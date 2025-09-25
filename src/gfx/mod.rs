@@ -93,6 +93,7 @@ pub struct Renderer {
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
     wizard_wire_pipeline: Option<wgpu::RenderPipeline>,
+    wizard_simple_pipeline: wgpu::RenderPipeline,
     wizard_mat_bg: wgpu::BindGroup,
     _wizard_mat_buf: wgpu::Buffer,
     _wizard_tex_view: wgpu::TextureView,
@@ -202,6 +203,7 @@ impl Renderer {
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
         let (wizard_pipeline, wizard_wire_pipeline) =
             pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, &material_bgl, config.format);
+        let wizard_simple_pipeline = pipeline::create_wizard_simple_pipeline(&device, &globals_bgl, &material_bgl, config.format);
 
         // --- Buffers & bind groups ---
         // Globals
@@ -541,6 +543,7 @@ impl Renderer {
             joints_per_wizard,
             wizard_pipeline,
             wizard_wire_pipeline,
+            wizard_simple_pipeline,
             wizard_mat_bg,
             _wizard_mat_buf: wizard_mat_buf,
             _wizard_tex_view,
@@ -626,16 +629,17 @@ impl Renderer {
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
             // Wizards (skinned + instanced)
-            let wiz_pipe = if self.wire_enabled { self.wizard_wire_pipeline.as_ref().unwrap_or(&self.wizard_pipeline) } else { &self.wizard_pipeline };
-            rpass.set_pipeline(wiz_pipe);
+            // For exact parity with standalone viewer: use the simple pipeline
+            rpass.set_pipeline(&self.wizard_simple_pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            rpass.set_bind_group(2, &self.palettes_bg, &[]);
+            // No model/instance/palettes for simple viewer path
+            // rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+            // rpass.set_bind_group(2, &self.palettes_bg, &[]);
             rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
             rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
-            rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
+            // Draw only one wizard, no instancing, u16 indices
             rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
+            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..1);
 
             // Ruins (instanced)
             let inst_pipe = if self.wire_enabled {

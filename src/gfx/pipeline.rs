@@ -191,3 +191,29 @@ pub fn create_wizard_pipelines(
 
     (pipeline, wire_pipeline)
 }
+
+pub fn create_wizard_simple_pipeline(
+    device: &wgpu::Device,
+    globals_bgl: &BindGroupLayout,
+    material_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wizard-simple-shader"),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader_wizard_viewer.wgsl"))),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("wizard-simple-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl, material_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wizard-simple-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState { module: &shader, entry_point: Some("vs_main"), buffers: &[VertexSkinned::LAYOUT], compilation_options: Default::default() },
+        fragment: Some(FragmentState { module: &shader, entry_point: Some("fs_main"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState { format: wgpu::TextureFormat::Depth32Float, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+        multisample: wgpu::MultisampleState::default(), multiview: None, cache: None,
+    })
+}
