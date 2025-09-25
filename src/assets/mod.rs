@@ -71,6 +71,7 @@ pub struct SkinnedMeshCPU {
     pub base_color_texture: Option<TextureCPU>,
     pub node_names: Vec<String>,
     pub hand_right_node: Option<usize>,
+    pub root_node: Option<usize>,
 }
 
 pub struct TextureCPU { pub pixels: Vec<u8>, pub width: u32, pub height: u32, pub srgb: bool }
@@ -328,8 +329,12 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         let low = n.to_lowercase();
         low.contains("hand right") || low.contains("right hand") || low.contains("hand_r") || low.contains("r_hand")
     });
+    let root_node = node_names.iter().position(|n| {
+        let low = n.to_lowercase();
+        low == "root" || low.contains("armature")
+    });
 
-    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture, node_names, hand_right_node })
+    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture, node_names, hand_right_node, root_node })
 }
 
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
