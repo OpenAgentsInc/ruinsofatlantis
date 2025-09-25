@@ -268,11 +268,7 @@ impl Renderer {
                 });
                 (vb, ib, ruins_cpu.indices.len() as u32)
             }
-            Err(e) => {
-                log::warn!("ruins.gltf unavailable ({}). Using placeholder cube mesh.", e);
-                let (vb, ib, idx) = mesh::create_cube(&device);
-                (vb, ib, idx)
-            }
+            Err(e) => return Err(anyhow::anyhow!("failed to load ruins model: {e}")),
         };
 
         // --- Build a tiny ECS world and spawn entities ---
@@ -548,14 +544,17 @@ fn sample_palette(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32) -> Vec<glam::M
     // Compute global matrices for all nodes touched by joints
     let mut global: HashMap<usize, glam::Mat4> = HashMap::new();
     for &jn in &mesh.joints_nodes {
-        compute_global(jn, &mesh.parent, &local_t, &local_r, &local_s, &mut global);
+        if jn < local_t.len() {
+            compute_global(jn, &mesh.parent, &local_t, &local_r, &local_s, &mut global);
+        }
     }
 
     // Build palette: global * inverse_bind per joint in skin order
     let mut out = Vec::with_capacity(mesh.joints_nodes.len());
     for (i, &node_idx) in mesh.joints_nodes.iter().enumerate() {
-        let g = *global.get(&node_idx).unwrap_or(&glam::Mat4::IDENTITY);
-        out.push(g * mesh.inverse_bind[i]);
+        let g = if node_idx < local_t.len() { *global.get(&node_idx).unwrap_or(&glam::Mat4::IDENTITY) } else { glam::Mat4::IDENTITY };
+        let ibm = mesh.inverse_bind.get(i).copied().unwrap_or(glam::Mat4::IDENTITY);
+        out.push(g * ibm);
     }
     out
 }

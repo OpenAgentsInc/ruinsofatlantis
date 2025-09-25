@@ -14,7 +14,10 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { window: None, state: None }
+        Self {
+            window: None,
+            state: None,
+        }
     }
 }
 
@@ -22,7 +25,7 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             let window = event_loop
-                .create_window(WindowAttributes::default().with_title("Ruins of Atlantis — Instancing"))
+                .create_window(WindowAttributes::default().with_title("Ruins of Atlantis"))
                 .expect("create window");
             let state = pollster::block_on(Renderer::new(&window)).expect("wgpu init");
             self.window = Some(window);
@@ -36,7 +39,9 @@ impl ApplicationHandler for App {
         window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let (Some(window), Some(state)) = (&self.window, &mut self.state) else { return; };
+        let (Some(window), Some(state)) = (&self.window, &mut self.state) else {
+            return;
+        };
         if window.id() != window_id {
             return;
         }
@@ -46,7 +51,9 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = state.render() {
                     match err {
-                        SurfaceError::Lost | SurfaceError::Outdated => state.resize(window.inner_size()),
+                        SurfaceError::Lost | SurfaceError::Outdated => {
+                            state.resize(window.inner_size())
+                        }
                         SurfaceError::OutOfMemory => event_loop.exit(),
                         e => eprintln!("render error: {e:?}"),
                     }

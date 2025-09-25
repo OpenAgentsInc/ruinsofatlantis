@@ -31,7 +31,7 @@
 
 ## Build, Test, and Development Commands
 - Prerequisites: Install Rust via `rustup` (stable toolchain). If the edition is unsupported, run `rustup update`.
-- Run the app (root crate): `cargo run`
+- Run the app (root crate): `cargo run` (default-run is `ruinsofatlantis`)
 - Build (debug/release): `cargo build` / `cargo build --release`
 - Run with logs: `RUST_LOG=info cargo run`
 - Tests: `cargo test`
@@ -42,6 +42,9 @@
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
 - Current prototype loads two meshes (`wizard.gltf`, `ruins.gltf`) and draws them via instancing.
+- If a model is Draco-compressed (e.g., `ruins.gltf`), prepare a decompressed copy once:
+  - `cargo run --bin gltf_decompress -- assets/models/ruins.gltf assets/models/ruins.decompressed.gltf`
+  - The runtime prefers `*.decompressed.gltf` if present.
 - When adding dependencies for loaders or formats, use `cargo add` (never hand‑edit `Cargo.toml`).
 - Draco compression: The runtime does NOT attempt decompression. If a model declares `KHR_draco_mesh_compression`, run our one-time helper:
   - `cargo run --bin gltf_decompress -- assets/models/foo.gltf assets/models/foo.decompressed.gltf`
