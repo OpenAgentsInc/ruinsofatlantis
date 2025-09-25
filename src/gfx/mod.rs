@@ -362,6 +362,8 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
+        // For viewer parity (simple pipeline draws at origin), force camera to look at origin
+        cam_target = glam::vec3(0.0, 1.2, 0.0);
 
         // Allocate storage for skinning palettes: one palette per wizard
         let total_mats = (wiz_instances.len() as u32 * joints_per_wizard) as usize;
