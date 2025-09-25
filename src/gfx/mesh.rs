@@ -5,6 +5,7 @@
 use crate::gfx::types::Vertex;
 use wgpu::util::DeviceExt;
 
+#[allow(dead_code)] // Kept for quick test geometry and future debug paths
 pub fn create_cube(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, u32) {
     let p = 0.5f32;
     let vertices = [
@@ -67,4 +68,3 @@ pub fn create_plane(device: &wgpu::Device, extent: f32) -> (wgpu::Buffer, wgpu::
     let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("plane-ib"), contents: bytemuck::cast_slice(&idx), usage: wgpu::BufferUsages::INDEX });
     (vb, ib, idx.len() as u32)
 }
-

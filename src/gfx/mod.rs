@@ -18,12 +18,15 @@ mod camera;
 mod mesh;
 mod pipeline;
 mod types;
+pub use types::Vertex;
 mod util;
 
 use anyhow::Context;
 use camera::Camera;
 use types::{Globals, Instance, Model};
 use util::scale_to_max;
+use crate::assets::load_gltf_mesh;
+use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt, SurfaceError, SurfaceTargetUnsafe};
@@ -57,23 +60,32 @@ pub struct Renderer {
     _plane_model_buf: wgpu::Buffer,
     shard_model_buf: wgpu::Buffer,
 
-    // Geometry
-    cube_vb: wgpu::Buffer,
-    cube_ib: wgpu::Buffer,
-    cube_index_count: u32,
+    // Geometry (ground plane)
     plane_vb: wgpu::Buffer,
     plane_ib: wgpu::Buffer,
     plane_index_count: u32,
 
-    // Instancing
-    instance_buf: wgpu::Buffer,
-    grid_cols: u32,
-    grid_rows: u32,
-    culling_enabled: bool,
+    // GLTF geometry (wizard + ruins)
+    wizard_vb: wgpu::Buffer,
+    wizard_ib: wgpu::Buffer,
+    wizard_index_count: u32,
+    ruins_vb: wgpu::Buffer,
+    ruins_ib: wgpu::Buffer,
+    ruins_index_count: u32,
+
+    // Instancing buffers
+    wizard_instances: wgpu::Buffer,
+    wizard_count: u32,
+    ruins_instances: wgpu::Buffer,
+    ruins_count: u32,
+
+    // Flags
     wire_enabled: bool,
 
     // Time base for animation
     start: Instant,
+
+    // (ECS World is used transiently during construction)
 }
 
 impl Renderer {
@@ -199,32 +211,88 @@ impl Renderer {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: shard_model_buf.as_entire_binding() }],
         });
 
-        // Geometry
-        let (cube_vb, cube_ib, cube_index_count) = mesh::create_cube(&device);
-        // Ground size covers the grid and then some
-        let grid_cols = 100u32;
-        let grid_rows = 100u32;
-        let spacing = 2.5f32;
-        // Plane size: previously 2.0x the grid footprint; shrink by 25% → 1.5x
-        let plane_extent = spacing * (grid_cols.max(grid_rows) as f32) * 1.5;
+        // Ground plane (choose a generous extent for the plaza)
+        let plane_extent = 150.0;
         let (plane_vb, plane_ib, plane_index_count) = mesh::create_plane(&device, plane_extent);
 
-        // Instances
-        let mut instances = Vec::with_capacity((grid_cols * grid_rows) as usize);
-        for r in 0..grid_rows {
-            for c in 0..grid_cols {
-                let x = (c as f32 - grid_cols as f32 * 0.5) * spacing;
-                let z = (r as f32 - grid_rows as f32 * 0.5) * spacing;
-                let model = glam::Mat4::from_translation(glam::vec3(x, 1.0, z));
-                instances.push(Instance { model: model.to_cols_array_2d(), color: [0.85, 0.15, 0.15], selected: 0.0 });
+        // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
+        let wizard_cpu = load_gltf_mesh(std::path::Path::new("assets/models/wizard.gltf"))
+            .context("load wizard.gltf")?;
+        let ruins_cpu = load_gltf_mesh(std::path::Path::new("assets/models/ruins.gltf"))
+            .context("load ruins.gltf")?;
+
+        let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-vb"),
+            contents: bytemuck::cast_slice(&wizard_cpu.vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let wizard_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-ib"),
+            contents: bytemuck::cast_slice(&wizard_cpu.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let wizard_index_count = wizard_cpu.indices.len() as u32;
+
+        let ruins_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ruins-vb"),
+            contents: bytemuck::cast_slice(&ruins_cpu.vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let ruins_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ruins-ib"),
+            contents: bytemuck::cast_slice(&ruins_cpu.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let ruins_index_count = ruins_cpu.indices.len() as u32;
+
+        // --- Build a tiny ECS world and spawn entities ---
+        let mut world = World::new();
+        use rand::{SeedableRng, Rng};
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(42);
+
+        let place_range = plane_extent * 0.4;
+
+        for _ in 0..100 { // 100 wizards
+            let translation = glam::vec3(
+                rng.random_range(-place_range..place_range),
+                0.0,
+                rng.random_range(-place_range..place_range),
+            );
+            let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+            world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
+        }
+        for _ in 0..30 { // 30 ruins
+            let translation = glam::vec3(
+                rng.random_range(-place_range..place_range),
+                0.0,
+                rng.random_range(-place_range..place_range),
+            );
+            let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+            world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
+        }
+
+        // --- Create instance buffers per kind from ECS world ---
+        let mut wiz_instances: Vec<Instance> = Vec::new();
+        let mut ruin_instances: Vec<Instance> = Vec::new();
+        for (i, kind) in world.kinds.iter().enumerate() {
+            let t = world.transforms[i];
+            let m = t.matrix().to_cols_array_2d();
+            match kind {
+                RenderKind::Wizard => wiz_instances.push(Instance { model: m, color: [0.20, 0.45, 0.95], selected: 0.0 }),
+                RenderKind::Ruins => ruin_instances.push(Instance { model: m, color: [0.65, 0.66, 0.68], selected: 0.0 }),
             }
         }
-        log::info!("instances: {} ({} x {})", (grid_cols as u64 * grid_rows as u64), grid_cols, grid_rows);
-        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("instance-buf"),
-            contents: bytemuck::cast_slice(&instances),
+        let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-instances"),
+            contents: bytemuck::cast_slice(&wiz_instances),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
+        let ruins_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ruins-instances"),
+            contents: bytemuck::cast_slice(&ruin_instances),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
 
         Ok(Self {
             surface,
@@ -246,17 +314,19 @@ impl Renderer {
             _plane_model_buf: plane_model_buf,
             shard_model_buf,
 
-            cube_vb,
-            cube_ib,
-            cube_index_count,
             plane_vb,
             plane_ib,
             plane_index_count,
-
-            instance_buf,
-            grid_cols,
-            grid_rows,
-            culling_enabled: true,
+            wizard_vb,
+            wizard_ib,
+            wizard_index_count,
+            ruins_vb,
+            ruins_ib,
+            ruins_index_count,
+            wizard_instances,
+            wizard_count: wiz_instances.len() as u32,
+            ruins_instances,
+            ruins_count: ruin_instances.len() as u32,
             wire_enabled: false,
 
             start: Instant::now(),
@@ -295,9 +365,9 @@ impl Renderer {
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
-        // Rotate the shard base model a bit for motion
-        let shard_mtx = glam::Mat4::from_rotation_y(t) * glam::Mat4::from_translation(glam::vec3(0.0, 1.0, 0.0));
-        let shard_model = Model { model: shard_mtx.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.15, _pad: [0.0; 4] };
+        // Rotate a base model slightly for subtle motion on instanced meshes
+        let shard_mtx = glam::Mat4::from_rotation_y(t * 0.2);
+        let shard_model = Model { model: shard_mtx.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.05, _pad: [0.0; 4] };
         self.queue.write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
 
         // Begin commands
@@ -329,7 +399,7 @@ impl Renderer {
             rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
-            // Instanced shards
+            // Wizards (instanced)
             let inst_pipe = if self.wire_enabled {
                 self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
             } else {
@@ -338,20 +408,16 @@ impl Renderer {
             rpass.set_pipeline(inst_pipe);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            rpass.set_vertex_buffer(0, self.cube_vb.slice(..));
-            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
-            rpass.set_index_buffer(self.cube_ib.slice(..), IndexFormat::Uint16);
+            rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
+            rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
+            rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
 
-            // Very rough CPU culling per row (kept simple for demo)
-            let cam_z = cam.eye.z;
-            for r in 0..self.grid_rows {
-                let z_world = (r as f32 - self.grid_rows as f32 * 0.5) * 2.5;
-                let visible = !self.culling_enabled || (z_world - cam_z).abs() < 150.0;
-                if visible {
-                    let first = r * self.grid_cols;
-                    rpass.draw_indexed(0..self.cube_index_count, 0, first..first + self.grid_cols);
-                }
-            }
+            // Ruins (instanced)
+            rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
+            rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
+            rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();

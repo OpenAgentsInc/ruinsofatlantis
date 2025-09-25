@@ -38,6 +38,12 @@
 - Format/lint: `cargo fmt` and `cargo clippy -- -D warnings`
 - Optional dev loop: `cargo install cargo-watch` then `cargo watch -x run`
 
+## Assets & GLTF
+- Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
+- GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
+- Current prototype loads two meshes (`wizard.gltf`, `ruins.gltf`) and draws them via instancing.
+- When adding dependencies for loaders or formats, use `cargo add` (never hand‑edit `Cargo.toml`).
+
 ## Dependency Management
 - Never add dependencies by hand in `Cargo.toml`.
 - Always use Cargo’s tooling so versions/resolution are correct:
