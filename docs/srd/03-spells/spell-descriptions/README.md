@@ -12,4 +12,8 @@ Spell entries are organized alphabetically. Each entry reproduces the spell’s 
 - F — docs/srd/03-spells/spell-descriptions/F.md
 - G — docs/srd/03-spells/spell-descriptions/G.md
 - H — docs/srd/03-spells/spell-descriptions/H.md
+- I — docs/srd/03-spells/spell-descriptions/I.md
+- J — docs/srd/03-spells/spell-descriptions/J.md
+- K — docs/srd/03-spells/spell-descriptions/K.md
+- L — docs/srd/03-spells/spell-descriptions/L.md
   
