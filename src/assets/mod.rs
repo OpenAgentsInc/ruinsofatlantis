@@ -77,7 +77,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     // Robust prepare: prefer original glTF if it imports; fall back to a
     // decompressed copy (or auto-decompress) only if needed.
     let prepared = prepare_gltf_path(path)?;
-    if prepared != path { log::warn!("anim diag: using prepared glTF: {}", prepared.display()); }
+    // prefer prepared path silently
     let (doc, buffers, images) = gltf::import(&prepared).with_context(|| format!("import skinned glTF: {}", prepared.display()))?;
 
     // Build parent map and base TRS
@@ -101,7 +101,6 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     // (deferred material loading uses `images` later)
 
     // Prefer a mesh attached to a skinned node; fall back later if none.
-    let mut joints_all_zero = false;
     'outer: for node in doc.nodes() {
         if node.skin().is_none() { continue; }
         if let Some(mesh) = node.mesh() {
@@ -150,18 +149,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     for i in 0..pos.len() {
                         verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] });
                     }
-                    // Debug: log JOINTS/WEIGHTS ranges captured from standard attributes
-                    if !verts.is_empty() {
-                        let mut jmin = [u16::MAX;4];
-                        let mut jmax = [0u16;4];
-                        let mut wsum_min = f32::INFINITY; let mut wsum_max = f32::NEG_INFINITY;
-                        for v in verts.iter().take(512) {
-                            for k in 0..4 { jmin[k] = jmin[k].min(v.joints[k]); jmax[k] = jmax[k].max(v.joints[k]); }
-                            let s = v.weights[0]+v.weights[1]+v.weights[2]+v.weights[3];
-                            wsum_min = wsum_min.min(s); wsum_max = wsum_max.max(s);
-                        }
-                        log::warn!("assets: std attrs JOINTS_0=[{}..{}] WEIGHT_SUM=[{:.3}..{:.3}]", jmin[0], jmax[0], wsum_min, wsum_max);
-                    }
+                    // (debug diagnostics removed)
                     let idx_u32: Vec<u32> = match reader.read_indices() {
                         Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(),
                         Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
@@ -172,7 +160,6 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     break 'outer;
                 } else if prim.extension_value("KHR_draco_mesh_compression").is_some() {
                     // Fallback: decode via Draco if standard attributes are unavailable
-                    log::warn!("assets: falling back to Draco decode for skinned primitive");
                     decode_draco_skinned_primitive(&doc, &buffers, &prim, &mut verts, &mut indices)?;
                     break 'outer;
                 } else {
@@ -201,17 +188,14 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 break 'find_any;
             }
         }
-        joints_all_zero = true;
-    } else {
-        // Check if all joints are zero -> indicates missing skin attributes
-        joints_all_zero = verts.iter().all(|v| v.joints == [0,0,0,0]);
     }
 
-    // Final attempt: if joints are all zero and the file uses Draco, try to decompress via gltf-transform CLI and re-import
-    if joints_all_zero && doc.extensions_required().any(|e| e == "KHR_draco_mesh_compression") {
+    // Final attempt: if we still have no skinned vertices and the file uses Draco,
+    // try to decompress via gltf-transform CLI and re-import
+    if verts.is_empty() && doc.extensions_required().any(|e| e == "KHR_draco_mesh_compression") {
         let decompressed = path.with_extension("decompressed.gltf");
         if let Some(out_path) = try_gltf_transform_decompress(path, &decompressed) {
-            log::warn!("anim diag: Draco-compressed skin; re-importing decompressed glTF: {}", out_path.display());
+            // (debug diagnostic log removed)
             let (doc2, buffers2, _images2) = gltf::import(&out_path).with_context(|| format!("import decompressed glTF: {}", out_path.display()))?;
             verts.clear(); indices.clear();
             'outer2: for scene in doc2.scenes() { for node in scene.nodes() {
@@ -235,10 +219,9 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     }
                 }
             }}
-            let all_zero = verts.iter().all(|v| v.joints == [0,0,0,0]);
-            log::warn!("anim diag: after decompress, all joints zero = {} (verts={})", all_zero, verts.len());
+            // (debug diagnostic logs removed)
         } else {
-            log::warn!("anim diag: Draco decompression tool not available; skinning may be static");
+            // tool unavailable; continue without re-import
         }
     }
 
@@ -296,12 +279,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         animations.insert(name.clone(), AnimClip { name, duration: max_t, t_tracks, r_tracks, s_tracks });
     }
 
-    // Debug: list available clips
-    if !animations.is_empty() {
-        for (k,v) in &animations { log::info!("anim clip: '{}' dur={:.3}s T={} R={} S={}", k, v.duration, v.t_tracks.len(), v.r_tracks.len(), v.s_tracks.len()); }
-    } else {
-        log::warn!("no animations parsed from {}", path.display());
-    }
+    // (debug animation listing removed)
 
     if animations.is_empty() {
         animations.insert("__static".to_string(), AnimClip { name: "__static".to_string(), duration: 0.0, t_tracks: HashMap::new(), r_tracks: HashMap::new(), s_tracks: HashMap::new() });
@@ -340,12 +318,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         }
     }
 
-    // Log UV range for diagnostics
-    if !verts.is_empty() {
-        let mut umin = f32::INFINITY; let mut vmin = f32::INFINITY; let mut umax = f32::NEG_INFINITY; let mut vmax = f32::NEG_INFINITY;
-        for v in &verts { umin = umin.min(v.uv[0]); umax = umax.max(v.uv[0]); vmin = vmin.min(v.uv[1]); vmax = vmax.max(v.uv[1]); }
-        log::info!("loader: wizard UV range: u=[{:.3},{:.3}] v=[{:.3},{:.3}]", umin, umax, vmin, vmax);
-    }
+    // (debug UV range log removed)
 
     Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture })
 }

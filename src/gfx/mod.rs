@@ -75,9 +75,6 @@ pub struct Renderer {
     wizard_vb: wgpu::Buffer,
     wizard_ib: wgpu::Buffer,
     wizard_index_count: u32,
-    wizard_vb_simple: wgpu::Buffer,
-    wizard_ib_simple: wgpu::Buffer,
-    wizard_index_count_simple: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -95,8 +92,7 @@ pub struct Renderer {
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
-    wizard_wire_pipeline: Option<wgpu::RenderPipeline>,
-    wizard_simple_pipeline: wgpu::RenderPipeline,
+    // (wizard simple/wire debug pipelines removed)
     wizard_mat_bg: wgpu::BindGroup,
     _wizard_mat_buf: wgpu::Buffer,
     _wizard_tex_view: wgpu::TextureView,
@@ -204,9 +200,8 @@ impl Renderer {
         let material_bgl = pipeline::create_material_bgl(&device);
         let (pipeline, inst_pipeline, wire_pipeline) =
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
-        let (wizard_pipeline, wizard_wire_pipeline) =
+        let (wizard_pipeline, _wizard_wire_pipeline_unused) =
             pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, &material_bgl, config.format);
-        let wizard_simple_pipeline = pipeline::create_wizard_simple_pipeline(&device, &globals_bgl, &material_bgl, config.format);
 
         // --- Buffers & bind groups ---
         // Globals
@@ -223,7 +218,8 @@ impl Renderer {
         });
 
         // Per-draw Model buffers (plane and shard base)
-        let plane_model_init = Model { model: glam::Mat4::IDENTITY.to_cols_array_2d(), color: [0.05, 0.80, 0.30], emissive: 0.0, _pad: [0.0; 4] };
+        // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
+        let plane_model_init = Model { model: glam::Mat4::from_translation(glam::vec3(0.0, -0.05, 0.0)).to_cols_array_2d(), color: [0.05, 0.80, 0.30], emissive: 0.0, _pad: [0.0; 4] };
         let plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("plane-model"),
             contents: bytemuck::bytes_of(&plane_model_init),
@@ -279,29 +275,7 @@ impl Renderer {
             })
             .collect();
 
-        // Diagnostics: JOINTS_0 and WEIGHTS_0 ranges
-        if !wiz_vertices.is_empty() {
-            let mut jmin = [u16::MAX;4];
-            let mut jmax = [0u16;4];
-            let mut wmin = [f32::INFINITY;4];
-            let mut wmax = [f32::NEG_INFINITY;4];
-            for v in wiz_vertices.iter().take(512) { // sample subset
-                for k in 0..4 { jmin[k] = jmin[k].min(v.joints[k]); jmax[k] = jmax[k].max(v.joints[k]); }
-                for k in 0..4 { wmin[k] = wmin[k].min(v.weights[k]); wmax[k] = wmax[k].max(v.weights[k]); }
-            }
-            log::warn!(
-                "anim diag: JOINTS_0 x=[{}..{}] y=[{}..{}] z=[{}..{}] w=[{}..{}]; WEIGHTS_0 x=[{:.2}..{:.2}] y=[{:.2}..{:.2}] z=[{:.2}..{:.2}] w=[{:.2}..{:.2}]",
-                jmin[0], jmax[0], jmin[1], jmax[1], jmin[2], jmax[2], jmin[3], jmax[3],
-                wmin[0], wmax[0], wmin[1], wmax[1], wmin[2], wmax[2], wmin[3], wmax[3]
-            );
-        }
-
-        // Debug: UV range
-        if !wiz_vertices.is_empty() {
-            let mut umin = f32::INFINITY; let mut vmin = f32::INFINITY; let mut umax = f32::NEG_INFINITY; let mut vmax = f32::NEG_INFINITY;
-            for v in &wiz_vertices { umin = umin.min(v.uv[0]); umax = umax.max(v.uv[0]); vmin = vmin.min(v.uv[1]); vmax = vmax.max(v.uv[1]); }
-            log::info!("wizard UV range: u=[{:.3},{:.3}] v=[{:.3},{:.3}] verts={}", umin, umax, vmin, vmax, wiz_vertices.len());
-        }
+        // (debug diagnostic logs removed)
         let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-vb"),
             contents: bytemuck::cast_slice(&wiz_vertices),
@@ -314,23 +288,7 @@ impl Renderer {
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
 
-        // Viewer-parity simple mesh (pos+uv only)
-        let (wizard_vb_simple, wizard_ib_simple, wizard_index_count_simple) = {
-            use gltf::mesh::util::ReadIndices as RI;
-            let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).context("viewer-parity import")?;
-            let mesh = doc.meshes().next().context("viewer-parity: no mesh")?;
-            let prim = mesh.primitives().next().context("viewer-parity: no primitive")?;
-            let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-            let pos: Vec<[f32;3]> = reader.read_positions().context("viewer-parity: positions missing")?.collect();
-            let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
-            let uv: Vec<[f32;2]> = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32().collect()).unwrap_or_else(|| pos.iter().map(|p| [0.5 + 0.5*p[0], 0.5 - 0.5*p[2]]).collect());
-            let verts: Vec<crate::gfx::types::VertexPosUv> = pos.into_iter().zip(uv.into_iter()).map(|(p,t)| crate::gfx::types::VertexPosUv{ pos: p, uv: t }).collect();
-            let idx_u32: Vec<u32> = match reader.read_indices() { Some(RI::U16(it)) => it.map(|v| v as u32).collect(), Some(RI::U32(it)) => it.collect(), Some(RI::U8(it)) => it.map(|v| v as u32).collect(), None => (0..verts.len() as u32).collect() };
-            let idx_u16: Vec<u16> = idx_u32.iter().map(|&v| v as u16).collect();
-            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-vb-simple"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
-            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-ib-simple"), contents: bytemuck::cast_slice(&idx_u16), usage: wgpu::BufferUsages::INDEX });
-            (vb, ib, idx_u16.len() as u32)
-        };
+        // (viewer-parity simple mesh removed)
 
         let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
             Ok(ruins_cpu) => {
@@ -356,13 +314,22 @@ impl Renderer {
 
         let place_range = plane_extent * 0.4;
 
-        for _ in 0..10 { // 10 wizards
-            let translation = glam::vec3(
-                rng.random_range(-place_range..place_range),
-                0.0,
-                rng.random_range(-place_range..place_range),
-            );
-            let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        // Cluster wizards around a central one so the camera can see all of them.
+        let wizard_count = 10usize;
+        let center = glam::vec3(0.0, 0.0, 0.0);
+        // Spawn the central wizard first (becomes camera target)
+        world.spawn(Transform { translation: center, rotation: glam::Quat::IDENTITY, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
+        // Place remaining wizards on a small ring facing the center
+        let ring_radius = 3.5f32;
+        for i in 1..wizard_count {
+            let theta = (i as f32 - 1.0) / (wizard_count as f32 - 1.0) * std::f32::consts::TAU;
+            let translation = glam::vec3(ring_radius * theta.cos(), 0.0, ring_radius * theta.sin());
+            // Face the center with yaw that maps forward (-Z) toward (center - translation)
+            let dx = center.x - translation.x;
+            let dz = center.z - translation.z;
+            // Model forward is +Z; yaw that aligns +Z to (dx,dz)
+            let yaw = dx.atan2(dz);
+            let rotation = glam::Quat::from_rotation_y(yaw);
             world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
         }
         // Place ~3 ruins spread out
@@ -400,8 +367,8 @@ impl Renderer {
         let mut wizard_time_offset: Vec<f32> = Vec::with_capacity(wiz_instances.len());
         for (i, inst) in wiz_instances.iter_mut().enumerate() {
             inst.palette_base = (i as u32) * joints_per_wizard;
-            // Force "Waiting" animation for all wizards to avoid T-pose
-            wizard_anim_index.push(2); // 2 = Waiting (see select_clip)
+            // Center wizard uses PortalOpen; ring uses Waiting
+            if i == 0 { wizard_anim_index.push(0); } else { wizard_anim_index.push(2); }
             wizard_time_offset.push(rng2.random::<f32>() * 1.7);
         }
 
@@ -586,9 +553,6 @@ impl Renderer {
             wizard_vb,
             wizard_ib,
             wizard_index_count,
-            wizard_vb_simple,
-            wizard_ib_simple,
-            wizard_index_count_simple,
             ruins_vb,
             ruins_ib,
             ruins_index_count,
@@ -600,8 +564,7 @@ impl Renderer {
             palettes_bg,
             joints_per_wizard,
             wizard_pipeline,
-            wizard_wire_pipeline,
-            wizard_simple_pipeline,
+            // debug pipelines removed
             wizard_mat_bg,
             _wizard_mat_buf: wizard_mat_buf,
             _wizard_tex_view,
@@ -643,10 +606,10 @@ impl Renderer {
         // Update globals (camera + time)
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        // Orbit closely around the first wizard we spawned
-        // Zoom in further and slow orbit speed by 75%
-        // Freeze orbit rotation to help observe animation clearly
-        let cam = Camera::orbit(self.cam_target, 3.0, 0.0, aspect);
+        // Orbit around the first wizard; ensure the whole ring is visible.
+        let cam_angle = t * 0.35; // radians/sec
+        let cam_radius = 8.5;     // closer framing while keeping the ring visible
+        let cam = Camera::orbit(self.cam_target, cam_radius, cam_angle, aspect);
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
@@ -728,23 +691,11 @@ impl Renderer {
         for i in 0..(self.wizard_count as usize) {
             let t = time_global + self.wizard_time_offset[i];
             let clip = self.select_clip(self.wizard_anim_index[i]);
-            if i == 0 {
-                log::warn!(
-                    "anim diag: wizard0 clip='{}' dur={:.3}s tracks: T={} R={} S={}",
-                    clip.name, clip.duration, clip.t_tracks.len(), clip.r_tracks.len(), clip.s_tracks.len()
-                );
-            }
-            let mut palette = sample_palette(&self.skinned_cpu, clip, t);
+            let palette = sample_palette(&self.skinned_cpu, clip, t);
             mats.extend(palette);
         }
         // Upload as raw f32x16
-        if mats.len() >= joints {
-            // Quick T-pose diagnostic: log first joint of first wizard (translation)
-            let m0 = mats[0];
-            let c = m0.to_cols_array(); // column-major
-            let tx = c[12]; let ty = c[13]; let tz = c[14];
-            log::warn!("anim diag: first joint T=({:.4},{:.4},{:.4})", tx, ty, tz);
-        }
+        // (debug diagnostic logs removed)
         let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
         for m in mats { raw.push(m.to_cols_array()); }
         self.queue.write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
