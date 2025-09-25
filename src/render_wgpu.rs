@@ -3,16 +3,16 @@ use wgpu::SurfaceError;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
-pub struct WgpuState {
-    surface: wgpu::Surface,
+pub struct WgpuState<'w> {
+    surface: wgpu::Surface<'w>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
 }
 
-impl WgpuState {
-    pub async fn new(window: &Window) -> anyhow::Result<Self> {
+impl<'w> WgpuState<'w> {
+    pub async fn new(window: &'w Window) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
         // Instance/Surface
@@ -37,8 +37,9 @@ impl WgpuState {
                     label: Some("wgpu-device"),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::Performance,
+                    trace: wgpu::Trace::default(),
                 },
-                None,
             )
             .await
             .context("request device")?;
@@ -67,6 +68,7 @@ impl WgpuState {
             present_mode,
             alpha_mode,
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
 
@@ -105,22 +107,21 @@ impl WgpuState {
                 label: Some("clear-encoder"),
             });
         {
-            let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            use wgpu::{Color, LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp};
+            let _rpass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("clear-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.02,
-                            g: 0.08,
-                            b: 0.16,
-                            a: 1.0,
-                        }),
-                        store: true,
+                    depth_slice: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color { r: 0.02, g: 0.08, b: 0.16, a: 1.0 }),
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             });
         }
         self.queue.submit(Some(encoder.finish()));
@@ -128,4 +129,3 @@ impl WgpuState {
         Ok(())
     }
 }
-

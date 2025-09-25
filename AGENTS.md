@@ -28,7 +28,12 @@
   - Install: `cargo install cargo-edit`
   - Add deps: `cargo add <crate> [<crate>...]` (e.g., `cargo add winit wgpu log env_logger anyhow`)
   - Remove deps: `cargo rm <crate>`
-  - Upgrade: `cargo upgrade` (review diffs before committing)
+- Upgrade: `cargo upgrade` (review diffs before committing)
+
+## Build Hygiene
+- Always leave the repo in a compiling state before stopping work.
+- Run `cargo check` (and for changed binaries, `cargo build`) to confirm there are no compile errors.
+- Prefer to address warnings promptly, but errors are never acceptable at handoff.
 
 ## Coding Style & Naming Conventions
 - Rust 2021+, 4‑space indent; target ~100‑char lines.
