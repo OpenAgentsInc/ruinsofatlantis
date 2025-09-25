@@ -1,25 +1,39 @@
 use anyhow::Context;
-use wgpu::SurfaceError;
+use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceError, SurfaceTargetUnsafe};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
-pub struct WgpuState<'w> {
-    surface: wgpu::Surface<'w>,
+pub struct WgpuState {
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
 }
 
-impl<'w> WgpuState<'w> {
-    pub async fn new(window: &'w Window) -> anyhow::Result<Self> {
+impl WgpuState {
+    pub async fn new(window: &Window) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
         // Instance/Surface
         let instance = wgpu::Instance::default();
-        let surface = instance
-            .create_surface(window)
-            .context("create wgpu surface")?;
+        // Create a surface without tying its lifetime to &Window using raw handles.
+        let raw_display = window
+            .display_handle()
+            .map_err(|e| anyhow::anyhow!("display_handle: {e}"))?
+            .as_raw();
+        let raw_window = window
+            .window_handle()
+            .map_err(|e| anyhow::anyhow!("window_handle: {e}"))?
+            .as_raw();
+        let surface = unsafe {
+            instance
+                .create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: raw_display,
+                    raw_window_handle: raw_window,
+                })
+        }
+        .context("create wgpu surface (unsafe)")?;
 
         // Adapter/Device
         let adapter = instance
@@ -32,15 +46,13 @@ impl<'w> WgpuState<'w> {
             .context("request adapter")?;
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("wgpu-device"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults(),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                    trace: wgpu::Trace::default(),
-                },
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("wgpu-device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::default(),
+            })
             .await
             .context("request device")?;
 
