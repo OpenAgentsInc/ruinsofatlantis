@@ -654,17 +654,17 @@ impl Renderer {
             rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
-            // Wizards (skinned + instanced)
-            // For exact parity with standalone viewer: use the simple pipeline
-            rpass.set_pipeline(&self.wizard_simple_pipeline);
-            // Group 0: globals (view_proj)
+            // Wizards (animated skinning + instancing) using viewer-like sampling
+            rpass.set_pipeline(&self.wizard_pipeline);
+            // Bind groups: 0=globals, 1=model (identity), 2=palettes, 3=material
             rpass.set_bind_group(0, &self.globals_bg, &[]);
-            // Group 1: material (texture + sampler)
-            rpass.set_bind_group(1, &self.wizard_mat_bg, &[]);
-            rpass.set_vertex_buffer(0, self.wizard_vb_simple.slice(..));
+            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+            rpass.set_bind_group(2, &self.palettes_bg, &[]);
+            rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
+            rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
             rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
-            rpass.set_index_buffer(self.wizard_ib_simple.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.wizard_index_count_simple, 0, 0..self.wizard_count);
+            rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
 
             // Ruins (instanced)
             let inst_pipe = if self.wire_enabled {
