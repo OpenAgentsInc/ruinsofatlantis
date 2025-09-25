@@ -72,6 +72,7 @@ pub struct VertexPosUv {
 }
 
 impl VertexPosUv {
+    #[allow(dead_code)]
     pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: std::mem::size_of::<VertexPosUv>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,

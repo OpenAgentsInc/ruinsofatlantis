@@ -192,6 +192,7 @@ pub fn create_wizard_pipelines(
     (pipeline, wire_pipeline)
 }
 
+#[allow(dead_code)]
 pub fn create_wizard_simple_pipeline(
     device: &wgpu::Device,
     globals_bgl: &BindGroupLayout,
