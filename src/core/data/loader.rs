@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use anyhow::{Context, Result};
+use super::spell::SpellSpec;
 
 fn data_root() -> PathBuf {
     // Assume running from project root during development
@@ -17,3 +18,9 @@ pub fn read_json(rel: impl AsRef<Path>) -> Result<String> {
     Ok(s)
 }
 
+/// Load and deserialize a spell JSON (from data/spells/*).
+pub fn load_spell_spec(rel: impl AsRef<Path>) -> Result<SpellSpec> {
+    let txt = read_json(rel)?;
+    let spec: SpellSpec = serde_json::from_str(&txt).context("parse spell json")?;
+    Ok(spec)
+}

@@ -6,4 +6,4 @@ pub mod ids;
 pub mod ability;
 pub mod spell;
 pub mod loader;
-
+pub mod scenario;

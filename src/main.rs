@@ -1,9 +1,4 @@
-mod platform_winit;
-pub mod gfx;
-pub mod assets;
-pub mod ecs;
-pub mod core; // production types (data/rules/combat)
-pub mod sim;  // deterministic simulation harness modules
+use ruinsofatlantis::platform_winit;
 
 fn main() {
     // Minimal logger to see wgpu/winit info in dev

@@ -1,0 +1,34 @@
+name: Aboleth Demo
+tick_ms: 50
+seed: 42
+map: flooded_ruin
+underwater: true
+actors:
+  - id: boss_aboleth
+    role: boss
+    class: monster
+    abilities: []
+  - id: fighter_tank
+    role: tank
+    class: fighter
+    abilities: ["basic_attack"]
+  - id: cleric_heal
+    role: healer
+    class: cleric
+    abilities: ["bless", "healing_word"]
+  - id: wizard_ctrl
+    role: dps
+    class: wizard
+    abilities: ["wiz.fire_bolt.srd521", "grease"]
+  - id: rogue_dps
+    role: dps
+    class: rogue
+    abilities: ["basic_attack"]
+  - id: monk_dps
+    role: dps
+    class: monk
+    abilities: ["basic_attack"]
+  - id: ranger_dps
+    role: dps
+    class: ranger
+    abilities: ["ensnaring_strike"]
