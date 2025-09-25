@@ -97,6 +97,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     // (deferred material loading uses `images` later)
 
     // Prefer a mesh attached to a skinned node; fall back later if none.
+    let mut joints_all_zero = false;
     'outer: for scene in doc.scenes() { for node in scene.nodes() {
         if node.skin().is_none() { continue; }
         if let Some(mesh) = node.mesh() {
@@ -168,6 +169,45 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 for i in idx_u32 { if i > u16::MAX as u32 { bail!("indices exceed u16"); } indices.push(i as u16); }
                 break 'find_any;
             }
+        }
+        joints_all_zero = true;
+    } else {
+        // Check if all joints are zero -> indicates missing skin attributes
+        joints_all_zero = verts.iter().all(|v| v.joints == [0,0,0,0]);
+    }
+
+    // Final attempt: if joints are all zero and the file uses Draco, try to decompress via gltf-transform CLI and re-import
+    if joints_all_zero && doc.extensions_required().any(|e| e == "KHR_draco_mesh_compression") {
+        let decompressed = path.with_extension("decompressed.gltf");
+        if let Some(out_path) = try_gltf_transform_decompress(path, &decompressed) {
+            log::warn!("anim diag: Draco-compressed skin; re-importing decompressed glTF: {}", out_path.display());
+            let (doc2, buffers2, _images2) = gltf::import(&out_path).with_context(|| format!("import decompressed glTF: {}", out_path.display()))?;
+            verts.clear(); indices.clear();
+            'outer2: for scene in doc2.scenes() { for node in scene.nodes() {
+                if node.skin().is_none() { continue; }
+                if let Some(mesh) = node.mesh() {
+                    for prim in mesh.primitives() {
+                        let reader = prim.reader(|b| buffers2.get(b.index()).map(|bb| bb.0.as_slice()));
+                        let Some(pos_it) = reader.read_positions() else { continue };
+                        let nrm_it = reader.read_normals();
+                        let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
+                        let uv_opt = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32());
+                        let joints = match reader.read_joints(0) { Some(gltf::mesh::util::ReadJoints::U16(it)) => it.map(|v| [v[0],v[1],v[2],v[3]]).collect::<Vec<[u16;4]>>(), Some(gltf::mesh::util::ReadJoints::U8(it)) => it.map(|v| [v[0] as u16,v[1] as u16,v[2] as u16,v[3] as u16]).collect(), _ => continue };
+                        let weights = match reader.read_weights(0) { Some(gltf::mesh::util::ReadWeights::F32(it)) => it.collect::<Vec<[f32;4]>>(), Some(gltf::mesh::util::ReadWeights::U16(it)) => it.map(|v| [v[0] as f32/65535.0, v[1] as f32/65535.0, v[2] as f32/65535.0, v[3] as f32/65535.0]).collect(), Some(gltf::mesh::util::ReadWeights::U8(it)) => it.map(|v| [v[0] as f32/255.0, v[1] as f32/255.0, v[2] as f32/255.0, v[3] as f32/255.0]).collect(), None => continue };
+                        let pos: Vec<[f32;3]> = pos_it.collect();
+                        let nrm: Vec<[f32;3]> = nrm_it.map(|it| it.collect()).unwrap_or_else(|| vec![[0.0,1.0,0.0]; pos.len()]);
+                        let uv: Vec<[f32;2]> = if let Some(it) = uv_opt { it.collect() } else { pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect() };
+                        for i in 0..pos.len() { verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] }); }
+                        let idx_u32: Vec<u32> = match reader.read_indices() { Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(), Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(), Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(), None => (0..pos.len() as u32).collect() };
+                        for i in idx_u32 { if i > u16::MAX as u32 { bail!("indices exceed u16"); } indices.push(i as u16); }
+                        break 'outer2;
+                    }
+                }
+            }}
+            let all_zero = verts.iter().all(|v| v.joints == [0,0,0,0]);
+            log::warn!("anim diag: after decompress, all joints zero = {} (verts={})", all_zero, verts.len());
+        } else {
+            log::warn!("anim diag: Draco decompression tool not available; skinning may be static");
         }
     }
 
