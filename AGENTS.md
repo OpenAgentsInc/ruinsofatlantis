@@ -2,7 +2,8 @@
 
 ## Project Structure & Module Organization
 - Root: `README.md`, `GDD.md` (design), `LICENSE`, `NOTICE`.
-- Rust workspace (planned): `Cargo.toml` at root; crates under `server/`, `client/`, `shared/`, `tools/` (not final).
+- Rust crate (current): single binary at root with `Cargo.toml` and `src/main.rs`.
+- Future workspace (planned): crates under `server/`, `client/`, `shared/`, `tools/`.
 - Assets: `assets/` (art/audio), `data/` (JSON/CSV), `docs/` (design notes, diagrams).
 - Tests: unit tests within each crate’s `src/`; integration tests in top‑level `tests/`.
 
@@ -13,11 +14,13 @@
 - SRD usage: maintain exact attribution in `NOTICE`; document any terminology deviations (e.g., using “race”).
 
 ## Build, Test, and Development Commands
-- Build all crates: `cargo build`
-- Run formatter and lints: `cargo fmt` and `cargo clippy -- -D warnings`
-- Run all tests: `cargo test`
-- Run server (when present): `cargo run -p server`
-- Example with logs: `RUST_LOG=info cargo run -p server`
+- Prerequisites: Install Rust via `rustup` (stable toolchain). If the edition is unsupported, run `rustup update`.
+- Run the app (root crate): `cargo run`
+- Build (debug/release): `cargo build` / `cargo build --release`
+- Run with logs: `RUST_LOG=info cargo run`
+- Tests: `cargo test`
+- Format/lint: `cargo fmt` and `cargo clippy -- -D warnings`
+- Optional dev loop: `cargo install cargo-watch` then `cargo watch -x run`
 
 ## Coding Style & Naming Conventions
 - Rust 2021+, 4‑space indent; target ~100‑char lines.
