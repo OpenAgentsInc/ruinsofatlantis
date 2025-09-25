@@ -5,7 +5,7 @@
 
 use wgpu::{BindGroupLayout, ColorTargetState, FragmentState, PipelineLayoutDescriptor, PolygonMode, RenderPipeline, ShaderModule, ShaderSource, VertexState};
 
-use crate::gfx::types::{Instance, Vertex};
+use crate::gfx::types::{Instance, InstanceSkin, Vertex, VertexSkinned};
 
 pub fn create_shader(device: &wgpu::Device) -> ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -38,6 +38,18 @@ pub fn create_bind_group_layouts(device: &wgpu::Device) -> (BindGroupLayout, Bin
     });
 
     (globals, model)
+}
+
+pub fn create_palettes_bgl(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("palettes-bgl"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None },
+            count: None,
+        }],
+    })
 }
 
 pub fn create_pipelines(
@@ -101,3 +113,46 @@ pub fn create_pipelines(
     (pipeline, inst_pipeline, wire_pipeline)
 }
 
+pub fn create_wizard_pipelines(
+    device: &wgpu::Device,
+    shader: &ShaderModule,
+    globals_bgl: &BindGroupLayout,
+    model_bgl: &BindGroupLayout,
+    palettes_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> (RenderPipeline, Option<RenderPipeline>) {
+    let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("wizard-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl],
+        push_constant_ranges: &[],
+    });
+
+    let depth_format = wgpu::TextureFormat::Depth32Float;
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wizard-inst-pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: VertexState { module: shader, entry_point: Some("vs_wizard"), buffers: &[VertexSkinned::LAYOUT, InstanceSkin::LAYOUT], compilation_options: Default::default() },
+        fragment: Some(FragmentState { module: shader, entry_point: Some("fs_inst"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    });
+
+    let wire_pipeline = if device.features().contains(wgpu::Features::POLYGON_MODE_LINE) {
+        Some(device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("wizard-inst-pipeline-wire"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState { module: shader, entry_point: Some("vs_wizard"), buffers: &[VertexSkinned::LAYOUT, InstanceSkin::LAYOUT], compilation_options: Default::default() },
+            fragment: Some(FragmentState { module: shader, entry_point: Some("fs_inst"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+            primitive: wgpu::PrimitiveState { polygon_mode: PolygonMode::Line, ..Default::default() },
+            depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        }))
+    } else { None };
+
+    (pipeline, wire_pipeline)
+}

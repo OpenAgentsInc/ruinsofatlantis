@@ -23,9 +23,9 @@ mod util;
 
 use anyhow::Context;
 use camera::Camera;
-use types::{Globals, Instance, Model};
+use types::{Globals, Instance, InstanceSkin, Model, VertexSkinned};
 use util::scale_to_max;
-use crate::assets::load_gltf_mesh;
+use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU};
 use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
@@ -79,13 +79,27 @@ pub struct Renderer {
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
+    // Wizard skinning palettes
+    palettes_buf: wgpu::Buffer,
+    palettes_bg: wgpu::BindGroup,
+    joints_per_wizard: u32,
+
+    // Wizard pipelines
+    wizard_pipeline: wgpu::RenderPipeline,
+    wizard_wire_pipeline: Option<wgpu::RenderPipeline>,
+
     // Flags
     wire_enabled: bool,
 
     // Time base for animation
     start: Instant,
 
-    // (ECS World is used transiently during construction)
+    // Wizard animation selection and time offsets
+    wizard_anim_index: Vec<usize>,
+    wizard_time_offset: Vec<f32>,
+
+    // CPU-side skinned mesh data
+    skinned_cpu: SkinnedMeshCPU,
 }
 
 impl Renderer {
@@ -169,8 +183,11 @@ impl Renderer {
         // --- Pipelines + BGLs ---
         let shader = pipeline::create_shader(&device);
         let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
+        let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let (pipeline, inst_pipeline, wire_pipeline) =
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
+        let (wizard_pipeline, wizard_wire_pipeline) =
+            pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, config.format);
 
         // --- Buffers & bind groups ---
         // Globals
@@ -216,34 +233,47 @@ impl Renderer {
         let (plane_vb, plane_ib, plane_index_count) = mesh::create_plane(&device, plane_extent);
 
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
-        let wizard_cpu = load_gltf_mesh(std::path::Path::new("assets/models/wizard.gltf"))
-            .context("load wizard.gltf")?;
-        let ruins_cpu = load_gltf_mesh(std::path::Path::new("assets/models/ruins.gltf"))
-            .context("load ruins.gltf")?;
+        let skinned_cpu = load_gltf_skinned(std::path::Path::new("assets/models/wizard.gltf"))
+            .context("load skinned wizard.gltf")?;
+        let ruins_cpu_res = load_gltf_mesh(std::path::Path::new("assets/models/ruins.gltf"));
 
+        let wiz_vertices: Vec<VertexSkinned> = skinned_cpu
+            .vertices
+            .iter()
+            .map(|v| VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights })
+            .collect();
         let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-vb"),
-            contents: bytemuck::cast_slice(&wizard_cpu.vertices),
+            contents: bytemuck::cast_slice(&wiz_vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
         let wizard_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-ib"),
-            contents: bytemuck::cast_slice(&wizard_cpu.indices),
+            contents: bytemuck::cast_slice(&skinned_cpu.indices),
             usage: wgpu::BufferUsages::INDEX,
         });
-        let wizard_index_count = wizard_cpu.indices.len() as u32;
+        let wizard_index_count = skinned_cpu.indices.len() as u32;
 
-        let ruins_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("ruins-vb"),
-            contents: bytemuck::cast_slice(&ruins_cpu.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let ruins_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("ruins-ib"),
-            contents: bytemuck::cast_slice(&ruins_cpu.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let ruins_index_count = ruins_cpu.indices.len() as u32;
+        let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
+            Ok(ruins_cpu) => {
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("ruins-vb"),
+                    contents: bytemuck::cast_slice(&ruins_cpu.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("ruins-ib"),
+                    contents: bytemuck::cast_slice(&ruins_cpu.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+                (vb, ib, ruins_cpu.indices.len() as u32)
+            }
+            Err(e) => {
+                log::warn!("ruins.gltf unavailable ({}). Using placeholder cube mesh.", e);
+                let (vb, ib, idx) = mesh::create_cube(&device);
+                (vb, ib, idx)
+            }
+        };
 
         // --- Build a tiny ECS world and spawn entities ---
         let mut world = World::new();
@@ -272,16 +302,30 @@ impl Renderer {
         }
 
         // --- Create instance buffers per kind from ECS world ---
-        let mut wiz_instances: Vec<Instance> = Vec::new();
+        let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
         let mut ruin_instances: Vec<Instance> = Vec::new();
         for (i, kind) in world.kinds.iter().enumerate() {
             let t = world.transforms[i];
             let m = t.matrix().to_cols_array_2d();
             match kind {
-                RenderKind::Wizard => wiz_instances.push(Instance { model: m, color: [0.20, 0.45, 0.95], selected: 0.0 }),
+                RenderKind::Wizard => wiz_instances.push(InstanceSkin { model: m, color: [0.20, 0.45, 0.95], selected: 0.0, palette_base: 0, _pad_inst: [0;3] }),
                 RenderKind::Ruins => ruin_instances.push(Instance { model: m, color: [0.65, 0.66, 0.68], selected: 0.0 }),
             }
         }
+        // Assign palette bases and random animations
+        let joints_per_wizard = skinned_cpu.joints_nodes.len() as u32;
+        // Reuse existing RNG; already imported above
+        let mut rng2 = rand_chacha::ChaCha8Rng::seed_from_u64(4242);
+        let mut wizard_anim_index: Vec<usize> = Vec::with_capacity(wiz_instances.len());
+        let mut wizard_time_offset: Vec<f32> = Vec::with_capacity(wiz_instances.len());
+        for (i, inst) in wiz_instances.iter_mut().enumerate() {
+            inst.palette_base = (i as u32) * joints_per_wizard;
+            // 0=PortalOpen,1=Still,2=Waiting (fallback to whatever exists)
+            let pick = rng2.random_range(0..3);
+            wizard_anim_index.push(pick);
+            wizard_time_offset.push(rng2.random::<f32>() * 1.7);
+        }
+
         let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-instances"),
             contents: bytemuck::cast_slice(&wiz_instances),
@@ -293,6 +337,20 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
+
+        // Allocate storage for skinning palettes: one palette per wizard
+        let total_mats = (wiz_instances.len() as u32 * joints_per_wizard) as usize;
+        let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("palettes"),
+            size: (total_mats * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("palettes-bg"),
+            layout: &palettes_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &palettes_buf, offset: 0, size: None }) }],
+        });
 
         Ok(Self {
             surface,
@@ -327,9 +385,17 @@ impl Renderer {
             wizard_count: wiz_instances.len() as u32,
             ruins_instances,
             ruins_count: ruin_instances.len() as u32,
+            palettes_buf,
+            palettes_bg,
+            joints_per_wizard,
+            wizard_pipeline,
+            wizard_wire_pipeline,
             wire_enabled: false,
 
             start: Instant::now(),
+            wizard_anim_index,
+            wizard_time_offset,
+            skinned_cpu,
         })
     }
 
@@ -360,8 +426,8 @@ impl Renderer {
         // Update globals (camera + time)
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        // Slow orbit with elevated camera so the plaza reads clearly
-        let cam = Camera::orbit(glam::vec3(0.0, 0.0, 0.0), 40.0, t * 0.1125, aspect);
+        // Slightly closer orbit for better view
+        let cam = Camera::orbit(glam::vec3(0.0, 0.0, 0.0), 30.0, t * 0.1125, aspect);
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
@@ -369,6 +435,9 @@ impl Renderer {
         let shard_mtx = glam::Mat4::from_rotation_y(t * 0.2);
         let shard_model = Model { model: shard_mtx.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.05, _pad: [0.0; 4] };
         self.queue.write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
+
+        // Update wizard skinning palettes on CPU then upload
+        self.update_wizard_palettes(t);
 
         // Begin commands
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
@@ -399,21 +468,24 @@ impl Renderer {
             rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
-            // Wizards (instanced)
-            let inst_pipe = if self.wire_enabled {
-                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
-            } else {
-                &self.inst_pipeline
-            };
-            rpass.set_pipeline(inst_pipe);
+            // Wizards (skinned + instanced)
+            let wiz_pipe = if self.wire_enabled { self.wizard_wire_pipeline.as_ref().unwrap_or(&self.wizard_pipeline) } else { &self.wizard_pipeline };
+            rpass.set_pipeline(wiz_pipe);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+            rpass.set_bind_group(2, &self.palettes_bg, &[]);
             rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
             rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
             rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
 
             // Ruins (instanced)
+            let inst_pipe = if self.wire_enabled {
+                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+            } else {
+                &self.inst_pipeline
+            };
+            rpass.set_pipeline(inst_pipe);
             rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
             rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
             rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
@@ -423,4 +495,108 @@ impl Renderer {
         frame.present();
         Ok(())
     }
+}
+
+impl Renderer {
+    fn update_wizard_palettes(&mut self, time_global: f32) {
+        // Build palettes for each wizard with its animation + offset.
+        if self.wizard_count == 0 { return; }
+        let joints = self.joints_per_wizard as usize;
+        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
+        for i in 0..(self.wizard_count as usize) {
+            let t = time_global + self.wizard_time_offset[i];
+            let clip = self.select_clip(self.wizard_anim_index[i]);
+            let palette = sample_palette(&self.skinned_cpu, clip, t);
+            mats.extend(palette);
+        }
+        // Upload as raw f32x16
+        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
+        for m in mats { raw.push(m.to_cols_array()); }
+        self.queue.write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
+    }
+
+    fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
+        // Map 0..2 to PortalOpen/Still/Waiting, fallback to any available
+        let name = match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" };
+        self.skinned_cpu
+            .animations
+            .get(name)
+            .or_else(|| self.skinned_cpu.animations.values().next())
+            .expect("at least one animation clip present")
+    }
+}
+
+fn sample_palette(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32) -> Vec<glam::Mat4> {
+    use std::collections::HashMap;
+    let mut local_t: Vec<glam::Vec3> = mesh.base_t.clone();
+    let mut local_r: Vec<glam::Quat> = mesh.base_r.clone();
+    let mut local_s: Vec<glam::Vec3> = mesh.base_s.clone();
+
+    let time = if clip.duration > 0.0 { t % clip.duration } else { 0.0 };
+
+    // Apply tracks to local TRS
+    for (node, tr) in &clip.t_tracks {
+        local_t[*node] = sample_vec3(tr, time, mesh.base_t[*node]);
+    }
+    for (node, rr) in &clip.r_tracks {
+        local_r[*node] = sample_quat(rr, time, mesh.base_r[*node]);
+    }
+    for (node, sr) in &clip.s_tracks {
+        local_s[*node] = sample_vec3(sr, time, mesh.base_s[*node]);
+    }
+
+    // Compute global matrices for all nodes touched by joints
+    let mut global: HashMap<usize, glam::Mat4> = HashMap::new();
+    for &jn in &mesh.joints_nodes {
+        compute_global(jn, &mesh.parent, &local_t, &local_r, &local_s, &mut global);
+    }
+
+    // Build palette: global * inverse_bind per joint in skin order
+    let mut out = Vec::with_capacity(mesh.joints_nodes.len());
+    for (i, &node_idx) in mesh.joints_nodes.iter().enumerate() {
+        let g = *global.get(&node_idx).unwrap_or(&glam::Mat4::IDENTITY);
+        out.push(g * mesh.inverse_bind[i]);
+    }
+    out
+}
+
+fn compute_global(
+    node: usize,
+    parent: &Vec<Option<usize>>,
+    lt: &Vec<glam::Vec3>,
+    lr: &Vec<glam::Quat>,
+    ls: &Vec<glam::Vec3>,
+    cache: &mut std::collections::HashMap<usize, glam::Mat4>,
+) -> glam::Mat4 {
+    if let Some(m) = cache.get(&node) { return *m; }
+    let local = glam::Mat4::from_scale_rotation_translation(ls[node], lr[node], lt[node]);
+    let m = if let Some(p) = parent[node] {
+        compute_global(p, parent, lt, lr, ls, cache) * local
+    } else {
+        local
+    };
+    cache.insert(node, m);
+    m
+}
+
+fn sample_vec3(tr: &crate::assets::TrackVec3, t: f32, default: glam::Vec3) -> glam::Vec3 {
+    if tr.times.is_empty() { return default; }
+    if t <= tr.times[0] { return tr.values[0]; }
+    if t >= *tr.times.last().unwrap() { return *tr.values.last().unwrap(); }
+    let mut i = 0;
+    while i + 1 < tr.times.len() && !(t >= tr.times[i] && t <= tr.times[i+1]) { i += 1; }
+    let t0 = tr.times[i]; let t1 = tr.times[i+1];
+    let f = (t - t0) / (t1 - t0);
+    tr.values[i].lerp(tr.values[i+1], f)
+}
+
+fn sample_quat(tr: &crate::assets::TrackQuat, t: f32, default: glam::Quat) -> glam::Quat {
+    if tr.times.is_empty() { return default; }
+    if t <= tr.times[0] { return tr.values[0]; }
+    if t >= *tr.times.last().unwrap() { return *tr.values.last().unwrap(); }
+    let mut i = 0;
+    while i + 1 < tr.times.len() && !(t >= tr.times[i] && t <= tr.times[i+1]) { i += 1; }
+    let t0 = tr.times[i]; let t1 = tr.times[i+1];
+    let f = (t - t0) / (t1 - t0);
+    tr.values[i].slerp(tr.values[i+1], f)
 }
