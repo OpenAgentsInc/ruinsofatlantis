@@ -2,6 +2,20 @@
 
 Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a division of OpenAgents, Inc.
 
+## Contents
+
+- [Philosophy](#philosophy)
+- [Game Mechanics](#game-mechanics)
+- [SRD Usage and Attribution](#srd-usage-and-attribution)
+- [SRD Scope & Implementation](#srd-scope--implementation)
+- [Classes](#classes)
+- [Races](#races)
+- [Class Lore (Oceanic Context)](#class-lore-oceanic-context)
+- [Combat](#combat)
+- [Zones & Cosmology](#zones--cosmology)
+- [Technical Overview](#technical-overview)
+- [Technical Overview (Expanded)](#technical-overview-expanded)
+
 ## Philosophy
 
 RoA embraces old‑school difficulty. Travel and logistics matter, resources are scarce, choices are meaningful, and death is painful.
@@ -94,12 +108,6 @@ Pulled from SRD 5.2.1 classes; original names retained. This section frames how 
 - Outer Planes: Clerics, Paladins, Monks—divine oaths and cosmic order.
 - Astral/Ethereal: Wizards, Warlocks—arcane travel, dream‑sailing, ghostly insight.
 
-## Technical Overview
-
-- Engine: custom engine from scratch in Rust (no third‑party game engine).
-- Rendering: built on `wgpu` for modern graphics APIs.
-- Windowing/Input: `winit` for cross‑platform windows and event handling.
-- Rationale: maximum control, performance, and customizability for MMO‑scale systems.
 
 ## Combat
 
@@ -157,3 +165,50 @@ Pulled from SRD 5.2.1 cosmology. We keep the canonical plane names (Material, Fe
 ### Ethereal Plane
 - Felt as moonlit fogs, ghost‑ships, and drowned memories near the veil.
 - Liminal space between Material and others; divers may slip through unintentionally.
+
+## Technical Overview
+
+- Engine: custom engine from scratch in Rust (no third‑party game engine).
+- Rendering: built on `wgpu` for modern graphics APIs.
+- Windowing/Input: `winit` for cross‑platform windows and event handling.
+- Rationale: maximum control, performance, and customizability for MMO‑scale systems.
+
+## Technical Overview (Expanded)
+
+### Engine Strategy
+
+We are building a custom Rust engine tailored for an authoritative MMO: server determinism first, a lean client focused on streaming, visibility, and custom ocean/terrain rendering. We’ll compose small crates (rendering, window/input, scene, assets, net, sim) with strict boundaries—no gameplay types in the renderer and no renderer types in gameplay.
+
+### Rendering & Platform Stack Choice
+
+#### What is `wgpu` (and why we want it)
+
+`wgpu` is a safe, modern Rust graphics API that targets the next‑gen GPU backends: Vulkan, Direct3D 12, Metal, and WebGPU. Think of it as a Rust‑native “unified driver layer” that lets us write one renderer and run it on Windows, Linux, macOS, and (optionally) the web—without writing four backends.
+
+Benefits
+- Modern API set: explicit resource lifetimes, bind groups, render/compute passes—clean fit for our framegraph and GPU culling plans.
+- Cross‑platform parity: we get DX12/Metal/Vulkan without bespoke codepaths (massively reduces maintenance).
+- Safety + ergonomics: Rust types for GPU state reduce entire classes of lifetime/synchronization bugs common in raw Vulkan/DX12.
+- Compute‑friendly: easy to add GPU jobs (skinning, culling, terrain/ocean FFT) as we scale.
+
+Tradeoffs
+- Less “bare metal” than raw Vulkan/DX12 (tiny overhead, but we’ll profile).
+- Web builds (WebGPU) are optional for us; we treat them as a nicety, not a core target.
+
+#### What is `winit` (and why we want it)
+
+`winit` is a cross‑platform window + event library for Rust. It handles windows, input (keyboard/mouse), DPI, and integrates smoothly with `wgpu` surfaces.
+
+Benefits
+- One windowing layer for Win/macOS/Linux (and Wayland/X11 differences).
+- Input that “just works”—keyboard, mouse, focus/resize—so we can write our own controller/UI without a full engine.
+
+Tradeoffs
+- It is intentionally minimal (no menus, no native widgets). That’s fine; we’re building an in‑engine HUD anyway.
+
+### Why this stack fits an MMO client
+
+- Performance control: We own the render graph, resource residency, and batching; nothing hides from the profiler.
+- Deterministic sim isolation: Rendering never touches sim types; sim stays replayable and testable for server authority.
+- Streaming‑first: Custom asset packs, chunked world streaming, GPU culling/indirect draws—no engine assumptions to fight.
+- Long‑life maintainability: A small dependency surface that tracks platform APIs directly—less churn than big engines’ editor/tooling layers.
