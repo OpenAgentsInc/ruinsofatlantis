@@ -604,6 +604,7 @@ impl Renderer {
         // Precompute strike times and init FX state
         let hand_right_node = skinned_cpu.hand_right_node;
         let portalopen_strikes = compute_portalopen_strikes(&skinned_cpu, hand_right_node);
+        let root_node_copy = skinned_cpu.root_node; // copy before moving skinned_cpu
 
         Ok(Self {
             surface,
@@ -665,7 +666,7 @@ impl Renderer {
             portalopen_strikes,
             last_center_phase: 0.0,
             hand_right_node,
-            root_node: skinned_cpu.root_node,
+            root_node: root_node_copy,
             projectiles: Vec::new(),
             particles: Vec::new(),
             cam_target,
@@ -851,13 +852,13 @@ impl Renderer {
                             // Aim using the character root's horizontal forward
                             let dir = if let Some(root) = self.root_node {
                                 if let Some(m_root) = global_of_node(&self.skinned_cpu, clip, phase, root) {
-                                    let p0 = (m_root * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
-                                    let p1 = (m_root * glam::Vec4::new(0.0, 0.0, -1.0, 1.0)).truncate();
-                                    let mut f = (p1 - p0);
+                                    // Use the root's +Z axis (forward) flattened to horizontal.
+                                    let z_axis = (m_root * glam::Vec4::new(0.0, 0.0, 1.0, 0.0)).truncate();
+                                    let mut f = z_axis;
                                     f.y = 0.0; // flatten to horizontal
-                                    if f.length_squared() > 1e-6 { f.normalize() } else { glam::Vec3::new(0.0, 0.0, -1.0) }
-                                } else { glam::Vec3::new(0.0, 0.0, -1.0) }
-                            } else { glam::Vec3::new(0.0, 0.0, -1.0) };
+                                    if f.length_squared() > 1e-6 { f.normalize() } else { glam::Vec3::new(0.0, 0.0, 1.0) }
+                                } else { glam::Vec3::new(0.0, 0.0, 1.0) }
+                            } else { glam::Vec3::new(0.0, 0.0, 1.0) };
                             self.spawn_firebolt(origin + dir * 0.3, dir, t);
                         }
                     }
