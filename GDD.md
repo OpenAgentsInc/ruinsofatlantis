@@ -14,7 +14,6 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 - [Combat](#combat)
 - [Zones & Cosmology](#zones--cosmology)
 - [Technical Overview](#technical-overview)
-- [Technical Overview (Expanded)](#technical-overview-expanded)
 
 ## Philosophy
 
@@ -78,7 +77,7 @@ Implementation notes
 - Orc
 - Tiefling
 
-## Class Lore (Oceanic Context)
+## Class Lore
 
 Pulled from SRD 5.2.1 classes; original names retained. This section frames how each archetype fits an Atlantis‑ruins, oceanic world and the SRD cosmology without renaming mechanics.
 
@@ -172,8 +171,6 @@ Pulled from SRD 5.2.1 cosmology. We keep the canonical plane names (Material, Fe
 - Rendering: built on `wgpu` for modern graphics APIs.
 - Windowing/Input: `winit` for cross‑platform windows and event handling.
 - Rationale: maximum control, performance, and customizability for MMO‑scale systems.
-
-## Technical Overview (Expanded)
 
 ### Engine Strategy
 
