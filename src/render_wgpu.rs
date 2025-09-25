@@ -200,7 +200,7 @@ impl WgpuState {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
         });
 
-        let model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [1.0, 0.85, 0.3], emissive: 0.2, _pad: [0.0; 2] };
+        let model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [1.0, 0.85, 0.3], emissive: 0.2, _pad: [0.0; 4] };
         let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("model"), contents: bytemuck::bytes_of(&model), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
         let model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("model-bg"), layout: &model_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: model_buf.as_entire_binding() }] });
 
@@ -285,7 +285,7 @@ impl WgpuState {
             rpass.set_bind_group(0, &self.globals_bg, &[]);
 
             // Draw plane (water): model identity at y=0, colored blue
-            let plane_model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.1, 0.35, 0.6], emissive: 0.0, _pad: [0.0; 2] };
+            let plane_model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.1, 0.35, 0.6], emissive: 0.0, _pad: [0.0; 4] };
             self.queue.write_buffer(&self.model_buf, 0, bytemuck::bytes_of(&plane_model));
             rpass.set_bind_group(1, &self.model_bg, &[]);
             rpass.set_vertex_buffer(0, self.plane_vb.slice(..));
@@ -294,7 +294,7 @@ impl WgpuState {
 
             // Draw cube (shard): translate up and rotate over time
             let model = Mat4::from_rotation_y(t) * Mat4::from_translation(vec3(0.0, 1.0, 0.0));
-            let shard_model = Model { model: model.to_cols_array_2d(), color: [1.0, 0.85, 0.3], emissive: 0.2, _pad: [0.0; 2] };
+            let shard_model = Model { model: model.to_cols_array_2d(), color: [1.0, 0.85, 0.3], emissive: 0.2, _pad: [0.0; 4] };
             self.queue.write_buffer(&self.model_buf, 0, bytemuck::bytes_of(&shard_model));
             rpass.set_bind_group(1, &self.model_bg, &[]);
             rpass.set_vertex_buffer(0, self.cube_vb.slice(..));
@@ -320,7 +320,7 @@ struct Model {
     model: [[f32; 4]; 4],
     color: [f32; 3],
     emissive: f32,
-    _pad: [f32; 2],
+    _pad: [f32; 4],
 }
 
 #[repr(C)]
