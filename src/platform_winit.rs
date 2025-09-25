@@ -1,4 +1,4 @@
-use crate::render_wgpu::WgpuState;
+use crate::gfx::Renderer;
 use wgpu::SurfaceError;
 use winit::{
     application::ApplicationHandler,
@@ -9,7 +9,7 @@ use winit::{
 
 struct App {
     window: Option<Window>,
-    state: Option<WgpuState>,
+    state: Option<Renderer>,
 }
 
 impl Default for App {
@@ -22,9 +22,9 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             let window = event_loop
-                .create_window(WindowAttributes::default().with_title("Ruins of Atlantis — Awaken"))
+                .create_window(WindowAttributes::default().with_title("Ruins of Atlantis — Instancing"))
                 .expect("create window");
-            let state = pollster::block_on(WgpuState::new(&window)).expect("wgpu init");
+            let state = pollster::block_on(Renderer::new(&window)).expect("wgpu init");
             self.window = Some(window);
             self.state = Some(state);
         }
@@ -46,7 +46,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = state.render() {
                     match err {
-                        SurfaceError::Lost | SurfaceError::Outdated => state.reconfigure_surface(),
+                        SurfaceError::Lost | SurfaceError::Outdated => state.resize(window.inner_size()),
                         SurfaceError::OutOfMemory => event_loop.exit(),
                         e => eprintln!("render error: {e:?}"),
                     }

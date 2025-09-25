@@ -7,6 +7,22 @@
 - Assets: `assets/` (art/audio), `data/` (JSON/CSV), `docs/` (design notes, diagrams).
 - Tests: unit tests within each crate’s `src/`; integration tests in top‑level `tests/`.
 
+### Code Organization (client prototype)
+- Rendering lives under `src/gfx/` and is split by responsibility:
+  - `gfx/mod.rs`: `Renderer` entry point (init/resize/render) and high‑level wiring.
+  - `gfx/camera.rs`: camera math and helpers.
+  - `gfx/types.rs`: GPU‑POD buffer types and vertex layouts (`Globals`, `Model`, `Vertex`, `Instance`).
+  - `gfx/mesh.rs`: CPU‑side mesh builders (cube, plane) → vertex/index buffers.
+  - `gfx/pipeline.rs`: shader load, bind group layouts, pipelines (base/instanced/wireframe).
+  - `gfx/shader.wgsl`: WGSL shaders for plane + instanced draws.
+  - `gfx/util.rs`: small helpers (depth view, surface clamp preserving aspect).
+- Going forward, keep modules cohesive, focused, and documented; do not accrete new features into monolith files. Add sub‑modules as systems grow (input, scene graph, streaming, UI, net, ECS, etc.).
+
+### Documentation & Comments
+- All new modules must start with a brief docblock explaining scope and how to extend it.
+- Add inline comments for non‑obvious math, layout decisions, and API quirks (e.g., WGSL/std140 padding, wgpu limits).
+- Prefer doc comments (`///`) on public types/functions so `cargo doc` is useful.
+
 ## Game Design Document (GDD)
 - Canonical design source: `GDD.md` at repo root.
 - Keep these sections current: Philosophy, Game Mechanics, SRD Usage and Attribution, SRD Scope & Implementation, and any Design Differences from SRD.
