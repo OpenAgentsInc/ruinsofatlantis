@@ -631,11 +631,10 @@ impl Renderer {
             // Wizards (skinned + instanced)
             // For exact parity with standalone viewer: use the simple pipeline
             rpass.set_pipeline(&self.wizard_simple_pipeline);
+            // Group 0: globals (view_proj)
             rpass.set_bind_group(0, &self.globals_bg, &[]);
-            // No model/instance/palettes for simple viewer path
-            // rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            // rpass.set_bind_group(2, &self.palettes_bg, &[]);
-            rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
+            // Group 1: material (texture + sampler)
+            rpass.set_bind_group(1, &self.wizard_mat_bg, &[]);
             rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
             // Draw only one wizard, no instancing, u16 indices
             rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
