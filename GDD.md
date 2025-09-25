@@ -229,8 +229,8 @@ UI and adaptation notes
 Open simulation and consequence‑driven conflict; no per‑player PvP toggles. If it exists, you can interact with it—players included.
 
 Always‑interactable targets
-- All entities are valid targets. Friendly fire is on; spells, buffs, and debuffs can target any creature consistent with SRD targeting.
-- Concentration, saves, conditions, opportunity attacks, and damage rules apply identically in PvE and PvP.
+- All entities are valid targets except players who are your allies via party, guild, or raid. Hostile actions (attacks, harmful spells/effects, hostile interactions) do not apply to allied members; buffs and beneficial effects still do.
+- Concentration, saves, conditions, opportunity attacks, and damage rules apply identically in PvE and PvP, with the ally exception above. Area effects ignore allied members by default.
 
 Civilized spaces and consequences (not invulnerability)
 - Towns and sanctuaries are protected by in‑world law and warding, not “PvP off” flags. Aggression is allowed but swiftly punished: guards respond, wards mark/outlaw offenders, and capture/arrest systems resolve crimes.
@@ -249,7 +249,7 @@ Anti‑grief tuning (within the fiction)
 - Safe travel that is explainable (convoys, escorts, warded ferries) rather than global invulnerability; risk scales with route and reputation.
 
 Notes on SRD alignment
-- The SRD already permits targeting any creature; RoA keeps this intact. MMO‑specific mitigations (guards, bounties, duel rites) are layered as world systems, not exceptions to the rules engine.
+- The SRD permits targeting any creature; RoA preserves this except for explicit ally groupings (party/guild/raid), where hostile actions are disabled by design. Duels/wars temporarily override this when consented or declared. Other MMO‑specific mitigations (guards, bounties, duel rites) are layered as world systems.
 
 ### Combat Simulator & Harness
 
