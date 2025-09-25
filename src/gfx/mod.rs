@@ -383,9 +383,8 @@ impl Renderer {
         let mut wizard_time_offset: Vec<f32> = Vec::with_capacity(wiz_instances.len());
         for (i, inst) in wiz_instances.iter_mut().enumerate() {
             inst.palette_base = (i as u32) * joints_per_wizard;
-            // 0=PortalOpen,1=Still,2=Waiting (fallback to whatever exists)
-            let pick = rng2.random_range(0..3);
-            wizard_anim_index.push(pick);
+            // Force "Waiting" animation for all wizards to avoid T-pose
+            wizard_anim_index.push(2); // 2 = Waiting (see select_clip)
             wizard_time_offset.push(rng2.random::<f32>() * 1.7);
         }
 
@@ -400,8 +399,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
-        // For viewer parity (simple pipeline draws at origin), force camera to look at origin
-        cam_target = glam::vec3(0.0, 1.2, 0.0);
+        // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
         let total_mats = (wiz_instances.len() as u32 * joints_per_wizard) as usize;
