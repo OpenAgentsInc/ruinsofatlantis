@@ -662,9 +662,9 @@ impl Renderer {
             // Group 1: material (texture + sampler)
             rpass.set_bind_group(1, &self.wizard_mat_bg, &[]);
             rpass.set_vertex_buffer(0, self.wizard_vb_simple.slice(..));
-            // Draw only one wizard, no instancing, u16 indices
+            rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
             rpass.set_index_buffer(self.wizard_ib_simple.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.wizard_index_count_simple, 0, 0..1);
+            rpass.draw_indexed(0..self.wizard_index_count_simple, 0, 0..self.wizard_count);
 
             // Ruins (instanced)
             let inst_pipe = if self.wire_enabled {

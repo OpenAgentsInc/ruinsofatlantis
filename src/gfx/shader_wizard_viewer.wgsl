@@ -7,6 +7,10 @@ struct Globals { view_proj: mat4x4<f32>, time_pad: vec4<f32> };
 struct VSIn {
   @location(0) pos: vec3<f32>,
   @location(1) uv: vec2<f32>,
+  @location(2) i0: vec4<f32>,
+  @location(3) i1: vec4<f32>,
+  @location(4) i2: vec4<f32>,
+  @location(5) i3: vec4<f32>,
 };
 
 struct VSOut {
@@ -17,7 +21,8 @@ struct VSOut {
 @vertex
 fn vs_main(input: VSIn) -> VSOut {
   var out: VSOut;
-  out.pos = globals.view_proj * vec4<f32>(input.pos, 1.0);
+  let inst = mat4x4<f32>(input.i0, input.i1, input.i2, input.i3);
+  out.pos = globals.view_proj * (inst * vec4<f32>(input.pos, 1.0));
   out.uv = input.uv;
   return out;
 }

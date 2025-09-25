@@ -210,7 +210,7 @@ pub fn create_wizard_simple_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("wizard-simple-pipeline"),
         layout: Some(&layout),
-        vertex: VertexState { module: &shader, entry_point: Some("vs_main"), buffers: &[VertexPosUv::LAYOUT], compilation_options: Default::default() },
+        vertex: VertexState { module: &shader, entry_point: Some("vs_main"), buffers: &[VertexPosUv::LAYOUT, Instance::LAYOUT], compilation_options: Default::default() },
         fragment: Some(FragmentState { module: &shader, entry_point: Some("fs_main"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: Some(wgpu::DepthStencilState { format: wgpu::TextureFormat::Depth32Float, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
