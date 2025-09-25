@@ -721,10 +721,11 @@ impl Renderer {
         }
         // Upload as raw f32x16
         if mats.len() >= joints {
-            // Quick T-pose diagnostic: log first joint of first wizard
+            // Quick T-pose diagnostic: log first joint of first wizard (translation)
             let m0 = mats[0];
-            let det = m0.determinant();
-            log::warn!("anim diag: first joint det={:.6}", det);
+            let c = m0.to_cols_array(); // column-major
+            let tx = c[12]; let ty = c[13]; let tz = c[14];
+            log::warn!("anim diag: first joint T=({:.4},{:.4},{:.4})", tx, ty, tz);
         }
         let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
         for m in mats { raw.push(m.to_cols_array()); }
