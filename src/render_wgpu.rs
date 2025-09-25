@@ -303,7 +303,8 @@ impl WgpuState {
         let grid_cols = 100u32; // 10k instances
         let grid_rows = 100u32;
         let spacing = 2.5f32;
-        let plane_extent = spacing * (grid_cols.max(grid_rows) as f32);
+        // Make ground larger than the grid footprint (add generous margin)
+        let plane_extent = spacing * (grid_cols.max(grid_rows) as f32) * 2.0;
         let (plane_vb, plane_ib, plane_index_count) = create_plane(&device, plane_extent);
 
         // Instances grid
@@ -322,6 +323,7 @@ impl WgpuState {
             contents: bytemuck::cast_slice(&instances),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
+        log::info!("instances: {} ({} x {})", (grid_cols as u64 * grid_rows as u64), grid_cols, grid_rows);
 
         Ok(Self {
             surface,
@@ -388,7 +390,8 @@ impl WgpuState {
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
         // Lift the camera higher and farther so the grid reads as a plaza
-        let cam = Camera::orbit(vec3(0.0, 0.0, 0.0), 40.0, t * 0.15, aspect);
+        // Slow rotation by ~25% for a calmer orbit
+        let cam = Camera::orbit(vec3(0.0, 0.0, 0.0), 40.0, t * 0.1125, aspect);
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
