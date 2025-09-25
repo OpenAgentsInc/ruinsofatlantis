@@ -89,13 +89,9 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
-  // Final path: sample baseColor at model UVs (no flip, no transform), apply simple lighting
-  let light_dir = normalize(vec3<f32>(0.3, 1.0, 0.4));
-  let ndl = max(dot(in.nrm, light_dir), 0.0);
-  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
-  var base = albedo * (0.25 + 0.75 * ndl);
-  if (in.sel > 0.5) { base = vec3<f32>(1.0, 1.0, 0.1); }
-  return vec4<f32>(base, 1.0);
+  // Match standalone viewer: raw baseColor (no lighting or flips)
+  let col = textureSample(base_tex, base_sam, in.uv).rgb;
+  return vec4<f32>(col, 1.0);
 }
 
 // Skinned instanced pipeline (wizards)
