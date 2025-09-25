@@ -22,6 +22,14 @@
 - Format/lint: `cargo fmt` and `cargo clippy -- -D warnings`
 - Optional dev loop: `cargo install cargo-watch` then `cargo watch -x run`
 
+## Dependency Management
+- Never add dependencies by hand in `Cargo.toml`.
+- Always use Cargo’s tooling so versions/resolution are correct:
+  - Install: `cargo install cargo-edit`
+  - Add deps: `cargo add <crate> [<crate>...]` (e.g., `cargo add winit wgpu log env_logger anyhow`)
+  - Remove deps: `cargo rm <crate>`
+  - Upgrade: `cargo upgrade` (review diffs before committing)
+
 ## Coding Style & Naming Conventions
 - Rust 2021+, 4‑space indent; target ~100‑char lines.
 - Names: snake_case (functions/files), CamelCase (types/traits), SCREAMING_SNAKE_CASE (consts).
