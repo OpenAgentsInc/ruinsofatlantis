@@ -16,9 +16,11 @@ pub fn run(state: &mut SimState) {
         if has_attack {
             let target_ac = state.target_ac(actor_idx).unwrap_or(12);
             let (roll, nat20) = state.roll_d20(Advantage::Normal);
-            let hit = roll >= target_ac;
+            let bonus = state.actors[actor_idx].spell_attack_bonus;
+            let total = roll + bonus;
+            let hit = total >= target_ac;
             let actor_id = state.actors[actor_idx].id.clone();
-            state.log(format!("attack_resolved actor={} ability={} d20={} vs AC{} => {}", actor_id, ability_id, roll, target_ac, if hit {"HIT"} else {"MISS"}));
+            state.log(format!("attack_resolved actor={} ability={} d20={} + {} = {} vs AC{} => {}", actor_id, ability_id, roll, bonus, total, target_ac, if hit {"HIT"} else {"MISS"}));
             if hit { state.pending_damage.push((actor_idx, ability_id.clone(), crit_on_nat20 && nat20)); }
         } else {
             state.pending_damage.push((actor_idx, ability_id.clone(), false));

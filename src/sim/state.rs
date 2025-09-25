@@ -12,11 +12,15 @@ use crate::core::rules::attack::Advantage;
 pub struct ActorSim {
     pub id: String,
     pub role: String,
+    pub class: Option<String>,
     pub hp: i32,
     pub ability_ids: Vec<String>,
     pub action: ActionState,
     pub gcd: Gcd,
     pub target: Option<usize>,
+    pub spell_attack_bonus: i32,
+    pub spell_save_dc: i32,
+    pub statuses: Vec<(crate::core::combat::conditions::Condition, u32)>,
 }
 
 pub struct SimState {
@@ -26,7 +30,9 @@ pub struct SimState {
     pub spells: HashMap<String, SpellSpec>,
     pub cast_completed: Vec<(usize, String)>,
     pub pending_damage: Vec<(usize, String, bool)>,
+    pub pending_status: Vec<(usize, crate::core::combat::conditions::Condition, u32)>,
     pub logs: Vec<String>,
+    pub underwater: bool,
 }
 
 impl SimState {
@@ -38,7 +44,9 @@ impl SimState {
             spells: HashMap::new(),
             cast_completed: Vec::new(),
             pending_damage: Vec::new(),
+            pending_status: Vec::new(),
             logs: Vec::new(),
+            underwater: false,
         }
     }
 

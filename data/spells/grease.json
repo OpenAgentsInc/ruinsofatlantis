@@ -1,0 +1,37 @@
+{
+  "id": "wiz.grease.srd521",
+  "name": "Grease",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "conjuration",
+  "level": 1,
+  "classes": ["wizard"],
+  "tags": ["control", "aoe"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 6.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "unit-or-object",
+  "requires_line_of_sight": true,
+  "range_ft": 60,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 180,
+
+  "attack": null,
+  "damage": null,
+
+  "projectile": null,
+
+  "save": {
+    "kind": "dex",
+    "dc": 13,
+    "on_fail": { "apply_condition": "prone", "duration_ms": 6000 }
+  },
+
+  "events": ["CastStarted","CastCompleted","SaveResolved","ConditionApplied"],
+  "metrics": null,
+  "policy": { "role": "control", "priority_index": 2 }
+}

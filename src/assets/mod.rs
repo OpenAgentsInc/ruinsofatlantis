@@ -109,7 +109,18 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
 
                 let pos: Vec<[f32;3]> = pos_it.collect();
                 let nrm: Vec<[f32;3]> = nrm_it.collect();
-                let uv: Vec<[f32;2]> = uv0_opt.map(|mut it| { let mut v=Vec::with_capacity(pos.len()); for (i,t) in (0..pos.len()).zip(&mut it) { let u=t; v.push([u[0],u[1]]);} v }).unwrap_or_else(|| vec![[0.0,0.0]; pos.len()]);
+                let uv: Vec<[f32;2]> = if let Some(it) = uv0_opt {
+                    let collected: Vec<[f32;2]> = it.collect();
+                    if collected.len() == pos.len() { collected } else {
+                        log::warn!("wizard: TEXCOORD_0 length {} != positions {} — padding", collected.len(), pos.len());
+                        let mut v = collected;
+                        v.resize(pos.len(), [0.0, 0.0]);
+                        v
+                    }
+                } else {
+                    log::warn!("wizard: TEXCOORD_0 missing; using planar fallback UVs");
+                    pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
+                };
                 for i in 0..pos.len() {
                     verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] });
                 }

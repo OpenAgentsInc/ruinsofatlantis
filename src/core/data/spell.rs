@@ -63,6 +63,8 @@ pub struct SpellSpec {
     pub metrics: Option<serde_json::Value>,
     #[serde(default)]
     pub policy: Option<serde_json::Value>,
+    #[serde(default)]
+    pub save: Option<SaveSpec>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -98,4 +100,21 @@ pub struct SpawnOffset {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SaveSpec {
+    pub kind: String, // e.g., "dex", "wis"
+    #[serde(default)]
+    pub dc: Option<i32>, // if None, use caster's spell_save_dc
+    #[serde(default)]
+    pub on_fail: Option<OnFail>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OnFail {
+    #[serde(default)]
+    pub apply_condition: Option<String>, // e.g., "prone"
+    #[serde(default)]
+    pub duration_ms: Option<u32>,
 }

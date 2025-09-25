@@ -36,6 +36,7 @@
       "17-20": "4d10"
     }
   },
+  "save": null,
 
   "projectile": {
     "enabled": true,

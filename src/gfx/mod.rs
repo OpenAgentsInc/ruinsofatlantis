@@ -389,7 +389,15 @@ impl Renderer {
                 size3,
             );
             let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-            let sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("wizard-sampler"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("wizard-sampler"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                address_mode_u: wgpu::AddressMode::Repeat,
+                address_mode_v: wgpu::AddressMode::Repeat,
+                ..Default::default()
+            });
             let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("wizard-material-bg"), layout: &material_bgl,
                 entries: &[
@@ -409,7 +417,11 @@ impl Renderer {
                 size3,
             );
             let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-            let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::Repeat,
+                address_mode_v: wgpu::AddressMode::Repeat,
+                ..Default::default()
+            });
             let bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("wizard-material-bg"), layout: &material_bgl, entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
