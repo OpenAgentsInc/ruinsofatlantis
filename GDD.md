@@ -241,6 +241,8 @@ Goals
 - Control timestep, latency, RNG seed, and policies to compare outcomes.
 - Headless by default; optional debug visualization.
 
+Design doc: see `docs/combat_sim_ecs.md` for the ECS design, system pipeline, and SRD rules mapping used by the simulator.
+
 Architecture (planned crates)
 - sim-core: deterministic rules engine (fixed timestep, e.g., 50 ms). Holds entities, stats, cooldowns, effects, threat, concentration, and an event bus. No rendering.
 - sim-data: SRD-derived data (JSON/TOML) for classes, spells, conditions, monsters. Versioned IDs and provenance.
