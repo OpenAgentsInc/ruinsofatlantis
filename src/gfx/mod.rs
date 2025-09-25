@@ -711,8 +711,8 @@ impl Renderer {
             let t = time_global + self.wizard_time_offset[i];
             let clip = self.select_clip(self.wizard_anim_index[i]);
             if i == 0 {
-                log::debug!(
-                    "anim: wizard0 clip='{}' dur={:.3}s tracks: T={} R={} S={}",
+                log::warn!(
+                    "anim diag: wizard0 clip='{}' dur={:.3}s tracks: T={} R={} S={}",
                     clip.name, clip.duration, clip.t_tracks.len(), clip.r_tracks.len(), clip.s_tracks.len()
                 );
             }
@@ -724,7 +724,7 @@ impl Renderer {
             // Quick T-pose diagnostic: log first joint of first wizard
             let m0 = mats[0];
             let det = m0.determinant();
-            log::debug!("anim: first joint det={:.6}", det);
+            log::warn!("anim diag: first joint det={:.6}", det);
         }
         let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
         for m in mats { raw.push(m.to_cols_array()); }
