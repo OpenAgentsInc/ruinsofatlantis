@@ -256,10 +256,27 @@ impl Renderer {
             .context("load skinned wizard.gltf")?;
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
 
+        // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
+        // and override the UVs we got from the skinned loader if the counts match. This
+        // sidesteps any subtle attribute mismatches that can lead to banding.
+        let viewer_uv: Option<Vec<[f32;2]>> = (|| {
+            let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).ok()?;
+            let mesh = doc.meshes().next()?;
+            let prim = mesh.primitives().next()?;
+            let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+            let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
+            let uv = reader.read_tex_coords(uv_set)?.into_f32().collect::<Vec<[f32;2]>>();
+            Some(uv)
+        })();
+
         let wiz_vertices: Vec<VertexSkinned> = skinned_cpu
             .vertices
             .iter()
-            .map(|v| VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv: v.uv })
+            .enumerate()
+            .map(|(i, v)| {
+                let uv = if let Some(ref uvs) = viewer_uv { uvs.get(i).copied().unwrap_or(v.uv) } else { v.uv };
+                VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv }
+            })
             .collect();
 
         // Debug: UV range
