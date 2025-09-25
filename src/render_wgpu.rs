@@ -19,9 +19,11 @@ pub struct WgpuState {
     globals_buf: wgpu::Buffer,
     globals_bg: wgpu::BindGroup,
 
-    // Model-specific bind group (we reuse buffer per draw)
-    model_buf: wgpu::Buffer,
-    model_bg: wgpu::BindGroup,
+    // Model-specific bind groups (separate buffers for plane and shard)
+    plane_model_buf: wgpu::Buffer,
+    plane_model_bg: wgpu::BindGroup,
+    shard_model_buf: wgpu::Buffer,
+    shard_model_bg: wgpu::BindGroup,
 
     // Geometry
     cube_vb: wgpu::Buffer,
@@ -200,9 +202,13 @@ impl WgpuState {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
         });
 
-        let model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [1.0, 0.85, 0.3], emissive: 0.2, _pad: [0.0; 4] };
-        let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("model"), contents: bytemuck::bytes_of(&model), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
-        let model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("model-bg"), layout: &model_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: model_buf.as_entire_binding() }] });
+        let plane_model_init = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.0, 1.0, 0.0], emissive: 0.0, _pad: [0.0; 4] };
+        let plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("plane-model"), contents: bytemuck::bytes_of(&plane_model_init), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
+        let plane_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("plane-model-bg"), layout: &model_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: plane_model_buf.as_entire_binding() }] });
+
+        let shard_model_init = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [1.0, 0.0, 0.0], emissive: 0.2, _pad: [0.0; 4] };
+        let shard_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("shard-model"), contents: bytemuck::bytes_of(&shard_model_init), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
+        let shard_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("shard-model-bg"), layout: &model_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: shard_model_buf.as_entire_binding() }] });
 
         // Geometry: cube and plane
         let (cube_vb, cube_ib, cube_index_count) = create_cube(&device);
@@ -218,8 +224,10 @@ impl WgpuState {
             pipeline,
             globals_buf,
             globals_bg,
-            model_buf,
-            model_bg,
+            plane_model_buf,
+            plane_model_bg,
+            shard_model_buf,
+            shard_model_bg,
             cube_vb,
             cube_ib,
             cube_index_count,
@@ -257,6 +265,13 @@ impl WgpuState {
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
+        // Prepare per-model uniforms before encoding the pass
+        let plane_model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.05, 0.80, 0.30], emissive: 0.0, _pad: [0.0; 4] };
+        let model_mtx = Mat4::from_rotation_y(t) * Mat4::from_translation(vec3(0.0, 1.0, 0.0));
+        let shard_model = Model { model: model_mtx.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.15, _pad: [0.0; 4] };
+        self.queue.write_buffer(&self.plane_model_buf, 0, bytemuck::bytes_of(&plane_model));
+        self.queue.write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -284,21 +299,14 @@ impl WgpuState {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
 
-            // Draw plane (water): model identity at y=0, colored blue
-            // Strongly distinct plane color (green-teal)
-            let plane_model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.05, 0.80, 0.30], emissive: 0.0, _pad: [0.0; 4] };
-            self.queue.write_buffer(&self.model_buf, 0, bytemuck::bytes_of(&plane_model));
-            rpass.set_bind_group(1, &self.model_bg, &[]);
+            // Draw plane using its dedicated model buffer/bind-group
+            rpass.set_bind_group(1, &self.plane_model_bg, &[]);
             rpass.set_vertex_buffer(0, self.plane_vb.slice(..));
             rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
-            // Draw cube (shard): translate up and rotate over time
-            let model = Mat4::from_rotation_y(t) * Mat4::from_translation(vec3(0.0, 1.0, 0.0));
-            // High-contrast shard color (crimson)
-            let shard_model = Model { model: model.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.15, _pad: [0.0; 4] };
-            self.queue.write_buffer(&self.model_buf, 0, bytemuck::bytes_of(&shard_model));
-            rpass.set_bind_group(1, &self.model_bg, &[]);
+            // Draw shard using its dedicated model buffer/bind-group
+            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
             rpass.set_vertex_buffer(0, self.cube_vb.slice(..));
             rpass.set_index_buffer(self.cube_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.cube_index_count, 0, 0..1);
