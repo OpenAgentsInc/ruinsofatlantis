@@ -22,7 +22,7 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             let window = event_loop
-                .create_window(WindowAttributes::default().with_title("Ruins of Atlantis — Awaken"))
+                .create_window(WindowAttributes::default().with_title("Ruins of Atlantis — Instancing"))
                 .expect("create window");
             let state = pollster::block_on(Renderer::new(&window)).expect("wgpu init");
             self.window = Some(window);
