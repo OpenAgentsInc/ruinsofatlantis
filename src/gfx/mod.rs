@@ -710,10 +710,22 @@ impl Renderer {
         for i in 0..(self.wizard_count as usize) {
             let t = time_global + self.wizard_time_offset[i];
             let clip = self.select_clip(self.wizard_anim_index[i]);
+            if i == 0 {
+                log::debug!(
+                    "anim: wizard0 clip='{}' dur={:.3}s tracks: T={} R={} S={}",
+                    clip.name, clip.duration, clip.t_tracks.len(), clip.r_tracks.len(), clip.s_tracks.len()
+                );
+            }
             let palette = sample_palette(&self.skinned_cpu, clip, t);
             mats.extend(palette);
         }
         // Upload as raw f32x16
+        if mats.len() >= joints {
+            // Quick T-pose diagnostic: log first joint of first wizard
+            let m0 = mats[0];
+            let det = m0.determinant();
+            log::debug!("anim: first joint det={:.6}", det);
+        }
         let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
         for m in mats { raw.push(m.to_cols_array()); }
         self.queue.write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));

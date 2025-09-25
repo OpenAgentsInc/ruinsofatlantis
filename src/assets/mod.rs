@@ -218,6 +218,13 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         animations.insert(name.clone(), AnimClip { name, duration: max_t, t_tracks, r_tracks, s_tracks });
     }
 
+    // Debug: list available clips
+    if !animations.is_empty() {
+        for (k,v) in &animations { log::info!("anim clip: '{}' dur={:.3}s T={} R={} S={}", k, v.duration, v.t_tracks.len(), v.r_tracks.len(), v.s_tracks.len()); }
+    } else {
+        log::warn!("no animations parsed from {}", path.display());
+    }
+
     if animations.is_empty() {
         animations.insert("__static".to_string(), AnimClip { name: "__static".to_string(), duration: 0.0, t_tracks: HashMap::new(), r_tracks: HashMap::new(), s_tracks: HashMap::new() });
     }
