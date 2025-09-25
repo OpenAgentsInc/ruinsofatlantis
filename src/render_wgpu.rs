@@ -188,7 +188,7 @@ impl WgpuState {
         });
 
         // Buffers
-        let globals = Globals { view_proj: Mat4::IDENTITY.to_cols_array_2d(), time: 0.0, _pad: [0.0; 3] };
+        let globals = Globals { view_proj: Mat4::IDENTITY.to_cols_array_2d(), time_pad: [0.0; 4] };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
             contents: bytemuck::bytes_of(&globals),
@@ -254,7 +254,7 @@ impl WgpuState {
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
         let cam = Camera::orbit(vec3(0.0, 1.0, 0.0), 4.0, t * 0.3, aspect);
-        let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time: t, _pad: [0.0; 3] };
+        let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
         let mut encoder = self
@@ -311,8 +311,7 @@ impl WgpuState {
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 struct Globals {
     view_proj: [[f32; 4]; 4],
-    time: f32,
-    _pad: [f32; 3],
+    time_pad: [f32; 4],
 }
 
 #[repr(C)]
@@ -431,7 +430,7 @@ impl Camera {
 }
 
 const BASIC_WGSL: &str = r#"
-struct Globals { view_proj: mat4x4<f32>, time: f32, _pad: vec3<f32> };
+struct Globals { view_proj: mat4x4<f32>, time_pad: vec4<f32> };
 @group(0) @binding(0) var<uniform> globals: Globals;
 
 struct Model { model: mat4x4<f32>, color: vec3<f32>, emissive: f32, _pad: vec2<f32> };
@@ -455,7 +454,8 @@ fn vs_main(input: VSIn) -> VSOut {
   if (abs(input.nrm.y) > 0.9 && abs(p.y) < 0.0001) {
     let amp = 0.05;
     let freq = 0.5;
-    p.y = amp * sin(p.x * freq + globals.time * 1.5) + amp * cos(p.z * freq + globals.time);
+    let t = globals.time_pad.x;
+    p.y = amp * sin(p.x * freq + t * 1.5) + amp * cos(p.z * freq + t);
   }
   let world_pos = (model_u.model * vec4<f32>(p, 1.0)).xyz;
   var out: VSOut;
