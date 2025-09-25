@@ -96,7 +96,9 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     let mut indices: Vec<u16> = Vec::new();
     // (deferred material loading uses `images` later)
 
+    // Prefer a mesh attached to a skinned node; fall back later if none.
     'outer: for scene in doc.scenes() { for node in scene.nodes() {
+        if node.skin().is_none() { continue; }
         if let Some(mesh) = node.mesh() {
             if let Some(skin) = node.skin() { skin_opt = Some(skin); }
             for prim in mesh.primitives() {

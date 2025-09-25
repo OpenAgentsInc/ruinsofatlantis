@@ -645,7 +645,8 @@ impl Renderer {
         let aspect = self.config.width as f32 / self.config.height as f32;
         // Orbit closely around the first wizard we spawned
         // Zoom in further and slow orbit speed by 75%
-        let cam = Camera::orbit(self.cam_target, 3.0, t * 0.15, aspect);
+        // Freeze orbit rotation to help observe animation clearly
+        let cam = Camera::orbit(self.cam_target, 3.0, 0.0, aspect);
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
@@ -734,9 +735,6 @@ impl Renderer {
                 );
             }
             let mut palette = sample_palette(&self.skinned_cpu, clip, t);
-            // Force a small rotation on joint 0 to validate skinning path
-            let rot = glam::Mat4::from_rotation_y(0.2 * t.sin());
-            if !palette.is_empty() { palette[0] = rot * palette[0]; }
             mats.extend(palette);
         }
         // Upload as raw f32x16
