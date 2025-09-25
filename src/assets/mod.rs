@@ -74,7 +74,11 @@ pub struct SkinnedMeshCPU {
 pub struct TextureCPU { pub pixels: Vec<u8>, pub width: u32, pub height: u32, pub srgb: bool }
 
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
-    let (doc, buffers, images) = gltf::import(path).with_context(|| format!("import skinned glTF: {}", path.display()))?;
+    // Prefer a pre-decompressed copy if present (avoids Draco at runtime)
+    let prefer = path.with_extension("decompressed.gltf");
+    let source = if prefer.exists() { prefer.as_path() } else { path };
+    if source != path { log::warn!("anim diag: using pre-decompressed glTF: {}", source.display()); }
+    let (doc, buffers, images) = gltf::import(source).with_context(|| format!("import skinned glTF: {}", source.display()))?;
 
     // Build parent map and base TRS
     let node_count = doc.nodes().len();
