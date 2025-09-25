@@ -8,4 +8,8 @@ Spell entries are organized alphabetically. Each entry reproduces the spell’s 
 - B — docs/srd/03-spells/spell-descriptions/B.md
 - C — docs/srd/03-spells/spell-descriptions/C.md
 - D — docs/srd/03-spells/spell-descriptions/D.md
+- E — docs/srd/03-spells/spell-descriptions/E.md
+- F — docs/srd/03-spells/spell-descriptions/F.md
+- G — docs/srd/03-spells/spell-descriptions/G.md
+- H — docs/srd/03-spells/spell-descriptions/H.md
   
