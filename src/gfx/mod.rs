@@ -75,6 +75,9 @@ pub struct Renderer {
     wizard_vb: wgpu::Buffer,
     wizard_ib: wgpu::Buffer,
     wizard_index_count: u32,
+    wizard_vb_simple: wgpu::Buffer,
+    wizard_ib_simple: wgpu::Buffer,
+    wizard_index_count_simple: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -276,6 +279,24 @@ impl Renderer {
             usage: wgpu::BufferUsages::INDEX,
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
+
+        // Viewer-parity simple mesh (pos+uv only)
+        let (wizard_vb_simple, wizard_ib_simple, wizard_index_count_simple) = {
+            use gltf::mesh::util::ReadIndices as RI;
+            let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).context("viewer-parity import")?;
+            let mesh = doc.meshes().next().context("viewer-parity: no mesh")?;
+            let prim = mesh.primitives().next().context("viewer-parity: no primitive")?;
+            let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+            let pos: Vec<[f32;3]> = reader.read_positions().context("viewer-parity: positions missing")?.collect();
+            let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
+            let uv: Vec<[f32;2]> = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32().collect()).unwrap_or_else(|| pos.iter().map(|p| [0.5 + 0.5*p[0], 0.5 - 0.5*p[2]]).collect());
+            let verts: Vec<crate::gfx::types::VertexPosUv> = pos.into_iter().zip(uv.into_iter()).map(|(p,t)| crate::gfx::types::VertexPosUv{ pos: p, uv: t }).collect();
+            let idx_u32: Vec<u32> = match reader.read_indices() { Some(RI::U16(it)) => it.map(|v| v as u32).collect(), Some(RI::U32(it)) => it.collect(), Some(RI::U8(it)) => it.map(|v| v as u32).collect(), None => (0..verts.len() as u32).collect() };
+            let idx_u16: Vec<u16> = idx_u32.iter().map(|&v| v as u16).collect();
+            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-vb-simple"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
+            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-ib-simple"), contents: bytemuck::cast_slice(&idx_u16), usage: wgpu::BufferUsages::INDEX });
+            (vb, ib, idx_u16.len() as u32)
+        };
 
         let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
             Ok(ruins_cpu) => {
@@ -533,6 +554,9 @@ impl Renderer {
             wizard_vb,
             wizard_ib,
             wizard_index_count,
+            wizard_vb_simple,
+            wizard_ib_simple,
+            wizard_index_count_simple,
             ruins_vb,
             ruins_ib,
             ruins_index_count,
@@ -637,10 +661,10 @@ impl Renderer {
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             // Group 1: material (texture + sampler)
             rpass.set_bind_group(1, &self.wizard_mat_bg, &[]);
-            rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
+            rpass.set_vertex_buffer(0, self.wizard_vb_simple.slice(..));
             // Draw only one wizard, no instancing, u16 indices
-            rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..1);
+            rpass.set_index_buffer(self.wizard_ib_simple.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.wizard_index_count_simple, 0, 0..1);
 
             // Ruins (instanced)
             let inst_pipe = if self.wire_enabled {

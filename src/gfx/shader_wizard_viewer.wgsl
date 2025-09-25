@@ -6,7 +6,7 @@ struct Globals { view_proj: mat4x4<f32>, time_pad: vec4<f32> };
 
 struct VSIn {
   @location(0) pos: vec3<f32>,
-  @location(11) uv: vec2<f32>,
+  @location(1) uv: vec2<f32>,
 };
 
 struct VSOut {
@@ -27,4 +27,3 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let c = textureSample(base_tex, base_sam, in.uv);
   return vec4<f32>(c.rgb, 1.0);
 }
-

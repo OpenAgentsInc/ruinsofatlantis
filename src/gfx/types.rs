@@ -63,6 +63,22 @@ impl VertexSkinned {
     };
 }
 
+// Position + UV only (viewer-parity path)
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct VertexPosUv {
+    pub pos: [f32; 3],
+    pub uv: [f32; 2],
+}
+
+impl VertexPosUv {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<VertexPosUv>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
+    };
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Instance {
