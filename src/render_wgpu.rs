@@ -99,14 +99,13 @@ impl WgpuState {
             .unwrap_or(wgpu::PresentMode::Fifo);
         let alpha_mode = caps.alpha_modes[0];
 
-        // Determine max supported surface dimension and clamp initial size
-        let supported = adapter.limits();
-        let max_dim = supported.max_texture_dimension_2d.max(1);
+        // Determine max supported dimension from the actual device limits (not adapter)
+        let dev_limits = device.limits();
+        let max_dim = dev_limits.max_texture_dimension_2d.max(1);
         let (mut w, mut h) = (size.width.max(1), size.height.max(1));
         if w > max_dim || h > max_dim {
-            let scale = (w as f32 / max_dim as f32).max(h as f32 / max_dim as f32);
-            w = ((w as f32 / scale).floor() as u32).max(1);
-            h = ((h as f32 / scale).floor() as u32).max(1);
+            w = w.min(max_dim);
+            h = h.min(max_dim);
             log::warn!(
                 "Clamping surface from {}x{} to {}x{} (max_dim={})",
                 size.width,
@@ -260,11 +259,10 @@ impl WgpuState {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            let (mut w, mut h) = (new_size.width, new_size.height);
+            let (mut w, mut h) = (new_size.width.max(1), new_size.height.max(1));
             if w > self.max_dim || h > self.max_dim {
-                let scale = (w as f32 / self.max_dim as f32).max(h as f32 / self.max_dim as f32);
-                w = ((w as f32 / scale).floor() as u32).max(1);
-                h = ((h as f32 / scale).floor() as u32).max(1);
+                w = w.min(self.max_dim);
+                h = h.min(self.max_dim);
                 log::warn!(
                     "Resized {}x{} exceeds max {}, clamped to {}x{}",
                     new_size.width,
