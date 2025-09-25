@@ -36,7 +36,7 @@ Players can earn coin and reputation by repairing damage in the world using SRD 
 - Eligible actions
   - Mending (cantrip): fixes a single break/tear up to 1 ft. in any dimension on a non‑creature object. Used for minor cracks, snapped rails, torn sails, and loose fittings.
   - Tool work: Carpenter’s Tools (wood), Mason’s Tools (stone), Smith’s Tools (metal), Tinker’s Tools (mechanisms). Applies to doors, bridges, hoists, stairs, railings, and town fixtures.
-- Flow (diegetic jobs)
+- Flow (in‑world jobs)
   - Damage occurs from combat or environment (e.g., a “hammer” swing breaks a door; siege in a port town damages railings).
   - Job boards and wardens post repair orders. Interact with the damaged object or board to accept a task.
   - Perform checks: use the relevant tool proficiency (with ability mod per SRD; DMG‑style DCs) and consume simple materials (wood/stone/metal scrap). Mending auto‑repairs qualifying small breaks without a check.
@@ -236,7 +236,7 @@ Civilized spaces and consequences (not invulnerability)
 - Towns and sanctuaries are protected by in‑world law and warding, not “PvP off” flags. Aggression is allowed but swiftly punished: guards respond, wards mark/outlaw offenders, and capture/arrest systems resolve crimes.
 - Outlaw status is visible and persistent: bounties, faction hostility, confiscation on defeat, and travel restrictions create meaningful deterrents without removing agency.
 
-Consentful conflict, diegetically
+Consentful conflict, in‑world
 - Duels: initiate via heralds/circles/contracts that both parties accept; rules (timers, no outside aid, stakes) are enforced by the rite, not UI toggles.
 - Wars: guilds/kingdoms declare war at heralds over regions/routes; after notice, members are open targets within the declared scope. Treaties and ceasefires are likewise filed in world.
 
