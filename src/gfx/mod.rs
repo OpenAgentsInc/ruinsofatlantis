@@ -279,6 +279,23 @@ impl Renderer {
             })
             .collect();
 
+        // Diagnostics: JOINTS_0 and WEIGHTS_0 ranges
+        if !wiz_vertices.is_empty() {
+            let mut jmin = [u16::MAX;4];
+            let mut jmax = [0u16;4];
+            let mut wmin = [f32::INFINITY;4];
+            let mut wmax = [f32::NEG_INFINITY;4];
+            for v in wiz_vertices.iter().take(512) { // sample subset
+                for k in 0..4 { jmin[k] = jmin[k].min(v.joints[k]); jmax[k] = jmax[k].max(v.joints[k]); }
+                for k in 0..4 { wmin[k] = wmin[k].min(v.weights[k]); wmax[k] = wmax[k].max(v.weights[k]); }
+            }
+            log::warn!(
+                "anim diag: JOINTS_0 x=[{}..{}] y=[{}..{}] z=[{}..{}] w=[{}..{}]; WEIGHTS_0 x=[{:.2}..{:.2}] y=[{:.2}..{:.2}] z=[{:.2}..{:.2}] w=[{:.2}..{:.2}]",
+                jmin[0], jmax[0], jmin[1], jmax[1], jmin[2], jmax[2], jmin[3], jmax[3],
+                wmin[0], wmax[0], wmin[1], wmax[1], wmin[2], wmax[2], wmin[3], wmax[3]
+            );
+        }
+
         // Debug: UV range
         if !wiz_vertices.is_empty() {
             let mut umin = f32::INFINITY; let mut vmin = f32::INFINITY; let mut umax = f32::NEG_INFINITY; let mut vmax = f32::NEG_INFINITY;
@@ -716,7 +733,10 @@ impl Renderer {
                     clip.name, clip.duration, clip.t_tracks.len(), clip.r_tracks.len(), clip.s_tracks.len()
                 );
             }
-            let palette = sample_palette(&self.skinned_cpu, clip, t);
+            let mut palette = sample_palette(&self.skinned_cpu, clip, t);
+            // Force a small rotation on joint 0 to validate skinning path
+            let rot = glam::Mat4::from_rotation_y(0.2 * t.sin());
+            if !palette.is_empty() { palette[0] = rot * palette[0]; }
             mats.extend(palette);
         }
         // Upload as raw f32x16
