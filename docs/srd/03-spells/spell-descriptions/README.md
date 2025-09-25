@@ -19,4 +19,7 @@ Spell entries are organized alphabetically. Each entry reproduces the spell’s 
 - M — docs/srd/03-spells/spell-descriptions/M.md
 - N — docs/srd/03-spells/spell-descriptions/N.md
 - P — docs/srd/03-spells/spell-descriptions/P.md
+- R — docs/srd/03-spells/spell-descriptions/R.md
+- S — docs/srd/03-spells/spell-descriptions/S.md
+- T — docs/srd/03-spells/spell-descriptions/T.md
   
