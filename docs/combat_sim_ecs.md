@@ -184,3 +184,84 @@ Phase 4 — Threat & Bossing
 
 This aligns with the Fire Bolt spec while staying general for other abilities.
 
+---
+
+Here’s a clean hierarchy that keeps “authoritative game data + rules” shared, and lets the
+  sim (FSM/engine) pull them in.
+
+  Authoritative Data (checked in, shared)
+
+  - data/
+      - spells/ JSON/TOML (e.g., fire_bolt.json)
+      - abilities/ (if you keep non‑spell abilities separate)
+      - conditions/
+      - items/, monsters/, classes/, feats/
+      - encounters/ (optional authored sets)
+      - scenarios/ (inputs for sim harness; you can also put this under tools/sim-harness/scenarios/ if you want it tool‑local)
+      - manifest.(json|toml) (optional index with versions/provenance)
+
+  The sim, server, and client all load from data/ via shared loaders.
+
+  Target Workspace Layout (when we split crates)
+
+  - shared/
+      - game-data/ (serde models + loaders)
+          - Types: Ability, Spell, Condition, Item, Monster, Class, IDs, provenance
+          - Loaders: resolve data/ paths, versioning, validation
+      - rules/ (SRD math and constants)
+          - Dice, advantage/disadvantage, crit rules, save DC math, underwater modifiers
+      - ecs/ (lightweight ECS infra if we outgrow current src/ecs/)
+      - combat/ (production combat types)
+          - fsm/ Ability/Action state machines (cast/channel/reaction windows, GCD/CD), events
+          - Damage model, condition application, concentration links
+      - sim-core/ (deterministic systems over ECS)
+          - Events bus, scheduler, RNG streams, systems (attack, save, damage, conditions, projectiles, threat)
+      - ai/ (policies/behavior trees)
+  - tools/
+      - sim-harness/ (CLI; consumes shared crates, reads data/scenarios/*)
+      - gltf-decompress/ (already present as src/bin/gltf_decompress.rs, later migrate here)
+  - client/ (renderer, input, streaming)
+  - server/ (authoritative host; uses shared/* and can embed sim-core)
+
+  This puts all production types/data in shared/* and data/. The sim harness depends on them; it owns zero game facts.
+
+  Transitional (single-crate now, minimal churn)
+  Until we flip to a workspace, add a shared module tree the sim can import directly:
+
+  - src/shared/
+      - mod.rs
+      - data/ (serde types + loaders reading data/)
+          - ability.rs, spell.rs, condition.rs, monster.rs, item.rs, class.rs, loader.rs, ids.rs
+      - rules/ (SRD math/constants; dice, adv/disadv, crits, saves, underwater)
+          - mod.rs, dice.rs, attack.rs, saves.rs
+      - combat/
+          - fsm.rs (cast/channel/interrupt/cooldown state; reaction windows)
+          - damage.rs (types, resist/vuln/immune), conditions.rs (apply/remove, concentration links)
+  - src/sim/ (engine only; consumes shared)
+      - events.rs, rng.rs, scheduler.rs, types.rs
+      - components/ (sim runtime: CastBar, AbilityBook, Statuses, Projectile, Threat, Controller; reuse src/ecs/mod.rs:1 Transform)
+      - systems/ (input/AI, cast begin/progress, attack/save, projectile, damage, condition, concentration, death, threat, metrics)
+      - policies/
+      - data/ (only scenario serde, not game facts)
+  - src/bin/sim_harness.rs (CLI; loads from data/ + shared::data::loader)
+
+  This keeps production definitions under src/shared/* now, which later maps 1:1 into shared/* crates without rewrites. The sim only imports from crate::shared::*.
+
+  What goes where (rule of thumb)
+
+  - Game facts/schema (serde types, loaders) → shared/game-data (now: src/shared/data/*)
+  - SRD math and constants → shared/rules (now: src/shared/rules/*)
+  - Production combat model (FSM, damage, conditions) → shared/combat (now: src/shared/combat/*)
+  - Deterministic runtime (systems, events, RNG, scheduler) → shared/sim-core (now: src/sim/*)
+  - Author content → data/*
+  - Tool‑specific configs (only for running a tool) → tool folder; sim scenarios can live under data/scenarios/ to reuse across tools.
+
+  Concrete next steps
+
+  - Create src/shared/data/{ability.rs,spell.rs,condition.rs,loader.rs} with docblocks; point loaders at data/.
+  - Add src/shared/rules/{dice.rs,attack.rs,saves.rs} and src/shared/combat/fsm.rs.
+  - Have the sim (and later server) import from crate::shared::*.
+  - Place Fire Bolt JSON under data/spells/fire_bolt.json per docs/fire_bolt.md; wire the loader.
+  - Add src/bin/sim_harness.rs that glues shared::data + shared::rules + shared::combat + sim together.
+
+  If you want, I can scaffold the src/shared/* modules and a minimal sim_harness entry so you can start writing the FSM types in their final home.

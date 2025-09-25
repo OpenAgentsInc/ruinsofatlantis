@@ -254,6 +254,13 @@ impl Renderer {
             .iter()
             .map(|v| VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv: v.uv })
             .collect();
+
+        // Debug: UV range
+        if !wiz_vertices.is_empty() {
+            let mut umin = f32::INFINITY; let mut vmin = f32::INFINITY; let mut umax = f32::NEG_INFINITY; let mut vmax = f32::NEG_INFINITY;
+            for v in &wiz_vertices { umin = umin.min(v.uv[0]); umax = umax.max(v.uv[0]); vmin = vmin.min(v.uv[1]); vmax = vmax.max(v.uv[1]); }
+            log::info!("wizard UV range: u=[{:.3},{:.3}] v=[{:.3},{:.3}] verts={}", umin, umax, vmin, vmax, wiz_vertices.len());
+        }
         let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-vb"),
             contents: bytemuck::cast_slice(&wiz_vertices),
@@ -368,6 +375,7 @@ impl Renderer {
 
         // Wizard material (albedo from glTF)
         let (wizard_mat_bg, _wizard_tex_view, _wizard_sampler) = if let Some(tex) = &skinned_cpu.base_color_texture {
+            log::info!("wizard albedo: {}x{} (srgb={})", tex.width, tex.height, tex.srgb);
             let size3 = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
             let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("wizard-albedo"), size: size3, mip_level_count: 1, sample_count: 1,
@@ -391,6 +399,7 @@ impl Renderer {
             });
             (bg, view, sampler)
         } else {
+            log::warn!("wizard albedo: NONE; using 1x1 fallback");
             let size3 = wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 };
             let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("white-1x1"), size: size3, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
             queue.write_texture(

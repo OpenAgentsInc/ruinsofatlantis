@@ -249,6 +249,13 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         }
     }
 
+    // Log UV range for diagnostics
+    if !verts.is_empty() {
+        let mut umin = f32::INFINITY; let mut vmin = f32::INFINITY; let mut umax = f32::NEG_INFINITY; let mut vmax = f32::NEG_INFINITY;
+        for v in &verts { umin = umin.min(v.uv[0]); umax = umax.max(v.uv[0]); vmin = vmin.min(v.uv[1]); vmax = vmax.max(v.uv[1]); }
+        log::info!("loader: wizard UV range: u=[{:.3},{:.3}] v=[{:.3},{:.3}]", umin, umax, vmin, vmax);
+    }
+
     Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture })
 }
 
