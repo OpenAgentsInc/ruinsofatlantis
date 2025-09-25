@@ -285,7 +285,8 @@ impl WgpuState {
             rpass.set_bind_group(0, &self.globals_bg, &[]);
 
             // Draw plane (water): model identity at y=0, colored blue
-            let plane_model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.03, 0.22, 0.62], emissive: 0.0, _pad: [0.0; 4] };
+            // Strongly distinct plane color (green-teal)
+            let plane_model = Model { model: Mat4::IDENTITY.to_cols_array_2d(), color: [0.05, 0.80, 0.30], emissive: 0.0, _pad: [0.0; 4] };
             self.queue.write_buffer(&self.model_buf, 0, bytemuck::bytes_of(&plane_model));
             rpass.set_bind_group(1, &self.model_bg, &[]);
             rpass.set_vertex_buffer(0, self.plane_vb.slice(..));
@@ -294,7 +295,8 @@ impl WgpuState {
 
             // Draw cube (shard): translate up and rotate over time
             let model = Mat4::from_rotation_y(t) * Mat4::from_translation(vec3(0.0, 1.0, 0.0));
-            let shard_model = Model { model: model.to_cols_array_2d(), color: [1.0, 0.58, 0.12], emissive: 0.25, _pad: [0.0; 4] };
+            // High-contrast shard color (crimson)
+            let shard_model = Model { model: model.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.15, _pad: [0.0; 4] };
             self.queue.write_buffer(&self.model_buf, 0, bytemuck::bytes_of(&shard_model));
             rpass.set_bind_group(1, &self.model_bg, &[]);
             rpass.set_vertex_buffer(0, self.cube_vb.slice(..));
