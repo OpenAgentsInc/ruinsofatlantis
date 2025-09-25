@@ -26,6 +26,7 @@ use camera::Camera;
 use types::{Globals, Instance, InstanceSkin, Model, VertexSkinned};
 use util::scale_to_max;
 use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU};
+use crate::core::data::{loader as data_loader, spell::SpellSpec};
 use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
@@ -137,6 +138,9 @@ pub struct Renderer {
     // Projectiles/particles (CPU side)
     projectiles: Vec<Projectile>,
     particles: Vec<Particle>,
+
+    // Data-driven spell spec (Fire Bolt)
+    fire_bolt: Option<SpellSpec>,
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
@@ -593,6 +597,9 @@ impl Renderer {
             (bg, view, sampler)
         };
 
+        // Load spell data (Fire Bolt)
+        let fire_bolt = data_loader::load_spell_spec("spells/fire_bolt.json").ok();
+
         // Precompute strike times and init FX state
         let hand_right_node = skinned_cpu.hand_right_node;
         let portalopen_strikes = compute_portalopen_strikes(&skinned_cpu, hand_right_node);
@@ -660,6 +667,7 @@ impl Renderer {
             projectiles: Vec::new(),
             particles: Vec::new(),
             cam_target,
+            fire_bolt,
         })
     }
 
@@ -838,9 +846,8 @@ impl Renderer {
                         if let Some(m) = global_of_node(&self.skinned_cpu, clip, phase, hand) {
                             let c = m.to_cols_array();
                             let origin = glam::vec3(c[12], c[13], c[14]);
-                            // Forward = m * (0,0,1,0)
-                            let f4 = m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0);
-                            let dir = glam::Vec3::new(f4.x, f4.y, f4.z).normalize_or_zero();
+                            // Use world forward (-Z) so bolt travels horizontally forward.
+                            let dir = glam::Vec3::new(0.0, 0.0, -1.0);
                             self.spawn_firebolt(origin + dir * 0.3, dir, t);
                         }
                     }
@@ -905,8 +912,12 @@ impl Renderer {
     }
 
     fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
-        let speed = 40.0; // m/s
-        self.projectiles.push(Projectile { pos: origin, vel: dir * speed, radius: 0.1, t_die: t + 1.0 });
+        let (mut speed, mut radius, mut z_off) = (40.0f32, 0.1f32, 0.3f32);
+        if let Some(spec) = &self.fire_bolt {
+            if let Some(proj) = &spec.projectile { speed = proj.speed_mps; radius = proj.radius_m; z_off = proj.spawn_offset_m.z.max(0.0); }
+        }
+        let spawn = origin + dir * z_off;
+        self.projectiles.push(Projectile { pos: spawn, vel: dir * speed, radius, t_die: t + 1.0 });
     }
 }
 
