@@ -43,6 +43,9 @@
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
 - Current prototype loads two meshes (`wizard.gltf`, `ruins.gltf`) and draws them via instancing.
 - When adding dependencies for loaders or formats, use `cargo add` (never hand‑edit `Cargo.toml`).
+- Draco compression: If a model declares `KHR_draco_mesh_compression`, the loader will try to call `npx -y @gltf-transform/cli decompress` to produce a `*.decompressed.gltf` next to the source. If `npx` is not available, manually decompress:
+  - Install Node (if needed) and run: `npx -y @gltf-transform/cli decompress assets/models/foo.gltf assets/models/foo.decompressed.gltf`.
+  - Or re-export the asset without Draco. Our runtime does not decode Draco in-process.
 
 ## Dependency Management
 - Never add dependencies by hand in `Cargo.toml`.

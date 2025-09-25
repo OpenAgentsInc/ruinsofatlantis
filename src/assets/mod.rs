@@ -15,6 +15,7 @@
 //!   can be added later.
 
 use anyhow::{anyhow, bail, Context, Result};
+use std::{fs, path::{Path, PathBuf}, process::Command};
 use crate::gfx::Vertex;
 
 /// CPU-side mesh ready to be uploaded to GPU.
@@ -24,11 +25,30 @@ pub struct CpuMesh {
 }
 
 /// Load a `.gltf` file from disk and merge all primitives into a single mesh.
-pub fn load_gltf_mesh(path: &std::path::Path) -> Result<CpuMesh> {
+pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
+    // Preflight: detect Draco compression and attempt to decompress via `gltf-transform` if present.
+    let mut source_path: PathBuf = path.to_path_buf();
+    if is_draco_compressed(path).unwrap_or(false) {
+        if let Some(out) = try_decompress_with_gltf_transform(path) {
+            log::warn!(
+                "Detected KHR_draco_mesh_compression; using decompressed copy: {}",
+                out.display()
+            );
+            source_path = out;
+        } else {
+            bail!(
+                "The model uses KHR_draco_mesh_compression which this loader does not decode. \
+                 Install Node and run: `npx -y @gltf-transform/cli decompress {0} {0}.decompressed.gltf` \
+                 Then update the path or replace the original.",
+                path.display()
+            );
+        }
+    }
+
     // Use the high-level importer which resolves external buffers/images.
-    let (doc, buffers, _images) = gltf::import(path).with_context(|| format!(
+    let (doc, buffers, _images) = gltf::import(&source_path).with_context(|| format!(
         "failed to import glTF: {}",
-        path.display()
+        source_path.display()
     ))?;
 
     let mut vertices: Vec<Vertex> = Vec::new();
@@ -91,4 +111,36 @@ pub fn load_gltf_mesh(path: &std::path::Path) -> Result<CpuMesh> {
     }
 
     Ok(CpuMesh { vertices, indices })
+}
+
+/// Returns true if the `.gltf` JSON declares `KHR_draco_mesh_compression` as required.
+fn is_draco_compressed(path: &Path) -> Result<bool> {
+    if path.extension().and_then(|e| e.to_str()).unwrap_or("") != "gltf" {
+        return Ok(false);
+    }
+    let bytes = fs::read(path).with_context(|| format!("read glTF json: {}", path.display()))?;
+    let gltf = gltf::Gltf::from_slice(&bytes).context("parse glTF JSON header")?;
+    Ok(gltf
+        .extensions_required()
+        .any(|s| s == "KHR_draco_mesh_compression"))
+}
+
+/// Best-effort Draco decompression using `gltf-transform` CLI via `npx`.
+/// Returns the output path if successful.
+fn try_decompress_with_gltf_transform(input: &Path) -> Option<PathBuf> {
+    let npx = which::which("npx").ok()?;
+    let out = input.with_extension("decompressed.gltf");
+    let status = Command::new(npx)
+        .arg("-y")
+        .arg("@gltf-transform/cli")
+        .arg("decompress")
+        .arg(input.as_os_str())
+        .arg(out.as_os_str())
+        .status()
+        .ok()?;
+    if status.success() && out.exists() {
+        Some(out)
+    } else {
+        None
+    }
 }
