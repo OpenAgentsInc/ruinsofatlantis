@@ -126,7 +126,7 @@ impl WgpuState {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: Some(std::num::NonZeroU64::new(std::mem::size_of::<Globals>() as u64).unwrap()),
+                    min_binding_size: None,
                 },
                 count: None,
             }],
@@ -140,7 +140,7 @@ impl WgpuState {
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: Some(std::num::NonZeroU64::new(std::mem::size_of::<Model>() as u64).unwrap()),
+                    min_binding_size: None,
                 },
                 count: None,
             }],
