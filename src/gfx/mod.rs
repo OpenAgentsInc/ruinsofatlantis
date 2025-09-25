@@ -29,6 +29,7 @@ use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU}
 use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
+ 
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt, SurfaceError, SurfaceTargetUnsafe};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -91,6 +92,9 @@ pub struct Renderer {
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
     wizard_wire_pipeline: Option<wgpu::RenderPipeline>,
+    wizard_mat_bg: wgpu::BindGroup,
+    _wizard_tex_view: wgpu::TextureView,
+    _wizard_sampler: wgpu::Sampler,
 
     // Flags
     wire_enabled: bool,
@@ -191,10 +195,11 @@ impl Renderer {
         let shader = pipeline::create_shader(&device);
         let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
+        let material_bgl = pipeline::create_material_bgl(&device);
         let (pipeline, inst_pipeline, wire_pipeline) =
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
         let (wizard_pipeline, wizard_wire_pipeline) =
-            pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, config.format);
+            pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, &material_bgl, config.format);
 
         // --- Buffers & bind groups ---
         // Globals
@@ -247,7 +252,7 @@ impl Renderer {
         let wiz_vertices: Vec<VertexSkinned> = skinned_cpu
             .vertices
             .iter()
-            .map(|v| VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights })
+            .map(|v| VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv: v.uv })
             .collect();
         let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-vb"),
@@ -361,6 +366,48 @@ impl Renderer {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &palettes_buf, offset: 0, size: None }) }],
         });
 
+        // Wizard material (albedo from glTF)
+        let (wizard_mat_bg, _wizard_tex_view, _wizard_sampler) = if let Some(tex) = &skinned_cpu.base_color_texture {
+            let size3 = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
+            let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("wizard-albedo"), size: size3, mip_level_count: 1, sample_count: 1,
+                dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[]
+            });
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                &tex.pixels,
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) },
+                size3,
+            );
+            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("wizard-sampler"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
+            let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("wizard-material-bg"), layout: &material_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
+                ],
+            });
+            (bg, view, sampler)
+        } else {
+            let size3 = wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 };
+            let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("white-1x1"), size: size3, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                &[255,255,255,255],
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+                size3,
+            );
+            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+            let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+            let bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("wizard-material-bg"), layout: &material_bgl, entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
+            ] });
+            (bg, view, sampler)
+        };
+
         Ok(Self {
             surface,
             device,
@@ -399,6 +446,9 @@ impl Renderer {
             joints_per_wizard,
             wizard_pipeline,
             wizard_wire_pipeline,
+            wizard_mat_bg,
+            _wizard_tex_view,
+            _wizard_sampler,
             wire_enabled: false,
 
             start: Instant::now(),
@@ -485,6 +535,7 @@ impl Renderer {
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.shard_model_bg, &[]);
             rpass.set_bind_group(2, &self.palettes_bg, &[]);
+            rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
             rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
             rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
             rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);

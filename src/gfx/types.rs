@@ -44,6 +44,7 @@ pub struct VertexSkinned {
     pub nrm: [f32; 3],
     pub joints: [u16; 4],
     pub weights: [f32; 4],
+    pub uv: [f32; 2],
 }
 
 impl VertexSkinned {
@@ -57,6 +58,7 @@ impl VertexSkinned {
             wgpu::VertexAttribute { shader_location: 1, offset: 12, format: wgpu::VertexFormat::Float32x3 },
             wgpu::VertexAttribute { shader_location: 8, offset: 24, format: wgpu::VertexFormat::Uint16x4 },
             wgpu::VertexAttribute { shader_location: 9, offset: 32, format: wgpu::VertexFormat::Float32x4 },
+            wgpu::VertexAttribute { shader_location: 11, offset: 48, format: wgpu::VertexFormat::Float32x2 },
         ],
     };
 }

@@ -87,6 +87,16 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
   return vec4<f32>(base, 1.0);
 }
 
+@fragment
+fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
+  let light_dir = normalize(vec3<f32>(0.3, 1.0, 0.4));
+  let ndl = max(dot(in.nrm, light_dir), 0.0);
+  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
+  var base = albedo * (0.25 + 0.75 * ndl);
+  if (in.sel > 0.5) { base = vec3<f32>(1.0, 1.0, 0.1); }
+  return vec4<f32>(base, 1.0);
+}
+
 // Skinned instanced pipeline (wizards)
 struct WizIn {
   @location(0) pos: vec3<f32>,
@@ -103,6 +113,8 @@ struct WizIn {
   @location(9) weights: vec4<f32>,
   // per-instance palette base index
   @location(10) palette_base: u32,
+  // UVs
+  @location(11) uv: vec2<f32>,
 };
 
 struct WizOut {
@@ -111,6 +123,7 @@ struct WizOut {
   @location(1) world: vec3<f32>,
   @location(2) sel: f32,
   @location(3) icolor: vec3<f32>,
+  @location(4) uv: vec2<f32>,
 };
 
 struct Palettes { mats: array<mat4x4<f32>> };
@@ -146,5 +159,9 @@ fn vs_wizard(input: WizIn) -> WizOut {
   out.pos = globals.view_proj * vec4<f32>(world_pos, 1.0);
   out.sel = input.iselected;
   out.icolor = input.icolor;
+  out.uv = input.uv;
   return out;
 }
+
+@group(3) @binding(0) var base_tex: texture_2d<f32>;
+@group(3) @binding(1) var base_sam: sampler;

@@ -52,6 +52,30 @@ pub fn create_palettes_bgl(device: &wgpu::Device) -> BindGroupLayout {
     })
 }
 
+pub fn create_material_bgl(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("material-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    })
+}
+
 pub fn create_pipelines(
     device: &wgpu::Device,
     shader: &ShaderModule,
@@ -119,11 +143,12 @@ pub fn create_wizard_pipelines(
     globals_bgl: &BindGroupLayout,
     model_bgl: &BindGroupLayout,
     palettes_bgl: &BindGroupLayout,
+    material_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> (RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("wizard-pipeline-layout"),
-        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl],
+        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl, material_bgl],
         push_constant_ranges: &[],
     });
 
@@ -132,7 +157,7 @@ pub fn create_wizard_pipelines(
         label: Some("wizard-inst-pipeline"),
         layout: Some(&pipeline_layout),
         vertex: VertexState { module: shader, entry_point: Some("vs_wizard"), buffers: &[VertexSkinned::LAYOUT, InstanceSkin::LAYOUT], compilation_options: Default::default() },
-        fragment: Some(FragmentState { module: shader, entry_point: Some("fs_inst"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+        fragment: Some(FragmentState { module: shader, entry_point: Some("fs_wizard"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
         multisample: wgpu::MultisampleState::default(),
@@ -145,7 +170,7 @@ pub fn create_wizard_pipelines(
             label: Some("wizard-inst-pipeline-wire"),
             layout: Some(&pipeline_layout),
             vertex: VertexState { module: shader, entry_point: Some("vs_wizard"), buffers: &[VertexSkinned::LAYOUT, InstanceSkin::LAYOUT], compilation_options: Default::default() },
-            fragment: Some(FragmentState { module: shader, entry_point: Some("fs_inst"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+            fragment: Some(FragmentState { module: shader, entry_point: Some("fs_wizard"), targets: &[Some(ColorTargetState { format: color_format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
             primitive: wgpu::PrimitiveState { polygon_mode: PolygonMode::Line, ..Default::default() },
             depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
             multisample: wgpu::MultisampleState::default(),

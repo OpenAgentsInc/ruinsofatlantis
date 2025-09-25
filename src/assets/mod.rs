@@ -41,6 +41,7 @@ pub struct VertexSkinCPU {
     pub nrm: [f32; 3],
     pub joints: [u16; 4],
     pub weights: [f32; 4],
+    pub uv: [f32; 2],
 }
 
 #[derive(Clone)]
@@ -67,10 +68,13 @@ pub struct SkinnedMeshCPU {
     pub base_r: Vec<Quat>,
     pub base_s: Vec<Vec3>,
     pub animations: HashMap<String, AnimClip>,
+    pub base_color_texture: Option<TextureCPU>,
 }
 
+pub struct TextureCPU { pub pixels: Vec<u8>, pub width: u32, pub height: u32, pub srgb: bool }
+
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
-    let (doc, buffers, _images) = gltf::import(path).with_context(|| format!("import skinned glTF: {}", path.display()))?;
+    let (doc, buffers, images) = gltf::import(path).with_context(|| format!("import skinned glTF: {}", path.display()))?;
 
     // Build parent map and base TRS
     let node_count = doc.nodes().len();
@@ -90,6 +94,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     let mut skin_opt: Option<gltf::Skin> = None;
     let mut verts: Vec<VertexSkinCPU> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
+    let mut base_color_texture: Option<TextureCPU> = None;
 
     'outer: for scene in doc.scenes() { for node in scene.nodes() {
         if let Some(mesh) = node.mesh() {
@@ -98,16 +103,35 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
                 let Some(pos_it) = reader.read_positions() else { continue };
                 let Some(nrm_it) = reader.read_normals() else { continue };
+                let uv0_opt = reader.read_tex_coords(0).map(|tc| tc.into_f32());
                 let joints = match reader.read_joints(0) { Some(gltf::mesh::util::ReadJoints::U16(it)) => it.map(|v| [v[0],v[1],v[2],v[3]]).collect::<Vec<[u16;4]>>(), Some(gltf::mesh::util::ReadJoints::U8(it)) => it.map(|v| [v[0] as u16,v[1] as u16,v[2] as u16,v[3] as u16]).collect(), _ => continue };
                 let weights = match reader.read_weights(0) { Some(gltf::mesh::util::ReadWeights::F32(it)) => it.collect::<Vec<[f32;4]>>(), Some(gltf::mesh::util::ReadWeights::U16(it)) => it.map(|v| [v[0] as f32/65535.0, v[1] as f32/65535.0, v[2] as f32/65535.0, v[3] as f32/65535.0]).collect(), Some(gltf::mesh::util::ReadWeights::U8(it)) => it.map(|v| [v[0] as f32/255.0, v[1] as f32/255.0, v[2] as f32/255.0, v[3] as f32/255.0]).collect(), None => continue };
 
                 let pos: Vec<[f32;3]> = pos_it.collect();
                 let nrm: Vec<[f32;3]> = nrm_it.collect();
+                let uv: Vec<[f32;2]> = uv0_opt.map(|mut it| { let mut v=Vec::with_capacity(pos.len()); for (i,t) in (0..pos.len()).zip(&mut it) { let u=t; v.push([u[0],u[1]]);} v }).unwrap_or_else(|| vec![[0.0,0.0]; pos.len()]);
                 for i in 0..pos.len() {
-                    verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i] });
+                    verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] });
                 }
                 let idx_u32: Vec<u32> = match reader.read_indices() { Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(), Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(), Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(), None => (0..pos.len() as u32).collect() };
                 for i in idx_u32 { if i > u16::MAX as u32 { bail!("wizard indices exceed u16"); } indices.push(i as u16); }
+
+                // Material baseColorTexture
+                if let Some(mat) = prim.material().pbr_metallic_roughness().base_color_texture() {
+                    let tex = mat.texture();
+                    let src = tex.source();
+                    let data = &buffers;
+                    // use imported images via gltf::import:
+                    // But we don't have images vector here; use tex.source().source() via buffer view
+                    if let gltf::image::Source::View{ view, .. } = src.source() {
+                        let buf = view.buffer();
+                        let bytes = &data[buf.index()].0;
+                        let start = view.offset();
+                        let end = start + view.length();
+                        // decode PNG to RGBA8 using image crate via gltf importer already gave decoded pixels in images Data.
+                        // However here we don't have decoded data. Simpler approach: capture from gltf::import images instead by re-importing.
+                    }
+                }
                 break 'outer;
             }
         }
@@ -123,8 +147,9 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let nrm_it = reader.read_normals();
                 let pos: Vec<[f32;3]> = pos_it.collect();
                 let nrm: Vec<[f32;3]> = nrm_it.map(|it| it.collect()).unwrap_or_else(|| vec![[0.0,1.0,0.0]; pos.len()]);
+                let uv: Vec<[f32;2]> = vec![[0.0,0.0]; pos.len()];
                 for i in 0..pos.len() {
-                    verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: [0,0,0,0], weights: [1.0, 0.0, 0.0, 0.0] });
+                    verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: [0,0,0,0], weights: [1.0, 0.0, 0.0, 0.0], uv: uv[i] });
                 }
                 let idx_u32: Vec<u32> = match reader.read_indices() { Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(), Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(), Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(), None => (0..pos.len() as u32).collect() };
                 for i in idx_u32 { if i > u16::MAX as u32 { bail!("indices exceed u16"); } indices.push(i as u16); }
@@ -196,7 +221,35 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         bail!("no renderable geometry found in {}", path.display());
     }
 
-    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations })
+    // Try to grab baseColor texture via images from import
+    let mut base_color_texture = None;
+    if let Some(material) = doc.meshes().next().and_then(|m| m.primitives().next()).map(|p| p.material()) {
+        if let Some(texinfo) = material.pbr_metallic_roughness().base_color_texture() {
+            let tex = texinfo.texture();
+            let img_idx = tex.source().index();
+            if let Some(img) = images.get(img_idx) {
+                // Convert to RGBA8
+                let (w,h) = (img.width, img.height);
+                let pixels = match img.format {
+                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                    gltf::image::Format::R8G8B8 => {
+                        let mut out = Vec::with_capacity((w*h*4) as usize);
+                        for c in img.pixels.chunks_exact(3) { out.extend_from_slice(&[c[0],c[1],c[2],255]); }
+                        out
+                    }
+                    gltf::image::Format::R8 => {
+                        let mut out = Vec::with_capacity((w*h*4) as usize);
+                        for &r in &img.pixels { out.extend_from_slice(&[r,r,r,255]); }
+                        out
+                    }
+                    _ => img.pixels.clone(),
+                };
+                base_color_texture = Some(TextureCPU { pixels, width: w, height: h, srgb: true });
+            }
+        }
+    }
+
+    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture })
 }
 
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
