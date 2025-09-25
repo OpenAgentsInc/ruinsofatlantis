@@ -1,0 +1,31 @@
+{
+  "id": "wiz.shield.srd521",
+  "name": "Shield",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "abjuration",
+  "level": 1,
+  "classes": ["wizard", "sorcerer"],
+  "tags": ["reaction", "defense"],
+
+  "cast_time_s": 0.0,
+  "gcd_s": 0.0,
+  "cooldown_s": 0.0,
+  "resource_cost": null,
+  "can_move_while_casting": true,
+
+  "targeting": "self",
+  "requires_line_of_sight": false,
+  "range_ft": 0,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 0,
+
+  "attack": null,
+  "damage": null,
+  "projectile": null,
+  "save": null,
+
+  "events": ["ReactionUsed"],
+  "metrics": null,
+  "policy": { "role": "defense", "priority_index": 0 }
+}

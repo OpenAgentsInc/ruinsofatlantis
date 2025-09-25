@@ -1,0 +1,90 @@
+{
+  "id": "wiz.fire_bolt.srd521",
+  "name": "Fire Bolt",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "evocation",
+  "level": 0,
+  "classes": ["wizard", "sorcerer"],
+  "tags": ["projectile", "direct-damage", "fire", "ranged-spell-attack"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 0.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "unit-or-object",
+  "requires_line_of_sight": true,
+  "range_ft": 120,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 180,
+
+  "attack": {
+    "type": "ranged_spell_attack",
+    "rng_stream": "attack",
+    "crit_rule": "nat20_double_dice"
+  },
+
+  "damage": {
+    "type": "fire",
+    "add_spell_mod_to_damage": false,
+    "dice_by_level_band": {
+      "1-4": "1d10",
+      "5-10": "2d10",
+      "11-16": "3d10",
+      "17-20": "4d10"
+    }
+  },
+  "save": null,
+
+  "projectile": {
+    "enabled": true,
+    "speed_mps": 40.0,
+    "radius_m": 0.1,
+    "gravity": 0.0,
+    "collide_with": ["first_target_hit"],
+    "spawn_offset_m": { "x": 0.0, "y": 1.6, "z": 0.5 }
+  },
+
+  "secondary": {
+    "ignite_on_flammable_object": true
+  },
+
+  "latency": {
+    "uses_actor_input_delay": true,
+    "server_tick_ms": 50,
+    "queue_window_ms": 100
+  },
+
+  "events": [
+    "CastStarted",
+    "CastCompleted",
+    "ProjectileSpawned",
+    "HitResolved",
+    "DamageApplied",
+    "ObjectIgnited"
+  ],
+
+  "metrics": {
+    "collect": ["casts", "hits", "misses", "crits", "damage_total", "damage_mean", "proj_travel_ms"]
+  },
+
+  "policy": {
+    "role": "dps",
+    "priority_index": 1,
+    "range_preference_ft": 60
+  },
+
+  "vfx": { "projectile": "fire_bolt_trail", "impact": "fire_bolt_impact" },
+  "sfx": { "cast": "fire_bolt_cast", "impact": "fire_bolt_hit" },
+
+  "provenance": {
+    "notes": [
+      "Evocation cantrip, Action, 120 ft, V S, Instantaneous — SRD 5.2.1",
+      "Ranged spell attack: on hit 1d10 fire; ignites flammable, unworn objects",
+      "Scaling: +1d10 at levels 5, 11, 17"
+    ],
+    "citations": [ { "ref": "SRD 5.2.1 — Fire Bolt" } ]
+  }
+}

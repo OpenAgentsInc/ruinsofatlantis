@@ -87,3 +87,80 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
   return vec4<f32>(base, 1.0);
 }
 
+@fragment
+fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
+  // Match standalone viewer: raw baseColor (no lighting or flips)
+  let col = textureSample(base_tex, base_sam, in.uv).rgb;
+  return vec4<f32>(col, 1.0);
+}
+
+// Skinned instanced pipeline (wizards)
+struct WizIn {
+  @location(0) pos: vec3<f32>,
+  @location(1) nrm: vec3<f32>,
+  // instance mat4 + color/sel (locations 2..7)
+  @location(2) i0: vec4<f32>,
+  @location(3) i1: vec4<f32>,
+  @location(4) i2: vec4<f32>,
+  @location(5) i3: vec4<f32>,
+  @location(6) icolor: vec3<f32>,
+  @location(7) iselected: f32,
+  // vertex skinning inputs
+  @location(8) joints: vec4<u32>,
+  @location(9) weights: vec4<f32>,
+  // per-instance palette base index
+  @location(10) palette_base: u32,
+  // UVs
+  @location(11) uv: vec2<f32>,
+};
+
+struct WizOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) nrm: vec3<f32>,
+  @location(1) world: vec3<f32>,
+  @location(2) sel: f32,
+  @location(3) icolor: vec3<f32>,
+  @location(4) uv: vec2<f32>,
+};
+
+struct Palettes { mats: array<mat4x4<f32>> };
+@group(2) @binding(0) var<storage, read> palettes: Palettes;
+
+@vertex
+fn vs_wizard(input: WizIn) -> WizOut {
+  let inst = mat4x4<f32>(input.i0, input.i1, input.i2, input.i3);
+
+  let b = input.palette_base;
+  let i0 = b + input.joints.x;
+  let i1 = b + input.joints.y;
+  let i2 = b + input.joints.z;
+  let i3 = b + input.joints.w;
+
+  let skinned_pos =
+      (palettes.mats[i0] * vec4<f32>(input.pos, 1.0)) * input.weights.x +
+      (palettes.mats[i1] * vec4<f32>(input.pos, 1.0)) * input.weights.y +
+      (palettes.mats[i2] * vec4<f32>(input.pos, 1.0)) * input.weights.z +
+      (palettes.mats[i3] * vec4<f32>(input.pos, 1.0)) * input.weights.w;
+
+  let skinned_nrm = normalize(
+      (palettes.mats[i0] * vec4<f32>(input.nrm, 0.0)).xyz * input.weights.x +
+      (palettes.mats[i1] * vec4<f32>(input.nrm, 0.0)).xyz * input.weights.y +
+      (palettes.mats[i2] * vec4<f32>(input.nrm, 0.0)).xyz * input.weights.z +
+      (palettes.mats[i3] * vec4<f32>(input.nrm, 0.0)).xyz * input.weights.w);
+
+  let world_pos = (model_u.model * inst * skinned_pos).xyz;
+
+  var out: WizOut;
+  out.world = world_pos;
+  out.nrm = normalize((model_u.model * inst * vec4<f32>(skinned_nrm, 0.0)).xyz);
+  out.pos = globals.view_proj * vec4<f32>(world_pos, 1.0);
+  out.sel = input.iselected;
+  out.icolor = input.icolor;
+  out.uv = input.uv;
+  return out;
+}
+
+@group(3) @binding(0) var base_tex: texture_2d<f32>;
+@group(3) @binding(1) var base_sam: sampler;
+struct MaterialXform { offset: vec2<f32>, scale: vec2<f32>, rot: f32, _pad: vec3<f32> };
+@group(3) @binding(2) var<uniform> mat_xf: MaterialXform;

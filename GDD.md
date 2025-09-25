@@ -12,6 +12,7 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 - [Races](#races)
 - [Class Lore](#class-lore-oceanic-context)
 - [Combat](#combat)
+- [Player vs. Player (PvP)](#player-vs-player-pvp)
 - [Combat Simulator & Harness](#combat-simulator--harness)
 - [Zones & Cosmology](#zones--cosmology)
 - [Progression Matrix (Zones × Classes, Land Drama)](#progression-matrix-zones--classes-land-drama)
@@ -22,9 +23,28 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 
 RoA embraces old‑school difficulty. Travel and logistics matter, resources are scarce, choices are meaningful, and death is painful.
 
+In‑world interactions, not toggles. If a thing exists in the world—player, NPC, door, ship—you can use the same verbs on it: look, talk, trade, shove, steal, heal, curse, or strike. We do not add out‑of‑world switches like “PvP Enabled/Disabled” or invulnerability bubbles. Safety and norms are enforced in‑world (laws, wards, factions, guard response, bounties), not by breaking the simulation.
+
 ## Game Mechanics
 
 Built on Dungeons & Dragons 5th Edition (SRD): iconic classes, races, spells, monsters, and d20 combat—fully implemented and tuned for a dangerous, persistent MMO world.
+
+### In‑World Repair & Maintenance (SRD Tools + Mending)
+
+Players can earn coin and reputation by repairing damage in the world using SRD tool proficiencies and spells.
+
+- Eligible actions
+  - Mending (cantrip): fixes a single break/tear up to 1 ft. in any dimension on a non‑creature object. Used for minor cracks, snapped rails, torn sails, and loose fittings.
+  - Tool work: Carpenter’s Tools (wood), Mason’s Tools (stone), Smith’s Tools (metal), Tinker’s Tools (mechanisms). Applies to doors, bridges, hoists, stairs, railings, and town fixtures.
+- Flow (in‑world jobs)
+  - Damage occurs from combat or environment (e.g., a “hammer” swing breaks a door; siege in a port town damages railings).
+  - Job boards and wardens post repair orders. Interact with the damaged object or board to accept a task.
+  - Perform checks: use the relevant tool proficiency (with ability mod per SRD; DMG‑style DCs) and consume simple materials (wood/stone/metal scrap). Mending auto‑repairs qualifying small breaks without a check.
+  - Rewards: small coppers/silvers and reputation with local authorities, guilds, or wardens on completion; larger payouts for critical structures or rush orders.
+- Example
+  - A brawl breaks a tavern door. A player with Carpenter’s Tools repairs it in‑world, earning 5 cp and +2 reputation with the Dock Ward. A wizard accompanying them uses Mending to fix cracked lantern glass for a small bonus.
+- Simulator note
+  - Repairs are environment events the sim can schedule (restore object integrity, clear hazards), not combat stats. Policies can choose to prioritize repairs during lulls or after encounters.
 
 ## SRD Usage and Attribution
 
@@ -40,6 +60,7 @@ Goal: near‑complete implementation of SRD 5.2.1 content, adapted for an MMO.
 - Classes & Subclasses: all SRD classes and the subclasses contained in SRD 5.2.1; class features follow SRD rules unless MMO adjustments are explicitly documented.
 - Backgrounds & Feats: SRD backgrounds, origin/general feats, and any SRD tables referenced.
 - Spells: full SRD spell list (effects, components, durations, scaling, lists by class).
+- Example spell mapping: see `docs/fire_bolt.md` for Fire Bolt (SRD 5.2.1) → sim‑data/spec translation.
 - Equipment & Magic Items: weapons, armor, tools, gear, and SRD magic items with rules‑accurate properties and mastery tags.
 - Monsters: complete SRD bestiary with stat blocks, actions, traits, and legendary/lair rules as present.
 
@@ -203,12 +224,41 @@ UI and adaptation notes
 - Movement: water‑resistance icon appears when the character lacks a Swim Speed; stamina drain and animation weight communicate friction.
 - Visibility: underwater fog/light cones reduce detection; Perception checks and light sources use SRD “Vision and Light” baselines.
 
+## Player vs. Player (PvP)
+
+Open simulation and consequence‑driven conflict; no per‑player PvP toggles. If it exists, you can interact with it—players included.
+
+Always‑interactable targets
+- All entities are valid targets except players who are your allies via party, guild, or raid. Hostile actions (attacks, harmful spells/effects, hostile interactions) do not apply to allied members; buffs and beneficial effects still do.
+- Concentration, saves, conditions, opportunity attacks, and damage rules apply identically in PvE and PvP, with the ally exception above. Area effects ignore allied members by default.
+
+Civilized spaces and consequences (not invulnerability)
+- Towns and sanctuaries are protected by in‑world law and warding, not “PvP off” flags. Aggression is allowed but swiftly punished: guards respond, wards mark/outlaw offenders, and capture/arrest systems resolve crimes.
+- Outlaw status is visible and persistent: bounties, faction hostility, confiscation on defeat, and travel restrictions create meaningful deterrents without removing agency.
+
+Consentful conflict, in‑world
+- Duels: initiate via heralds/circles/contracts that both parties accept; rules (timers, no outside aid, stakes) are enforced by the rite, not UI toggles.
+- Wars: guilds/kingdoms declare war at heralds over regions/routes; after notice, members are open targets within the declared scope. Treaties and ceasefires are likewise filed in world.
+
+Non‑lethal and escalation options
+- Subdual outcomes (knockout, disarm, fine, exile) coexist with lethal combat. Victors choose to rob, ransom, arrest, or parley; repeated offenses escalate penalties.
+- Civilian protection focuses on consequences (summoned guards, crowd control, temporary binding) rather than immunity bubbles; interactions still occur.
+
+Anti‑grief tuning (within the fiction)
+- Diminishing returns on control effects in PvP; respawn/jail logistics that remove repeat harassment loops near crime scenes.
+- Safe travel that is explainable (convoys, escorts, warded ferries) rather than global invulnerability; risk scales with route and reputation.
+
+Notes on SRD alignment
+- The SRD permits targeting any creature; RoA preserves this except for explicit ally groupings (party/guild/raid), where hostile actions are disabled by design. Duels/wars temporarily override this when consented or declared. Other MMO‑specific mitigations (guards, bounties, duel rites) are layered as world systems.
+
 ### Combat Simulator & Harness
 
 Goals
 - Run thousands of deterministic combat simulations (PvE/PvP) to validate balance, tactics, and encounter design.
 - Control timestep, latency, RNG seed, and policies to compare outcomes.
 - Headless by default; optional debug visualization.
+
+Design doc: see `docs/combat_sim_ecs.md` for the ECS design, system pipeline, and SRD rules mapping used by the simulator.
 
 Architecture (planned crates)
 - sim-core: deterministic rules engine (fixed timestep, e.g., 50 ms). Holds entities, stats, cooldowns, effects, threat, concentration, and an event bus. No rendering.
@@ -290,6 +340,61 @@ Pulled from SRD 5.2.1 cosmology. We keep the canonical plane names (Material, Fe
 ### Ethereal Plane
 - Felt as moonlit fogs, ghost‑ships, and drowned memories near the veil.
 - Liminal space between Material and others; divers may slip through unintentionally.
+
+### Biome: The Atlantis Underdark
+
+#### Overview
+
+- A vast labyrinth of submerged tunnels, caverns, and trench‑vaults beneath the seafloor.
+- Formed when Atlantis collapsed; cracked foundations slid entire districts into the deep.
+- Waterlogged galleries, toxic air pockets, and fungal glow‑forests stretch for leagues.
+
+#### Environmental Features
+
+- Light: perpetual darkness punctuated by bioluminescent algae and fungal blooms.
+- Water & Air: zones range from fully submerged to half‑flooded; some contain poisonous gas pockets.
+- Hazards:
+  - Collapsing ceilings and sudden floods.
+  - Thermal vents scalding with superheated water.
+  - Hallucinogenic spores from drowned fungi forests.
+- Travel: treacherous; expect climbing gear, light sources, breathing apparatus, or magic.
+
+#### Inhabitants
+
+- Native predators: blind cave eels, giant crabs, albino sharks.
+- Monstrous factions:
+  - Deepfolk: twisted Atlanteans adapted to eternal night.
+  - Mycelid colonies: intelligent fungal networks, hostile to intruders.
+  - Abyssal spawn: otherworldly creatures leaking in from Shadowfell trenches.
+- Ruin survivors: isolated enclaves of surface folk or exiles hiding from coastal kings.
+
+#### Adventuring Themes
+
+- Exploration: mapping endless caverns; discovering sunken shrines and vaults.
+- Survival horror: low visibility, ambush predators, paranoia in the dark.
+- Mystery: ancient Atlantean runes that hint at the city’s fall.
+- Faction conflict: competing explorers (guilds, cultists) fighting for underground dominance.
+
+#### Traversal Rules (Simulator)
+
+- Movement Speed: halved without light or special senses.
+- Stealth: native monsters gain advantages; intruders without proper gear suffer penalties.
+- Resources: track food, oxygen, and light supply more strictly than surface zones.
+- Random Hazards: collapses, floods, fungal spore events; tie to seeded RNG for determinism.
+
+#### Expansion Hooks
+
+- Planar leaks: Shadowfell energies bleed in; some tunnels function as literal gates.
+- Lost cities: entire Atlantean metropolises intact but upside‑down, entombed beneath the sea.
+- Boss arcs:
+  - A fungal hivemind that “remembers” Atlantis.
+  - A trench leviathan coiled through caverns.
+  - Cults summoning abyssal gods using ruin‑conduits.
+
+#### SRD Notes
+
+- Terrain type: uses generic SRD term “Underdark.”
+- Setting flavor: Atlantis ruin‑spin keeps mechanics SRD‑aligned while distinct to RoA.
 
 ## Progression Matrix (Zones × Classes, Land Drama)
 

@@ -1,0 +1,7 @@
+{
+  "id": "ranger",
+  "base_ac": 15,
+  "spell_attack_bonus": 4,
+  "spell_save_dc": 12,
+  "save_mods": { "dex": 3, "wis": 2 }
+}

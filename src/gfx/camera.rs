@@ -17,7 +17,8 @@ pub struct Camera {
 
 impl Camera {
     pub fn orbit(target: Vec3, radius: f32, angle: f32, aspect: f32) -> Self {
-        let eye = Vec3::new(angle.cos() * radius, radius * 0.6, angle.sin() * radius);
+        let offset = Vec3::new(angle.cos() * radius, radius * 0.6, angle.sin() * radius);
+        let eye = target + offset;
         Self { eye, target, up: Vec3::Y, aspect, fovy: 60f32.to_radians(), znear: 0.1, zfar: 1000.0 }
     }
 
@@ -27,4 +28,3 @@ impl Camera {
         proj * view
     }
 }
-

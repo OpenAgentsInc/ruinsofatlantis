@@ -1,0 +1,7 @@
+{
+  "id": "rogue",
+  "base_ac": 14,
+  "spell_attack_bonus": 0,
+  "spell_save_dc": 0,
+  "save_mods": { "dex": 3, "int": 1 }
+}

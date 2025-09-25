@@ -1,0 +1,7 @@
+{
+  "id": "wizard",
+  "base_ac": 12,
+  "spell_attack_bonus": 5,
+  "spell_save_dc": 13,
+  "save_mods": { "dex": 2, "wis": 1 }
+}
