@@ -27,6 +27,8 @@ pub struct Actor {
     #[serde(default)]
     pub class: Option<String>,
     #[serde(default)]
+    pub team: Option<String>,
+    #[serde(default)]
     pub abilities: Vec<String>,
 }
 
@@ -37,4 +39,3 @@ pub fn load_yaml(path: &Path) -> Result<Scenario> {
     let scn: Scenario = serde_yaml::from_str(&txt).context("parse scenario yaml")?;
     Ok(scn)
 }
-

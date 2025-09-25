@@ -24,10 +24,13 @@ pub fn run_scenario(scn: &Scenario) {
                 (ac, 30, atk, dc)
             } else { (12, 30, 0, 0) }
         };
+        // Team membership: use scenario team if present; else default to "players" for non-boss, "boss" for boss
+        let team = a.team.clone().or_else(|| if a.role == "boss" { Some("boss".into()) } else { Some("players".into()) });
         state.actors.push(ActorSim {
             id: a.id.clone(),
             role: a.role.clone(),
             class: a.class.clone(),
+            team,
             hp,
             ac_base,
             ac_temp_bonus: 0,

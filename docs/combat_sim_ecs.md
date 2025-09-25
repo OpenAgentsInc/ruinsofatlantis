@@ -226,6 +226,12 @@ What goes where
 - Author content → `data/*`
 - Tool-specific configs (only for a tool) → tool folder; sim scenarios commonly live in `data/scenarios/` so multiple tools can reuse them.
 
+## Allies & Targeting (policy)
+
+- Party/guild/raid membership is represented as a `Team`/`team` label; allied members cannot be targeted by hostile actions.
+- Systems enforce ally immunity by skipping harmful resolution (`attack_roll`, `saving_throw`, `damage`) when `are_allies(a, b)` is true.
+- Duels/wars can temporarily override by switching team membership or flagging exceptions in scenario/policy.
+
 ---
 
 Here’s a clean hierarchy that keeps “authoritative game data + rules” shared, and lets the

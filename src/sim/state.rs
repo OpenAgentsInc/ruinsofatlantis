@@ -14,6 +14,7 @@ pub struct ActorSim {
     pub id: String,
     pub role: String,
     pub class: Option<String>,
+    pub team: Option<String>,
     pub hp: i32,
     pub ac_base: i32,
     pub ac_temp_bonus: i32,
@@ -113,6 +114,13 @@ impl SimState {
     pub fn target_ac(&self, actor_idx: usize) -> Option<i32> {
         let tgt = self.actors[actor_idx].target?;
         Some(self.actors[tgt].ac_base + self.actors[tgt].ac_temp_bonus)
+    }
+
+    pub fn are_allies(&self, a_idx: usize, b_idx: usize) -> bool {
+        match (&self.actors[a_idx].team, &self.actors[b_idx].team) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
     }
 
     pub fn roll_d20(&mut self, _adv: Advantage) -> (i32, bool) {

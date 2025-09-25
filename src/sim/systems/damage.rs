@@ -19,6 +19,7 @@ pub fn run(state: &mut SimState) {
         let mut total = state.roll_dice_str(&dice);
         if crit { total += state.roll_dice_str(&dice); }
         if let Some(tgt_idx) = state.actors[actor_idx].target {
+            if state.are_allies(actor_idx, tgt_idx) { continue; }
             let hp_before = state.actors[tgt_idx].hp;
             // Underwater fire resistance (prototype): halve fire damage
             if state.underwater && dmg_type == "fire" { total = (total / 2).max(0); }

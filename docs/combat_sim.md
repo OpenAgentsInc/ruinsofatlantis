@@ -82,6 +82,13 @@ This FSM is owned by `core` so production logic and sim share one source of trut
 
 These will implement the pipeline described in `docs/combat_sim_ecs.md`.
 
+## Allies & Targeting
+
+- Ally immunity: hostile actions (attacks, harmful spells, conditions) do not affect allies in your party/guild/raid (modeled as `team`).
+- AoE: area effects ignore allied members by default.
+- Overrides: duels/wars can explicitly lift immunity for scoped participants.
+- Sim: actors can specify `team` in scenarios; the engine skips hostile resolution when `are_allies()` is true.
+
 ## Extending the System
 
 Add a new spell/ability

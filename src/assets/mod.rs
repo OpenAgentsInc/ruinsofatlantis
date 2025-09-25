@@ -103,13 +103,19 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
                 let Some(pos_it) = reader.read_positions() else { continue };
                 let Some(nrm_it) = reader.read_normals() else { continue };
-                let uv0_opt = reader.read_tex_coords(0).map(|tc| tc.into_f32());
+                // Pick the UV set actually referenced by baseColorTexture (default 0)
+                let uv_set = prim.material()
+                    .pbr_metallic_roughness()
+                    .base_color_texture()
+                    .map(|ti| ti.tex_coord())
+                    .unwrap_or(0);
+                let uv_opt = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32());
                 let joints = match reader.read_joints(0) { Some(gltf::mesh::util::ReadJoints::U16(it)) => it.map(|v| [v[0],v[1],v[2],v[3]]).collect::<Vec<[u16;4]>>(), Some(gltf::mesh::util::ReadJoints::U8(it)) => it.map(|v| [v[0] as u16,v[1] as u16,v[2] as u16,v[3] as u16]).collect(), _ => continue };
                 let weights = match reader.read_weights(0) { Some(gltf::mesh::util::ReadWeights::F32(it)) => it.collect::<Vec<[f32;4]>>(), Some(gltf::mesh::util::ReadWeights::U16(it)) => it.map(|v| [v[0] as f32/65535.0, v[1] as f32/65535.0, v[2] as f32/65535.0, v[3] as f32/65535.0]).collect(), Some(gltf::mesh::util::ReadWeights::U8(it)) => it.map(|v| [v[0] as f32/255.0, v[1] as f32/255.0, v[2] as f32/255.0, v[3] as f32/255.0]).collect(), None => continue };
 
                 let pos: Vec<[f32;3]> = pos_it.collect();
                 let nrm: Vec<[f32;3]> = nrm_it.collect();
-                let uv: Vec<[f32;2]> = if let Some(it) = uv0_opt {
+                let uv: Vec<[f32;2]> = if let Some(it) = uv_opt {
                     let collected: Vec<[f32;2]> = it.collect();
                     let all_zero = collected.iter().all(|u| u[0] == 0.0 && u[1] == 0.0);
                     if collected.len() == pos.len() && !all_zero {

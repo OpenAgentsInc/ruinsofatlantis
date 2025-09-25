@@ -11,24 +11,30 @@ actors:
   - id: fighter_tank
     role: tank
     class: fighter
+    team: players
     abilities: ["basic_attack"]
   - id: cleric_heal
     role: healer
     class: cleric
+    team: players
     abilities: ["cleric.bless.srd521", "healing_word"]
   - id: wizard_ctrl
     role: dps
     class: wizard
+    team: players
     abilities: ["wiz.fire_bolt.srd521", "grease", "wiz.shield.srd521"]
   - id: rogue_dps
     role: dps
     class: rogue
+    team: players
     abilities: ["basic_attack"]
   - id: monk_dps
     role: dps
     class: monk
+    team: players
     abilities: ["basic_attack"]
   - id: ranger_dps
     role: dps
     class: ranger
+    team: players
     abilities: ["ensnaring_strike"]
