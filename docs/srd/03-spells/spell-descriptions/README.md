@@ -22,4 +22,8 @@ Spell entries are organized alphabetically. Each entry reproduces the spell’s 
 - R — docs/srd/03-spells/spell-descriptions/R.md
 - S — docs/srd/03-spells/spell-descriptions/S.md
 - T — docs/srd/03-spells/spell-descriptions/T.md
+- U — docs/srd/03-spells/spell-descriptions/U.md
+- V — docs/srd/03-spells/spell-descriptions/V.md
+- W — docs/srd/03-spells/spell-descriptions/W.md
+- Z — docs/srd/03-spells/spell-descriptions/Z.md
   

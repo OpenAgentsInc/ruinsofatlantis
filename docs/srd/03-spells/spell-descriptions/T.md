@@ -2,6 +2,56 @@
 
 # T Spells
 
+## Teleport
+Level 7 Conjuration (Bard, Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 10 feet
+- Components: V
+- Duration: Instantaneous
+
+This spell instantly transports you and up to eight willing creatures of your choice that you can see within range, or a single object that you can see within range, to a destination you select. The destination must be known to you, and it must be on the same plane of existence as you. Your familiarity with the destination determines whether you arrive there successfully, as the spell’s rules describe (Very Familiar to False Destination with associated mishap tables).
+
+## Teleportation Circle
+Level 5 Conjuration (Bard, Sorcerer, Wizard)
+
+- Casting Time: 1 minute
+- Range: 10 feet
+- Components: V, M (rare chalks and inks infused with precious gems worth 50+ GP, which the spell consumes)
+- Duration: 1 round
+
+As you cast the spell, you draw a 10‑foot‑diameter circle on the ground inscribed with sigils that link your location to a permanent teleportation circle of your choice whose sigil sequence you know on the same plane of existence. A shimmering portal opens within the circle you drew and remains open until the end of your next turn. Any creature that enters the portal instantly appears within 5 feet of the destination circle or in the nearest unoccupied space if that space is occupied.
+
+## Time Stop
+Level 9 Transmutation (Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: V
+- Duration: Instantaneous
+
+You briefly stop the flow of time for everyone but yourself. No time passes for other creatures while you take 1d4 + 1 turns in a row, during which you can use actions and move as normal. The spell ends if one of the actions you use during this period, or any effects that you create during this period, affects a creature other than you or an object being worn or carried by someone other than you.
+
+## Tiny Hut
+Level 3 Evocation (Bard, Wizard)
+
+- Casting Time: 1 minute
+- Range: Self (10‑foot radius)
+- Components: V, S, M (a small crystal bead)
+- Duration: 8 hours
+
+A 10‑foot‑radius immobile dome of force springs into existence around and above you and remains stationary for the duration. The dome can accommodate up to nine Medium creatures. The atmosphere inside the space is comfortable and dry, regardless of the weather outside. The dome is Opaque from the outside, of any color you choose, but it is Transparent from the inside. Creatures and objects can pass through freely.
+
+## Tongues
+Level 3 Divination (Bard, Cleric)
+
+- Casting Time: Action
+- Range: Touch
+- Components: V, S, M (a small clay model of a ziggurat)
+- Duration: 1 hour
+
+This spell grants the creature you touch the ability to understand any spoken language it hears. Moreover, when the target speaks, any creature that knows at least one language and can hear the target understands what it says.
+
 ## Telekinesis
 Level 5 Transmutation (Sorcerer, Wizard)
 
@@ -63,4 +113,3 @@ Level 8 Conjuration (Druid)
 - Duration: Concentration, up to 6 rounds
 
 A wall of water appears from a point you can see. The wall is up to 300 feet long, 300 feet high, and 50 feet thick. The wall moves 50 feet away from you at the start of each of your turns, and creatures in its area take Bludgeoning damage and are carried along as described in the spell.
-
