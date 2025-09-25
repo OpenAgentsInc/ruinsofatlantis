@@ -70,3 +70,19 @@ Implementation notes
 - Rendering: built on `wgpu` for modern graphics APIs.
 - Windowing/Input: `winit` for cross‑platform windows and event handling.
 - Rationale: maximum control, performance, and customizability for MMO‑scale systems.
+
+## Combat
+
+SRD compliance
+- Uses D&D 5th Edition (SRD) mechanics: d20 Attack Rolls vs. AC, Saving Throws vs. spell/save DCs, Advantage/Disadvantage, Conditions, damage types/resistance/vulnerability, critical hits, reach, and reactions (e.g., Opportunity Attack).
+- Spellcasting respects SRD Casting Time, Concentration, Components (adapted for MMO UX), and the action economy (Action/Bonus Action/Reaction) mapped to real‑time pacing.
+
+Real‑time adaptation (EverQuest‑style influence)
+- Continuous time with global and per‑ability cooldowns; 6‑second “round” is a simulation target, not a literal turn system.
+- Cast bars and weapon swing timers; taking damage triggers SRD Concentration checks and can interrupt long casts where appropriate.
+- Threat/aggro tables and taunt mechanics guide NPC target selection; positioning and facing matter for some abilities.
+- Crowd control (roots, stuns, sleeps, charms) is meaningful in open world; durations may scale by creature rank to preserve fairness.
+
+Design notes
+- Keep SRD math intact where possible; any deviations (e.g., flanking/positionals, diminishing returns on CC, movement while casting) are documented as Design Differences and tuned for MMO balance.
+- Time‑to‑kill skews longer than typical theme park MMOs; resource management (health, mana, stamina) and downtime drive social play.
