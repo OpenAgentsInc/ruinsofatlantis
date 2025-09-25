@@ -19,8 +19,11 @@ Goals
 - Harness: headless runner loads a scenario, executes N ticks, emits metrics/logs, optional TUI/viz.
 
 Recommended crate split (future workspace)
-- `sim-core`: ECS types, components, systems, scheduler, event bus, RNG, metrics.
-- `sim-data`: serde models + loaders for abilities (e.g., Fire Bolt), conditions, gear.
+- `core/game-data`: serde models + loaders for spells/abilities, conditions, items, classes, monsters (consumes `data/`).
+- `core/rules`: SRD math/constants (dice, advantage/disadvantage, crits, save DCs, underwater modifiers).
+- `core/combat`: production combat model (FSM for actions/casts/channels/reactions, damage model, condition application, concentration links).
+- `core/ecs` (optional): shared ECS infra if we outgrow the current lightweight `src/ecs`.
+- `sim-core`: deterministic systems over ECS (events bus, scheduler, RNG streams, attack/save/damage/conditions/projectiles/threat/metrics).
 - `sim-policies`: AI policies/behavior trees and utilities.
 - `sim-harness`: CLI runner + scenarios + exporters.
 - `sim-viz` (optional): simple orthographic debug renderer or TUI.
@@ -183,6 +186,45 @@ Phase 4 — Threat & Bossing
 6) `MetricsSystem`: updates counters; `ThreatSystem` updates threat.
 
 This aligns with the Fire Bolt spec while staying general for other abilities.
+
+—
+
+## Folder Hierarchy (Core naming)
+
+Authoritative data (checked in, shared)
+- `data/`
+  - `spells/`, `abilities/`, `conditions/`, `items/`, `monsters/`, `classes/`, `feats/`
+  - `encounters/` (optional), `scenarios/` (for sim harness inputs)
+  - Optional `manifest.(json|toml)` for indexing/versioning
+
+Transitional single-crate layout (now)
+- `src/core/`
+  - `data/` — serde types + loaders (read from top-level `data/`)
+    - `ability.rs`, `spell.rs`, `condition.rs`, `monster.rs`, `item.rs`, `class.rs`, `ids.rs`, `loader.rs`
+  - `rules/` — SRD math/constants
+    - `dice.rs`, `attack.rs`, `saves.rs`, `mod.rs`
+  - `combat/` — production combat types
+    - `fsm.rs` (cast/channel/reaction windows, GCD/CD), `damage.rs`, `conditions.rs`, `mod.rs`
+- `src/sim/` — deterministic runtime (engine only; consumes `crate::core::*` and `crate::ecs`)
+  - `events.rs`, `rng.rs`, `scheduler.rs`, `types.rs`
+  - `components/` (CastBar, AbilityBook, Statuses, Projectile, Threat, Controller; reuse `ecs::Transform`)
+  - `systems/` (input/AI, cast begin/progress, attack/save, projectile, damage, condition, concentration, death, threat, metrics)
+  - `policies/`
+  - `data/` (only scenario serde for the harness)
+- `src/bin/sim_harness.rs` — CLI runner (loads scenarios; outputs CSV/JSON/NDJSON)
+
+Target workspace layout (later)
+- `core/game-data`, `core/rules`, `core/combat`, `core/ecs` (optional)
+- `sim-core`, `sim-policies`, `tools/sim-harness`, `sim-viz` (optional)
+- `client/`, `server/` consume `core/*` and may embed `sim-core` (server authority/tests)
+
+What goes where
+- Game facts/schema + loaders → `core/game-data` (now: `src/core/data/*`)
+- SRD math → `core/rules`
+- Production combat model (FSM, damage, conditions) → `core/combat`
+- Deterministic runtime (systems, events, RNG, scheduler) → `sim-core` (now: `src/sim/*`)
+- Author content → `data/*`
+- Tool-specific configs (only for a tool) → tool folder; sim scenarios commonly live in `data/scenarios/` so multiple tools can reuse them.
 
 ---
 
