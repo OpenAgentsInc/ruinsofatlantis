@@ -417,6 +417,10 @@ impl Renderer {
             }
         }
 
+        log::info!(
+            "material xform: offset=({:.3},{:.3}) scale=({:.3},{:.3}) rot={:.3}",
+            mat_xf.offset[0], mat_xf.offset[1], mat_xf.scale[0], mat_xf.scale[1], mat_xf.rot
+        );
         let wizard_mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("material-xform"),
             contents: bytemuck::bytes_of(&mat_xf),

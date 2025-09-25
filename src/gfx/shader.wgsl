@@ -91,7 +91,8 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
   // Debug cycle based on time (every ~2 seconds switch):
   let t = globals.time_pad.x;
-  let mode = u32(floor(fract(t * 0.5) * 4.0));
+  // 6 modes cycling every ~10s total (~1.67s per step)
+  let mode = u32(floor(fract(t * 0.1) * 6.0));
 
   if (mode == 0u) {
     // 0: solid yellow => verifies fs_wizard path
@@ -103,13 +104,27 @@ fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
     // 2: Constant sample => verifies the texture is bound and readable
     let c = textureSample(base_tex, base_sam, vec2<f32>(0.25, 0.75));
     return vec4<f32>(c.rgb, 1.0);
-  } else {
-    // 3: Full path: sample using transformed UVs
+  } else if (mode == 3u) {
+    // 3: Sample with original UVs (no transform)
+    let col = textureSample(base_tex, base_sam, in.uv);
+    return vec4<f32>(col.rgb, 1.0);
+  } else if (mode == 4u) {
+    // 4: Full path: sample using transformed UVs
     var uv = in.uv;
     let c = cos(-mat_xf.rot);
     let s = sin(-mat_xf.rot);
     let R = mat2x2<f32>(c, -s, s, c);
     uv = (R * (uv * mat_xf.scale)) + mat_xf.offset;
+    let col = textureSample(base_tex, base_sam, uv);
+    return vec4<f32>(col.rgb, 1.0);
+  } else {
+    // 5: Full path + V flip
+    var uv = in.uv;
+    let c = cos(-mat_xf.rot);
+    let s = sin(-mat_xf.rot);
+    let R = mat2x2<f32>(c, -s, s, c);
+    uv = (R * (uv * mat_xf.scale)) + mat_xf.offset;
+    uv.y = 1.0 - uv.y;
     let col = textureSample(base_tex, base_sam, uv);
     return vec4<f32>(col.rgb, 1.0);
   }
