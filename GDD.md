@@ -126,6 +126,65 @@ Design notes
 - Keep SRD math intact where possible; any deviations (e.g., flanking/positionals, diminishing returns on CC, movement while casting) are documented as Design Differences and tuned for MMO balance.
 - Time‑to‑kill skews longer than typical theme park MMOs; resource management (health, mana, stamina) and downtime drive social play.
 
+### Example Combat: Six‑Player Boss Fight
+
+Scenario
+- Party: Fighter (tank), Cleric (healer), Wizard (control/DPS), Rogue (melee DPS), Monk (melee skirmisher), Ranger (ranged DPS/utility).
+- Boss: Leviathan Warden (Legendary; high AC, thunder/cold attacks, summons adds, heavy knockback). Mechanics draw on SRD (attack rolls vs. AC, saves vs. DCs, conditions, concentration) adapted to real‑time pacing.
+
+What players see (UI)
+- Boss frame with AC “skull” indicator, cast bar (e.g., Tidal Roar 2.5s), and enrage timer.
+- Party frames: HP/mana/stamina; a Concentration icon for concentrating casters (glows and shows DC when damaged).
+- Player HUD: hotbar with per‑ability cooldowns, global cooldown (GCD) spinner, weapon swing timer (for auto‑attacks), resource bars, threat meter.
+- Ground telegraphs for large effects (cones, circles); subtle tells (animation, audio) for interruptible casts.
+
+Pull & Phase 1 (0:00–0:45)
+- Fighter opens with Taunt (MMO mechanic; sets initial threat) → closes to melee, Shove (SRD) to turn the boss away from group; maintains threat with sustained attacks. Uses Second Wind reactively.
+- Cleric pre‑casts Bless (SRD; Concentration) on three allies; keeps Healing Word (Bonus Action) on standby; positions at mid‑range to avoid cleave.
+- Wizard applies Web on add spawn points (SRD; Dex save to restrain; Concentration) and uses Firebolt/Ray of Frost as filler; watches boss cast bar for interrupts.
+- Rogue opens from behind; time a heavy opener after Fighter’s first swing (to avoid pulling threat); uses Cunning Action (Disengage) to dodge cleaves; applies Sneak Attack when advantage/back window appears.
+- Monk engages flank: uses Focus Points for Flurry of Blows to build threat‑adjacent DPS without overtaking tank; Patient Defense when boss turns; Step of the Wind to exit ground AoE.
+- Ranger opens with Ensnaring Strike (SRD; on‑hit, Str save or restrained; Concentration) on the boss for brief control windows; then cycles aimed shots; swaps to adds as needed.
+
+Boss behavior
+- Basic pattern: heavy slam (bludgeoning), tail sweep (cone knockback), and Tidal Roar (2.5s cast, 30m cone, Con save half; on fail: Deafened 6s).
+- On damage taken, casters make SRD Concentration checks (Con save DC 10 or half damage) to maintain Bless/Web/Ensnaring Strike.
+- Every 20s: Summon Barnacle Swarm (3–4 adds) at reef vents; adds fixate on healers unless taunted/controlled.
+
+Micro interactions (SRD mapped to real‑time)
+- Attack rolls: all weapon and spell attacks roll vs. boss AC; crits on 20. Advantage granted by control (restrained), stealth windows, or specific positional rules we adopt.
+- Saves: players make Dex/Con/Wis saves vs. boss DCs; UI shows save type and result; on fail, apply conditions (Prone, Deafened, Restrained) per SRD.
+- Reactions: Opportunity Attacks trigger on careless movement; Shield (SRD) and Uncanny Dodge (Rogue) fire as reactions with short lockouts.
+
+Phase 2 (0:45–1:45): Pressure & Adds
+- At 70% HP, boss gains Crushing Pressure: stacking debuff on current target (increases incoming damage and Concentration DCs). Fighter rotates defensive cooldowns; may Grapple/Shove (SRD) to keep boss off squishies after knockbacks.
+- Add wave spawns; Wizard’s Web restrains some (Dex save). Ranger kites loose adds through caltrops/snare shots; Rogue peels an add with high burst then Vanish (if available) or Cunning Action to drop threat.
+- Cleric swaps to triage: instant Healing Word on the move; Cure Wounds (casted) between dodges. If Concentration breaks, re‑establish Bless when safe.
+- Monk interrupts a late Tidal Roar with a class stun (if available) or times a Flurry window between boss casts; otherwise uses Patient Defense to help healers stabilize.
+
+Phase 3 (1:45–end): Enrage Windows
+- Boss becomes Bloodied (50%): gains Undertow Grab (grapple, contested Athletics vs. Fighter) and occasional Frightful Current (Wis save or Frightened 8s). Party uses Inspiration or class features to mitigate.
+- Wizard times Fireball on clustered adds (Dex save) when tank stabilizes threat; swaps to single‑target cantrips during spread mechanics to avoid collateral.
+- Ranger switches to sustained single‑target; refreshes Ensnaring Strike after breaks. Positions to avoid tail cones while maintaining line of sight.
+- Rogue maintains back position; watches for swing timer gap to Backstab (if we add positionals); Cunning Action to re‑enter back arc after knockbacks.
+- Fighter uses Action Surge to cover a healer save failure (spike DPS/threat, shorten phase); Indomitable on a failed critical save.
+- Cleric channels a big heal window during predictable boss combos; maintains Concentration and rotates defensive buffs if domain allows (per SRD).
+
+Buttons, timing, and waits (illustrative hotbars)
+- Fighter: [1 Taunt (8s cd)] [2 Heavy Strike] [3 Shove] [4 Shield Block (cd)] [Q Second Wind] [E Action Surge] [R Indomitable]
+- Cleric: [1 Healing Word] [2 Cure Wounds] [3 Bless (Conc)] [4 Shield of Faith (Conc)] [Q Spare the Dying] [E Turn Undead]
+- Wizard: [1 Firebolt] [2 Ray of Frost] [3 Web (Conc)] [4 Fireball] [Q Shield (Reaction)] [E Misty Step]
+- Rogue: [1 Basic Strike] [2 Eviscerate] [3 Cunning Action] [Q Uncanny Dodge (Reaction)] [E Evasion]
+- Monk: [1 Jab] [2 Flurry (Focus)] [3 Patient Defense (Focus)] [4 Step of the Wind (Focus)]
+- Ranger: [1 Aimed Shot] [2 Multi‑Shot] [3 Ensnaring Strike (Conc)] [4 Dash/Disengage] [Q Trapper’s Kit]
+
+Threat & aggro
+- Threat accumulates from damage, taunts, and healing (reduced). Tank has innate threat modifiers; hard taunt snaps target briefly (diminishing if abused). Threat tables are visible to the group to teach management.
+
+Failure and recovery
+- If Tidal Roar is un‑interrupted and several fail Con saves, Concentration breaks and damage spikes; group answers with stuns, kiting, and triage.
+- Wipes typically occur when adds overwhelm healers or the tank loses control during knockback + grab. Recovery involves battle rez (if available), controlled kites, and re‑establishing Concentration.
+
 ## Zones & Cosmology
 
 Pulled from SRD 5.2.1 cosmology. We keep the canonical plane names (Material, Feywild, Shadowfell, Inner Planes, Outer Planes, Astral, Ethereal) and describe how they manifest in an Atlantis‑ruins, oceanic MMO world.
