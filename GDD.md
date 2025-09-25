@@ -12,6 +12,8 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 - [Races](#races)
 - [Class Lore](#class-lore-oceanic-context)
 - [Combat](#combat)
+ - [Combat](#combat)
+ - [Combat Simulator & Harness](#combat-simulator--harness)
 - [Zones & Cosmology](#zones--cosmology)
 - [Progression Matrix (Zones × Classes, Land Drama)](#progression-matrix-zones--classes-land-drama)
 - [Faction Framework](#faction-framework)
@@ -201,6 +203,53 @@ UI and adaptation notes
 - Targeting: tooltips indicate automatic miss beyond normal range while submerged.
 - Movement: water‑resistance icon appears when the character lacks a Swim Speed; stamina drain and animation weight communicate friction.
 - Visibility: underwater fog/light cones reduce detection; Perception checks and light sources use SRD “Vision and Light” baselines.
+
+### Combat Simulator & Harness
+
+Goals
+- Run thousands of deterministic combat simulations (PvE/PvP) to validate balance, tactics, and encounter design.
+- Control timestep, latency, RNG seed, and policies to compare outcomes.
+- Headless by default; optional debug visualization.
+
+Architecture (planned crates)
+- sim-core: deterministic rules engine (fixed timestep, e.g., 50 ms). Holds entities, stats, cooldowns, effects, threat, concentration, and an event bus. No rendering.
+- sim-data: SRD-derived data (JSON/TOML) for classes, spells, conditions, monsters. Versioned IDs and provenance.
+- sim-policies: tactical policies (boss AIs, player rotas/priority lists, movement heuristics). Pluggable strategies.
+- sim-harness: CLI runner for scenarios, sweeps, and metrics export (CSV/JSON).
+- sim-viz (optional): minimal wgpu/winit debug renderer (orthographic), or TUI for timelines/logs.
+
+Determinism & timestep
+- Fixed-timestep loop (e.g., 20 Hz/50 ms) with discrete-event scheduling for casts, cooldowns, DoTs/HoTs.
+- Seeded RNG per run and per-actor streams; all random draws (hit, crit, save) come from these streams.
+- Net-latency model: per-actor input delay and server tick alignment for realistic cast/queue timing.
+
+Scenario format
+- YAML/JSON: map, actors (class/build), gear tier, boss type, initial positions, policies, win/lose conditions, and metrics to collect.
+- Example: boss: aboleth, underwater: true, depth: shallow, party: [fighter_tank, cleric_heal, wizard_ctrl, rogue_dps, monk_dps, ranger_dps].
+
+Policies (tactics)
+- Priority lists and behavior trees: tank taunt→heavy→shove; cleric keep bless→heal<35%→cure windows.
+- Movement heuristics: keep flank, avoid 8 m cones, break LoS when dominated.
+- PvP: role kits (burst, peel, kite) and focus-fire rules.
+
+Outputs & metrics
+- Per-fight: TTK, DPS/HPS, damage taken, save rates, conc breaks, threat swings, time-in-melee, distance moved, ability usage histograms.
+- Aggregates: mean/median/percentiles, win rate by policy, sensitivity to latency or gear.
+- Artifacts: event logs (NDJSON), timelines, replay seeds.
+
+Visualization (optional)
+- Headless CSV/JSON by default. Debug modes: TUI (timelines, threat meter) and simple wgpu orthographic render (positions, AoEs, cast bars).
+- Replays: load event log + seed to step or scrub.
+
+CLI (proposed)
+- Single run: `cargo run -p sim-harness -- --scenario scenarios/aboleth.yaml --seed 42 --tick 50ms --log results/run.ndjson`
+- Monte Carlo: `... --trials 1000 --vary policy=tank_a,tank_b --out results/aboleth.csv`
+- PvP skirmish: `... --mode pvp --team-a scenarios/team_a.yaml --team-b scenarios/team_b.yaml`
+
+Next steps
+- Define sim-core state and event types; draft Aboleth encounter from this GDD.
+- Implement priority policy for the six-player party; add baseline boss AI.
+- Add metrics collectors and CSV exporter; wire seeds and determinism tests.
 
 ## Zones & Cosmology
 
