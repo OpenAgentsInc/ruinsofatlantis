@@ -40,11 +40,11 @@ impl Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct VertexSkinned {
-    pub pos: [f32; 3],
-    pub nrm: [f32; 3],
-    pub joints: [u16; 4],
-    pub weights: [f32; 4],
-    pub uv: [f32; 2],
+    pub pos: [f32; 3],   // 0
+    pub nrm: [f32; 3],   // 12
+    pub uv: [f32; 2],    // 24
+    pub joints: [u16; 4],// 32
+    pub weights: [f32; 4],// 40
 }
 
 impl VertexSkinned {
@@ -56,9 +56,9 @@ impl VertexSkinned {
         attributes: &[
             wgpu::VertexAttribute { shader_location: 0, offset: 0, format: wgpu::VertexFormat::Float32x3 },
             wgpu::VertexAttribute { shader_location: 1, offset: 12, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 8, offset: 24, format: wgpu::VertexFormat::Uint16x4 },
-            wgpu::VertexAttribute { shader_location: 9, offset: 32, format: wgpu::VertexFormat::Float32x4 },
-            wgpu::VertexAttribute { shader_location: 11, offset: 48, format: wgpu::VertexFormat::Float32x2 },
+            wgpu::VertexAttribute { shader_location: 11, offset: 24, format: wgpu::VertexFormat::Float32x2 },
+            wgpu::VertexAttribute { shader_location: 8, offset: 32, format: wgpu::VertexFormat::Uint16x4 },
+            wgpu::VertexAttribute { shader_location: 9, offset: 40, format: wgpu::VertexFormat::Float32x4 },
         ],
     };
 }
