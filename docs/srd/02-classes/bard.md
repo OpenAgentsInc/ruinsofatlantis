@@ -140,5 +140,22 @@ When you make an ability check or attack roll and fail, you can expend one use o
 
 ## Bard Spell List
 
-The Bard spell list appears across pp.31–34. See the class description in the PDF for the full tables by level with school and special notes (C for Concentration, R for Ritual, M for specific Material component).
+Cantrips (Level 0): Dancing Lights (C), Light, Mage Hand, Mending, Message, Minor Illusion, Prestidigitation, Starry Wisp, True Strike, Vicious Mockery
 
+Level 1: Animal Friendship, Bane (C), Charm Person, Color Spray, Command, Comprehend Languages (R), Cure Wounds, Detect Magic (C, R), Disguise Self, Dissonant Whispers, Faerie Fire (C), Feather Fall, Healing Word, Heroism (C), Hideous Laughter (C), Identify (R, M), Illusory Script (R, M), Longstrider, Silent Image (C), Sleep (C), Speak with Animals (R), Thunderwave, Unseen Servant (R)
+
+Level 2: Aid, Animal Messenger (R), Blindness/Deafness, Calm Emotions (C), Detect Thoughts (C), Enhance Ability (C), Enlarge/Reduce (C), Enthrall (C), Heat Metal (C), Hold Person (C)
+
+Level 3: Bestow Curse (C), Clairvoyance (C, M), Dispel Magic, Fear (C), Glyph of Warding (M), Hypnotic Pattern (C), Major Image (C), Mass Healing Word, Nondetection (M), Plant Growth, Sending, Slow (C), Speak with Dead, Speak with Plants, Stinking Cloud (C), Tiny Hut (R), Tongues
+
+Level 4: Charm Monster, Compulsion (C), Confusion (C), Dimension Door, Freedom of Movement, Greater Invisibility (C), Hallucinatory Terrain, Locate Creature (C), Phantasmal Killer (C), Polymorph (C)
+
+Level 5: Animate Objects (C), Awaken (M), Dominate Person (C), Dream, Geas, Greater Restoration (M), Hold Monster (C), Legend Lore (M), Mass Cure Wounds, Mislead (C), Modify Memory (C), Planar Binding (M), Raise Dead (M), Scrying (C, M), Seeming, Telepathic Bond (R), Teleportation Circle (M)
+
+Level 6: Eyebite (C), Find the Path (C, M), Guards and Wards (M), Heroes’ Feast (M), Irresistible Dance (C), Mass Suggestion, Programmed Illusion (M), True Seeing (M)
+
+Level 7: Arcane Sword (C, M), Etherealness, Forcecage (C, M), Magnificent Mansion (M), Mirage Arcane, Prismatic Spray, Project Image (C, M), Regenerate, Resurrection (M), Symbol (M), Teleport
+
+Level 8: Antipathy/Sympathy, Befuddlement, Dominate Monster (C), Glibness, Mind Blank, Power Word Stun
+
+Level 9: Foresight, Power Word Heal, Power Word Kill, Prismatic Wall, True Polymorph (C)

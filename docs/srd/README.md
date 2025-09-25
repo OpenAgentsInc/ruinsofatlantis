@@ -35,10 +35,21 @@ See `NOTICE` at the repository root for the canonical attribution statement. Do 
   - `README.md`
   - `barbarian.md`
   - `bard.md`
+  - `cleric.md`
+  - `druid.md`
+  - `fighter.md`
+  - `monk.md`
+  - `paladin.md`
+  - `ranger.md`
+  - `rogue.md`
+  - `sorcerer.md`
+  - `warlock.md`
 - `03-spells/`
   - `README.md`
   - `gaining-spells.md`
   - `casting-spells.md`
+  - `spell-descriptions/README.md`
+  - `spell-descriptions/A.md`
 
 Names use a numeric prefix to preserve SRD order and kebab‑case file names for stable links.
 
@@ -68,7 +79,9 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
 
 ## Status
 
-- Front matter and first sections of “Playing the Game” converted through Travel/vehicles.
+- Section 1 (Playing the Game): complete.
+- Section 2 (Classes): Barbarian, Bard (incl. spell list), Cleric (incl. spell list), Druid (incl. spell list), Fighter, Monk, Paladin (incl. spell list), Ranger (incl. spell list), Rogue, Sorcerer (incl. subclass), Warlock (incl. subclass and spell list).
+- Section 3 (Spells): Gaining/Casting Spells and “A” spell descriptions converted. Continuing alphabetically.
 
 ## Index
 

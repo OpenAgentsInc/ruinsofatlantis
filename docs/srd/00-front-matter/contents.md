@@ -19,7 +19,17 @@ This is an adapted table of contents that mirrors the Markdown folder structure 
   - Barbarian — docs/srd/02-classes/barbarian.md
   - Bard — docs/srd/02-classes/bard.md
   - Fighter — docs/srd/02-classes/fighter.md
+  - Cleric — docs/srd/02-classes/cleric.md
+  - Druid — docs/srd/02-classes/druid.md
+  - Monk — docs/srd/02-classes/monk.md
+  - Paladin — docs/srd/02-classes/paladin.md
+  - Ranger — docs/srd/02-classes/ranger.md
+  - Rogue — docs/srd/02-classes/rogue.md
+  - Sorcerer — docs/srd/02-classes/sorcerer.md
+  - Warlock — docs/srd/02-classes/warlock.md
 
 - Spells (03-spells)
   - Gaining Spells — docs/srd/03-spells/gaining-spells.md
   - Casting Spells — docs/srd/03-spells/casting-spells.md
+  - Spell Descriptions — docs/srd/03-spells/spell-descriptions/README.md
+    - A — docs/srd/03-spells/spell-descriptions/A.md
