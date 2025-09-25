@@ -38,11 +38,11 @@ pub struct WgpuState {
 
     // Instancing
     instance_buf: wgpu::Buffer,
-    instances: Vec<Instance>,
+    _instances: Vec<Instance>,
     grid_cols: u32,
     grid_rows: u32,
     culling_enabled: bool,
-    selected: Option<usize>,
+    _selected: Option<usize>,
     wire_enabled: bool,
 
     // Time
@@ -299,12 +299,15 @@ impl WgpuState {
 
         // Geometry: cube and plane
         let (cube_vb, cube_ib, cube_index_count) = create_cube(&device);
-        let (plane_vb, plane_ib, plane_index_count) = create_plane(&device);
-
-        // Instances grid
+        // Make plane large enough to sit under the full grid
         let grid_cols = 100u32; // 10k instances
         let grid_rows = 100u32;
         let spacing = 2.5f32;
+        let plane_extent = spacing * (grid_cols.max(grid_rows) as f32);
+        let (plane_vb, plane_ib, plane_index_count) = create_plane(&device, plane_extent);
+
+        // Instances grid
+        // Build grid instances
         let mut instances = Vec::with_capacity((grid_cols * grid_rows) as usize);
         for r in 0..grid_rows {
             for c in 0..grid_cols {
@@ -344,11 +347,11 @@ impl WgpuState {
             plane_ib,
             plane_index_count,
             instance_buf,
-            instances,
+            _instances: instances,
             grid_cols,
             grid_rows,
             culling_enabled: true,
-            selected: None,
+            _selected: None,
             wire_enabled: false,
             start: Instant::now(),
         })
@@ -384,7 +387,8 @@ impl WgpuState {
         // Update time and camera
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let cam = Camera::orbit(vec3(0.0, 1.0, 0.0), 4.0, t * 0.3, aspect);
+        // Lift the camera higher and farther so the grid reads as a plaza
+        let cam = Camera::orbit(vec3(0.0, 0.0, 0.0), 40.0, t * 0.15, aspect);
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
@@ -438,12 +442,9 @@ impl WgpuState {
             rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_index_buffer(self.cube_ib.slice(..), IndexFormat::Uint16);
 
-            // Simple CPU culling by rows: compute visible z range and draw only those rows
-            let vp = Mat4::from_cols_array_2d(&Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t,0.0,0.0,0.0] }.view_proj);
-            let cam_forward = (cam.target - cam.eye).normalize();
+            // Simple CPU culling by rows: compute visible range and draw only those rows
             let cam_z = cam.eye.z;
-            // Very rough: cull by Z in camera space
-            let mut draws = 0u32;
+            let mut _draws = 0u32;
             for r in 0..self.grid_rows {
                 let z_world = (r as f32 - self.grid_rows as f32 * 0.5) * 2.5;
                 // If culling disabled or row near camera
@@ -451,7 +452,7 @@ impl WgpuState {
                 if visible {
                     let first = r * self.grid_cols;
                     rpass.draw_indexed(0..self.cube_index_count, 0, first..first + self.grid_cols);
-                    draws += 1;
+                    _draws += 1;
                 }
             }
         }
@@ -554,9 +555,8 @@ fn create_cube(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, u32) {
     (vb, ib, indices.len() as u32)
 }
 
-fn create_plane(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, u32) {
-    // A simple 2x2 plane centered at origin on XZ
-    let s = 10.0f32;
+fn create_plane(device: &wgpu::Device, s: f32) -> (wgpu::Buffer, wgpu::Buffer, u32) {
+    // A large plane centered at origin on XZ
     let verts = [
         Vertex { pos: [-s, 0.0, -s], nrm: [0.0, 1.0, 0.0] },
         Vertex { pos: [ s, 0.0, -s], nrm: [0.0, 1.0, 0.0] },
