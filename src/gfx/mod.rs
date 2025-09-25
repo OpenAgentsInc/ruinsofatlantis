@@ -720,12 +720,25 @@ impl Renderer {
     }
 
     fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
-        // Map 0..2 to PortalOpen/Still/Waiting, fallback to any available
-        let name = match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" };
+        // Prefer "Waiting" (no T-pose), then "Still", then "PortalOpen".
+        // If the selected clip has no duration or no tracks, fall back in that order.
+        let order = [
+            match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" },
+            "Waiting",
+            "Still",
+            "PortalOpen",
+        ];
+        for name in order.iter() {
+            if let Some(clip) = self.skinned_cpu.animations.get(*name) {
+                let has_tracks = !clip.t_tracks.is_empty() || !clip.r_tracks.is_empty() || !clip.s_tracks.is_empty();
+                if clip.duration > 0.0 && has_tracks { return clip; }
+            }
+        }
+        // Last resort: any available
         self.skinned_cpu
             .animations
-            .get(name)
-            .or_else(|| self.skinned_cpu.animations.values().next())
+            .values()
+            .next()
             .expect("at least one animation clip present")
     }
 }
