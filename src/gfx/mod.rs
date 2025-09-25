@@ -205,7 +205,8 @@ impl Renderer {
         let grid_cols = 100u32;
         let grid_rows = 100u32;
         let spacing = 2.5f32;
-        let plane_extent = spacing * (grid_cols.max(grid_rows) as f32) * 2.0;
+        // Plane size: previously 2.0x the grid footprint; shrink by 25% → 1.5x
+        let plane_extent = spacing * (grid_cols.max(grid_rows) as f32) * 1.5;
         let (plane_vb, plane_ib, plane_index_count) = mesh::create_plane(&device, plane_extent);
 
         // Instances
