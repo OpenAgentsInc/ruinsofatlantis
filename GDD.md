@@ -12,6 +12,7 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 - [Races](#races)
 - [Class Lore](#class-lore-oceanic-context)
 - [Combat](#combat)
+- [Player vs. Player (PvP)](#player-vs-player-pvp)
 - [Combat Simulator & Harness](#combat-simulator--harness)
 - [Zones & Cosmology](#zones--cosmology)
 - [Progression Matrix (Zones × Classes, Land Drama)](#progression-matrix-zones--classes-land-drama)
@@ -21,6 +22,8 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 ## Philosophy
 
 RoA embraces old‑school difficulty. Travel and logistics matter, resources are scarce, choices are meaningful, and death is painful.
+
+Diegetic interactions, not toggles. If a thing exists in the world—player, NPC, door, ship—you can use the same verbs on it: look, talk, trade, shove, steal, heal, curse, or strike. We do not add out‑of‑world switches like “PvP Enabled/Disabled” or invulnerability bubbles. Safety and norms are enforced in‑world (laws, wards, factions, guard response, bounties), not by breaking the simulation.
 
 ## Game Mechanics
 
@@ -202,6 +205,33 @@ UI and adaptation notes
 - Targeting: tooltips indicate automatic miss beyond normal range while submerged.
 - Movement: water‑resistance icon appears when the character lacks a Swim Speed; stamina drain and animation weight communicate friction.
 - Visibility: underwater fog/light cones reduce detection; Perception checks and light sources use SRD “Vision and Light” baselines.
+
+## Player vs. Player (PvP)
+
+Open simulation and consequence‑driven conflict; no per‑player PvP toggles. If it exists, you can interact with it—players included.
+
+Always‑interactable targets
+- All entities are valid targets. Friendly fire is on; spells, buffs, and debuffs can target any creature consistent with SRD targeting.
+- Concentration, saves, conditions, opportunity attacks, and damage rules apply identically in PvE and PvP.
+
+Civilized spaces and consequences (not invulnerability)
+- Towns and sanctuaries are protected by in‑world law and warding, not “PvP off” flags. Aggression is allowed but swiftly punished: guards respond, wards mark/outlaw offenders, and capture/arrest systems resolve crimes.
+- Outlaw status is visible and persistent: bounties, faction hostility, confiscation on defeat, and travel restrictions create meaningful deterrents without removing agency.
+
+Consentful conflict, diegetically
+- Duels: initiate via heralds/circles/contracts that both parties accept; rules (timers, no outside aid, stakes) are enforced by the rite, not UI toggles.
+- Wars: guilds/kingdoms declare war at heralds over regions/routes; after notice, members are open targets within the declared scope. Treaties and ceasefires are likewise filed in world.
+
+Non‑lethal and escalation options
+- Subdual outcomes (knockout, disarm, fine, exile) coexist with lethal combat. Victors choose to rob, ransom, arrest, or parley; repeated offenses escalate penalties.
+- Civilian protection focuses on consequences (summoned guards, crowd control, temporary binding) rather than immunity bubbles; interactions still occur.
+
+Anti‑grief tuning (within the fiction)
+- Diminishing returns on control effects in PvP; respawn/jail logistics that remove repeat harassment loops near crime scenes.
+- Safe travel that is explainable (convoys, escorts, warded ferries) rather than global invulnerability; risk scales with route and reputation.
+
+Notes on SRD alignment
+- The SRD already permits targeting any creature; RoA keeps this intact. MMO‑specific mitigations (guards, bounties, duel rites) are layered as world systems, not exceptions to the rules engine.
 
 ### Combat Simulator & Harness
 

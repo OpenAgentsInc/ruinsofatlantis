@@ -26,30 +26,40 @@ pub struct CpuMesh {
 
 /// Load a `.gltf` file from disk and merge all primitives into a single mesh.
 pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
-    // Preflight: detect Draco compression and attempt to decompress via `gltf-transform` if present.
+    // Try import first; if we hit Draco, fall back to best-effort decompression.
     let mut source_path: PathBuf = path.to_path_buf();
-    if is_draco_compressed(path).unwrap_or(false) {
-        if let Some(out) = try_decompress_with_gltf_transform(path) {
-            log::warn!(
-                "Detected KHR_draco_mesh_compression; using decompressed copy: {}",
-                out.display()
-            );
-            source_path = out;
-        } else {
-            bail!(
-                "The model uses KHR_draco_mesh_compression which this loader does not decode. \
-                 Install Node and run: `npx -y @gltf-transform/cli decompress {0} {0}.decompressed.gltf` \
-                 Then update the path or replace the original.",
-                path.display()
-            );
+    let import_result = gltf::import(&source_path);
+    let (doc, buffers, _images) = match import_result {
+        Ok(ok) => ok,
+        Err(e) => {
+            let err_str = format!("{e}");
+            // If the error directly mentions Draco or the JSON header says Draco is required, attempt to decompress.
+            let draco_flag = err_str.contains("KHR_draco_mesh_compression")
+                || is_draco_compressed(&source_path).unwrap_or(false)
+                || file_contains(&source_path, "KHR_draco_mesh_compression").unwrap_or(false);
+            if draco_flag {
+                if let Some(out) = try_decompress_with_gltf_transform(&source_path) {
+                    log::warn!(
+                        "Detected KHR_draco_mesh_compression; using decompressed copy: {}",
+                        out.display()
+                    );
+                    source_path = out;
+                    gltf::import(&source_path).with_context(|| format!(
+                        "failed to import glTF after decompress: {}",
+                        source_path.display()
+                    ))?
+                } else {
+                    bail!(
+                        "Model uses KHR_draco_mesh_compression and could not be auto-decompressed. \
+                         Please install Node and run: \n  npx -y @gltf-transform/cli decompress {0} {0}.decompressed.gltf\nThen re-run.",
+                        path.display()
+                    );
+                }
+            } else {
+                return Err(anyhow!("failed to import glTF: {}", source_path.display()).context(e));
+            }
         }
-    }
-
-    // Use the high-level importer which resolves external buffers/images.
-    let (doc, buffers, _images) = gltf::import(&source_path).with_context(|| format!(
-        "failed to import glTF: {}",
-        source_path.display()
-    ))?;
+    };
 
     let mut vertices: Vec<Vertex> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
@@ -143,4 +153,14 @@ fn try_decompress_with_gltf_transform(input: &Path) -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+fn file_contains(path: &Path, needle: &str) -> Result<bool> {
+    // Only for small JSON .gltf files; skips .glb.
+    if path.extension().and_then(|e| e.to_str()) != Some("gltf") {
+        return Ok(false);
+    }
+    let data = fs::read(path).with_context(|| format!("read file: {}", path.display()))?;
+    let nb = needle.as_bytes();
+    Ok(data.windows(nb.len()).any(|w| w == nb))
 }
