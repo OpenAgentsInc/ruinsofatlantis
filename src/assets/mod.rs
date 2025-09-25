@@ -74,7 +74,8 @@ pub struct SkinnedMeshCPU {
 pub struct TextureCPU { pub pixels: Vec<u8>, pub width: u32, pub height: u32, pub srgb: bool }
 
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
-    // Robust prepare: prefer pre-decompressed glTF, or auto-decompress if import would fail
+    // Robust prepare: prefer original glTF if it imports; fall back to a
+    // decompressed copy (or auto-decompress) only if needed.
     let prepared = prepare_gltf_path(path)?;
     if prepared != path { log::warn!("anim diag: using prepared glTF: {}", prepared.display()); }
     let (doc, buffers, images) = gltf::import(&prepared).with_context(|| format!("import skinned glTF: {}", prepared.display()))?;
@@ -101,58 +102,85 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
 
     // Prefer a mesh attached to a skinned node; fall back later if none.
     let mut joints_all_zero = false;
-    'outer: for scene in doc.scenes() { for node in scene.nodes() {
+    'outer: for node in doc.nodes() {
         if node.skin().is_none() { continue; }
         if let Some(mesh) = node.mesh() {
             if let Some(skin) = node.skin() { skin_opt = Some(skin); }
             for prim in mesh.primitives() {
-                // If Draco, decode skinned attributes via native decoder
-                if prim.extension_value("KHR_draco_mesh_compression").is_some() {
+                let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                let pos_it = reader.read_positions();
+                let nrm_it = reader.read_normals();
+                let joints_it = reader.read_joints(0);
+                let weights_it = reader.read_weights(0);
+
+                // If standard attributes are present, use them. Only fall back to Draco when
+                // joints/weights are unavailable via the normal reader.
+                if pos_it.is_some() && nrm_it.is_some() && joints_it.is_some() && weights_it.is_some() {
+                    let pos: Vec<[f32;3]> = pos_it.unwrap().collect();
+                    let nrm: Vec<[f32;3]> = nrm_it.unwrap().collect();
+                    // Pick the UV set actually referenced by baseColorTexture (default 0)
+                    let uv_set = prim.material()
+                        .pbr_metallic_roughness()
+                        .base_color_texture()
+                        .map(|ti| ti.tex_coord())
+                        .unwrap_or(0);
+                    let uv_opt = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32());
+                    let joints: Vec<[u16;4]> = match joints_it.unwrap() {
+                        gltf::mesh::util::ReadJoints::U16(it) => it.map(|v| [v[0],v[1],v[2],v[3]]).collect(),
+                        gltf::mesh::util::ReadJoints::U8(it) => it.map(|v| [v[0] as u16,v[1] as u16,v[2] as u16,v[3] as u16]).collect(),
+                    };
+                    let weights: Vec<[f32;4]> = match weights_it.unwrap() {
+                        gltf::mesh::util::ReadWeights::F32(it) => it.collect(),
+                        gltf::mesh::util::ReadWeights::U16(it) => it.map(|v| [v[0] as f32/65535.0, v[1] as f32/65535.0, v[2] as f32/65535.0, v[3] as f32/65535.0]).collect(),
+                        gltf::mesh::util::ReadWeights::U8(it) => it.map(|v| [v[0] as f32/255.0, v[1] as f32/255.0, v[2] as f32/255.0, v[3] as f32/255.0]).collect(),
+                    };
+
+                    let uv: Vec<[f32;2]> = if let Some(it) = uv_opt {
+                        let collected: Vec<[f32;2]> = it.collect();
+                        let all_zero = collected.iter().all(|u| u[0] == 0.0 && u[1] == 0.0);
+                        if collected.len() == pos.len() && !all_zero { collected } else {
+                            log::warn!("wizard: invalid TEXCOORD_{} (len {}, all_zero={}); using planar fallback", uv_set, collected.len(), all_zero);
+                            pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
+                        }
+                    } else {
+                        log::warn!("wizard: TEXCOORD_{} missing; using planar fallback UVs", uv_set);
+                        pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
+                    };
+
+                    for i in 0..pos.len() {
+                        verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] });
+                    }
+                    // Debug: log JOINTS/WEIGHTS ranges captured from standard attributes
+                    if !verts.is_empty() {
+                        let mut jmin = [u16::MAX;4];
+                        let mut jmax = [0u16;4];
+                        let mut wsum_min = f32::INFINITY; let mut wsum_max = f32::NEG_INFINITY;
+                        for v in verts.iter().take(512) {
+                            for k in 0..4 { jmin[k] = jmin[k].min(v.joints[k]); jmax[k] = jmax[k].max(v.joints[k]); }
+                            let s = v.weights[0]+v.weights[1]+v.weights[2]+v.weights[3];
+                            wsum_min = wsum_min.min(s); wsum_max = wsum_max.max(s);
+                        }
+                        log::warn!("assets: std attrs JOINTS_0=[{}..{}] WEIGHT_SUM=[{:.3}..{:.3}]", jmin[0], jmax[0], wsum_min, wsum_max);
+                    }
+                    let idx_u32: Vec<u32> = match reader.read_indices() {
+                        Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(),
+                        Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                        Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(),
+                        None => (0..pos.len() as u32).collect(),
+                    };
+                    for i in idx_u32 { if i > u16::MAX as u32 { bail!("wizard indices exceed u16"); } indices.push(i as u16); }
+                    break 'outer;
+                } else if prim.extension_value("KHR_draco_mesh_compression").is_some() {
+                    // Fallback: decode via Draco if standard attributes are unavailable
+                    log::warn!("assets: falling back to Draco decode for skinned primitive");
                     decode_draco_skinned_primitive(&doc, &buffers, &prim, &mut verts, &mut indices)?;
                     break 'outer;
-                }
-                let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-                let Some(pos_it) = reader.read_positions() else { continue };
-                let Some(nrm_it) = reader.read_normals() else { continue };
-                // Pick the UV set actually referenced by baseColorTexture (default 0)
-                let uv_set = prim.material()
-                    .pbr_metallic_roughness()
-                    .base_color_texture()
-                    .map(|ti| ti.tex_coord())
-                    .unwrap_or(0);
-                let uv_opt = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32());
-                let joints = match reader.read_joints(0) { Some(gltf::mesh::util::ReadJoints::U16(it)) => it.map(|v| [v[0],v[1],v[2],v[3]]).collect::<Vec<[u16;4]>>(), Some(gltf::mesh::util::ReadJoints::U8(it)) => it.map(|v| [v[0] as u16,v[1] as u16,v[2] as u16,v[3] as u16]).collect(), _ => continue };
-                let weights = match reader.read_weights(0) { Some(gltf::mesh::util::ReadWeights::F32(it)) => it.collect::<Vec<[f32;4]>>(), Some(gltf::mesh::util::ReadWeights::U16(it)) => it.map(|v| [v[0] as f32/65535.0, v[1] as f32/65535.0, v[2] as f32/65535.0, v[3] as f32/65535.0]).collect(), Some(gltf::mesh::util::ReadWeights::U8(it)) => it.map(|v| [v[0] as f32/255.0, v[1] as f32/255.0, v[2] as f32/255.0, v[3] as f32/255.0]).collect(), None => continue };
-
-                let pos: Vec<[f32;3]> = pos_it.collect();
-                let nrm: Vec<[f32;3]> = nrm_it.collect();
-                let uv: Vec<[f32;2]> = if let Some(it) = uv_opt {
-                    let collected: Vec<[f32;2]> = it.collect();
-                    let all_zero = collected.iter().all(|u| u[0] == 0.0 && u[1] == 0.0);
-                    if collected.len() == pos.len() && !all_zero {
-                        collected
-                    } else {
-                        log::warn!(
-                            "wizard: invalid TEXCOORD_0 (len {}, all_zero={}); using planar fallback",
-                            collected.len(), all_zero
-                        );
-                        pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
-                    }
                 } else {
-                    log::warn!("wizard: TEXCOORD_0 missing; using planar fallback UVs");
-                    pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
-                };
-                for i in 0..pos.len() {
-                    verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] });
+                    continue;
                 }
-                let idx_u32: Vec<u32> = match reader.read_indices() { Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(), Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(), Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(), None => (0..pos.len() as u32).collect() };
-                for i in idx_u32 { if i > u16::MAX as u32 { bail!("wizard indices exceed u16"); } indices.push(i as u16); }
-
-                // baseColorTexture will be resolved below using `images` from gltf::import
-                break 'outer;
             }
         }
-    }}
+    }
 
     // If we did not capture skinned attributes, fall back to rigid geometry so we can still render the mesh.
     if verts.is_empty() {
@@ -868,16 +896,20 @@ fn decode_draco_skinned_primitive(
 /// Returns a path guaranteed to import (or an error if it cannot be prepared).
 pub fn prepare_gltf_path(path: &Path) -> Result<PathBuf> {
     let decompressed = path.with_extension("decompressed.gltf");
-    if decompressed.exists() {
-        return Ok(decompressed);
-    }
-    // Try import quickly; if it works, return original path.
+    // Prefer original if it imports successfully.
     if gltf::import(path).is_ok() {
         return Ok(path.to_path_buf());
     }
-    // Import failed — try to auto-decompress assuming Draco.
+    // If original fails but a decompressed copy exists and imports, use it.
+    if decompressed.exists() {
+        if gltf::import(&decompressed).is_ok() {
+            log::warn!("anim diag: original failed; using decompressed copy: {}", decompressed.display());
+            return Ok(decompressed);
+        }
+    }
+    // Try to auto-decompress assuming Draco.
     if let Some(out) = try_gltf_transform_decompress(path, &decompressed) {
-        log::info!("auto-decompressed {} -> {}", path.display(), decompressed.display());
+        log::info!("auto-decompressed {} -> {}", path.display(), out.display());
         Ok(out)
     } else {
         Err(anyhow!(
