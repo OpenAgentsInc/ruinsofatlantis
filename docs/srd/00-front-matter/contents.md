@@ -27,6 +27,7 @@ This is an adapted table of contents that mirrors the Markdown folder structure 
   - Rogue — docs/srd/02-classes/rogue.md
   - Sorcerer — docs/srd/02-classes/sorcerer.md
   - Warlock — docs/srd/02-classes/warlock.md
+  - Wizard — docs/srd/02-classes/wizard.md
 
 - Spells (03-spells)
   - Gaining Spells — docs/srd/03-spells/gaining-spells.md

@@ -44,6 +44,7 @@ See `NOTICE` at the repository root for the canonical attribution statement. Do 
   - `rogue.md`
   - `sorcerer.md`
   - `warlock.md`
+  - `wizard.md`
 - `03-spells/`
   - `README.md`
   - `gaining-spells.md`
