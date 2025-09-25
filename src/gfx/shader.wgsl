@@ -89,45 +89,13 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
-  // Debug cycle based on time (every ~2 seconds switch):
-  let t = globals.time_pad.x;
-  // 6 modes cycling every ~10s total (~1.67s per step)
-  let mode = u32(floor(fract(t * 0.1) * 6.0));
-
-  if (mode == 0u) {
-    // 0: solid yellow => verifies fs_wizard path
-    return vec4<f32>(1.0, 1.0, 0.0, 1.0);
-  } else if (mode == 1u) {
-    // 1: UV gradient => verifies varying UVs arrive
-    return vec4<f32>(in.uv, 0.0, 1.0);
-  } else if (mode == 2u) {
-    // 2: Constant sample => verifies the texture is bound and readable
-    let c = textureSample(base_tex, base_sam, vec2<f32>(0.25, 0.75));
-    return vec4<f32>(c.rgb, 1.0);
-  } else if (mode == 3u) {
-    // 3: Sample with original UVs (no transform)
-    let col = textureSample(base_tex, base_sam, in.uv);
-    return vec4<f32>(col.rgb, 1.0);
-  } else if (mode == 4u) {
-    // 4: Full path: sample using transformed UVs
-    var uv = in.uv;
-    let c = cos(-mat_xf.rot);
-    let s = sin(-mat_xf.rot);
-    let R = mat2x2<f32>(c, -s, s, c);
-    uv = (R * (uv * mat_xf.scale)) + mat_xf.offset;
-    let col = textureSample(base_tex, base_sam, uv);
-    return vec4<f32>(col.rgb, 1.0);
-  } else {
-    // 5: Full path + V flip
-    var uv = in.uv;
-    let c = cos(-mat_xf.rot);
-    let s = sin(-mat_xf.rot);
-    let R = mat2x2<f32>(c, -s, s, c);
-    uv = (R * (uv * mat_xf.scale)) + mat_xf.offset;
-    uv.y = 1.0 - uv.y;
-    let col = textureSample(base_tex, base_sam, uv);
-    return vec4<f32>(col.rgb, 1.0);
-  }
+  // Final path: sample baseColor at model UVs (no flip, no transform), apply simple lighting
+  let light_dir = normalize(vec3<f32>(0.3, 1.0, 0.4));
+  let ndl = max(dot(in.nrm, light_dir), 0.0);
+  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
+  var base = albedo * (0.25 + 0.75 * ndl);
+  if (in.sel > 0.5) { base = vec3<f32>(1.0, 1.0, 0.1); }
+  return vec4<f32>(base, 1.0);
 }
 
 // Skinned instanced pipeline (wizards)
