@@ -33,6 +33,7 @@ use std::time::Instant;
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt, SurfaceError, SurfaceTargetUnsafe};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+use std::fs;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
@@ -93,6 +94,7 @@ pub struct Renderer {
     wizard_pipeline: wgpu::RenderPipeline,
     wizard_wire_pipeline: Option<wgpu::RenderPipeline>,
     wizard_mat_bg: wgpu::BindGroup,
+    _wizard_mat_buf: wgpu::Buffer,
     _wizard_tex_view: wgpu::TextureView,
     _wizard_sampler: wgpu::Sampler,
 
@@ -374,8 +376,64 @@ impl Renderer {
         });
 
         // Wizard material (albedo from glTF)
+        // Material transform defaults (can be overridden by KHR_texture_transform)
+        // Note: std140 layout for uniforms rounds vec2 members to 16 bytes each.
+        // Expand the struct to 48 bytes to satisfy backend expectations.
+        #[repr(C)]
+        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+        struct MaterialXform {
+            offset: [f32; 2], _pad0: [f32; 2], // 16 bytes
+            scale:  [f32; 2], _pad1: [f32; 2], // 16 bytes
+            rot: f32,       _pad2: [f32; 3],  // 16 bytes
+        }
+        let mut mat_xf = MaterialXform { offset: [0.0, 0.0], _pad0: [0.0;2], scale: [1.0, 1.0], _pad1: [0.0;2], rot: 0.0, _pad2: [0.0;3] };
+        // Try to read KHR_texture_transform from the wizard glTF for the first primitive's material
+        if let Ok(txt) = std::fs::read_to_string(asset_path("assets/models/wizard.gltf")) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&txt) {
+                // Resolve first primitive material index
+                let mat_index = json.get("meshes")
+                    .and_then(|m| m.get(0))
+                    .and_then(|m0| m0.get("primitives"))
+                    .and_then(|prims| prims.get(0))
+                    .and_then(|p0| p0.get("material"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as usize;
+                let base_tex = json.get("materials")
+                    .and_then(|arr| arr.get(mat_index))
+                    .and_then(|m| m.get("pbrMetallicRoughness"))
+                    .and_then(|p| p.get("baseColorTexture"));
+                if let Some(bct) = base_tex {
+                    // Optional: texCoord selection was already handled in loader; we only read transform here
+                    if let Some(ext) = bct.get("extensions").and_then(|e| e.get("KHR_texture_transform")) {
+                        if let Some(off) = ext.get("offset").and_then(|v| v.as_array()) {
+                            if off.len() == 2 { mat_xf.offset = [off[0].as_f64().unwrap_or(0.0) as f32, off[1].as_f64().unwrap_or(0.0) as f32]; }
+                        }
+                        if let Some(s) = ext.get("scale").and_then(|v| v.as_array()) {
+                            if s.len() == 2 { mat_xf.scale = [s[0].as_f64().unwrap_or(1.0) as f32, s[1].as_f64().unwrap_or(1.0) as f32]; }
+                        }
+                        if let Some(r) = ext.get("rotation").and_then(|v| v.as_f64()) { mat_xf.rot = r as f32; }
+                    }
+                }
+            }
+        }
+
+        let wizard_mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("material-xform"),
+            contents: bytemuck::bytes_of(&mat_xf),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let (wizard_mat_bg, _wizard_tex_view, _wizard_sampler) = if let Some(tex) = &skinned_cpu.base_color_texture {
             log::info!("wizard albedo: {}x{} (srgb={})", tex.width, tex.height, tex.srgb);
+            // Debug: dump CPU albedo to disk and basic stats
+            {
+                let dir = asset_path("data/debug"); let _ = fs::create_dir_all(&dir);
+                let out = dir.join("wizard_albedo_cpu.png");
+                let _ = image::save_buffer(&out, &tex.pixels, tex.width, tex.height, image::ExtendedColorType::Rgba8);
+                let mut rmin=255u8; let mut gmin=255u8; let mut bmin=255u8; let mut rmax=0u8; let mut gmax=0u8; let mut bmax=0u8;
+                for px in tex.pixels.chunks_exact(4) { rmin=rmin.min(px[0]); gmin=gmin.min(px[1]); bmin=bmin.min(px[2]); rmax=rmax.max(px[0]); gmax=gmax.max(px[1]); bmax=bmax.max(px[2]); }
+                log::info!("wizard albedo cpu rgb min=({},{},{}) max=({},{},{})", rmin,gmin,bmin,rmax,gmax,bmax);
+            }
             let size3 = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
             let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("wizard-albedo"), size: size3, mip_level_count: 1, sample_count: 1,
@@ -385,7 +443,11 @@ impl Renderer {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
                 &tex.pixels,
-                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) },
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * tex.width),
+                    rows_per_image: Some(tex.height),
+                },
                 size3,
             );
             let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
@@ -403,8 +465,11 @@ impl Renderer {
                 entries: &[
                     wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
                     wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
+                    wgpu::BindGroupEntry { binding: 2, resource: wizard_mat_buf.as_entire_binding() },
                 ],
             });
+
+            // Note: if further debugging is needed, implement a GPU readback copy here.
             (bg, view, sampler)
         } else {
             log::warn!("wizard albedo: NONE; using 1x1 fallback");
@@ -413,7 +478,11 @@ impl Renderer {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
                 &[255,255,255,255],
-                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: Some(1),
+                },
                 size3,
             );
             let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
@@ -425,6 +494,7 @@ impl Renderer {
             let bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("wizard-material-bg"), layout: &material_bgl, entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
+                wgpu::BindGroupEntry { binding: 2, resource: wizard_mat_buf.as_entire_binding() },
             ] });
             (bg, view, sampler)
         };
@@ -468,6 +538,7 @@ impl Renderer {
             wizard_pipeline,
             wizard_wire_pipeline,
             wizard_mat_bg,
+            _wizard_mat_buf: wizard_mat_buf,
             _wizard_tex_view,
             _wizard_sampler,
             wire_enabled: false,

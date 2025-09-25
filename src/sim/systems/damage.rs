@@ -14,7 +14,7 @@ pub fn run(state: &mut SimState) {
             .and_then(|m| m.get("1-4").cloned())
             .unwrap_or_else(|| "1d10".to_string());
         let dmg_type = dmg.damage_type.to_ascii_lowercase();
-        drop(spec);
+        let _ = spec;
         // Roll
         let mut total = state.roll_dice_str(&dice);
         if crit { total += state.roll_dice_str(&dice); }

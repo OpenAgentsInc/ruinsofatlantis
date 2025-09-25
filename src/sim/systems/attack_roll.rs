@@ -30,7 +30,7 @@ pub fn run(state: &mut SimState) {
             let mut bonus = state.actors[actor_idx].spell_attack_bonus;
             // Bless adds 1d4 to attacks if active
             if state.actors[actor_idx].blessed_ms > 0 { bonus += state.roll_dice_str("1d4"); }
-            let mut total = roll + bonus;
+            let total = roll + bonus;
             let mut target_ac = target_ac_initial;
             let would_hit = total >= target_ac;
             // Reaction: Shield (+5 AC) if target has shield and reaction ready and would be hit

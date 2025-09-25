@@ -179,4 +179,40 @@ impl SimState {
             save: None,
         }
     }
+
+    pub fn builtin_boss_tentacle_spec() -> crate::core::data::spell::SpellSpec {
+        use std::collections::HashMap;
+        use crate::core::data::spell::{SpellSpec, AttackSpec, DamageSpec};
+        let mut dice = HashMap::new();
+        dice.insert("1-4".to_string(), "3d10".to_string());
+        SpellSpec {
+            id: "boss.tentacle".into(),
+            name: "Tentacle".into(),
+            version: None,
+            source: None,
+            school: "natural".into(),
+            level: 0,
+            classes: vec![],
+            tags: vec!["melee".into(), "boss".into()],
+            cast_time_s: 1.0,
+            gcd_s: 1.0,
+            cooldown_s: 0.0,
+            resource_cost: None,
+            can_move_while_casting: false,
+            targeting: "unit".into(),
+            requires_line_of_sight: true,
+            range_ft: 10,
+            minimum_range_ft: 0,
+            firing_arc_deg: 180,
+            attack: Some(AttackSpec { kind: "melee_attack".into(), rng_stream: Some("attack".into()), crit_rule: Some("nat20_double_dice".into()) }),
+            damage: Some(DamageSpec { damage_type: "bludgeoning".into(), add_spell_mod_to_damage: false, dice_by_level_band: Some(dice) }),
+            projectile: None,
+            secondary: None,
+            latency: None,
+            events: vec![],
+            metrics: None,
+            policy: None,
+            save: None,
+        }
+    }
 }

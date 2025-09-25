@@ -9,6 +9,7 @@ use ruinsofatlantis::sim::runner;
 fn main() {
     let args: Vec<String> = env::args().collect();
     let scenario = args.iter().skip_while(|a| a.as_str() != "--scenario").nth(1);
+    let result_only = args.iter().any(|a| a == "--result-only" || a == "-q");
     match scenario {
         Some(path) => {
             println!("[sim] loading scenario: {path}");
@@ -22,7 +23,7 @@ fn main() {
                         println!("[sim] loaded spell: {} (lvl {})", fb.name, fb.level);
                         if let Some(dmg) = fb.damage { println!("[sim] damage.type={}", dmg.damage_type); }
                     }
-                    runner::run_scenario(&scn);
+                    runner::run_scenario(&scn, result_only);
                 }
                 Err(e) => eprintln!("[sim] failed to load scenario: {e}"),
             }

@@ -94,7 +94,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     let mut skin_opt: Option<gltf::Skin> = None;
     let mut verts: Vec<VertexSkinCPU> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
-    let mut base_color_texture: Option<TextureCPU> = None;
+    // (deferred material loading uses `images` later)
 
     'outer: for scene in doc.scenes() { for node in scene.nodes() {
         if let Some(mesh) = node.mesh() {
@@ -137,22 +137,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let idx_u32: Vec<u32> = match reader.read_indices() { Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(), Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(), Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(), None => (0..pos.len() as u32).collect() };
                 for i in idx_u32 { if i > u16::MAX as u32 { bail!("wizard indices exceed u16"); } indices.push(i as u16); }
 
-                // Material baseColorTexture
-                if let Some(mat) = prim.material().pbr_metallic_roughness().base_color_texture() {
-                    let tex = mat.texture();
-                    let src = tex.source();
-                    let data = &buffers;
-                    // use imported images via gltf::import:
-                    // But we don't have images vector here; use tex.source().source() via buffer view
-                    if let gltf::image::Source::View{ view, .. } = src.source() {
-                        let buf = view.buffer();
-                        let bytes = &data[buf.index()].0;
-                        let start = view.offset();
-                        let end = start + view.length();
-                        // decode PNG to RGBA8 using image crate via gltf importer already gave decoded pixels in images Data.
-                        // However here we don't have decoded data. Simpler approach: capture from gltf::import images instead by re-importing.
-                    }
-                }
+                // baseColorTexture will be resolved below using `images` from gltf::import
                 break 'outer;
             }
         }
