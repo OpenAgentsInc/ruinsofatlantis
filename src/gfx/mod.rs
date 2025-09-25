@@ -33,6 +33,10 @@ use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt, Surface
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
+fn asset_path(rel: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+}
+
 /// Renderer owns the GPU state and per‑scene resources.
 ///
 /// The intent is that a higher‑level game loop owns a `Renderer` and calls
@@ -100,6 +104,9 @@ pub struct Renderer {
 
     // CPU-side skinned mesh data
     skinned_cpu: SkinnedMeshCPU,
+
+    // Camera focus (we orbit around a close wizard)
+    cam_target: glam::Vec3,
 }
 
 impl Renderer {
@@ -233,9 +240,9 @@ impl Renderer {
         let (plane_vb, plane_ib, plane_index_count) = mesh::create_plane(&device, plane_extent);
 
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
-        let skinned_cpu = load_gltf_skinned(std::path::Path::new("assets/models/wizard.gltf"))
+        let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
             .context("load skinned wizard.gltf")?;
-        let ruins_cpu_res = load_gltf_mesh(std::path::Path::new("assets/models/ruins.gltf"));
+        let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
 
         let wiz_vertices: Vec<VertexSkinned> = skinned_cpu
             .vertices
@@ -278,7 +285,7 @@ impl Renderer {
 
         let place_range = plane_extent * 0.4;
 
-        for _ in 0..100 { // 100 wizards
+        for _ in 0..10 { // 10 wizards
             let translation = glam::vec3(
                 rng.random_range(-place_range..place_range),
                 0.0,
@@ -287,24 +294,30 @@ impl Renderer {
             let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
             world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
         }
-        for _ in 0..30 { // 30 ruins
-            let translation = glam::vec3(
-                rng.random_range(-place_range..place_range),
-                0.0,
-                rng.random_range(-place_range..place_range),
-            );
+        // Place ~3 ruins spread out
+        let ruins_positions = [
+            glam::vec3(-place_range, 0.0, -place_range * 0.6),
+            glam::vec3(place_range * 0.9, 0.0, 0.0),
+            glam::vec3(0.0, 0.0, place_range * 0.8),
+        ];
+        for pos in ruins_positions { 
             let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-            world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
+            world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
         }
 
         // --- Create instance buffers per kind from ECS world ---
         let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
         let mut ruin_instances: Vec<Instance> = Vec::new();
+        let mut cam_target = glam::Vec3::ZERO;
+        let mut has_cam_target = false;
         for (i, kind) in world.kinds.iter().enumerate() {
             let t = world.transforms[i];
             let m = t.matrix().to_cols_array_2d();
             match kind {
-                RenderKind::Wizard => wiz_instances.push(InstanceSkin { model: m, color: [0.20, 0.45, 0.95], selected: 0.0, palette_base: 0, _pad_inst: [0;3] }),
+                RenderKind::Wizard => {
+                    if !has_cam_target { cam_target = t.translation + glam::vec3(0.0, 1.2, 0.0); has_cam_target = true; }
+                    wiz_instances.push(InstanceSkin { model: m, color: [0.20, 0.45, 0.95], selected: 0.0, palette_base: 0, _pad_inst: [0;3] })
+                }
                 RenderKind::Ruins => ruin_instances.push(Instance { model: m, color: [0.65, 0.66, 0.68], selected: 0.0 }),
             }
         }
@@ -392,6 +405,7 @@ impl Renderer {
             wizard_anim_index,
             wizard_time_offset,
             skinned_cpu,
+            cam_target,
         })
     }
 
@@ -422,13 +436,14 @@ impl Renderer {
         // Update globals (camera + time)
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        // Slightly closer orbit for better view
-        let cam = Camera::orbit(glam::vec3(0.0, 0.0, 0.0), 30.0, t * 0.1125, aspect);
+        // Orbit closely around the first wizard we spawned
+        // Zoom in further and slow orbit speed by 75%
+        let cam = Camera::orbit(self.cam_target, 3.0, t * 0.15, aspect);
         let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
-        // Rotate a base model slightly for subtle motion on instanced meshes
-        let shard_mtx = glam::Mat4::from_rotation_y(t * 0.2);
+        // Keep model base identity to avoid moving instances globally
+        let shard_mtx = glam::Mat4::IDENTITY;
         let shard_model = Model { model: shard_mtx.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.05, _pad: [0.0; 4] };
         self.queue.write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
 
