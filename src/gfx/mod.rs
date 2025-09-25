@@ -732,26 +732,27 @@ impl Renderer {
     }
 
     fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
-        // Prefer "Waiting" (no T-pose), then "Still", then "PortalOpen".
-        // If the selected clip has no duration or no tracks, fall back in that order.
-        let order = [
+        // Choose a clip that actually affects the skin's joints.
+        let prefer = [
             match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" },
             "Waiting",
             "Still",
             "PortalOpen",
         ];
-        for name in order.iter() {
+        let joints = &self.skinned_cpu.joints_nodes;
+        let mut best: Option<&AnimClip> = None;
+        let mut best_cov: usize = 0;
+        for name in prefer.iter() {
             if let Some(clip) = self.skinned_cpu.animations.get(*name) {
-                let has_tracks = !clip.t_tracks.is_empty() || !clip.r_tracks.is_empty() || !clip.s_tracks.is_empty();
-                if clip.duration > 0.0 && has_tracks { return clip; }
+                if clip.duration <= 0.0 { continue; }
+                // Coverage: how many joints have any track
+                let cov = joints.iter().filter(|&&jn| clip.t_tracks.contains_key(&jn) || clip.r_tracks.contains_key(&jn) || clip.s_tracks.contains_key(&jn)).count();
+                if cov > best_cov { best_cov = cov; best = Some(clip); }
             }
         }
-        // Last resort: any available
-        self.skinned_cpu
-            .animations
-            .values()
-            .next()
-            .expect("at least one animation clip present")
+        if let Some(c) = best { return c; }
+        // Fallback: any non-empty clip
+        self.skinned_cpu.animations.values().find(|c| c.duration > 0.0).or_else(|| self.skinned_cpu.animations.values().next()).expect("at least one animation clip present")
     }
 }
 
