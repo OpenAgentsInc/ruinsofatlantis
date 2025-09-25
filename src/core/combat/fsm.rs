@@ -19,6 +19,8 @@ pub struct Gcd { pub remaining_ms: u32 }
 #[derive(Debug, Clone)]
 pub struct ReactionWindow { pub remaining_ms: u32 }
 
+impl Default for ActionState { fn default() -> Self { ActionState::Idle } }
+
 impl ActionState {
     /// Advance timers by `dt_ms`, returning the updated state and any completion flag.
     pub fn tick(self, dt_ms: u32) -> (Self, Option<ActionDone>) {

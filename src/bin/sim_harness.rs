@@ -4,6 +4,7 @@
 use std::env;
 use std::path::Path;
 use ruinsofatlantis::core::data::{scenario, loader};
+use ruinsofatlantis::sim::runner;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -21,7 +22,7 @@ fn main() {
                         println!("[sim] loaded spell: {} (lvl {})", fb.name, fb.level);
                         if let Some(dmg) = fb.damage { println!("[sim] damage.type={}", dmg.damage_type); }
                     }
-                    println!("[sim] (stub) run complete.");
+                    runner::run_scenario(&scn);
                 }
                 Err(e) => eprintln!("[sim] failed to load scenario: {e}"),
             }
