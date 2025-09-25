@@ -32,3 +32,41 @@ Implementation notes
 - Trademarks: avoid non‑SRD proper nouns and Wizards of the Coast trademarks.
 - Fidelity first: implement rules verbatim where feasible; MMO‑specific changes (e.g., death penalties, travel weight, matchmaking limits) are documented under Design Differences.
 - Data‑driven: represent SRD entities in data (JSON/TOML) with stable IDs and versioning to simplify updates and audits.
+
+## Classes
+
+(Directly from SRD)
+
+- Barbarian
+- Bard
+- Cleric
+- Druid
+- Fighter
+- Monk
+- Paladin
+- Ranger
+- Rogue
+- Sorcerer
+- Warlock
+- Wizard
+
+## Races
+
+(Directly from SRD)
+
+- Dragonborn
+- Dwarf
+- Elf
+- Gnome
+- Goliath
+- Halfling
+- Human
+- Orc
+- Tiefling
+
+## Technical Overview
+
+- Engine: custom engine from scratch in Rust (no third‑party game engine).
+- Rendering: built on `wgpu` for modern graphics APIs.
+- Windowing/Input: `winit` for cross‑platform windows and event handling.
+- Rationale: maximum control, performance, and customizability for MMO‑scale systems.
