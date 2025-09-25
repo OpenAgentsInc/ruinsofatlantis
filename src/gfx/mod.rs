@@ -647,6 +647,8 @@ impl Renderer {
                 &self.inst_pipeline
             };
             rpass.set_pipeline(inst_pipe);
+            rpass.set_bind_group(0, &self.globals_bg, &[]);
+            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
             rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
             rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
             rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
