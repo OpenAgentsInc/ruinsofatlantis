@@ -17,6 +17,8 @@ pub struct WgpuState {
 
     // Pipeline and resources
     pipeline: wgpu::RenderPipeline,
+    inst_pipeline: wgpu::RenderPipeline,
+    wire_pipeline: Option<wgpu::RenderPipeline>,
     globals_buf: wgpu::Buffer,
     globals_bg: wgpu::BindGroup,
 
@@ -33,6 +35,15 @@ pub struct WgpuState {
     plane_vb: wgpu::Buffer,
     plane_ib: wgpu::Buffer,
     plane_index_count: u32,
+
+    // Instancing
+    instance_buf: wgpu::Buffer,
+    instances: Vec<Instance>,
+    grid_cols: u32,
+    grid_rows: u32,
+    culling_enabled: bool,
+    selected: Option<usize>,
+    wire_enabled: bool,
 
     // Time
     start: Instant,
@@ -81,10 +92,14 @@ impl WgpuState {
             .await
             .context("request adapter")?;
 
+        let mut req_features = wgpu::Features::empty();
+        if adapter.features().contains(wgpu::Features::POLYGON_MODE_LINE) {
+            req_features |= wgpu::Features::POLYGON_MODE_LINE;
+        }
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("wgpu-device"),
-                required_features: wgpu::Features::empty(),
+                required_features: req_features,
                 required_limits: wgpu::Limits::downlevel_defaults(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::default(),
@@ -176,7 +191,7 @@ impl WgpuState {
             push_constant_ranges: &[],
         });
 
-        // Render pipeline
+        // Render pipelines (non-instanced + instanced; optional wireframe)
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as u64,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -211,6 +226,56 @@ impl WgpuState {
             cache: None,
         });
 
+        // Instanced pipeline (adds per-instance transform+color)
+        let instance_buffers = [
+            wgpu::VertexBufferLayout {
+                array_stride: vertex_buffers[0].array_stride,
+                step_mode: vertex_buffers[0].step_mode,
+                attributes: vertex_buffers[0].attributes,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<Instance>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &wgpu::vertex_attr_array![
+                    2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4, // mat4
+                    6 => Float32x3, // color
+                    7 => Float32    // selected
+                ],
+            },
+        ];
+        let inst_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("inst-pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_inst"), buffers: &instance_buffers, compilation_options: Default::default() },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_inst"),
+                targets: &[Some(wgpu::ColorTargetState { format: config.format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        // Optional wireframe pipeline if supported
+        let features = device.features();
+        let wire_pipeline = if features.contains(wgpu::Features::POLYGON_MODE_LINE) {
+            Some(device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("inst-pipeline-wire"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_inst"), buffers: &instance_buffers, compilation_options: Default::default() },
+                fragment: Some(wgpu::FragmentState { module: &shader, entry_point: Some("fs_inst"), targets: &[Some(wgpu::ColorTargetState { format: config.format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+                primitive: wgpu::PrimitiveState { polygon_mode: wgpu::PolygonMode::Line, ..Default::default() },
+                depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            }))
+        } else { None };
+
         // Buffers
         let globals = Globals { view_proj: Mat4::IDENTITY.to_cols_array_2d(), time_pad: [0.0; 4] };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -236,6 +301,25 @@ impl WgpuState {
         let (cube_vb, cube_ib, cube_index_count) = create_cube(&device);
         let (plane_vb, plane_ib, plane_index_count) = create_plane(&device);
 
+        // Instances grid
+        let grid_cols = 100u32; // 10k instances
+        let grid_rows = 100u32;
+        let spacing = 2.5f32;
+        let mut instances = Vec::with_capacity((grid_cols * grid_rows) as usize);
+        for r in 0..grid_rows {
+            for c in 0..grid_cols {
+                let x = (c as f32 - grid_cols as f32 * 0.5) * spacing;
+                let z = (r as f32 - grid_rows as f32 * 0.5) * spacing;
+                let model = Mat4::from_translation(Vec3::new(x, 1.0, z));
+                instances.push(Instance { model: model.to_cols_array_2d(), color: [0.85, 0.15, 0.15], selected: 0.0 });
+            }
+        }
+        let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("instance-buf"),
+            contents: bytemuck::cast_slice(&instances),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -245,6 +329,8 @@ impl WgpuState {
             max_dim,
             depth,
             pipeline,
+            inst_pipeline,
+            wire_pipeline,
             globals_buf,
             globals_bg,
             plane_model_buf,
@@ -257,6 +343,13 @@ impl WgpuState {
             plane_vb,
             plane_ib,
             plane_index_count,
+            instance_buf,
+            instances,
+            grid_cols,
+            grid_rows,
+            culling_enabled: true,
+            selected: None,
+            wire_enabled: false,
             start: Instant::now(),
         })
     }
@@ -336,10 +429,31 @@ impl WgpuState {
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
             // Draw shard using its dedicated model buffer/bind-group
-            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+            // Instanced shards: choose pipeline
+            let inst_pipe = if self.wire_enabled { self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline) } else { &self.inst_pipeline };
+            rpass.set_pipeline(inst_pipe);
+            rpass.set_bind_group(0, &self.globals_bg, &[]);
+            rpass.set_bind_group(1, &self.shard_model_bg, &[]); // per-draw model (rotation)
             rpass.set_vertex_buffer(0, self.cube_vb.slice(..));
+            rpass.set_vertex_buffer(1, self.instance_buf.slice(..));
             rpass.set_index_buffer(self.cube_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.cube_index_count, 0, 0..1);
+
+            // Simple CPU culling by rows: compute visible z range and draw only those rows
+            let vp = Mat4::from_cols_array_2d(&Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t,0.0,0.0,0.0] }.view_proj);
+            let cam_forward = (cam.target - cam.eye).normalize();
+            let cam_z = cam.eye.z;
+            // Very rough: cull by Z in camera space
+            let mut draws = 0u32;
+            for r in 0..self.grid_rows {
+                let z_world = (r as f32 - self.grid_rows as f32 * 0.5) * 2.5;
+                // If culling disabled or row near camera
+                let visible = !self.culling_enabled || (z_world - cam_z).abs() < 150.0;
+                if visible {
+                    let first = r * self.grid_cols;
+                    rpass.draw_indexed(0..self.cube_index_count, 0, first..first + self.grid_cols);
+                    draws += 1;
+                }
+            }
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -361,6 +475,14 @@ struct Model {
     color: [f32; 3],
     emissive: f32,
     _pad: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct Instance {
+    model: [[f32; 4]; 4],
+    color: [f32; 3],
+    selected: f32,
 }
 
 #[repr(C)]
@@ -510,6 +632,51 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let light_dir = normalize(vec3<f32>(0.3, 1.0, 0.4));
   let ndl = max(dot(in.nrm, light_dir), 0.0);
   let base = model_u.color * (0.2 + 0.8 * ndl) + model_u.emissive;
+  return vec4<f32>(base, 1.0);
+}
+
+// Instanced pipeline
+struct InstIn {
+  @location(0) pos: vec3<f32>,
+  @location(1) nrm: vec3<f32>,
+  // per-instance transform (mat4 split across 4 attrs)
+  @location(2) i0: vec4<f32>,
+  @location(3) i1: vec4<f32>,
+  @location(4) i2: vec4<f32>,
+  @location(5) i3: vec4<f32>,
+  @location(6) icolor: vec3<f32>,
+  @location(7) iselected: f32,
+};
+
+struct InstOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) nrm: vec3<f32>,
+  @location(1) world: vec3<f32>,
+  @location(2) sel: f32,
+  @location(3) icolor: vec3<f32>,
+};
+
+@vertex
+fn vs_inst(input: InstIn) -> InstOut {
+  let inst = mat4x4<f32>(input.i0, input.i1, input.i2, input.i3);
+  let world_pos = (model_u.model * inst * vec4<f32>(input.pos, 1.0)).xyz;
+  var out: InstOut;
+  out.world = world_pos;
+  out.nrm = normalize((model_u.model * inst * vec4<f32>(input.nrm, 0.0)).xyz);
+  out.pos = globals.view_proj * vec4<f32>(world_pos, 1.0);
+  out.sel = input.iselected;
+  out.icolor = input.icolor;
+  return out;
+}
+
+@fragment
+fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
+  let light_dir = normalize(vec3<f32>(0.3, 1.0, 0.4));
+  let ndl = max(dot(in.nrm, light_dir), 0.0);
+  var base = in.icolor * (0.2 + 0.8 * ndl) + model_u.emissive;
+  if (in.sel > 0.5) {
+    base = vec3<f32>(1.0, 1.0, 0.1);
+  }
   return vec4<f32>(base, 1.0);
 }
 "#;
