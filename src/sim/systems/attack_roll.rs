@@ -14,6 +14,7 @@ pub fn run(state: &mut SimState) {
             } else { (false, false) }
         } else { (false, false) };
         if has_attack {
+            if !state.actor_alive(actor_idx) { continue; }
             // Skip hostile resolution against allies
             if let Some(tgt_idx) = state.actors[actor_idx].target {
                 if state.are_allies(actor_idx, tgt_idx) {
@@ -22,6 +23,7 @@ pub fn run(state: &mut SimState) {
                     state.log(format!("ally_immunity actor={} -> tgt={} ability={} (skipped)", actor_id, tgt_id, ability_id));
                     continue;
                 }
+                if !state.actor_alive(tgt_idx) { continue; }
             }
             let target_ac_initial = state.target_ac(actor_idx).unwrap_or(12);
             let (roll, nat20) = state.roll_d20(Advantage::Normal);

@@ -91,7 +91,12 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
   let light_dir = normalize(vec3<f32>(0.3, 1.0, 0.4));
   let ndl = max(dot(in.nrm, light_dir), 0.0);
-  let uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  var uv = in.uv;
+  let c = cos(mat_xf.rot);
+  let s = sin(mat_xf.rot);
+  let R = mat2x2<f32>(c, -s, s, c);
+  uv = (R * (uv * mat_xf.scale)) + mat_xf.offset;
+  uv = vec2<f32>(uv.x, 1.0 - uv.y);
   let albedo = textureSample(base_tex, base_sam, uv).rgb;
   var base = albedo * (0.25 + 0.75 * ndl);
   if (in.sel > 0.5) { base = vec3<f32>(1.0, 1.0, 0.1); }
@@ -166,3 +171,5 @@ fn vs_wizard(input: WizIn) -> WizOut {
 
 @group(3) @binding(0) var base_tex: texture_2d<f32>;
 @group(3) @binding(1) var base_sam: sampler;
+struct MaterialXform { offset: vec2<f32>, scale: vec2<f32>, rot: f32, _pad: vec3<f32> };
+@group(3) @binding(2) var<uniform> mat_xf: MaterialXform;

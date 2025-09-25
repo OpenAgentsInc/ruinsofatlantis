@@ -48,9 +48,9 @@ pub fn run_scenario(scn: &Scenario) {
     }
     for i in 0..state.actors.len() { if i != boss_idx { state.actors[i].target = Some(boss_idx); } }
 
-    // Run a few seconds of sim
-    let steps = (10_000 / scn.tick_ms) as usize; // 10 seconds
-    for _ in 0..steps {
+    // Run until boss dies or party wipes, with a safety cap
+    let max_steps = (300_000 / scn.tick_ms) as usize; // 5 minutes cap
+    for step in 0..max_steps {
         // Reset per-tick temp AC and reaction
         for a in &mut state.actors { a.ac_temp_bonus = 0; a.reaction_ready = true; }
         systems::cast_begin::run(&mut state);
@@ -62,6 +62,17 @@ pub fn run_scenario(scn: &Scenario) {
         systems::conditions::run(&mut state);
         // Clear one-tick cast completion triggers
         state.cast_completed.clear();
+        // Check win/loss
+        let boss_alive = state.actors.iter().any(|a| a.role == "boss" && a.hp > 0);
+        let party_alive = state.actors.iter().any(|a| a.team.as_deref() == Some("players") && a.hp > 0);
+        if !boss_alive {
+            println!("[sim] result: BOSS DEFEATED at t={} ms", (step as u32) * scn.tick_ms);
+            break;
+        }
+        if !party_alive {
+            println!("[sim] result: PARTY WIPED at t={} ms", (step as u32) * scn.tick_ms);
+            break;
+        }
     }
 
     // Print summary

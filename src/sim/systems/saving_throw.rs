@@ -35,6 +35,7 @@ pub fn run(state: &mut SimState) {
             } else { continue }
         } else { continue };
         let Some(tgt_idx) = state.actors[actor_idx].target else { continue };
+        if !state.actor_alive(actor_idx) || !state.actor_alive(tgt_idx) { continue; }
         if state.are_allies(actor_idx, tgt_idx) { continue; }
         let dc = save_dc_opt.unwrap_or(state.actors[actor_idx].spell_save_dc);
         let kind = parse_save_kind(&save_kind_s);

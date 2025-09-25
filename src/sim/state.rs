@@ -96,6 +96,7 @@ impl SimState {
         for idx in 0..self.actors.len() {
             let (done, actor_id) = {
                 let a = &mut self.actors[idx];
+                if a.hp <= 0 { continue; }
                 let (next, done) = a.action.clone().tick(dt);
                 a.action = next;
                 (done, a.id.clone())
@@ -136,5 +137,46 @@ impl SimState {
         let mut sum = 0;
         for _ in 0..n { sum += (self.rng.random::<u32>() % (m as u32) + 1) as i32; }
         sum
+    }
+
+    pub fn actor_alive(&self, idx: usize) -> bool { self.actors.get(idx).map(|a| a.hp > 0).unwrap_or(false) }
+}
+
+// Built-in fallback specs
+impl SimState {
+    pub fn builtin_basic_attack_spec() -> crate::core::data::spell::SpellSpec {
+        use std::collections::HashMap;
+        use crate::core::data::spell::{SpellSpec, AttackSpec, DamageSpec};
+        let mut dice = HashMap::new();
+        dice.insert("1-4".to_string(), "1d6".to_string());
+        SpellSpec {
+            id: "core.basic_attack".into(),
+            name: "Basic Attack".into(),
+            version: None,
+            source: None,
+            school: "weapon".into(),
+            level: 0,
+            classes: vec![],
+            tags: vec!["weapon".into()],
+            cast_time_s: 1.0,
+            gcd_s: 1.0,
+            cooldown_s: 0.0,
+            resource_cost: None,
+            can_move_while_casting: false,
+            targeting: "unit".into(),
+            requires_line_of_sight: true,
+            range_ft: 5,
+            minimum_range_ft: 0,
+            firing_arc_deg: 180,
+            attack: Some(AttackSpec { kind: "melee_weapon_attack".into(), rng_stream: Some("attack".into()), crit_rule: Some("nat20_double_dice".into()) }),
+            damage: Some(DamageSpec { damage_type: "slashing".into(), add_spell_mod_to_damage: false, dice_by_level_band: Some(dice) }),
+            projectile: None,
+            secondary: None,
+            latency: None,
+            events: vec![],
+            metrics: None,
+            policy: None,
+            save: None,
+        }
     }
 }

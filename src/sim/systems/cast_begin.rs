@@ -24,7 +24,9 @@ pub fn run(state: &mut SimState) {
         let Some((first, sel_idx)) = start_ability else { continue };
         // Load spec if needed
         if !state.spells.contains_key(&first) {
-            if let Ok(spec) = state.load_spell(&first) { state.spells.insert(first.clone(), spec); } else { continue }
+            if let Ok(spec) = state.load_spell(&first) { state.spells.insert(first.clone(), spec); }
+            else if first == "basic_attack" { let spec = SimState::builtin_basic_attack_spec(); state.spells.insert(first.clone(), spec); }
+            else { continue }
         }
         let spec = state.spells.get(&first).unwrap();
         // Cast time / GCD in ms
