@@ -23,11 +23,28 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 
 RoA embraces old‑school difficulty. Travel and logistics matter, resources are scarce, choices are meaningful, and death is painful.
 
-Diegetic interactions, not toggles. If a thing exists in the world—player, NPC, door, ship—you can use the same verbs on it: look, talk, trade, shove, steal, heal, curse, or strike. We do not add out‑of‑world switches like “PvP Enabled/Disabled” or invulnerability bubbles. Safety and norms are enforced in‑world (laws, wards, factions, guard response, bounties), not by breaking the simulation.
+In‑world interactions, not toggles. If a thing exists in the world—player, NPC, door, ship—you can use the same verbs on it: look, talk, trade, shove, steal, heal, curse, or strike. We do not add out‑of‑world switches like “PvP Enabled/Disabled” or invulnerability bubbles. Safety and norms are enforced in‑world (laws, wards, factions, guard response, bounties), not by breaking the simulation.
 
 ## Game Mechanics
 
 Built on Dungeons & Dragons 5th Edition (SRD): iconic classes, races, spells, monsters, and d20 combat—fully implemented and tuned for a dangerous, persistent MMO world.
+
+### In‑World Repair & Maintenance (SRD Tools + Mending)
+
+Players can earn coin and reputation by repairing damage in the world using SRD tool proficiencies and spells.
+
+- Eligible actions
+  - Mending (cantrip): fixes a single break/tear up to 1 ft. in any dimension on a non‑creature object. Used for minor cracks, snapped rails, torn sails, and loose fittings.
+  - Tool work: Carpenter’s Tools (wood), Mason’s Tools (stone), Smith’s Tools (metal), Tinker’s Tools (mechanisms). Applies to doors, bridges, hoists, stairs, railings, and town fixtures.
+- Flow (diegetic jobs)
+  - Damage occurs from combat or environment (e.g., a “hammer” swing breaks a door; siege in a port town damages railings).
+  - Job boards and wardens post repair orders. Interact with the damaged object or board to accept a task.
+  - Perform checks: use the relevant tool proficiency (with ability mod per SRD; DMG‑style DCs) and consume simple materials (wood/stone/metal scrap). Mending auto‑repairs qualifying small breaks without a check.
+  - Rewards: small coppers/silvers and reputation with local authorities, guilds, or wardens on completion; larger payouts for critical structures or rush orders.
+- Example
+  - A brawl breaks a tavern door. A player with Carpenter’s Tools repairs it in‑world, earning 5 cp and +2 reputation with the Dock Ward. A wizard accompanying them uses Mending to fix cracked lantern glass for a small bonus.
+- Simulator note
+  - Repairs are environment events the sim can schedule (restore object integrity, clear hazards), not combat stats. Policies can choose to prioritize repairs during lulls or after encounters.
 
 ## SRD Usage and Attribution
 
