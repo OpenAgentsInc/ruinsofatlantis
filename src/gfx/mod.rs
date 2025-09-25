@@ -344,16 +344,16 @@ impl Renderer {
             world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
         }
         // 2) Add a ring of smaller ruins close to the wizards
-        let ruins_ring_radius = 6.5f32;
-        let ruins_ring_count = 6usize; // keep it subtle
+        let ruins_ring_radius = 10.0f32; // push farther out so they don't overlap the wizards
+        let ruins_ring_count = 4usize;   // fewer near-circle ruins
         for i in 0..ruins_ring_count {
             let a = (i as f32) / (ruins_ring_count as f32) * std::f32::consts::TAU;
-            let jitter_r = rng.random_range(-0.3..0.3);
+            let jitter_r = rng.random_range(-0.4..0.4);
             let pos = glam::vec3((ruins_ring_radius + jitter_r) * a.cos(), 0.0, (ruins_ring_radius + jitter_r) * a.sin());
             // Face roughly outward from the center with some randomness
             let yaw = a + std::f32::consts::PI + rng.random_range(-0.25..0.25);
             let rot = glam::Quat::from_rotation_y(yaw);
-            let scale = glam::Vec3::splat(0.6 + rng.random_range(-0.05..0.05));
+            let scale = glam::Vec3::splat(0.7 + rng.random_range(-0.05..0.05));
             world.spawn(Transform { translation: pos, rotation: rot, scale }, RenderKind::Ruins);
         }
 
