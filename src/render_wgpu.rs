@@ -39,6 +39,15 @@ pub struct WgpuState {
 }
 
 impl WgpuState {
+    fn scale_to_max((w0, h0): (u32, u32), max_dim: u32) -> (u32, u32) {
+        let (mut w, mut h) = (w0.max(1), h0.max(1));
+        if w > max_dim || h > max_dim {
+            let scale = (w as f32 / max_dim as f32).max(h as f32 / max_dim as f32);
+            w = ((w as f32 / scale).floor() as u32).clamp(1, max_dim);
+            h = ((h as f32 / scale).floor() as u32).clamp(1, max_dim);
+        }
+        (w, h)
+    }
     pub async fn new(window: &Window) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
@@ -101,18 +110,13 @@ impl WgpuState {
 
         // Determine max supported dimension from the actual device limits (not adapter)
         let dev_limits = device.limits();
-        let max_dim = dev_limits.max_texture_dimension_2d.max(1);
-        let (mut w, mut h) = (size.width.max(1), size.height.max(1));
-        if w > max_dim || h > max_dim {
-            w = w.min(max_dim);
-            h = h.min(max_dim);
+        // Extra safety: hard-cap to 2048 for surfaces on older drivers that report larger device limits.
+        let max_dim = dev_limits.max_texture_dimension_2d.max(1).min(2048);
+        let (w, h) = Self::scale_to_max((size.width, size.height), max_dim);
+        if w != size.width || h != size.height {
             log::warn!(
                 "Clamping surface from {}x{} to {}x{} (max_dim={})",
-                size.width,
-                size.height,
-                w,
-                h,
-                max_dim
+                size.width, size.height, w, h, max_dim
             );
         }
 
@@ -259,17 +263,11 @@ impl WgpuState {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            let (mut w, mut h) = (new_size.width.max(1), new_size.height.max(1));
-            if w > self.max_dim || h > self.max_dim {
-                w = w.min(self.max_dim);
-                h = h.min(self.max_dim);
+            let (w, h) = Self::scale_to_max((new_size.width, new_size.height), self.max_dim);
+            if w != new_size.width || h != new_size.height {
                 log::warn!(
-                    "Resized {}x{} exceeds max {}, clamped to {}x{}",
-                    new_size.width,
-                    new_size.height,
-                    self.max_dim,
-                    w,
-                    h
+                    "Resized {}x{} exceeds max {}, clamped to {}x{} (aspect kept)",
+                    new_size.width, new_size.height, self.max_dim, w, h
                 );
             }
             self.size = PhysicalSize::new(w, h);
