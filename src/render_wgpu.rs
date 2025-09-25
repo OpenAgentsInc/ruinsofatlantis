@@ -12,6 +12,7 @@ pub struct WgpuState {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
+    max_dim: u32,
     depth: wgpu::TextureView,
 
     // Pipeline and resources
@@ -98,11 +99,29 @@ impl WgpuState {
             .unwrap_or(wgpu::PresentMode::Fifo);
         let alpha_mode = caps.alpha_modes[0];
 
+        // Determine max supported surface dimension and clamp initial size
+        let supported = adapter.limits();
+        let max_dim = supported.max_texture_dimension_2d.max(1);
+        let (mut w, mut h) = (size.width.max(1), size.height.max(1));
+        if w > max_dim || h > max_dim {
+            let scale = (w as f32 / max_dim as f32).max(h as f32 / max_dim as f32);
+            w = ((w as f32 / scale).floor() as u32).max(1);
+            h = ((h as f32 / scale).floor() as u32).max(1);
+            log::warn!(
+                "Clamping surface from {}x{} to {}x{} (max_dim={})",
+                size.width,
+                size.height,
+                w,
+                h,
+                max_dim
+            );
+        }
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width: size.width.max(1),
-            height: size.height.max(1),
+            width: w,
+            height: h,
             present_mode,
             alpha_mode,
             view_formats: vec![],
@@ -219,7 +238,8 @@ impl WgpuState {
             device,
             queue,
             config,
-            size,
+            size: PhysicalSize::new(w, h),
+            max_dim,
             depth,
             pipeline,
             globals_buf,
@@ -240,9 +260,23 @@ impl WgpuState {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
+            let (mut w, mut h) = (new_size.width, new_size.height);
+            if w > self.max_dim || h > self.max_dim {
+                let scale = (w as f32 / self.max_dim as f32).max(h as f32 / self.max_dim as f32);
+                w = ((w as f32 / scale).floor() as u32).max(1);
+                h = ((h as f32 / scale).floor() as u32).max(1);
+                log::warn!(
+                    "Resized {}x{} exceeds max {}, clamped to {}x{}",
+                    new_size.width,
+                    new_size.height,
+                    self.max_dim,
+                    w,
+                    h
+                );
+            }
+            self.size = PhysicalSize::new(w, h);
+            self.config.width = w;
+            self.config.height = h;
             self.surface.configure(&self.device, &self.config);
             self.depth = create_depth_view(&self.device, self.config.width, self.config.height, self.config.format);
         }
