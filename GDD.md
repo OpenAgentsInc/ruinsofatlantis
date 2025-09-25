@@ -10,7 +10,7 @@ Ruins of Atlantis is a fantasy MMORPG under development by Blue Rush Studios, a 
 - [SRD Scope & Implementation](#srd-scope--implementation)
 - [Classes](#classes)
 - [Races](#races)
-- [Class Lore (Oceanic Context)](#class-lore-oceanic-context)
+- [Class Lore](#class-lore-oceanic-context)
 - [Combat](#combat)
 - [Zones & Cosmology](#zones--cosmology)
 - [Progression Matrix (Zones × Classes, Land Drama)](#progression-matrix-zones--classes-land-drama)
