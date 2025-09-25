@@ -16,4 +16,7 @@ Spell entries are organized alphabetically. Each entry reproduces the spell’s 
 - J — docs/srd/03-spells/spell-descriptions/J.md
 - K — docs/srd/03-spells/spell-descriptions/K.md
 - L — docs/srd/03-spells/spell-descriptions/L.md
+- M — docs/srd/03-spells/spell-descriptions/M.md
+- N — docs/srd/03-spells/spell-descriptions/N.md
+- P — docs/srd/03-spells/spell-descriptions/P.md
   
