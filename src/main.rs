@@ -1,5 +1,5 @@
 mod platform_winit;
-mod render_wgpu;
+pub mod gfx;
 
 fn main() {
     // Minimal logger to see wgpu/winit info in dev
