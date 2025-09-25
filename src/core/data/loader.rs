@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use anyhow::{Context, Result};
 use super::spell::SpellSpec;
+use super::class::ClassSpec;
+use super::monster::MonsterSpec;
 
 fn data_root() -> PathBuf {
     // Assume running from project root during development
@@ -22,5 +24,17 @@ pub fn read_json(rel: impl AsRef<Path>) -> Result<String> {
 pub fn load_spell_spec(rel: impl AsRef<Path>) -> Result<SpellSpec> {
     let txt = read_json(rel)?;
     let spec: SpellSpec = serde_json::from_str(&txt).context("parse spell json")?;
+    Ok(spec)
+}
+
+pub fn load_class_spec(rel: impl AsRef<Path>) -> Result<ClassSpec> {
+    let txt = read_json(rel)?;
+    let spec: ClassSpec = serde_json::from_str(&txt).context("parse class json")?;
+    Ok(spec)
+}
+
+pub fn load_monster_spec(rel: impl AsRef<Path>) -> Result<MonsterSpec> {
+    let txt = read_json(rel)?;
+    let spec: MonsterSpec = serde_json::from_str(&txt).context("parse monster json")?;
     Ok(spec)
 }

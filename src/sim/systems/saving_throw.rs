@@ -57,7 +57,11 @@ pub fn run(state: &mut SimState) {
     }
 }
 
-fn actor_save_mod(_state: &SimState, _idx: usize, kind: SaveKind) -> i32 {
-    // Prototype: give boss +3 on Dex, others +1 Dex, 0 otherwise
-    match kind { SaveKind::Dex => 1, _ => 0 }
+fn actor_save_mod(state: &mut SimState, idx: usize, kind: SaveKind) -> i32 {
+    let mut bonus = 0;
+    // Use simple defaults: Dex+1 for non-boss, +3 for boss
+    match kind { SaveKind::Dex => { bonus += if state.actors[idx].role == "boss" { 3 } else { 1 }; } _ => {} }
+    // Bless adds 1d4 to saves if active
+    if state.actors[idx].blessed_ms > 0 { bonus += state.roll_dice_str("1d4"); }
+    bonus
 }

@@ -1,0 +1,7 @@
+{
+  "id": "fighter",
+  "base_ac": 16,
+  "spell_attack_bonus": 0,
+  "spell_save_dc": 0,
+  "save_mods": { "str": 3, "con": 2 }
+}

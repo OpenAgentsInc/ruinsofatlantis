@@ -14,16 +14,23 @@ pub fn run_scenario(scn: &Scenario) {
         .position(|a| a.role == "boss")
         .unwrap_or(0);
     for a in &scn.actors {
-        let (atk, dc) = match a.class.as_deref() {
-            Some("wizard") | Some("sorcerer") => (5, 13),
-            Some("cleric") | Some("warlock") => (5, 13),
-            _ => (4, 12),
+        // Load defaults
+        let (ac_base, hp, atk, dc) = if a.role == "boss" {
+            let (ac, hp) = state.load_monster_defaults(&a.id).unwrap_or((17, 120));
+            (ac, hp, 0, 0)
+        } else {
+            if let Some(class_id) = &a.class {
+                let (ac, atk, dc) = state.load_class_defaults(class_id).unwrap_or((12, 0, 0));
+                (ac, 30, atk, dc)
+            } else { (12, 30, 0, 0) }
         };
         state.actors.push(ActorSim {
             id: a.id.clone(),
             role: a.role.clone(),
             class: a.class.clone(),
-            hp: if a.role == "boss" { 120 } else { 30 },
+            hp,
+            ac_base,
+            ac_temp_bonus: 0,
             ability_ids: a.abilities.clone(),
             action: Default::default(),
             gcd: Default::default(),
@@ -31,16 +38,22 @@ pub fn run_scenario(scn: &Scenario) {
             spell_attack_bonus: atk,
             spell_save_dc: dc,
             statuses: Vec::new(),
+            blessed_ms: 0,
+            reaction_ready: true,
+            next_ability_idx: 0,
         });
     }
     for i in 0..state.actors.len() { if i != boss_idx { state.actors[i].target = Some(boss_idx); } }
 
     // Run a few seconds of sim
-    let steps = (3000 / scn.tick_ms) as usize; // 3 seconds
+    let steps = (10_000 / scn.tick_ms) as usize; // 10 seconds
     for _ in 0..steps {
+        // Reset per-tick temp AC and reaction
+        for a in &mut state.actors { a.ac_temp_bonus = 0; a.reaction_ready = true; }
         systems::cast_begin::run(&mut state);
         state.tick();
         systems::saving_throw::run(&mut state);
+        systems::buffs::run(&mut state);
         systems::attack_roll::run(&mut state);
         systems::damage::run(&mut state);
         systems::conditions::run(&mut state);

@@ -5,6 +5,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::core::combat::fsm::{ActionDone, ActionState, Gcd};
 use crate::core::data::loader::load_spell_spec;
+use crate::core::data::loader::{load_class_spec, load_monster_spec};
 use crate::core::data::spell::SpellSpec;
 use crate::core::rules::attack::Advantage;
 
@@ -14,6 +15,8 @@ pub struct ActorSim {
     pub role: String,
     pub class: Option<String>,
     pub hp: i32,
+    pub ac_base: i32,
+    pub ac_temp_bonus: i32,
     pub ability_ids: Vec<String>,
     pub action: ActionState,
     pub gcd: Gcd,
@@ -21,6 +24,9 @@ pub struct ActorSim {
     pub spell_attack_bonus: i32,
     pub spell_save_dc: i32,
     pub statuses: Vec<(crate::core::combat::conditions::Condition, u32)>,
+    pub blessed_ms: u32,
+    pub reaction_ready: bool,
+    pub next_ability_idx: usize,
 }
 
 pub struct SimState {
@@ -60,15 +66,28 @@ impl SimState {
             if let Ok(spec) = load_spell_spec(&alt) { return Ok(spec); }
         }
         // Heuristic: if the id contains "fire_bolt", fall back to fire_bolt.json
-        if id.contains("fire_bolt") {
-            if let Ok(spec) = load_spell_spec("spells/fire_bolt.json") { return Ok(spec); }
-        }
+        if id.contains("fire_bolt") { if let Ok(spec) = load_spell_spec("spells/fire_bolt.json") { return Ok(spec); } }
+        if id.contains("bless") { if let Ok(spec) = load_spell_spec("spells/bless.json") { return Ok(spec); } }
+        if id.contains("shield") { if let Ok(spec) = load_spell_spec("spells/shield.json") { return Ok(spec); } }
+        if id.contains("grease") { if let Ok(spec) = load_spell_spec("spells/grease.json") { return Ok(spec); } }
         // Fallback: try the filename portion after a slash if present
         if let Some((_ns, tail)) = id.rsplit_once('/') {
             let alt = format!("spells/{}.json", tail);
             if let Ok(spec) = load_spell_spec(&alt) { return Ok(spec); }
         }
         load_spell_spec(&primary)
+    }
+
+    pub fn load_class_defaults(&self, id: &str) -> anyhow::Result<(i32,i32,i32)> {
+        let rel = format!("classes/{}.json", id);
+        let spec = load_class_spec(rel)?;
+        Ok((spec.base_ac, spec.spell_attack_bonus, spec.spell_save_dc))
+    }
+
+    pub fn load_monster_defaults(&self, id: &str) -> anyhow::Result<(i32,i32)> {
+        let rel = format!("monsters/{}.json", id);
+        let spec = load_monster_spec(rel)?;
+        Ok((spec.ac, spec.hp))
     }
 
     pub fn tick(&mut self) {
@@ -93,8 +112,7 @@ impl SimState {
 
     pub fn target_ac(&self, actor_idx: usize) -> Option<i32> {
         let tgt = self.actors[actor_idx].target?;
-        // Prototype: fixed AC for targets
-        Some(match self.actors[tgt].role.as_str() { "boss" => 17, _ => 12 })
+        Some(self.actors[tgt].ac_base + self.actors[tgt].ac_temp_bonus)
     }
 
     pub fn roll_d20(&mut self, _adv: Advantage) -> (i32, bool) {

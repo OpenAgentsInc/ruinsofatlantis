@@ -1,0 +1,6 @@
+{
+  "id": "boss_aboleth",
+  "ac": 17,
+  "hp": 120,
+  "save_mods": { "wis": 2, "int": 4, "con": 5, "dex": 2 }
+}

@@ -1,0 +1,31 @@
+{
+  "id": "cleric.bless.srd521",
+  "name": "Bless",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "enchantment",
+  "level": 1,
+  "classes": ["cleric"],
+  "tags": ["buff", "concentration"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 6.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "unit-or-object",
+  "requires_line_of_sight": true,
+  "range_ft": 30,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 180,
+
+  "attack": null,
+  "damage": null,
+  "projectile": null,
+  "save": null,
+
+  "events": ["CastStarted","CastCompleted","BuffApplied"],
+  "metrics": null,
+  "policy": { "role": "support", "priority_index": 1 }
+}

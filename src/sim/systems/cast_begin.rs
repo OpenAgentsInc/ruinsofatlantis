@@ -14,11 +14,14 @@ pub fn run(state: &mut SimState) {
     }
     // Try to start casts on idle actors
     for idx in 0..state.actors.len() {
-        let start_ability: Option<String> = {
+        let start_ability: Option<(String, usize)> = {
             let a = &state.actors[idx];
-            if !matches!(a.action, ActionState::Idle) { None } else { a.ability_ids.first().cloned() }
+            if !matches!(a.action, ActionState::Idle) { None } else if a.ability_ids.is_empty() { None } else {
+                let i = a.next_ability_idx % a.ability_ids.len();
+                Some((a.ability_ids[i].clone(), i))
+            }
         };
-        let Some(first) = start_ability else { continue };
+        let Some((first, sel_idx)) = start_ability else { continue };
         // Load spec if needed
         if !state.spells.contains_key(&first) {
             if let Ok(spec) = state.load_spell(&first) { state.spells.insert(first.clone(), spec); } else { continue }
@@ -35,6 +38,7 @@ pub fn run(state: &mut SimState) {
             if let Ok(new_state) = a.action.clone().try_start_cast(id, cast_ms, &mut a.gcd, gcd_ms) {
                 a.action = new_state;
                 started = true;
+                a.next_ability_idx = sel_idx.wrapping_add(1);
             }
             a.id.clone()
         };

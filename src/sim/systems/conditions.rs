@@ -13,6 +13,6 @@ pub fn run(state: &mut SimState) {
     for a in &mut state.actors {
         for s in &mut a.statuses { s.1 = s.1.saturating_sub(state.tick_ms); }
         a.statuses.retain(|s| s.1 > 0);
+        if a.blessed_ms > 0 { a.blessed_ms = a.blessed_ms.saturating_sub(state.tick_ms); }
     }
 }
-

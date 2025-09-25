@@ -15,11 +15,11 @@ actors:
   - id: cleric_heal
     role: healer
     class: cleric
-    abilities: ["bless", "healing_word"]
+    abilities: ["cleric.bless.srd521", "healing_word"]
   - id: wizard_ctrl
     role: dps
     class: wizard
-    abilities: ["wiz.fire_bolt.srd521", "grease"]
+    abilities: ["wiz.fire_bolt.srd521", "grease", "wiz.shield.srd521"]
   - id: rogue_dps
     role: dps
     class: rogue

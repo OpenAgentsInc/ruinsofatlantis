@@ -1,0 +1,7 @@
+{
+  "id": "monk",
+  "base_ac": 15,
+  "spell_attack_bonus": 0,
+  "spell_save_dc": 0,
+  "save_mods": { "dex": 3, "wis": 2 }
+}

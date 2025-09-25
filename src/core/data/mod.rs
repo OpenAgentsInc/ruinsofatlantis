@@ -7,3 +7,5 @@ pub mod ability;
 pub mod spell;
 pub mod loader;
 pub mod scenario;
+pub mod class;
+pub mod monster;

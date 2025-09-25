@@ -9,3 +9,4 @@ pub mod damage;
 pub mod projectiles;
 pub mod saving_throw;
 pub mod conditions;
+pub mod buffs;

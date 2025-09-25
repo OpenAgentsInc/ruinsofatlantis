@@ -38,7 +38,7 @@ impl ActionState {
             }
             ActionState::Recovery { remaining_ms } => {
                 let new = remaining_ms.saturating_sub(dt_ms);
-                (ActionState::Recovery { remaining_ms: new }, None)
+                if new == 0 { (ActionState::Idle, None) } else { (ActionState::Recovery { remaining_ms: new }, None) }
             }
         }
     }

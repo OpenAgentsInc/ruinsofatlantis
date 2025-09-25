@@ -111,11 +111,15 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let nrm: Vec<[f32;3]> = nrm_it.collect();
                 let uv: Vec<[f32;2]> = if let Some(it) = uv0_opt {
                     let collected: Vec<[f32;2]> = it.collect();
-                    if collected.len() == pos.len() { collected } else {
-                        log::warn!("wizard: TEXCOORD_0 length {} != positions {} — padding", collected.len(), pos.len());
-                        let mut v = collected;
-                        v.resize(pos.len(), [0.0, 0.0]);
-                        v
+                    let all_zero = collected.iter().all(|u| u[0] == 0.0 && u[1] == 0.0);
+                    if collected.len() == pos.len() && !all_zero {
+                        collected
+                    } else {
+                        log::warn!(
+                            "wizard: invalid TEXCOORD_0 (len {}, all_zero={}); using planar fallback",
+                            collected.len(), all_zero
+                        );
+                        pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
                     }
                 } else {
                     log::warn!("wizard: TEXCOORD_0 missing; using planar fallback UVs");
@@ -158,7 +162,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let nrm_it = reader.read_normals();
                 let pos: Vec<[f32;3]> = pos_it.collect();
                 let nrm: Vec<[f32;3]> = nrm_it.map(|it| it.collect()).unwrap_or_else(|| vec![[0.0,1.0,0.0]; pos.len()]);
-                let uv: Vec<[f32;2]> = vec![[0.0,0.0]; pos.len()];
+                let uv: Vec<[f32;2]> = pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect();
                 for i in 0..pos.len() {
                     verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: [0,0,0,0], weights: [1.0, 0.0, 0.0, 0.0], uv: uv[i] });
                 }

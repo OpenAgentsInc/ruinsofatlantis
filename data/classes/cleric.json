@@ -1,0 +1,7 @@
+{
+  "id": "cleric",
+  "base_ac": 16,
+  "spell_attack_bonus": 5,
+  "spell_save_dc": 13,
+  "save_mods": { "wis": 3, "con": 2 }
+}

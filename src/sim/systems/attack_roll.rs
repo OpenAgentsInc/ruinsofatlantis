@@ -14,10 +14,23 @@ pub fn run(state: &mut SimState) {
             } else { (false, false) }
         } else { (false, false) };
         if has_attack {
-            let target_ac = state.target_ac(actor_idx).unwrap_or(12);
+            let target_ac_initial = state.target_ac(actor_idx).unwrap_or(12);
             let (roll, nat20) = state.roll_d20(Advantage::Normal);
-            let bonus = state.actors[actor_idx].spell_attack_bonus;
-            let total = roll + bonus;
+            let mut bonus = state.actors[actor_idx].spell_attack_bonus;
+            // Bless adds 1d4 to attacks if active
+            if state.actors[actor_idx].blessed_ms > 0 { bonus += state.roll_dice_str("1d4"); }
+            let mut total = roll + bonus;
+            let mut target_ac = target_ac_initial;
+            let would_hit = total >= target_ac;
+            // Reaction: Shield (+5 AC) if target has shield and reaction ready and would be hit
+            if let Some(tgt_idx) = state.actors[actor_idx].target {
+                if would_hit && state.actors[tgt_idx].reaction_ready && state.actors[tgt_idx].ability_ids.iter().any(|s| s.contains("shield")) {
+                    state.actors[tgt_idx].ac_temp_bonus += 5;
+                    state.actors[tgt_idx].reaction_ready = false;
+                    target_ac = target_ac + 5;
+                    state.log(format!("shield_reaction tgt={} +5 AC -> {}", state.actors[tgt_idx].id, target_ac));
+                }
+            }
             let hit = total >= target_ac;
             let actor_id = state.actors[actor_idx].id.clone();
             state.log(format!("attack_resolved actor={} ability={} d20={} + {} = {} vs AC{} => {}", actor_id, ability_id, roll, bonus, total, target_ac, if hit {"HIT"} else {"MISS"}));
