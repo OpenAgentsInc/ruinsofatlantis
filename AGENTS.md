@@ -6,6 +6,12 @@
 - Assets: `assets/` (art/audio), `data/` (JSON/CSV), `docs/` (design notes, diagrams).
 - Tests: unit tests within each crate’s `src/`; integration tests in top‑level `tests/`.
 
+## Game Design Document (GDD)
+- Canonical design source: `GDD.md` at repo root.
+- Keep these sections current: Philosophy, Game Mechanics, SRD Usage and Attribution, SRD Scope & Implementation, and any Design Differences from SRD.
+- Before gameplay/rules changes, update `GDD.md` in the same PR; explain rationale and SRD impact.
+- SRD usage: maintain exact attribution in `NOTICE`; document any terminology deviations (e.g., using “race”).
+
 ## Build, Test, and Development Commands
 - Build all crates: `cargo build`
 - Run formatter and lints: `cargo fmt` and `cargo clippy -- -D warnings`
@@ -27,7 +33,7 @@
 ## Commit & Pull Request Guidelines
 - Commit style: `<area>: <imperative summary>` (e.g., `server: add login flow`).
 - Include what/why in body; link issues (e.g., `#123`).
-- PRs must: describe changes, include screenshots for UI, update docs (`README.md`/`GDD.md`), update `NOTICE` if SRD content is used, and pass build/fmt/clippy/tests.
+- PRs must: describe changes, include screenshots for UI, update design docs (`GDD.md`), update `NOTICE` when SRD content is added, and pass build/fmt/clippy/tests.
 
 ## SRD, Licensing, and Attribution
 - SRD 5.2.1 content is CC‑BY‑4.0. Include the exact attribution in `NOTICE` and keep GDD’s SRD section accurate.
