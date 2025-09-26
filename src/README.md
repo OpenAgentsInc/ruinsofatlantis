@@ -57,13 +57,17 @@ This document summarizes the `src/` folder structure and what each module does.
   - camera.rs — Camera type and view/projection math.
   - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
   - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.
+  - ui.rs — Overlays: nameplates (text atlas) and health bars (screen‑space quads with green→yellow→red gradient).
+  - pipeline.rs — Adds `create_bar_pipeline` for solid‑color screen quads.
+  - shader.wgsl — Adds `vs_bar`/`fs_bar` for health bar rendering.
 
 - server/
   - mod.rs — In‑process server scaffold: authoritative NPC state (positions/health) and projectile collision/damage resolution. Designed to move into its own crate/process in a future workspace split.
 
 Gameplay wiring (prototype)
-- NPCs: two rings of simple cube NPCs spawn — one further out and one closer just beyond the outer wizard ring. They have health and can be killed.
+- NPCs: multiple rings of cube NPCs spawn at various radii. They have health and can be killed; on hit, bars drop and color shifts.
 - Fire Bolt: on hit, applies damage to NPCs (logs hits/deaths). Impact spawns a small particle burst.
+- Health bars: shown for the player, all wizards, and all NPC boxes. Bars render above the head/center in screen space.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
   - pipeline.rs — Shader/bind group layouts and pipelines (base/instanced/particles/wizard).

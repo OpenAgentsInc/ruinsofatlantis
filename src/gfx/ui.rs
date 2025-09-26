@@ -591,6 +591,7 @@ impl Nameplates {
 #[cfg(test)]
 mod bar_tests {
     use super::HealthBars;
+    use glam::Mat4;
     #[test]
     fn color_mapping_is_monotonic() {
         let g = HealthBars::color_for_frac(1.0);
@@ -599,5 +600,16 @@ mod bar_tests {
         assert!((g[1] - 1.0).abs() < 1e-6 && g[0] < 0.5);
         assert!((y[0] - 1.0).abs() < 1e-6 && (y[1] - 1.0).abs() < 1e-6);
         assert!((r[0] - 1.0).abs() < 1e-6 && r[1] < 0.1);
+    }
+
+    #[test]
+    fn build_vertices_counts_match_fill_fraction() {
+        let vp = Mat4::IDENTITY;
+        // One entry at origin, full health -> background (6) + filled (6)
+        let v_full = HealthBars::build_vertices(1920, 1080, vp, &[(glam::Vec3::ZERO, 1.0)]);
+        assert_eq!(v_full.len(), 12);
+        // Zero health -> only background (6)
+        let v_zero = HealthBars::build_vertices(1920, 1080, vp, &[(glam::Vec3::ZERO, 0.0)]);
+        assert_eq!(v_zero.len(), 6);
     }
 }
