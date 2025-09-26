@@ -65,7 +65,7 @@
 - Prefer to address warnings promptly, but errors are never acceptable at handoff.
 
 ## Coding Style & Naming Conventions
-- Rust 2021+, 4‑space indent; target ~100‑char lines.
+- Rust 2024 edition, 4‑space indent; target ~100‑char lines.
 - Names: snake_case (functions/files), CamelCase (types/traits), SCREAMING_SNAKE_CASE (consts).
 - Prefer explicit imports; avoid wildcards. Document public APIs with rustdoc.
 - Use `rustfmt` (enforced) and `clippy`; fix warnings or add justified `#[allow]` with a comment.

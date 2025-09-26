@@ -23,9 +23,10 @@ mod util;
 
 use anyhow::Context;
 use camera::Camera;
-use types::{Globals, Instance, InstanceSkin, Model, VertexSkinned};
+use types::{Globals, Instance, InstanceSkin, Model, VertexSkinned, ParticleVertex, ParticleInstance};
 use util::scale_to_max;
 use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU};
+use crate::core::data::{loader as data_loader, spell::SpellSpec};
 use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
@@ -38,6 +39,13 @@ use std::fs;
 fn asset_path(rel: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
+
+// --- Minimal FX structs ---
+#[derive(Clone, Copy, Debug)]
+struct Projectile { pos: glam::Vec3, vel: glam::Vec3, t_die: f32 }
+
+#[derive(Clone, Copy, Debug)]
+struct Particle { pos: glam::Vec3, vel: glam::Vec3, age: f32, life: f32, size: f32, color: [f32;3] }
 
 /// Renderer owns the GPU state and per‑scene resources.
 ///
@@ -57,6 +65,7 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     inst_pipeline: wgpu::RenderPipeline,
     wire_pipeline: Option<wgpu::RenderPipeline>,
+    particle_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     plane_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
@@ -90,6 +99,7 @@ pub struct Renderer {
     _fx_capacity: u32,
     fx_count: u32,
     fx_model_bg: wgpu::BindGroup,
+    quad_vb: wgpu::Buffer,
 
     // Wizard skinning palettes
     palettes_buf: wgpu::Buffer,
@@ -109,6 +119,7 @@ pub struct Renderer {
 
     // Time base for animation
     start: Instant,
+    last_time: f32,
 
     // Wizard animation selection and time offsets
     wizard_anim_index: Vec<usize>,
@@ -116,6 +127,19 @@ pub struct Renderer {
 
     // CPU-side skinned mesh data
     skinned_cpu: SkinnedMeshCPU,
+
+    // Animation-driven VFX
+    portalopen_strikes: Vec<f32>,
+    last_center_phase: f32,
+    hand_right_node: Option<usize>,
+    root_node: Option<usize>,
+
+    // Projectile + particle pools
+    projectiles: Vec<Projectile>,
+    particles: Vec<Particle>,
+
+    // Data-driven spec
+    fire_bolt: Option<SpellSpec>,
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
@@ -208,10 +232,11 @@ impl Renderer {
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
         let (wizard_pipeline, _wizard_wire_pipeline_unused) =
             pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, &material_bgl, config.format);
+        let particle_pipeline = pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, config.format);
 
         // --- Buffers & bind groups ---
         // Globals
-        let globals_init = Globals { view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(), time_pad: [0.0; 4] };
+        let globals_init = Globals { view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(), cam_right_time: [1.0, 0.0, 0.0, 0.0], cam_up_pad: [0.0, 1.0, 0.0, 0.0] };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
             contents: bytemuck::bytes_of(&globals_init),
@@ -316,7 +341,7 @@ impl Renderer {
         // --- Build a tiny ECS world and spawn entities ---
         let mut world = World::new();
         use rand::{SeedableRng, Rng};
-        // rng for ruins placement removed; keep ring clean for VFX testing
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(42);
 
         // Cluster wizards around a central one so the camera can see all of them.
         let wizard_count = 10usize;
@@ -337,7 +362,17 @@ impl Renderer {
             world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
         }
         // Place a set of ruins around the wizard circle
-        // 1) Backdrop ruins disabled to keep horizon clear for VFX testing
+        let place_range = plane_extent * 0.9;
+        // 1) A few backdrop ruins placed far away for depth
+        let ruins_positions = [
+            glam::vec3(-place_range * 0.9, 0.0, -place_range * 0.7),
+            glam::vec3(place_range * 0.85, 0.0, -place_range * 0.2),
+            glam::vec3(-place_range * 0.2, 0.0, place_range * 0.95),
+        ];
+        for pos in ruins_positions {
+            let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+            world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
+        }
         // 2) Near-circle ruins disabled to keep space around the wizards clear
 
         // --- Create instance buffers per kind from ECS world ---
@@ -402,6 +437,20 @@ impl Renderer {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: fx_model_buf.as_entire_binding() }],
         });
         let fx_count: u32 = 0;
+        // Static unit quad for particles (triangle strip)
+        let quad: [ParticleVertex; 4] = [
+            ParticleVertex { corner: [-0.5, -0.5] },
+            ParticleVertex { corner: [ 0.5, -0.5] },
+            ParticleVertex { corner: [-0.5,  0.5] },
+            ParticleVertex { corner: [ 0.5,  0.5] },
+        ];
+        let quad_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("quad-vb"), contents: bytemuck::cast_slice(&quad), usage: wgpu::BufferUsages::VERTEX });
+        // Load Fire Bolt spec (optional)
+        let fire_bolt = data_loader::load_spell_spec("spells/fire_bolt.json").ok();
+        // Precompute strike times (or leave empty to use periodic fallback)
+        let hand_right_node = skinned_cpu.hand_right_node;
+        let root_node = skinned_cpu.root_node;
+        let portalopen_strikes = compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
         // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
@@ -558,6 +607,7 @@ impl Renderer {
             pipeline,
             inst_pipeline,
             wire_pipeline,
+            particle_pipeline,
             globals_bg,
             plane_model_bg,
             shard_model_bg,
@@ -583,6 +633,7 @@ impl Renderer {
             _fx_capacity: fx_capacity,
             fx_count,
             fx_model_bg,
+            quad_vb,
             palettes_buf,
             palettes_bg,
             joints_per_wizard,
@@ -595,10 +646,18 @@ impl Renderer {
             wire_enabled: false,
 
             start: Instant::now(),
+            last_time: 0.0,
             wizard_anim_index,
             wizard_time_offset,
             skinned_cpu,
+            portalopen_strikes,
+            last_center_phase: 0.0,
+            hand_right_node,
+            root_node,
+            projectiles: Vec::new(),
+            particles: Vec::new(),
             cam_target,
+            fire_bolt,
         })
     }
 
@@ -633,7 +692,11 @@ impl Renderer {
         let cam_angle = t * 0.35; // radians/sec
         let cam_radius = 8.5;     // closer framing while keeping the ring visible
         let cam = Camera::orbit(self.cam_target, cam_radius, cam_angle, aspect);
-        let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
+        // Build billboard bases for particles
+        let forward = (self.cam_target - cam.eye).normalize_or_zero();
+        let right = forward.cross(glam::Vec3::Y).normalize_or_zero();
+        let up = right.cross(forward).normalize_or_zero();
+        let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), cam_right_time: [right.x, right.y, right.z, t], cam_up_pad: [up.x, up.y, up.z, 0.0] };
         self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
         // Keep model base identity to avoid moving instances globally
@@ -643,6 +706,10 @@ impl Renderer {
 
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
+        // FX update (projectiles/particles)
+        let dt = (t - self.last_time).max(0.0);
+        self.last_time = t;
+        self.update_fx(t, dt);
 
         // Begin commands
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
@@ -701,16 +768,13 @@ impl Renderer {
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
             }
 
-            // FX (instanced cubes/particles) — draw only if we have any
+            // FX (billboard particles)
             if self.fx_count > 0 {
-                rpass.set_pipeline(&self.inst_pipeline);
+                rpass.set_pipeline(&self.particle_pipeline);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
-                rpass.set_bind_group(1, &self.fx_model_bg, &[]);
-                // Use ruins geometry as placeholder mesh for FX if present; count is what matters here
-                rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
+                rpass.set_vertex_buffer(0, self.quad_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.fx_instances.slice(..));
-                rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
-                rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.fx_count);
+                rpass.draw(0..4, 0..self.fx_count);
             }
         }
         self.queue.submit(Some(encoder.finish()));
@@ -760,6 +824,80 @@ impl Renderer {
         if let Some(c) = best { return c; }
         // Fallback: any non-empty clip
         self.skinned_cpu.animations.values().find(|c| c.duration > 0.0).or_else(|| self.skinned_cpu.animations.values().next()).expect("at least one animation clip present")
+    }
+
+    // Update and render-side state for projectiles/particles
+    fn update_fx(&mut self, t: f32, dt: f32) {
+        // 1) Spawn on staff strike for center wizard (index 0), or periodically if no events.
+        if self.wizard_count > 0 {
+            let idx = 0usize;
+            let clip = self.select_clip(self.wizard_anim_index[idx]);
+            let phase = if clip.duration > 0.0 { (t + self.wizard_time_offset[idx]) % clip.duration } else { 0.0 };
+            let should_spawn = if !self.portalopen_strikes.is_empty() {
+                crossed_event(self.last_center_phase, phase, clip.duration, &self.portalopen_strikes)
+            } else {
+                // periodic fallback every ~0.9s
+                ((self.last_center_phase / 0.9).floor() - (phase / 0.9).floor()).abs() >= 1.0
+            };
+            if should_spawn {
+                if let Some(origin) = self.right_hand_world(clip, phase) {
+                    let dir = self.root_flat_forward(clip, phase).unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
+                    self.spawn_firebolt(origin + dir * 0.3, dir, t);
+                }
+            }
+            self.last_center_phase = phase;
+        }
+
+        // 2) Integrate projectiles
+        for p in &mut self.projectiles { p.pos += p.vel * dt; }
+        // Ground hit or timeout
+        let mut burst: Vec<Particle> = Vec::new();
+        let mut i = 0; while i < self.projectiles.len() {
+            let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
+            if kill {
+                let hit = self.projectiles[i].pos;
+                // smaller flare + fewer burst particles
+                burst.push(Particle { pos: hit, vel: glam::Vec3::ZERO, age: 0.0, life: 0.25, size: 0.20, color: [1.0, 0.8, 0.25] });
+                for _ in 0..16 {
+                    let a = rand_unit() * std::f32::consts::TAU; let r = 4.0 + rand_unit()*1.0;
+                    burst.push(Particle { pos: hit, vel: glam::vec3(a.cos()*r, 2.0 + rand_unit()*1.5, a.sin()*r), age: 0.0, life: 0.25, size: 0.06, color: [1.0, 0.55, 0.15] });
+                }
+                self.projectiles.swap_remove(i);
+            } else { i += 1; }
+        }
+
+        // 3) Particle integration with gravity/damping; add trails
+        for p in &mut self.particles { p.age += dt; p.vel.y -= 3.0 * dt; p.pos += p.vel * dt; p.vel *= 0.90; }
+        self.particles.retain(|p| p.age < p.life);
+        for p in &self.projectiles {
+            for _ in 0..2 { self.particles.push(Particle { pos: p.pos, vel: glam::vec3(rand_unit()*0.2, rand_unit()*0.1, rand_unit()*0.2), age: 0.0, life: 0.18, size: 0.04, color: [1.0, 0.55, 0.12] }); }
+        }
+        self.particles.extend(burst);
+
+        // 4) Upload FX instances (as instanced cubes)
+        let mut inst: Vec<Instance> = Vec::with_capacity(self.projectiles.len() + self.particles.len());
+        for pr in &self.projectiles { inst.push(instance_from(pr.pos, 0.06, [1.0, 0.65, 0.2])); }
+        for pa in &self.particles {
+            let k = (1.0 - (pa.age/pa.life)).clamp(0.0, 1.0);
+            inst.push(instance_from(pa.pos, pa.size * (0.5 + 0.5*k), pa.color));
+        }
+        self.fx_count = inst.len() as u32;
+        if self.fx_count > 0 {
+            self.queue.write_buffer(&self.fx_instances, 0, bytemuck::cast_slice(&inst));
+        }
+    }
+
+    fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
+        let mut speed = 40.0; let life = 1.2;
+        if let Some(spec) = &self.fire_bolt { if let Some(p) = &spec.projectile { speed = p.speed_mps; } }
+        self.projectiles.push(Projectile { pos: origin, vel: dir * speed, t_die: t + life });
+    }
+
+    fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
+        let h = self.hand_right_node?; let m = global_of_node(&self.skinned_cpu, clip, phase, h)?; let c = m.to_cols_array(); Some(glam::vec3(c[12], c[13], c[14]))
+    }
+    fn root_flat_forward(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
+        let r = self.root_node?; let m = global_of_node(&self.skinned_cpu, clip, phase, r)?; let z = (m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0)).truncate(); let mut f = z; f.y = 0.0; if f.length_squared()>1e-6 { Some(f.normalize()) } else { None }
     }
 }
 
@@ -840,3 +978,47 @@ fn sample_quat(tr: &crate::assets::TrackQuat, t: f32, default: glam::Quat) -> gl
     let f = (t - t0) / (t1 - t0);
     tr.values[i].slerp(tr.values[i+1], f)
 }
+
+fn global_of_node(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32, node_idx: usize) -> Option<glam::Mat4> {
+    let mut lt = mesh.base_t.clone();
+    let mut lr = mesh.base_r.clone();
+    let mut ls = mesh.base_s.clone();
+    let time = if clip.duration > 0.0 { t % clip.duration } else { 0.0 };
+    if let Some(tr) = clip.t_tracks.get(&node_idx) { lt[node_idx] = sample_vec3(tr, time, lt[node_idx]); }
+    if let Some(rr) = clip.r_tracks.get(&node_idx) { lr[node_idx] = sample_quat(rr, time, lr[node_idx]); }
+    if let Some(sr) = clip.s_tracks.get(&node_idx) { ls[node_idx] = sample_vec3(sr, time, ls[node_idx]); }
+    let mut cache = std::collections::HashMap::new();
+    Some(compute_global(node_idx, &mesh.parent, &lt, &lr, &ls, &mut cache))
+}
+
+fn crossed_event(prev: f32, curr: f32, dur: f32, events: &Vec<f32>) -> bool {
+    if events.is_empty() || dur <= 0.0 { return false; }
+    if prev <= curr { events.iter().any(|&e| e >= prev && e < curr) } else { events.iter().any(|&e| e >= prev || e < curr) }
+}
+
+fn compute_portalopen_strikes(mesh: &SkinnedMeshCPU, hand_right_node: Option<usize>, _root_node: Option<usize>) -> Vec<f32> {
+    if let (Some(hand), Some(clip)) = (hand_right_node, mesh.animations.get("PortalOpen")) {
+        if let Some(trk) = clip.t_tracks.get(&hand) {
+            if trk.times.len() >= 3 {
+                let mut min_y = f32::INFINITY; for v in &trk.values { if v.y < min_y { min_y = v.y; } }
+                let thresh = min_y + 0.02;
+                let mut out = Vec::new();
+                for i in 1..(trk.times.len()-1) {
+                    let y0 = trk.values[i-1].y; let y1 = trk.values[i].y; let y2 = trk.values[i+1].y;
+                    if y1 < y0 && y1 < y2 && y1 <= thresh { out.push(trk.times[i]); }
+                }
+                if !out.is_empty() { return out; }
+            }
+        }
+        // Fallback: periodic triggers if hand track missing
+        if clip.duration > 0.0 { let mut out=Vec::new(); let mut t=clip.duration*0.25; while t<clip.duration { out.push(t); t+=0.9; } return out; }
+    }
+    Vec::new()
+}
+
+fn instance_from(pos: glam::Vec3, scale: f32, color: [f32;3]) -> Instance {
+    let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(scale), glam::Quat::IDENTITY, pos);
+    Instance { model: m.to_cols_array_2d(), color, selected: 0.0 }
+}
+
+fn rand_unit() -> f32 { use rand::Rng as _; let mut r = rand::rng(); r.random::<f32>() * 2.0 - 1.0 }

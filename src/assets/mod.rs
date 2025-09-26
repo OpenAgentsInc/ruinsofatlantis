@@ -16,7 +16,6 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
 use crate::gfx::Vertex;
 use gltf::mesh::Semantic;
 use gltf::buffer::Data;
@@ -69,13 +68,16 @@ pub struct SkinnedMeshCPU {
     pub base_s: Vec<Vec3>,
     pub animations: HashMap<String, AnimClip>,
     pub base_color_texture: Option<TextureCPU>,
+    pub node_names: Vec<String>,
+    pub hand_right_node: Option<usize>,
+    pub root_node: Option<usize>,
 }
 
 pub struct TextureCPU { pub pixels: Vec<u8>, pub width: u32, pub height: u32, pub srgb: bool }
 
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
-    // Robust prepare: prefer original glTF if it imports; fall back to a
-    // decompressed copy (or auto-decompress) only if needed.
+    // Robust prepare: prefer original glTF or a sibling decompressed copy
+    // if present; do not attempt any runtime decompression.
     let prepared = prepare_gltf_path(path)?;
     // prefer prepared path silently
     let (doc, buffers, images) = gltf::import(&prepared).with_context(|| format!("import skinned glTF: {}", prepared.display()))?;
@@ -93,6 +95,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         let (t, r, s) = decompose_node(&n);
         base_t[n.index()] = t; base_r[n.index()] = r; base_s[n.index()] = s;
     }
+    let node_names: Vec<String> = doc.nodes().map(|n| n.name().unwrap_or("").to_string()).collect();
 
     // Find first mesh primitive with joints/weights and its skin via the node
     let mut skin_opt: Option<gltf::Skin> = None;
@@ -190,39 +193,12 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         }
     }
 
-    // Final attempt: if we still have no skinned vertices and the file uses Draco,
-    // try to decompress via gltf-transform CLI and re-import
+    // If the file uses Draco and we failed to extract skinned data via standard readers,
+    // require a pre-decompressed copy (policy). Do not attempt runtime decompression.
     if verts.is_empty() && doc.extensions_required().any(|e| e == "KHR_draco_mesh_compression") {
-        let decompressed = path.with_extension("decompressed.gltf");
-        if let Some(out_path) = try_gltf_transform_decompress(path, &decompressed) {
-            // (debug diagnostic log removed)
-            let (doc2, buffers2, _images2) = gltf::import(&out_path).with_context(|| format!("import decompressed glTF: {}", out_path.display()))?;
-            verts.clear(); indices.clear();
-            'outer2: for scene in doc2.scenes() { for node in scene.nodes() {
-                if node.skin().is_none() { continue; }
-                if let Some(mesh) = node.mesh() {
-                    for prim in mesh.primitives() {
-                        let reader = prim.reader(|b| buffers2.get(b.index()).map(|bb| bb.0.as_slice()));
-                        let Some(pos_it) = reader.read_positions() else { continue };
-                        let nrm_it = reader.read_normals();
-                        let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
-                        let uv_opt = reader.read_tex_coords(uv_set).map(|tc| tc.into_f32());
-                        let joints = match reader.read_joints(0) { Some(gltf::mesh::util::ReadJoints::U16(it)) => it.map(|v| [v[0],v[1],v[2],v[3]]).collect::<Vec<[u16;4]>>(), Some(gltf::mesh::util::ReadJoints::U8(it)) => it.map(|v| [v[0] as u16,v[1] as u16,v[2] as u16,v[3] as u16]).collect(), _ => continue };
-                        let weights = match reader.read_weights(0) { Some(gltf::mesh::util::ReadWeights::F32(it)) => it.collect::<Vec<[f32;4]>>(), Some(gltf::mesh::util::ReadWeights::U16(it)) => it.map(|v| [v[0] as f32/65535.0, v[1] as f32/65535.0, v[2] as f32/65535.0, v[3] as f32/65535.0]).collect(), Some(gltf::mesh::util::ReadWeights::U8(it)) => it.map(|v| [v[0] as f32/255.0, v[1] as f32/255.0, v[2] as f32/255.0, v[3] as f32/255.0]).collect(), None => continue };
-                        let pos: Vec<[f32;3]> = pos_it.collect();
-                        let nrm: Vec<[f32;3]> = nrm_it.map(|it| it.collect()).unwrap_or_else(|| vec![[0.0,1.0,0.0]; pos.len()]);
-                        let uv: Vec<[f32;2]> = if let Some(it) = uv_opt { it.collect() } else { pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect() };
-                        for i in 0..pos.len() { verts.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] }); }
-                        let idx_u32: Vec<u32> = match reader.read_indices() { Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(), Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(), Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(), None => (0..pos.len() as u32).collect() };
-                        for i in idx_u32 { if i > u16::MAX as u32 { bail!("indices exceed u16"); } indices.push(i as u16); }
-                        break 'outer2;
-                    }
-                }
-            }}
-            // (debug diagnostic logs removed)
-        } else {
-            // tool unavailable; continue without re-import
-        }
+        bail!(
+            "GLTF uses KHR_draco_mesh_compression; please provide a pre-decompressed copy (e.g., assets/models/<name>.decompressed.gltf) using the gltf_decompress tool"
+        );
     }
 
     // Choose a skin if available; otherwise synthesize a 1-joint skin.
@@ -320,7 +296,17 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
 
     // (debug UV range log removed)
 
-    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture })
+    // Identify useful nodes for VFX
+    let hand_right_node = node_names.iter().position(|n| {
+        let low = n.to_lowercase();
+        low.contains("hand right") || low.contains("right hand") || low.contains("hand_r") || low.contains("r_hand")
+    });
+    let root_node = node_names.iter().position(|n| {
+        let low = n.to_lowercase();
+        low == "root" || low.contains("armature")
+    });
+
+    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture, node_names, hand_right_node, root_node })
 }
 
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
@@ -864,63 +850,15 @@ fn decode_draco_skinned_primitive(
 }
 
 /// Prepare a glTF for loading: prefer `<name>.decompressed.gltf` if present.
-/// If import fails due to Draco compression, attempt to auto-decompress once
-/// using glTF-Transform via `npx` or a globally installed `gltf-transform`.
-/// Returns a path guaranteed to import (or an error if it cannot be prepared).
+/// Policy: do not attempt runtime Draco decompression; assets must be
+/// pre-processed offline if they require `KHR_draco_mesh_compression`.
+/// Returns the preferred path for loading.
 pub fn prepare_gltf_path(path: &Path) -> Result<PathBuf> {
+    // Prefer the original if it loads; else try `<name>.decompressed.gltf`.
+    if gltf::import(path).is_ok() { return Ok(path.to_path_buf()); }
     let decompressed = path.with_extension("decompressed.gltf");
-    // Prefer original if it imports successfully.
-    if gltf::import(path).is_ok() {
-        return Ok(path.to_path_buf());
-    }
-    // If original fails but a decompressed copy exists and imports, use it.
-    if decompressed.exists() {
-        if gltf::import(&decompressed).is_ok() {
-            log::warn!("anim diag: original failed; using decompressed copy: {}", decompressed.display());
-            return Ok(decompressed);
-        }
-    }
-    // Try to auto-decompress assuming Draco.
-    if let Some(out) = try_gltf_transform_decompress(path, &decompressed) {
-        log::info!("auto-decompressed {} -> {}", path.display(), out.display());
-        Ok(out)
-    } else {
-        Err(anyhow!(
-            "failed to prepare glTF: {} (Draco decompress failed). Install Node and run:\n  npx -y @gltf-transform/cli draco {} {} --decode",
-            path.display(), path.display(), decompressed.display()
-        ))
-    }
+    if decompressed.exists() && gltf::import(&decompressed).is_ok() { return Ok(decompressed); }
+    Err(anyhow!("failed to import {} (and decompressed sibling if present)", path.display()))
 }
 
-fn try_gltf_transform_decompress(input: &Path, output: &Path) -> Option<PathBuf> {
-    // Candidate invocations: prefer '@gltf-transform/cli', then 'gltf-transform'.
-    // Correct argument order for v4+: `draco <in> <out> --decode`
-    let variants: Vec<Vec<&OsStr>> = vec![
-        vec![OsStr::new("@gltf-transform/cli"), OsStr::new("draco"), input.as_os_str(), output.as_os_str(), OsStr::new("--decode")],
-        vec![OsStr::new("gltf-transform"), OsStr::new("draco"), input.as_os_str(), output.as_os_str(), OsStr::new("--decode")],
-        // Older CLI fallback
-        vec![OsStr::new("@gltf-transform/cli"), OsStr::new("decompress"), input.as_os_str(), output.as_os_str()],
-        vec![OsStr::new("gltf-transform"), OsStr::new("decompress"), input.as_os_str(), output.as_os_str()],
-    ];
-
-    // Try via npx
-    if let Ok(npx) = which::which("npx") {
-        for args in &variants {
-            let status = std::process::Command::new(npx.as_os_str()).arg("-y").args(args).status();
-            if let Ok(s) = status {
-                if s.success() && output.exists() { return Some(output.to_path_buf()); }
-            }
-        }
-    }
-    // Try global binary directly
-    for args in &variants {
-        let Some(cmd) = args.first() else { continue };
-        if which::which(cmd).is_ok() {
-            let status = std::process::Command::new(cmd).args(&args[1..]).status();
-            if let Ok(s) = status {
-                if s.success() && output.exists() { return Some(output.to_path_buf()); }
-            }
-        }
-    }
-    None
-}
+// try_gltf_transform_decompress removed per runtime decompression policy.
