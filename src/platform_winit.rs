@@ -43,6 +43,8 @@ impl ApplicationHandler for App {
         if window.id() != window_id {
             return;
         }
+        // Feed input to the renderer first (for keyboard-driven controller)
+        state.handle_window_event(&event);
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),

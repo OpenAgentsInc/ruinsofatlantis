@@ -32,7 +32,7 @@ use crate::assets::{AnimClip, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned}
 use crate::core::data::{loader as data_loader, spell::SpellSpec};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
-use types::{Globals, Model, ParticleInstance, VertexSkinned};
+use types::{Globals, Model, ParticleInstance, VertexSkinned, InstanceSkin};
 use util::scale_to_max;
 
 use std::time::Instant;
@@ -41,6 +41,8 @@ use wgpu::{
     SurfaceError, SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt,
 };
 use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
@@ -108,6 +110,7 @@ pub struct Renderer {
     palettes_bg: wgpu::BindGroup,
     joints_per_wizard: u32,
     wizard_models: Vec<glam::Mat4>,
+    wizard_instances_cpu: Vec<InstanceSkin>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -144,10 +147,15 @@ pub struct Renderer {
     fire_bolt: Option<SpellSpec>,
 
     // Camera focus (we orbit around a close wizard)
-    cam_target: glam::Vec3,
 
     // UI overlay
     nameplates: ui::Nameplates,
+
+    // --- Player/Camera ---
+    pc_index: usize,
+    player: crate::client::controller::PlayerController,
+    input: crate::client::input::InputState,
+    cam_follow: camera_sys::FollowState,
 }
 
 impl Renderer {
@@ -402,6 +410,12 @@ impl Renderer {
 
         // Build scene instance buffers and camera target
         let scene_build = scene::build_demo_scene(&device, &skinned_cpu, plane_extent);
+        // Precompute PC initial position from the soon-to-be-moved vector
+        let pc_initial_pos = {
+            let m = scene_build.wizard_models[scene_build.pc_index];
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
         // Upload text atlas once now that we have a queue
         nameplates.upload_atlas(&queue);
         // FX resources
@@ -418,7 +432,7 @@ impl Renderer {
         let root_node = skinned_cpu.root_node;
         let _strikes_tmp =
             anim::compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
-        // Camera target: first wizard encountered above (close-up orbit)
+        // Camera target: follow the PC (center wizard)
 
         // Allocate storage for skinning palettes: one palette per wizard
         let total_mats = scene_build.wizard_count as usize * scene_build.joints_per_wizard as usize;
@@ -491,6 +505,7 @@ impl Renderer {
             palettes_bg,
             joints_per_wizard: scene_build.joints_per_wizard,
             wizard_models: scene_build.wizard_models,
+            wizard_instances_cpu: scene_build.wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
@@ -509,9 +524,17 @@ impl Renderer {
             root_node,
             projectiles: Vec::new(),
             particles: Vec::new(),
-            cam_target: scene_build.cam_target,
             fire_bolt,
             nameplates,
+
+            // Player/camera
+            pc_index: scene_build.pc_index,
+            player: crate::client::controller::PlayerController::new(pc_initial_pos),
+            input: Default::default(),
+            cam_follow: camera_sys::FollowState {
+                current_pos: glam::vec3(0.0, 5.0, -10.0),
+                current_look: scene_build.cam_target,
+            },
         })
     }
 
@@ -550,10 +573,23 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Update globals (camera + time)
+        // Time and dt
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let (_cam, globals) = camera_sys::orbit_and_globals(self.cam_target, 10.0, 0.35, aspect, t);
+        let dt = (t - self.last_time).max(0.0);
+        self.last_time = t;
+
+        // Update player transform from input (WASD) then camera follow
+        self.update_player_and_camera(dt, aspect);
+        let (_cam, globals) = camera_sys::third_person_follow(
+            &mut self.cam_follow,
+            self.player.pos,
+            glam::Quat::from_rotation_y(self.player.yaw),
+            glam::vec3(0.0, 4.0, -8.5),
+            glam::vec3(0.0, 1.8, 6.0),
+            aspect,
+            dt,
+        );
         self.queue
             .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
@@ -571,8 +607,6 @@ impl Renderer {
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
         // FX update (projectiles/particles)
-        let dt = (t - self.last_time).max(0.0);
-        self.last_time = t;
         self.update_fx(t, dt);
 
         // Begin commands
@@ -660,6 +694,50 @@ impl Renderer {
 }
 
 impl Renderer {
+    /// Handle platform window events that affect input (keyboard focus/keys).
+    pub fn handle_window_event(&mut self, event: &WindowEvent) {
+        match event {
+            WindowEvent::KeyboardInput { event, .. } => {
+                let pressed = event.state.is_pressed();
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyW) => self.input.forward = pressed,
+                    PhysicalKey::Code(KeyCode::KeyS) => self.input.backward = pressed,
+                    PhysicalKey::Code(KeyCode::KeyA) => self.input.left = pressed,
+                    PhysicalKey::Code(KeyCode::KeyD) => self.input.right = pressed,
+                    PhysicalKey::Code(KeyCode::ShiftLeft) | PhysicalKey::Code(KeyCode::ShiftRight) => {
+                        self.input.run = pressed
+                    }
+                    _ => {}
+                }
+            }
+            WindowEvent::Focused(false) => {
+                // Clear sticky keys when window loses focus
+                self.input.clear();
+            }
+            _ => {}
+        }
+    }
+
+    /// Apply a basic WASD character controller to the PC and update its instance data.
+    fn update_player_and_camera(&mut self, dt: f32, _aspect: f32) {
+        if self.wizard_count == 0 { return; }
+        let cam_fwd = self.cam_follow.current_look - self.cam_follow.current_pos;
+        self.player.update(&self.input, dt, cam_fwd);
+        self.apply_pc_transform();
+    }
+
+    fn apply_pc_transform(&mut self) {
+        // Update CPU model matrix and upload only the PC instance
+        let rot = glam::Quat::from_rotation_y(self.player.yaw);
+        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, self.player.pos);
+        self.wizard_models[self.pc_index] = m;
+        let mut inst = self.wizard_instances_cpu[self.pc_index];
+        inst.model = m.to_cols_array_2d();
+        self.wizard_instances_cpu[self.pc_index] = inst;
+        let offset = (self.pc_index * std::mem::size_of::<InstanceSkin>()) as u64;
+        self.queue
+            .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+    }
     fn update_wizard_palettes(&mut self, time_global: f32) {
         // Build palettes for each wizard with its animation + offset.
         if self.wizard_count == 0 {
