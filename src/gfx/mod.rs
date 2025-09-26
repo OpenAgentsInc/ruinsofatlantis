@@ -856,11 +856,11 @@ impl Renderer {
             let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
             if kill {
                 let hit = self.projectiles[i].pos;
-                // smaller flare + fewer burst particles
-                burst.push(Particle { pos: hit, vel: glam::Vec3::ZERO, age: 0.0, life: 0.25, size: 0.20, color: [1.0, 0.8, 0.25] });
-                for _ in 0..16 {
-                    let a = rand_unit() * std::f32::consts::TAU; let r = 4.0 + rand_unit()*1.0;
-                    burst.push(Particle { pos: hit, vel: glam::vec3(a.cos()*r, 2.0 + rand_unit()*1.5, a.sin()*r), age: 0.0, life: 0.25, size: 0.06, color: [1.0, 0.55, 0.15] });
+                // much smaller flare + compact burst
+                burst.push(Particle { pos: hit, vel: glam::Vec3::ZERO, age: 0.0, life: 0.12, size: 0.06, color: [1.0, 0.8, 0.25] });
+                for _ in 0..10 {
+                    let a = rand_unit() * std::f32::consts::TAU; let r = 3.0 + rand_unit()*0.8;
+                    burst.push(Particle { pos: hit, vel: glam::vec3(a.cos()*r, 1.5 + rand_unit()*1.0, a.sin()*r), age: 0.0, life: 0.12, size: 0.015, color: [1.0, 0.55, 0.15] });
                 }
                 self.projectiles.swap_remove(i);
             } else { i += 1; }
@@ -870,13 +870,14 @@ impl Renderer {
         for p in &mut self.particles { p.age += dt; p.vel.y -= 3.0 * dt; p.pos += p.vel * dt; p.vel *= 0.90; }
         self.particles.retain(|p| p.age < p.life);
         for p in &self.projectiles {
-            for _ in 0..2 { self.particles.push(Particle { pos: p.pos, vel: glam::vec3(rand_unit()*0.2, rand_unit()*0.1, rand_unit()*0.2), age: 0.0, life: 0.18, size: 0.04, color: [1.0, 0.55, 0.12] }); }
+            // single tiny ember per frame for a thin trail
+            self.particles.push(Particle { pos: p.pos, vel: glam::vec3(rand_unit()*0.1, rand_unit()*0.05, rand_unit()*0.1), age: 0.0, life: 0.08, size: 0.008, color: [1.0, 0.55, 0.12] });
         }
         self.particles.extend(burst);
 
         // 4) Upload FX instances (as instanced cubes)
         let mut inst: Vec<Instance> = Vec::with_capacity(self.projectiles.len() + self.particles.len());
-        for pr in &self.projectiles { inst.push(instance_from(pr.pos, 0.06, [1.0, 0.65, 0.2])); }
+        for pr in &self.projectiles { inst.push(instance_from(pr.pos, 0.02, [1.0, 0.75, 0.25])); }
         for pa in &self.particles {
             let k = (1.0 - (pa.age/pa.life)).clamp(0.0, 1.0);
             inst.push(instance_from(pa.pos, pa.size * (0.5 + 0.5*k), pa.color));
