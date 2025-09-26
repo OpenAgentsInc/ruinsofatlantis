@@ -223,6 +223,70 @@ pub fn create_particle_pipeline(
     })
 }
 
+// Text rendering: simple textured quad in screen space (NDC in vertex positions)
+pub fn create_text_bgl(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("text-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    })
+}
+
+pub fn create_text_pipeline(
+    device: &wgpu::Device,
+    shader: &ShaderModule,
+    text_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("text-pipeline-layout"),
+        bind_group_layouts: &[text_bgl],
+        push_constant_ranges: &[],
+    });
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("text-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module: shader,
+            entry_point: Some("vs_text"),
+            buffers: &[crate::gfx::types::TextVertex::LAYOUT],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: shader,
+            entry_point: Some("fs_text"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 #[allow(dead_code)]
 pub fn create_wizard_simple_pipeline(
     device: &wgpu::Device,
