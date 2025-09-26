@@ -212,6 +212,9 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    fn any_zombies_alive(&self) -> bool {
+        self.server.npcs.iter().any(|n| n.alive)
+    }
     fn remove_wizard_at(&mut self, idx: usize) {
         if idx >= self.wizard_count as usize { return; }
         // Keep PC for now; skip removal if it's the player character to avoid breaking input/camera
@@ -1373,8 +1376,8 @@ impl Renderer {
 
     // Update and render-side state for projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
-        // 1) Spawn firebolts for all wizards playing PortalOpen when their phase crosses the trigger.
-        if self.wizard_count > 0 {
+        // 1) Spawn firebolts for PortalOpen phase crossing, but only while zombies exist
+        if self.wizard_count > 0 && self.any_zombies_alive() {
             let cycle = 5.0f32; // synthetic cycle period
             let bolt_offset = 1.5f32; // trigger point in the cycle
             for i in 0..(self.wizard_count as usize) {
