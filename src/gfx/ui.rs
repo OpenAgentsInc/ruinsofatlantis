@@ -293,8 +293,9 @@ impl Nameplates {
             }
             let mut cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
-            // baseline a bit above the head (slightly lower than before)
-            let baseline_y = (cy - 26.0).max(0.0);
+            // Place name below the health bar with padding so they never overlap
+            // Bars are anchored ~48px above the head center; keep text ~18px above head
+            let baseline_y = (cy - 18.0).max(0.0);
 
             // Measure label width
             let text = &labels[i];
@@ -481,7 +482,8 @@ impl HealthBars {
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
             let bx0 = cx - bar_w * 0.5 - pad;
             let bx1 = cx + bar_w * 0.5 + pad;
-            let by0 = (cy - 34.0).max(0.0);
+            // Anchor bar higher above the head to avoid overlapping the name text
+            let by0 = (cy - 48.0).max(0.0);
             let by1 = by0 + bar_h + pad * 2.0;
             let bg = [0.0, 0.0, 0.0, 0.5];
             // Background quad

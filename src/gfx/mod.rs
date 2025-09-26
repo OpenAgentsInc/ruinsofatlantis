@@ -146,6 +146,7 @@ pub struct Renderer {
     // Animation-driven VFX
     wizard_last_phase: Vec<f32>,
     hand_right_node: Option<usize>,
+    #[allow(dead_code)]
     root_node: Option<usize>,
 
     // Projectile + particle pools
@@ -1031,13 +1032,12 @@ impl Renderer {
                             .unwrap_or(glam::Mat4::IDENTITY);
                         let origin_w = inst
                             * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
-                        let dir_local = self
-                            .root_flat_forward(clip, clip_time)
-                            .unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
-                        let dir_w = (inst
-                            * glam::Vec4::new(dir_local.x, dir_local.y, dir_local.z, 0.0))
-                        .truncate()
-                        .normalize_or_zero();
+                        // Use instance forward in world-space to ensure truly straight shots.
+                        // Some skeletons may have a slight local yaw bias; instance transform
+                        // encodes our desired world orientation.
+                        let dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
+                            .truncate()
+                            .normalize_or_zero();
                         if i == self.pc_index {
                             log::info!("PC Fire Bolt fired at t={:.2}", t);
                         }
@@ -1176,6 +1176,7 @@ impl Renderer {
         let c = m.to_cols_array();
         Some(glam::vec3(c[12], c[13], c[14]))
     }
+    #[allow(dead_code)]
     fn root_flat_forward(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
         let r = self.root_node?;
         let m = anim::global_of_node(&self.skinned_cpu, clip, phase, r)?;
