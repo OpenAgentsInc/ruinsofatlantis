@@ -1041,7 +1041,7 @@ impl Renderer {
                         if i == self.pc_index {
                             log::info!("PC Fire Bolt fired at t={:.2}", t);
                         }
-                        self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t);
+                        self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t, Some(i));
                     }
                 }
                 self.wizard_last_phase[i] = phase;
@@ -1136,6 +1136,11 @@ impl Renderer {
             }
         }
 
+        // 2.6) Collide with wizards/PC (friendly fire on)
+        if !self.projectiles.is_empty() {
+            self.collide_with_wizards(dt, 10);
+        }
+
         // 3) Upload FX instances (billboard particles) — show both bolts and impacts
 
         // 4) Upload FX instances (billboard particles)
@@ -1155,7 +1160,52 @@ impl Renderer {
         }
     }
 
-    fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
+    fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
+        let mut i = 0usize;
+        while i < self.projectiles.len() {
+            let pr = self.projectiles[i];
+            let p0 = pr.pos - pr.vel * dt;
+            let p1 = pr.pos;
+            let mut hit_someone = false;
+            for j in 0..(self.wizard_count as usize) {
+                if Some(j) == pr.owner_wizard { continue; } // do not hit the caster
+                let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
+                if hp <= 0 { continue; }
+                let m = self.wizard_models[j].to_cols_array();
+                let center = glam::vec3(m[12], m[13], m[14]);
+                let r = 0.7f32; // generous cylinder radius
+                if segment_hits_circle_xz(p0, p1, center, r) {
+                    let before = self.wizard_hp[j];
+                    let after = (before - damage).max(0);
+                    self.wizard_hp[j] = after;
+                    let fatal = after == 0;
+                    log::info!(
+                        "wizard hit: idx={} hp {} -> {} (dmg {}), fatal={}",
+                        j, before, after, damage, fatal
+                    );
+                    // impact burst
+                    for _ in 0..14 {
+                        let a = rand_unit() * std::f32::consts::TAU;
+                        let r2 = 3.5 + rand_unit() * 1.0;
+                        self.particles.push(Particle {
+                            pos: p1,
+                            vel: glam::vec3(a.cos() * r2, 2.0 + rand_unit() * 1.0, a.sin() * r2),
+                            age: 0.0,
+                            life: 0.16,
+                            size: 0.02,
+                            color: [1.0, 0.45, 0.15],
+                        });
+                    }
+                    self.projectiles.swap_remove(i);
+                    hit_someone = true;
+                    break;
+                }
+            }
+            if !hit_someone { i += 1; }
+        }
+    }
+
+    fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32, owner: Option<usize>) {
         let mut speed = 40.0;
         let life = 1.2;
         if let Some(spec) = &self.fire_bolt
@@ -1167,6 +1217,7 @@ impl Renderer {
             pos: origin,
             vel: dir * speed,
             t_die: t + life,
+            owner_wizard: owner,
         });
     }
 
@@ -1202,4 +1253,29 @@ fn rand_unit() -> f32 {
     use rand::Rng as _;
     let mut r = rand::rng();
     r.random::<f32>() * 2.0 - 1.0
+}
+
+fn segment_hits_circle_xz(p0: glam::Vec3, p1: glam::Vec3, c: glam::Vec3, r: f32) -> bool {
+    let p0 = glam::vec2(p0.x, p0.z);
+    let p1 = glam::vec2(p1.x, p1.z);
+    let c = glam::vec2(c.x, c.z);
+    let d = p1 - p0;
+    let m = p0 - c;
+    let a = d.dot(d);
+    if a <= 1e-6 { return m.length() <= r; }
+    let t = (-(m.dot(d)) / a).clamp(0.0, 1.0);
+    let closest = p0 + d * t;
+    (closest - c).length() <= r
+}
+
+#[cfg(test)]
+mod proj_tests {
+    use super::*;
+    #[test]
+    fn segment_circle_intersects_center_cross() {
+        let c = glam::vec3(0.0, 0.0, 0.0);
+        let p0 = glam::vec3(-2.0, 0.5, 0.0);
+        let p1 = glam::vec3(2.0, 0.5, 0.0);
+        assert!(segment_hits_circle_xz(p0, p1, c, 0.5));
+    }
 }

@@ -131,7 +131,7 @@ mod tests {
     fn server_applies_damage_and_kills() {
         let mut s = ServerState::new();
         let id = s.spawn_npc(Vec3::ZERO, 0.95, 10);
-        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(0.25, 0.0, 0.0), vel: Vec3::new(1.0, 0.0, 0.0), t_die: 1.0 }];
+        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(0.25, 0.0, 0.0), vel: Vec3::new(1.0, 0.0, 0.0), t_die: 1.0, owner_wizard: None }];
         let ev = s.collide_and_damage(&mut projs, 0.1, 10);
         assert!(projs.is_empty());
         assert_eq!(ev.len(), 1);
@@ -149,7 +149,7 @@ mod tests {
         // Projectile path just outside cube half-extent but within padded circle
         // Simulate a step where p0 -> p1 crosses near the circle's edge
         // Here p1 is current position (after integration in the runtime), dt=0.5s
-        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(-1.0, 0.0, 0.8), vel: Vec3::new(-5.0, 0.0, 0.0), t_die: 1.0 }];
+        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(-1.0, 0.0, 0.8), vel: Vec3::new(-5.0, 0.0, 0.0), t_die: 1.0, owner_wizard: None }];
         let ev = s.collide_and_damage(&mut projs, 0.5, 5);
         assert_eq!(ev.len(), 1);
     }
