@@ -22,6 +22,10 @@ pub struct SceneBuild {
     pub wizard_time_offset: Vec<f32>,
     pub cam_target: glam::Vec3,
     pub wizard_models: Vec<glam::Mat4>,
+    /// CPU copy of instance data for wizards so we can update transforms per-frame.
+    pub wizard_instances_cpu: Vec<InstanceSkin>,
+    /// Index of the player character (PC) among wizards; others are NPCs.
+    pub pc_index: usize,
 }
 
 pub fn build_demo_scene(
@@ -145,7 +149,8 @@ pub fn build_demo_scene(
                 wiz_instances.push(InstanceSkin {
                     model: m,
                     color: [0.20, 0.45, 0.95],
-                    selected: 0.0,
+                    // Mark center wizard (first) as selected (PC)
+                    selected: if wizard_models.len() == 1 { 1.0 } else { 0.0 },
                     palette_base: 0,
                     _pad_inst: [0; 3],
                 })
@@ -207,5 +212,7 @@ pub fn build_demo_scene(
         wizard_time_offset,
         cam_target,
         wizard_models,
+        wizard_instances_cpu: wiz_instances,
+        pc_index: 0,
     }
 }

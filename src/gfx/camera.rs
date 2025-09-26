@@ -16,6 +16,8 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// Legacy orbit camera retained for reference/testing.
+    #[allow(dead_code)] // kept as a simple reference orbit mode and for tests
     pub fn orbit(target: Vec3, radius: f32, angle: f32, aspect: f32) -> Self {
         let offset = Vec3::new(angle.cos() * radius, radius * 0.6, angle.sin() * radius);
         let eye = target + offset;

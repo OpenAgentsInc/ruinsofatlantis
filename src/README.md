@@ -6,6 +6,10 @@ This document summarizes the `src/` folder structure and what each module does.
 - main.rs — Binary entry; sets up logging and runs the winit platform loop.
 - platform_winit.rs — Window/event loop integration using winit 0.30.
 
+- client/
+  - mod.rs — Client runtime systems index (input/controllers).
+  - input.rs — Input state (WASD + Shift) for the player controller.
+
 - assets/
   - mod.rs — Public re‑exports for asset loading modules.
   - types.rs — CPU asset types (CpuMesh, SkinnedMeshCPU, AnimClip, Tracks, TextureCPU).
@@ -50,7 +54,7 @@ This document summarizes the `src/` folder structure and what each module does.
 - gfx/
   - mod.rs — Renderer entry (init/resize/render) and high‑level wiring.
   - camera.rs — Camera type and view/projection math.
-  - camera_sys.rs — Orbit camera + `Globals` assembly for billboarding.
+  - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
   - pipeline.rs — Shader/bind group layouts and pipelines (base/instanced/particles/wizard).
