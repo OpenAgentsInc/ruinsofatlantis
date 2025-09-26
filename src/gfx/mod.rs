@@ -544,7 +544,7 @@ impl Renderer {
         // Update globals (camera + time)
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let (_cam, globals) = camera_sys::orbit_and_globals(self.cam_target, 8.5, 0.35, aspect, t);
+        let (_cam, globals) = camera_sys::orbit_and_globals(self.cam_target, 10.0, 0.35, aspect, t);
         self.queue
             .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
