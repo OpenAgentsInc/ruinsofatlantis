@@ -38,7 +38,8 @@ pub fn build_demo_scene(
     let mut rng = ChaCha8Rng::seed_from_u64(42);
 
     // Cluster wizards around a central one so the camera can see all of them.
-    let wizard_count = 10usize;
+    // Use one central PC and a single outward-facing ring of NPC wizards.
+    let ring_count = 19usize; // number of NPC wizards on the outer ring
     let center = glam::vec3(0.0, 0.0, 0.0);
     // Spawn the central wizard first (becomes camera target)
     world.spawn(
@@ -49,25 +50,7 @@ pub fn build_demo_scene(
         },
         RenderKind::Wizard,
     );
-    // Place remaining wizards on a small ring facing outward (away from the center)
-    let ring_radius = 3.5f32;
-    for i in 1..wizard_count {
-        let theta = (i as f32 - 1.0) / (wizard_count as f32 - 1.0) * std::f32::consts::TAU;
-        let translation = glam::vec3(ring_radius * theta.cos(), 0.0, ring_radius * theta.sin());
-        // Face outward: yaw aligns +Z with (translation - center)
-        let dx = translation.x - center.x;
-        let dz = translation.z - center.z;
-        let yaw = dx.atan2(dz);
-        let rotation = glam::Quat::from_rotation_y(yaw);
-        world.spawn(
-            Transform {
-                translation,
-                rotation,
-                scale: glam::Vec3::splat(1.0),
-            },
-            RenderKind::Wizard,
-        );
-    }
+    // Inner ring removed (except center PC). We keep a single large ring below.
     // Place a set of ruins around the wizard circle
     let place_range = plane_extent * 0.9;
     // A few backdrop ruins placed far away for depth
@@ -105,11 +88,10 @@ pub fn build_demo_scene(
         );
     }
 
-    // Add an outer ring of wizards facing outward
-    let outer_ring_radius = ring_radius * 2.1;
-    let outer_count = wizard_count; // same count as inner ring
-    for i in 0..outer_count {
-        let theta = (i as f32) / (outer_count as f32) * std::f32::consts::TAU;
+    // Add one outward-facing ring of wizards
+    let outer_ring_radius = 7.5f32; // wider circle for better spacing
+    for i in 0..ring_count {
+        let theta = (i as f32) / (ring_count as f32) * std::f32::consts::TAU;
         let translation = glam::vec3(
             outer_ring_radius * theta.cos(),
             0.0,
@@ -163,8 +145,7 @@ pub fn build_demo_scene(
         }
     }
 
-    // Assign palette bases and animations: inner ring faces inward (center uses PortalOpen,
-    // others Waiting); outer ring faces outward (all PortalOpen). Stagger PortalOpen starts by 0.5s.
+    // Assign palette bases and animations: PC idle in Still; all ring wizards PortalOpen (staggered).
     let joints_per_wizard = skinned_cpu.joints_nodes.len() as u32;
     let mut wizard_anim_index: Vec<usize> = Vec::with_capacity(wiz_instances.len());
     let mut wizard_time_offset: Vec<f32> = Vec::with_capacity(wiz_instances.len());
@@ -174,15 +155,11 @@ pub fn build_demo_scene(
             // Center wizard (PC): idle in Still until casting
             wizard_anim_index.push(1);
             wizard_time_offset.push(0.0);
-        } else if i < wizard_count {
-            // Inner ring (excluding center): Still only
-            wizard_anim_index.push(1);
-            wizard_time_offset.push(0.0);
         } else {
-            // Outer ring: PortalOpen, staggered by 0.5s
+            // Single ring: PortalOpen for all NPC wizards, staggered by 0.5s
             wizard_anim_index.push(0);
-            let outer_idx = i - wizard_count;
-            wizard_time_offset.push(outer_idx as f32 * 0.5);
+            let ring_idx = i - 1;
+            wizard_time_offset.push(ring_idx as f32 * 0.5);
         }
     }
 

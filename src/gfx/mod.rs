@@ -1082,13 +1082,19 @@ impl Renderer {
         self.damage.draw(&mut encoder, &view);
 
         // Draw wizard nameplates first
+        // Draw wizard nameplates for alive wizards only (hide dead PC/NPC labels)
+        let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
+        for (i, m) in self.wizard_models.iter().enumerate() {
+            let hp = self.wizard_hp.get(i).copied().unwrap_or(0);
+            if hp > 0 { wiz_alive.push(*m); }
+        }
         self.nameplates.queue_labels(
             &self.device,
             &self.queue,
             self.config.width,
             self.config.height,
             view_proj,
-            &self.wizard_models,
+            &wiz_alive,
         );
         self.nameplates.draw(&mut encoder, &view);
 

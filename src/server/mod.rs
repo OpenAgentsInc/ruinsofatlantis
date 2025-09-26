@@ -62,7 +62,9 @@ impl ServerState {
         let attack_cd = 1.5f32;
         let damage = 5i32;
         let mut hits = Vec::new();
-        for n in &mut self.npcs {
+        // Keep each NPC's chosen target index for hit evaluation after resolving collisions.
+        let mut chosen: Vec<Option<usize>> = vec![None; self.npcs.len()];
+        for (idx, n) in self.npcs.iter_mut().enumerate() {
             if !n.alive { continue; }
             // reduce cooldown
             n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
@@ -75,6 +77,7 @@ impl ServerState {
                 let d2 = dx*dx + dz*dz;
                 if d2 < best_d2 { best_d2 = d2; best_i = i; }
             }
+            chosen[idx] = Some(best_i);
             let target = wizards[best_i];
             let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
             let dist = to.length();
@@ -82,12 +85,70 @@ impl ServerState {
                 let step = (speed * dt).min(dist);
                 n.pos += to.normalize() * step;
             }
-            if dist <= attack_range && n.attack_cooldown <= 0.0 {
-                hits.push((best_i, damage));
-                n.attack_cooldown = attack_cd;
+        }
+        // Resolve simple collisions so NPCs don't overlap each other or wizards
+        self.resolve_collisions(wizards);
+        // Evaluate attacks post-resolution
+        for (idx, n) in self.npcs.iter_mut().enumerate() {
+            if !n.alive { continue; }
+            if let Some(best_i) = chosen[idx] {
+                let target = wizards[best_i];
+                let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
+                let dist = to.length();
+                if dist <= attack_range && n.attack_cooldown <= 0.0 {
+                    hits.push((best_i, damage));
+                    n.attack_cooldown = attack_cd;
+                }
             }
         }
         hits
+    }
+
+    /// Push overlapping NPCs apart and also keep them from overlapping wizards.
+    fn resolve_collisions(&mut self, wizards: &[Vec3]) {
+        // NPC vs NPC separation
+        let nlen = self.npcs.len();
+        for i in 0..nlen {
+            if !self.npcs[i].alive { continue; }
+            for j in (i+1)..nlen {
+                if !self.npcs[j].alive { continue; }
+                let mut dx = self.npcs[j].pos.x - self.npcs[i].pos.x;
+                let mut dz = self.npcs[j].pos.z - self.npcs[i].pos.z;
+                let d2 = dx*dx + dz*dz;
+                let min_d = self.npcs[i].radius + self.npcs[j].radius;
+                if d2 < min_d * min_d {
+                    let mut d = d2.sqrt();
+                    if d < 1e-4 { dx = 1.0; dz = 0.0; d = 1e-4; }
+                    dx /= d; dz /= d;
+                    let overlap = min_d - d;
+                    let push = overlap * 0.5;
+                    // push apart equally in XZ
+                    self.npcs[i].pos.x -= dx * push;
+                    self.npcs[i].pos.z -= dz * push;
+                    self.npcs[j].pos.x += dx * push;
+                    self.npcs[j].pos.z += dz * push;
+                }
+            }
+        }
+        // NPC vs Wizard obstacles (simple circle-circle with wizard_radius)
+        let wiz_r = 0.7f32;
+        for n in &mut self.npcs {
+            if !n.alive { continue; }
+            for w in wizards {
+                let mut dx = n.pos.x - w.x;
+                let mut dz = n.pos.z - w.z;
+                let d2 = dx*dx + dz*dz;
+                let min_d = n.radius + wiz_r;
+                if d2 < min_d * min_d {
+                    let mut d = d2.sqrt();
+                    if d < 1e-4 { dx = 1.0; dz = 0.0; d = 1e-4; }
+                    dx /= d; dz /= d;
+                    let overlap = min_d - d;
+                    n.pos.x += dx * overlap;
+                    n.pos.z += dz * overlap;
+                }
+            }
+        }
     }
     pub fn ring_spawn(&mut self, count: usize, radius: f32, hp: i32) {
         for i in 0..count {
@@ -189,5 +250,20 @@ mod tests {
         let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(-1.0, 0.0, 0.8), vel: Vec3::new(-5.0, 0.0, 0.0), t_die: 1.0, owner_wizard: None }];
         let ev = s.collide_and_damage(&mut projs, 0.5, 5);
         assert_eq!(ev.len(), 1);
+    }
+
+    #[test]
+    fn zombies_separate_and_do_not_overlap() {
+        let mut s = ServerState::new();
+        // Two NPCs starting at same position
+        s.spawn_npc(Vec3::new(0.0, 0.0, 0.0), 0.8, 10);
+        s.spawn_npc(Vec3::new(0.0, 0.0, 0.0), 0.8, 10);
+        // One wizard far away so they try to move toward it
+        let wiz = vec![Vec3::new(10.0, 0.0, 0.0)];
+        s.step_npc_ai(0.1, &wiz);
+        let dx = s.npcs[1].pos.x - s.npcs[0].pos.x;
+        let dz = s.npcs[1].pos.z - s.npcs[0].pos.z;
+        let d = (dx*dx + dz*dz).sqrt();
+        assert!(d >= s.npcs[0].radius + s.npcs[1].radius - 1e-3);
     }
 }
