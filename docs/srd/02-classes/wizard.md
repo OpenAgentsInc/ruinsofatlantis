@@ -112,4 +112,122 @@ When you cast a Wizard spell with a spell slot of levels 1–5 that deals damage
 
 ## Wizard Spell List
 
-See the Wizard spell list in the SRD 5.2.1 (beginning around p.79) for the full list of cantrips and spells available to the class. Notable cantrips include Fire Bolt, Light, Mage Hand, Ray of Frost, Shocking Grasp, and True Strike.
+See the Wizard spell list in the SRD 5.2.1 (beginning around p.79) for the full list of spells available to the class. All Wizard cantrips are listed in full below for convenience.
+
+### Wizard Cantrips (Full Text)
+
+#### Acid Splash
+Evocation Cantrip (Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 60 feet
+- Components: V, S
+- Duration: Instantaneous
+
+You create an acidic bubble at a point within range, where it explodes in a 5‑foot‑radius Sphere. Each creature in that Sphere must succeed on a Dexterity saving throw or take 1d6 Acid damage.
+
+Cantrip Upgrade: The damage increases by 1d6 when you reach levels 5 (2d6), 11 (3d6), and 17 (4d6).
+
+#### Fire Bolt
+Evocation Cantrip (Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: V, S
+- Duration: Instantaneous
+
+You hurl a mote of fire at a creature or an object within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 Fire damage. A flammable object hit by this spell ignites if it isn’t being worn or carried.
+
+Cantrip Upgrade: The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).
+
+#### Light
+Evocation Cantrip (Bard, Cleric, Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: Touch
+- Components: V, M (a firefly or phosphorescent moss)
+- Duration: 1 hour
+
+You touch one Large or smaller object that isn’t being worn or carried. Until the spell ends, the object sheds Bright Light in a 20‑foot radius and Dim Light for an additional 20 feet. The light can be colored as you like. Covering the object with something opaque blocks the light. The spell ends if you cast it again.
+
+#### Mage Hand
+Conjuration Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 30 feet
+- Components: V, S
+- Duration: 1 minute
+
+A spectral, floating hand appears at a point you choose within range. The hand lasts for the duration or until you cast this spell again. You can use the hand to manipulate an object, open an unlocked door or container, stow or retrieve an item from an open container, or pour the contents out of a vial. As a Magic action, you can move the hand up to 30 feet each time. The hand can’t attack, activate magic items, or carry more than 10 pounds.
+
+#### Mending
+Transmutation Cantrip (Bard, Cleric, Druid, Sorcerer, Wizard)
+
+- Casting Time: 1 minute
+- Range: Touch
+- Components: V, S, M (two lodestones)
+- Duration: Instantaneous
+
+This spell repairs a single break or tear in an object you touch, such as a broken chain link, two halves of a broken key, a torn cloak, or a leaking wineskin, provided the break is no larger than 1 foot in any dimension. The spell can physically repair a magic item, but it can’t restore magic to such an object.
+
+#### Message
+Transmutation Cantrip (Bard, Druid, Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: S, M (a copper wire)
+- Duration: 1 round
+
+You point toward a creature within range and whisper a message. The target (and only the target) hears the message and can reply in a whisper that only you can hear. You can cast this spell through solid objects if you are familiar with the target and know it is beyond the barrier. Magical silence; 1 foot of stone, metal, or wood; or a thin sheet of lead blocks the spell.
+
+#### Minor Illusion
+Illusion Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 30 feet
+- Components: S, M (a bit of fleece)
+- Duration: 1 minute
+
+You create a sound or an image of an object within range that lasts for the duration. A creature that studies the illusion can discern it with an Intelligence (Investigation) check against your spell save DC; a creature that discerns the illusion sees it as faint.
+
+#### Prestidigitation
+Transmutation Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 10 feet
+- Components: V, S
+- Duration: Up to 1 hour
+
+You perform minor magical tricks. You can create one of several simple magical effects, such as: create a harmless sensory effect; light or snuff out a small flame; clean or soil an object; chill, warm, or flavor 1 cubic foot of nonliving material; make a color, small mark, or symbol appear; or create a small trinket or illusory image that lasts until the end of your next turn. If you cast this spell multiple times, you can have up to three of its non‑instantaneous effects active at a time.
+
+#### Ray of Frost
+Evocation Cantrip (Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 60 feet
+- Components: V, S
+- Duration: Instantaneous
+
+Make a ranged spell attack against a creature within range. On a hit, it takes 1d8 Cold damage, and its Speed is reduced by 10 feet until the start of your next turn.
+
+Cantrip Upgrade: The damage increases by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).
+
+#### Shocking Grasp
+Evocation Cantrip (Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: Touch
+- Components: V, S
+- Duration: Instantaneous
+
+Lightning springs from your hand to deliver a shock to a creature you try to touch. Make a melee spell attack. On a hit, the target takes 1d8 Lightning damage, and it can’t take Reactions until the start of its next turn. You have Advantage on the attack roll if the target is wearing metal armor.
+
+#### True Strike
+Divination Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 30 feet
+- Components: V, S
+- Duration: 1 round
+
+You extend your hand and point a finger at a target in range. On your next turn, you gain Advantage on your first attack roll against the target.
