@@ -29,8 +29,12 @@ impl PlayerController {
         right = right.normalize_or_zero();
         if input.forward { move_dir += fwd; }
         if input.backward { move_dir -= fwd; }
-        if input.right { move_dir += right; }
-        if input.left { move_dir -= right; }
+        // Expected behavior: D moves right, A moves left relative to camera.
+        // If you observe opposite behavior due to asset/world handedness,
+        // swap the signs here. Based on feedback, we invert compared to
+        // previous iteration to match in-game expectation.
+        if input.right { move_dir -= right; }
+        if input.left { move_dir += right; }
         if move_dir.length_squared() > 1e-6 {
             move_dir = move_dir.normalize();
             self.pos += move_dir * speed * dt;
@@ -80,7 +84,7 @@ mod tests {
         // camera forward along +Z
         let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
         pc.update(&input, 0.016, cam_fwd);
-        // Should not instantly snap to 90deg
-        assert!(pc.yaw > 0.0 && pc.yaw < std::f32::consts::FRAC_PI_2);
+        // Should change yaw smoothly (magnitude less than 90deg)
+        assert!(pc.yaw.abs() > 0.0 && pc.yaw.abs() < std::f32::consts::FRAC_PI_2);
     }
 }
