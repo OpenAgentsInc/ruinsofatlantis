@@ -84,6 +84,16 @@ Level 4 Conjuration (Wizard)
 
 Squirming, ebony tentacles fill a 20‑foot square on ground you can see within range. For the duration, the ground in that area is Difficult Terrain. Each creature in the area makes a Strength saving throw. On a failed save, it takes 3d6 Bludgeoning damage and has the Restrained condition until the spell ends. A creature also makes that save if it enters the area or ends its turn there (once per turn). A Restrained creature can take an action to make a Strength (Athletics) check against your spell save DC, ending the condition on a success.
 
+## Blade Ward
+Abjuration Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: V, S
+- Duration: 1 round
+
+You trace a sigil of warding in the air. Until the end of your next turn, you have Resistance to Bludgeoning, Piercing, and Slashing damage from weapon attacks.
+
 ## Blade Barrier
 Level 6 Evocation (Cleric)
 

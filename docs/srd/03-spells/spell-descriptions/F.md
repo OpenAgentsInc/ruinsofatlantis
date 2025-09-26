@@ -103,7 +103,13 @@ Level 7 Evocation (Cleric, Druid, Sorcerer)
 - Duration: Instantaneous
 
 Up to ten 10‑foot Cubes of fire appear in range. Each creature in the area makes a Dexterity save, taking 7d10 Fire damage on a failed save or half as much on a success. Flammable objects in the area that aren’t being worn or carried ignite.
-<<<<<<< HEAD
-=======
 
->>>>>>> origin/wizardandruins
+## Friends
+Enchantment Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: S, M (a small amount of makeup applied to the face as part of the spell)
+- Duration: Concentration, up to 1 minute
+
+For the duration, you have Advantage on Charisma checks directed at one creature of your choice that isn’t Hostile toward you. When the spell ends, the creature realizes that you used magic to influence its mood and becomes Hostile toward you.
