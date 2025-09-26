@@ -216,8 +216,10 @@ fn sample_quat(track: &ra_assets::TrackQuat, t: f32) -> glam::Quat {
     if i + 1 >= times.len() { return *vals.last().unwrap(); }
     let t0 = times[i]; let t1 = times[i+1]; let a = vals[i]; let b = vals[i+1];
     let w = if t1 > t0 { (tt - t0) / (t1 - t0) } else { 0.0 };
-    // Nlerp-then-normalize for stability
-    (a + (b - a) * w).normalize()
+    // Use shortest-arc slerp to avoid sudden flips at antipodal quats
+    let mut bb = b;
+    if a.dot(b) < 0.0 { bb = -b; }
+    a.slerp(bb, w).normalize()
 }
 
 #[derive(Parser, Debug)]
