@@ -955,9 +955,11 @@ impl Renderer {
 
         // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
-        for npc in &self.server.npcs {
-            if !npc.alive { continue; }
-            npc_positions.push(npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0));
+        // Prefer model matrices for accurate label anchors (handles any future scaling/animation)
+        for (idx, m) in self.zombie_models.iter().enumerate() {
+            if let Some(npc) = self.server.npcs.get(idx) && !npc.alive { continue; }
+            let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            npc_positions.push(head.truncate());
         }
         if !npc_positions.is_empty() {
             self.nameplates_npc.queue_npc_labels(
