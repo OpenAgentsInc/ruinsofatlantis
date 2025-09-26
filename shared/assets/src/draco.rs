@@ -73,13 +73,20 @@ pub(crate) fn decode_draco_primitive(
             gltf::accessor::Dimensions::Vec4 => 4,
             _ => 3,
         };
-        let ty = match acc.data_type() {
-            gltf::accessor::DataType::F32 => AttributeDataType::Float32,
-            gltf::accessor::DataType::U16 => AttributeDataType::UInt16,
-            gltf::accessor::DataType::U8 => AttributeDataType::UInt8,
-            gltf::accessor::DataType::I16 => AttributeDataType::Int16,
-            gltf::accessor::DataType::I8 => AttributeDataType::Int8,
-            gltf::accessor::DataType::U32 => AttributeDataType::UInt32,
+        // Force float32 for POSITION/NORMAL/TEXCOORD streams to avoid quantized output
+        // mismatching our parser stride. Draco decoding will convert quantized data to f32.
+        let ty = match sem {
+            Semantic::Positions | Semantic::Normals | Semantic::TexCoords(_) => {
+                AttributeDataType::Float32
+            }
+            _ => match acc.data_type() {
+                gltf::accessor::DataType::F32 => AttributeDataType::Float32,
+                gltf::accessor::DataType::U16 => AttributeDataType::UInt16,
+                gltf::accessor::DataType::U8 => AttributeDataType::UInt8,
+                gltf::accessor::DataType::I16 => AttributeDataType::Int16,
+                gltf::accessor::DataType::I8 => AttributeDataType::Int8,
+                gltf::accessor::DataType::U32 => AttributeDataType::UInt32,
+            },
         };
         cfg.add_attribute(dim as u32, ty);
     }
@@ -122,13 +129,17 @@ pub(crate) fn decode_draco_primitive(
             gltf::accessor::Dimensions::Vec4 => 4usize,
             _ => 3usize,
         };
-        let ty = match acc.data_type() {
-            gltf::accessor::DataType::F32 => AttributeDataType::Float32,
-            gltf::accessor::DataType::U16 => AttributeDataType::UInt16,
-            gltf::accessor::DataType::U8 => AttributeDataType::UInt8,
-            gltf::accessor::DataType::I16 => AttributeDataType::Int16,
-            gltf::accessor::DataType::I8 => AttributeDataType::Int8,
-            gltf::accessor::DataType::U32 => AttributeDataType::UInt32,
+        // Match the types requested in the config above
+        let ty = match sem {
+            Semantic::Positions | Semantic::Normals | Semantic::TexCoords(_) => AttributeDataType::Float32,
+            _ => match acc.data_type() {
+                gltf::accessor::DataType::F32 => AttributeDataType::Float32,
+                gltf::accessor::DataType::U16 => AttributeDataType::UInt16,
+                gltf::accessor::DataType::U8 => AttributeDataType::UInt8,
+                gltf::accessor::DataType::I16 => AttributeDataType::Int16,
+                gltf::accessor::DataType::I8 => AttributeDataType::Int8,
+                gltf::accessor::DataType::U32 => AttributeDataType::UInt32,
+            },
         };
         let comp_size = ty.size_in_bytes();
         let bytes_len = dim * (vertex_count as usize) * comp_size;
@@ -426,4 +437,3 @@ pub(crate) fn decode_draco_skinned_primitive(
     }
     Ok(())
 }
-
