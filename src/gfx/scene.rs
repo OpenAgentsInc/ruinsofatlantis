@@ -54,10 +54,12 @@ pub fn build_demo_scene(
     // Place a set of ruins around the wizard circle
     let place_range = plane_extent * 0.9;
     // A few backdrop ruins placed far away for depth
+    // The ruins model origin is roughly centered; raise Y so it rests on ground.
+    let ruins_y = 0.6f32;
     let ruins_positions = [
-        glam::vec3(-place_range * 0.9, 0.0, -place_range * 0.7),
-        glam::vec3(place_range * 0.85, 0.0, -place_range * 0.2),
-        glam::vec3(-place_range * 0.2, 0.0, place_range * 0.95),
+        glam::vec3(-place_range * 0.9, ruins_y, -place_range * 0.7),
+        glam::vec3(place_range * 0.85, ruins_y, -place_range * 0.2),
+        glam::vec3(-place_range * 0.2, ruins_y, place_range * 0.95),
     ];
     for pos in ruins_positions {
         let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
@@ -76,7 +78,7 @@ pub fn build_demo_scene(
         let base_a = (i as f32) / (far_count as f32) * std::f32::consts::TAU;
         let a = base_a + rng.random::<f32>() * 0.2 - 0.1; // jitter
         let r = place_range * (0.78 + rng.random::<f32>() * 0.15);
-        let pos = glam::vec3(r * a.cos(), 0.0, r * a.sin());
+        let pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
         let rot = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
         world.spawn(
             Transform {
