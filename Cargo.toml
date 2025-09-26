@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 default-run = "ruinsofatlantis"
 
+[workspace]
+members = [
+    ".",                # root crate
+    "shared/assets",    # shared library for model/assets
+    "tools/model-viewer" # standalone model viewer
+]
+resolver = "2"
+
 [dependencies]
 ab_glyph = "0.2.25"
 anyhow = "1.0.100"

@@ -1,0 +1,17 @@
+[package]
+name = "ra-assets"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ra_assets"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+glam = "0.30"
+bytemuck = { version = "1.13", features = ["derive"] }
+
+# Reuse the existing engine's asset loaders for v1
+ruinsofatlantis = { path = "../.." }
+
