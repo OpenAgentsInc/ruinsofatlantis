@@ -83,7 +83,7 @@ async fn run(cli: Cli) -> Result<()> {
         .create_window(
             WindowAttributes::default()
                 .with_title("Model Viewer")
-                .with_inner_size(PhysicalSize::new(1280, 720)),
+                .with_inner_size(PhysicalSize::new(1920, 1080)),
         )?;
     let instance = wgpu::Instance::default();
     let raw_display = window.display_handle()?.as_raw();
