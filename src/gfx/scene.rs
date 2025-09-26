@@ -49,14 +49,14 @@ pub fn build_demo_scene(
         },
         RenderKind::Wizard,
     );
-    // Place remaining wizards on a small ring facing the center
+    // Place remaining wizards on a small ring facing outward (away from the center)
     let ring_radius = 3.5f32;
     for i in 1..wizard_count {
         let theta = (i as f32 - 1.0) / (wizard_count as f32 - 1.0) * std::f32::consts::TAU;
         let translation = glam::vec3(ring_radius * theta.cos(), 0.0, ring_radius * theta.sin());
-        // Face the center with yaw that aligns +Z to (center - translation)
-        let dx = center.x - translation.x;
-        let dz = center.z - translation.z;
+        // Face outward: yaw aligns +Z with (translation - center)
+        let dx = translation.x - center.x;
+        let dz = translation.z - center.z;
         let yaw = dx.atan2(dz);
         let rotation = glam::Quat::from_rotation_y(yaw);
         world.spawn(
