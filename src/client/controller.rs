@@ -1,7 +1,9 @@
 //! Basic third-person character controller for the PC.
 //!
-//! This controller implements simple WASD movement relative to the camera's
-//! forward/right axes and rotates the character to face the movement direction.
+//! This controller implements a simple third-person scheme:
+//! - A/D turn the character in place (no strafing).
+//! - W moves forward along the character's facing.
+//! - S does not translate (as requested) — it can be wired to backwards later.
 
 use glam::Vec3;
 
@@ -18,35 +20,28 @@ impl PlayerController {
         Self { pos: initial_pos, yaw: 0.0 }
     }
 
-    pub fn update(&mut self, input: &InputState, dt: f32, cam_forward: Vec3) {
+    pub fn update(&mut self, input: &InputState, dt: f32, _cam_forward: Vec3) {
         // Tunables: faster forward movement, slower turning
         let speed = if input.run { 9.0 } else { 5.0 };
-        let mut fwd = cam_forward;
-        let mut move_dir = Vec3::ZERO;
-        // Flatten forward and compute right
-        fwd.y = 0.0;
-        fwd = fwd.normalize_or_zero();
-        let mut right = Vec3::Y.cross(fwd);
-        right = right.normalize_or_zero();
-        if input.forward { move_dir += fwd; }
-        if input.backward { move_dir -= fwd; }
-        // Expected behavior: D moves right, A moves left relative to camera.
-        // If you observe opposite behavior due to asset/world handedness,
-        // swap the signs here. Based on feedback, we invert compared to
-        // previous iteration to match in-game expectation.
-        if input.right { move_dir -= right; }
-        if input.left { move_dir += right; }
-        if move_dir.length_squared() > 1e-6 {
-            move_dir = move_dir.normalize();
-            self.pos += move_dir * speed * dt;
-            // Smoothly rotate toward target yaw
-            let target_yaw = move_dir.x.atan2(move_dir.z);
-            let max_turn = 2.5 * dt; // rad/s (slower for smoother turns)
-            self.yaw = turn_towards(self.yaw, target_yaw, max_turn);
+        let yaw_rate = 1.8; // rad/s
+
+        // In-place yaw
+        if input.left {
+            self.yaw = wrap_angle(self.yaw + yaw_rate * dt);
+        }
+        if input.right {
+            self.yaw = wrap_angle(self.yaw - yaw_rate * dt);
+        }
+
+        // Forward-only translation
+        if input.forward {
+            let fwd = Vec3::new(self.yaw.sin(), 0.0, self.yaw.cos());
+            self.pos += fwd.normalize_or_zero() * speed * dt;
         }
     }
 }
 
+#[allow(dead_code)]
 fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
     let delta = wrap_angle(target - current);
     if delta.abs() <= max_delta {
