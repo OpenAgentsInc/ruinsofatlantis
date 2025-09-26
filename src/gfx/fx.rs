@@ -4,7 +4,7 @@ use crate::gfx::types::ParticleInstance;
 use wgpu::util::DeviceExt;
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Projectile {
+pub struct Projectile {
     pub pos: glam::Vec3,
     pub vel: glam::Vec3,
     pub t_die: f32,

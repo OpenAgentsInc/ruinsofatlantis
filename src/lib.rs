@@ -6,3 +6,4 @@ pub mod gfx;
 pub mod client;
 pub mod platform_winit;
 pub mod sim;
+pub mod server;

@@ -1,0 +1,134 @@
+//! Server-side simulation scaffold (in-process for now).
+//!
+//! This module holds authoritative NPC state (positions, health) and performs
+//! simple projectile collision and damage resolution. It is intentionally
+//! decoupled from rendering so it can be moved to a standalone crate/process
+//! later.
+
+use glam::Vec3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NpcId(pub u32);
+
+#[derive(Debug, Clone)]
+pub struct Npc {
+    pub id: NpcId,
+    pub pos: Vec3,
+    pub radius: f32,
+    pub hp: i32,
+    pub max_hp: i32,
+    pub alive: bool,
+}
+
+impl Npc {
+    pub fn new(id: NpcId, pos: Vec3, radius: f32, hp: i32) -> Self {
+        Self { id, pos, radius, hp, max_hp: hp, alive: true }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HitEvent {
+    pub npc: NpcId,
+    pub pos: Vec3,
+    pub damage: i32,
+    pub hp_before: i32,
+    pub hp_after: i32,
+    pub fatal: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct ServerState {
+    next_id: u32,
+    pub npcs: Vec<Npc>,
+}
+
+impl ServerState {
+    pub fn new() -> Self { Self { next_id: 1, npcs: Vec::new() } }
+
+    pub fn spawn_npc(&mut self, pos: Vec3, radius: f32, hp: i32) -> NpcId {
+        let id = NpcId(self.next_id);
+        self.next_id += 1;
+        self.npcs.push(Npc::new(id, pos, radius, hp));
+        id
+    }
+
+    pub fn ring_spawn(&mut self, count: usize, radius: f32, hp: i32) {
+        for i in 0..count {
+            let a = (i as f32) / (count as f32) * std::f32::consts::TAU;
+            let pos = Vec3::new(radius * a.cos(), 0.0, radius * a.sin());
+            self.spawn_npc(pos, 0.6, hp);
+        }
+    }
+
+    /// Collide moving projectiles against NPC spheres and apply damage.
+    /// Returns a list of hit events; `projectiles` is filtered in place to
+    /// remove those that hit.
+    pub fn collide_and_damage(
+        &mut self,
+        projectiles: &mut Vec<crate::gfx::fx::Projectile>,
+        dt: f32,
+        damage: i32,
+    ) -> Vec<HitEvent> {
+        let mut events = Vec::new();
+        let mut i = 0;
+        'outer: while i < projectiles.len() {
+            let pr = &projectiles[i];
+            let p0 = pr.pos - pr.vel * dt; // previous position
+            let p1 = pr.pos;
+            for npc in &mut self.npcs {
+                if !npc.alive { continue; }
+                if segment_hits_sphere(p0, p1, npc.pos, npc.radius) {
+                    let hp_before = npc.hp;
+                    let hp_after = (npc.hp - damage).max(0);
+                    npc.hp = hp_after;
+                    if hp_after == 0 { npc.alive = false; }
+                    let fatal = !npc.alive;
+                    events.push(HitEvent { npc: npc.id, pos: p1, damage, hp_before, hp_after, fatal });
+                    // remove projectile
+                    projectiles.swap_remove(i);
+                    continue 'outer;
+                }
+            }
+            i += 1;
+        }
+        events
+    }
+}
+
+fn segment_hits_sphere(p0: Vec3, p1: Vec3, center: Vec3, r: f32) -> bool {
+    let d = p1 - p0;
+    let m = p0 - center;
+    let a = d.dot(d);
+    if a <= 1e-6 { return m.length() <= r; }
+    let t = -(m.dot(d)) / a;
+    let t = t.clamp(0.0, 1.0);
+    let closest = p0 + d * t;
+    (closest - center).length() <= r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn segment_sphere_intersects() {
+        let c = Vec3::new(0.0, 0.0, 0.0);
+        let p0 = Vec3::new(-2.0, 0.0, 0.0);
+        let p1 = Vec3::new(2.0, 0.0, 0.0);
+        assert!(segment_hits_sphere(p0, p1, c, 0.5));
+    }
+
+    #[test]
+    fn server_applies_damage_and_kills() {
+        let mut s = ServerState::new();
+        let id = s.spawn_npc(Vec3::ZERO, 0.5, 10);
+        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(0.25, 0.0, 0.0), vel: Vec3::new(1.0, 0.0, 0.0), t_die: 1.0 }];
+        let ev = s.collide_and_damage(&mut projs, 0.1, 10);
+        assert!(projs.is_empty());
+        assert_eq!(ev.len(), 1);
+        assert_eq!(ev[0].npc, id);
+        assert!(ev[0].fatal);
+        assert!(!s.npcs[0].alive);
+        assert_eq!(s.npcs[0].hp, 0);
+    }
+}
