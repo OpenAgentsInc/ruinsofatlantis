@@ -658,11 +658,19 @@ async fn run(cli: Cli) -> Result<()> {
                 rpass.draw(0..(verts.len() as u32), 0..1);
 
                 // Text overlay: label next to checkbox + list animations beneath
-                let mut text_verts: Vec<UiVertex> = Vec::new();
-                // Label
+                // Draw label next to the checkbox (always)
+                let mut text_verts_label: Vec<UiVertex> = Vec::new();
                 let label = vec!["AUTO ROTATE".to_string()];
                 let label_start = (m + s + 8.0, m);
-                build_text_quads(&label, label_start, (width as f32, height as f32), &mut text_verts, [0.85, 0.85, 0.9, 1.0], 3.0);
+                build_text_quads(&label, label_start, (width as f32, height as f32), &mut text_verts_label, [0.85, 0.85, 0.9, 1.0], 3.0);
+                if !text_verts_label.is_empty() {
+                    let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-label"), contents: bytemuck::cast_slice(&text_verts_label), usage: wgpu::BufferUsages::VERTEX });
+                    rpass.set_pipeline(&ui_pipe);
+                    rpass.set_vertex_buffer(0, tvb.slice(..));
+                    rpass.draw(0..(text_verts_label.len() as u32), 0..1);
+                }
+                // Anim list text (if any)
+                let mut text_verts: Vec<UiVertex> = Vec::new();
                 let mut lines: Vec<String> = Vec::new();
                 if let Some(ref gpu) = model_gpu
                     && let ModelGpu::Skinned { anims, .. } = gpu
