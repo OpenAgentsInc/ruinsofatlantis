@@ -26,7 +26,10 @@ use camera::Camera;
 use types::{Globals, Instance, InstanceSkin, Model, VertexSkinned};
 use util::scale_to_max;
 use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU};
+<<<<<<< HEAD
 use crate::core::data::{loader as data_loader, spell::SpellSpec};
+=======
+>>>>>>> origin/wizardandruins
 use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
@@ -39,6 +42,7 @@ use std::fs;
 fn asset_path(rel: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
+<<<<<<< HEAD
 
 // --- Minimal FX structs (CPU side) ---
 #[derive(Clone, Copy, Debug)]
@@ -46,6 +50,8 @@ struct Projectile { pos: glam::Vec3, vel: glam::Vec3, radius: f32, t_die: f32 }
 
 #[derive(Clone, Copy, Debug)]
 struct Particle { pos: glam::Vec3, vel: glam::Vec3, age: f32, life: f32, size: f32, color: [f32;3] }
+=======
+>>>>>>> origin/wizardandruins
 
 /// Renderer owns the GPU state and per‑scene resources.
 ///
@@ -83,10 +89,13 @@ pub struct Renderer {
     wizard_vb: wgpu::Buffer,
     wizard_ib: wgpu::Buffer,
     wizard_index_count: u32,
+<<<<<<< HEAD
     // Simple cube for FX/particles
     fx_cube_vb: wgpu::Buffer,
     fx_cube_ib: wgpu::Buffer,
     fx_cube_index_count: u32,
+=======
+>>>>>>> origin/wizardandruins
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -96,10 +105,13 @@ pub struct Renderer {
     wizard_count: u32,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
+<<<<<<< HEAD
     // FX instances (projectiles + particles)
     fx_instances: wgpu::Buffer,
     fx_count: u32,
     fx_capacity: u32,
+=======
+>>>>>>> origin/wizardandruins
 
     // Wizard skinning palettes
     palettes_buf: wgpu::Buffer,
@@ -113,16 +125,22 @@ pub struct Renderer {
     _wizard_mat_buf: wgpu::Buffer,
     _wizard_tex_view: wgpu::TextureView,
     _wizard_sampler: wgpu::Sampler,
+<<<<<<< HEAD
     // FX model (emissive)
     fx_model_bg: wgpu::BindGroup,
     _fx_model_buf: wgpu::Buffer,
+=======
+>>>>>>> origin/wizardandruins
 
     // Flags
     wire_enabled: bool,
 
     // Time base for animation
     start: Instant,
+<<<<<<< HEAD
     last_time: f32,
+=======
+>>>>>>> origin/wizardandruins
 
     // Wizard animation selection and time offsets
     wizard_anim_index: Vec<usize>,
@@ -130,6 +148,7 @@ pub struct Renderer {
 
     // CPU-side skinned mesh data
     skinned_cpu: SkinnedMeshCPU,
+<<<<<<< HEAD
     // Animation-driven VFX trigger data
     portalopen_strikes: Vec<f32>,
     last_center_phase: f32,
@@ -142,6 +161,8 @@ pub struct Renderer {
 
     // Data-driven spell spec (Fire Bolt)
     fire_bolt: Option<SpellSpec>,
+=======
+>>>>>>> origin/wizardandruins
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
@@ -320,9 +341,12 @@ impl Renderer {
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
 
+<<<<<<< HEAD
         // FX cube geometry (used for projectiles/particles)
         let (fx_cube_vb, fx_cube_ib, fx_cube_index_count) = mesh::create_cube(&device);
 
+=======
+>>>>>>> origin/wizardandruins
         // (viewer-parity simple mesh removed)
 
         let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
@@ -378,7 +402,23 @@ impl Renderer {
             let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
             world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
         }
+<<<<<<< HEAD
         // 2) Near-circle ruins disabled to keep space around the wizards clear
+=======
+        // 2) Add a ring of smaller ruins close to the wizards
+        let ruins_ring_radius = 18.0f32; // push even farther so they never overlap the wizards
+        let ruins_ring_count = 3usize;   // very few near-circle ruins
+        for i in 0..ruins_ring_count {
+            let a = (i as f32) / (ruins_ring_count as f32) * std::f32::consts::TAU;
+            let jitter_r = rng.random_range(-0.2..0.2);
+            let pos = glam::vec3((ruins_ring_radius + jitter_r) * a.cos(), 0.0, (ruins_ring_radius + jitter_r) * a.sin());
+            // Face roughly outward from the center with some randomness
+            let yaw = a + std::f32::consts::PI + rng.random_range(-0.25..0.25);
+            let rot = glam::Quat::from_rotation_y(yaw);
+            let scale = glam::Vec3::splat(0.6 + rng.random_range(-0.05..0.05));
+            world.spawn(Transform { translation: pos, rotation: rot, scale }, RenderKind::Ruins);
+        }
+>>>>>>> origin/wizardandruins
 
         // --- Create instance buffers per kind from ECS world ---
         let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
@@ -420,6 +460,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
+<<<<<<< HEAD
         // FX buffers (dynamic)
         let fx_capacity = 2048u32; // particles + projectiles
         let fx_instances = device.create_buffer(&wgpu::BufferDescriptor {
@@ -442,6 +483,8 @@ impl Renderer {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: fx_model_buf.as_entire_binding() }],
         });
 
+=======
+>>>>>>> origin/wizardandruins
         // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
@@ -585,6 +628,7 @@ impl Renderer {
             ] });
             (bg, view, sampler)
         };
+<<<<<<< HEAD
 
         // Load spell data (Fire Bolt)
         let fire_bolt = data_loader::load_spell_spec("spells/fire_bolt.json").ok();
@@ -593,6 +637,8 @@ impl Renderer {
         let hand_right_node = skinned_cpu.hand_right_node;
         let portalopen_strikes = compute_portalopen_strikes(&skinned_cpu, hand_right_node);
         let root_node_copy = skinned_cpu.root_node; // copy before moving skinned_cpu
+=======
+>>>>>>> origin/wizardandruins
 
         Ok(Self {
             surface,
@@ -620,9 +666,12 @@ impl Renderer {
             wizard_vb,
             wizard_ib,
             wizard_index_count,
+<<<<<<< HEAD
             fx_cube_vb,
             fx_cube_ib,
             fx_cube_index_count,
+=======
+>>>>>>> origin/wizardandruins
             ruins_vb,
             ruins_ib,
             ruins_index_count,
@@ -630,9 +679,12 @@ impl Renderer {
             wizard_count: wiz_instances.len() as u32,
             ruins_instances,
             ruins_count: ruin_instances.len() as u32,
+<<<<<<< HEAD
             fx_instances,
             fx_count: 0,
             fx_capacity,
+=======
+>>>>>>> origin/wizardandruins
             palettes_buf,
             palettes_bg,
             joints_per_wizard,
@@ -642,6 +694,7 @@ impl Renderer {
             _wizard_mat_buf: wizard_mat_buf,
             _wizard_tex_view,
             _wizard_sampler,
+<<<<<<< HEAD
             fx_model_bg,
             _fx_model_buf: fx_model_buf,
             wire_enabled: false,
@@ -659,6 +712,15 @@ impl Renderer {
             particles: Vec::new(),
             cam_target,
             fire_bolt,
+=======
+            wire_enabled: false,
+
+            start: Instant::now(),
+            wizard_anim_index,
+            wizard_time_offset,
+            skinned_cpu,
+            cam_target,
+>>>>>>> origin/wizardandruins
         })
     }
 
@@ -705,8 +767,11 @@ impl Renderer {
 
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
+<<<<<<< HEAD
         // Update FX (projectiles + particles)
         self.update_fx(t, dt);
+=======
+>>>>>>> origin/wizardandruins
 
         // Begin commands
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
@@ -762,6 +827,7 @@ impl Renderer {
             rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
             rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+<<<<<<< HEAD
 
             // FX (projectiles + particles) as small cubes
             if self.fx_count > 0 {
@@ -773,6 +839,8 @@ impl Renderer {
                 rpass.set_index_buffer(self.fx_cube_ib.slice(..), IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.fx_cube_index_count, 0, 0..self.fx_count);
             }
+=======
+>>>>>>> origin/wizardandruins
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -822,6 +890,7 @@ impl Renderer {
         // Fallback: any non-empty clip
         self.skinned_cpu.animations.values().find(|c| c.duration > 0.0).or_else(|| self.skinned_cpu.animations.values().next()).expect("at least one animation clip present")
     }
+<<<<<<< HEAD
 
     // Drive FX from animation and simulate projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
@@ -865,23 +934,38 @@ impl Renderer {
         while i < self.projectiles.len() {
             let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
             if kill {
-                // spawn impact burst
-                for _ in 0..12 {
-                    let jitter = glam::vec3(rand_unit()*0.6, rand_unit()*0.6 + 0.3, rand_unit()*0.6);
-                    new_particles.push(Particle { pos: self.projectiles[i].pos, vel: jitter * 5.0, age: 0.0, life: 0.25, size: 0.15, color: [1.0, 0.6, 0.2] });
+                // Bright flare and burst to mark the landing point
+                let hit = self.projectiles[i].pos;
+                new_particles.push(Particle { pos: hit, vel: glam::Vec3::ZERO, age: 0.0, life: 0.35, size: 0.45, color: [1.0, 0.8, 0.25] });
+                for _ in 0..24 {
+                    let angle = rand_unit() * std::f32::consts::TAU;
+                    let r = 4.0 + rand_unit()*1.0;
+                    let vx = angle.cos() * r; let vz = angle.sin() * r;
+                    let vy = 2.0 + rand_unit()*1.5;
+                    new_particles.push(Particle { pos: hit, vel: glam::vec3(vx, vy, vz), age: 0.0, life: 0.35, size: 0.12, color: [1.0, 0.6, 0.18] });
                 }
                 self.projectiles.swap_remove(i);
             } else { i += 1; }
         }
 
         // 3) Integrate particles (simple)
-        for p in &mut self.particles { p.age += dt; p.pos += p.vel * dt; p.vel *= 0.92; }
+        for p in &mut self.particles {
+            p.age += dt;
+            // simple gravity and damping
+            p.vel.y -= 3.0 * dt;
+            p.pos += p.vel * dt;
+            p.vel *= 0.90;
+        }
         self.particles.retain(|p| p.age < p.life);
         self.particles.extend(new_particles);
 
         // Also emit a small trail from active projectiles
         for p in &self.projectiles {
-            self.particles.push(Particle { pos: p.pos, vel: glam::Vec3::ZERO, age: 0.0, life: 0.18, size: 0.08, color: [1.0, 0.5, 0.1] });
+            // emit 3-4 hot trail particles each frame
+            for _ in 0..3 {
+                let jitter = glam::vec3(rand_unit()*0.3, rand_unit()*0.2, rand_unit()*0.3);
+                self.particles.push(Particle { pos: p.pos, vel: jitter, age: 0.0, life: 0.22, size: 0.10, color: [1.0, 0.6, 0.15] });
+            }
         }
 
         // 4) Build instance buffer (resize if needed)
@@ -918,6 +1002,8 @@ impl Renderer {
         let spawn = origin + dir * z_off;
         self.projectiles.push(Projectile { pos: spawn, vel: dir * speed, radius, t_die: t + 1.0 });
     }
+=======
+>>>>>>> origin/wizardandruins
 }
 
 fn sample_palette(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32) -> Vec<glam::Mat4> {
@@ -997,6 +1083,7 @@ fn sample_quat(tr: &crate::assets::TrackQuat, t: f32, default: glam::Quat) -> gl
     let f = (t - t0) / (t1 - t0);
     tr.values[i].slerp(tr.values[i+1], f)
 }
+<<<<<<< HEAD
 
 fn global_of_node(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32, node_idx: usize) -> Option<glam::Mat4> {
     let mut lt = mesh.base_t.clone();
@@ -1042,3 +1129,5 @@ fn instance_from(pos: glam::Vec3, scale: f32, color: [f32;3]) -> Instance {
 }
 
 fn rand_unit() -> f32 { use rand::Rng as _; let mut r = rand::rng(); r.random::<f32>() * 2.0 - 1.0 }
+=======
+>>>>>>> origin/wizardandruins

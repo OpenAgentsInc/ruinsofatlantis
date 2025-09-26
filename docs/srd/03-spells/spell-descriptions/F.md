@@ -2,6 +2,7 @@
 
 # F Spells
 
+<<<<<<< HEAD
 ## Fire Bolt
 Evocation Cantrip (Sorcerer, Wizard)
 
@@ -14,6 +15,8 @@ You hurl a mote of fire at a creature or an object within range. Make a ranged s
 
 Cantrip Upgrade: The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).
 
+=======
+>>>>>>> origin/wizardandruins
 ## Feather Fall
 Level 1 Transmutation (Bard, Sorcerer, Wizard)
 
@@ -103,3 +106,7 @@ Level 7 Evocation (Cleric, Druid, Sorcerer)
 - Duration: Instantaneous
 
 Up to ten 10‑foot Cubes of fire appear in range. Each creature in the area makes a Dexterity save, taking 7d10 Fire damage on a failed save or half as much on a success. Flammable objects in the area that aren’t being worn or carried ignite.
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/wizardandruins
