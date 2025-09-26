@@ -209,11 +209,41 @@ pub struct Renderer {
     // Wizard health (including PC at pc_index)
     wizard_hp: Vec<i32>,
     wizard_hp_max: i32,
+    pc_alive: bool,
 }
 
 impl Renderer {
     fn any_zombies_alive(&self) -> bool {
         self.server.npcs.iter().any(|n| n.alive)
+    }
+    /// Handle player character death: hide visuals, disable input/casting,
+    /// and keep camera in a spectator orbit around the last position.
+    fn kill_pc(&mut self) {
+        if !self.pc_alive { return; }
+        self.pc_alive = false;
+        if let Some(hp) = self.wizard_hp.get_mut(self.pc_index) { *hp = 0; }
+        self.pc_cast_queued = false;
+        self.input.clear();
+        // Move PC far off-screen to avoid AI targeting and hide the model by scaling it down.
+        // Keep instance slot to avoid reindexing other wizards; UI bars already omit 0 HP.
+        if self.pc_index < self.wizard_models.len() {
+            let hide_pos = glam::vec3(1.0e6, -1.0e6, 1.0e6);
+            let m = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(0.0001),
+                glam::Quat::IDENTITY,
+                hide_pos,
+            );
+            self.wizard_models[self.pc_index] = m;
+            if self.pc_index < self.wizard_instances_cpu.len() {
+                let mut inst = self.wizard_instances_cpu[self.pc_index];
+                inst.model = m.to_cols_array_2d();
+                self.wizard_instances_cpu[self.pc_index] = inst;
+                let offset = (self.pc_index * std::mem::size_of::<InstanceSkin>()) as u64;
+                self.queue
+                    .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+            }
+        }
+        log::info!("PC died; spectator camera engaged");
     }
     fn remove_wizard_at(&mut self, idx: usize) {
         if idx >= self.wizard_count as usize { return; }
@@ -804,6 +834,7 @@ impl Renderer {
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
+            pc_alive: true,
         })
     }
 
@@ -889,11 +920,16 @@ impl Renderer {
         self.update_wizard_palettes(t);
         // Zombie AI/movement on server; then update local transforms and palettes
         {
-            // Wizard positions for AI
+            // Wizard positions for AI — keep index mapping 1:1 with wizard_models.
+            // If PC is dead, push a far-away sentinel so NPCs won't target it.
             let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_count as usize);
-            for m in &self.wizard_models {
-                let c = m.to_cols_array();
-                wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+            for (i, m) in self.wizard_models.iter().enumerate() {
+                if !self.pc_alive && i == self.pc_index {
+                    wiz_pos.push(glam::vec3(1.0e6, 0.0, 1.0e6));
+                } else {
+                    let c = m.to_cols_array();
+                    wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+                }
             }
             let hits = self.server.step_npc_ai(dt, &wiz_pos);
             // Apply melee hits to wizard HP
@@ -903,7 +939,10 @@ impl Renderer {
                     *hp = (*hp - dmg).max(0);
                     let fatal = *hp == 0;
                     log::info!("wizard melee hit: idx={} hp {} -> {} (dmg {}), fatal={}", widx, before, *hp, dmg, fatal);
-                    if fatal { self.remove_wizard_at(widx); }
+                    if fatal {
+                        if widx == self.pc_index { self.kill_pc(); }
+                        else { self.remove_wizard_at(widx); }
+                    }
                 }
             }
             self.update_zombies_from_server();
@@ -1221,14 +1260,15 @@ impl Renderer {
             WindowEvent::KeyboardInput { event, .. } => {
                 let pressed = event.state.is_pressed();
                 match event.physical_key {
-                    PhysicalKey::Code(KeyCode::KeyW) => self.input.forward = pressed,
-                    PhysicalKey::Code(KeyCode::KeyS) => self.input.backward = pressed,
-                    PhysicalKey::Code(KeyCode::KeyA) => self.input.left = pressed,
-                    PhysicalKey::Code(KeyCode::KeyD) => self.input.right = pressed,
-                    PhysicalKey::Code(KeyCode::ShiftLeft) | PhysicalKey::Code(KeyCode::ShiftRight) => {
+                    // Ignore movement/casting inputs if the PC is dead
+                    PhysicalKey::Code(KeyCode::KeyW) if self.pc_alive => self.input.forward = pressed,
+                    PhysicalKey::Code(KeyCode::KeyS) if self.pc_alive => self.input.backward = pressed,
+                    PhysicalKey::Code(KeyCode::KeyA) if self.pc_alive => self.input.left = pressed,
+                    PhysicalKey::Code(KeyCode::KeyD) if self.pc_alive => self.input.right = pressed,
+                    PhysicalKey::Code(KeyCode::ShiftLeft) | PhysicalKey::Code(KeyCode::ShiftRight) if self.pc_alive => {
                         self.input.run = pressed
                     }
-                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1) => {
+                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1) if self.pc_alive => {
                         if pressed { self.pc_cast_queued = true; log::info!("PC cast queued: Fire Bolt"); }
                     }
                     _ => {}
@@ -1275,13 +1315,14 @@ impl Renderer {
 
     /// Apply a basic WASD character controller to the PC and update its instance data.
     fn update_player_and_camera(&mut self, dt: f32, _aspect: f32) {
-        if self.wizard_count == 0 { return; }
+        if self.wizard_count == 0 || !self.pc_alive || self.pc_index >= self.wizard_count as usize { return; }
         let cam_fwd = self.cam_follow.current_look - self.cam_follow.current_pos;
         self.player.update(&self.input, dt, cam_fwd);
         self.apply_pc_transform();
     }
 
     fn apply_pc_transform(&mut self) {
+        if !self.pc_alive || self.pc_index >= self.wizard_count as usize { return; }
         // Update CPU model matrix and upload only the PC instance
         let rot = glam::Quat::from_rotation_y(self.player.yaw);
         let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, self.player.pos);
@@ -1302,7 +1343,7 @@ impl Renderer {
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
         for i in 0..(self.wizard_count as usize) {
             let clip = self.select_clip(self.wizard_anim_index[i]);
-            let palette = if i == self.pc_index {
+            let palette = if self.pc_alive && i == self.pc_index && self.pc_index < self.wizard_count as usize {
                 if let Some(start) = self.pc_anim_start {
                     let lt = (time_global - start).clamp(0.0, clip.duration.max(0.0));
                     anim::sample_palette(&self.skinned_cpu, clip, lt)
@@ -1350,6 +1391,7 @@ impl Renderer {
     }
 
     fn process_pc_cast(&mut self, t: f32) {
+        if !self.pc_alive || self.pc_index >= self.wizard_count as usize { return; }
         if self.pc_cast_queued {
             self.pc_cast_queued = false;
             if self.wizard_anim_index[self.pc_index] != 0 && self.pc_anim_start.is_none() {
@@ -1558,7 +1600,10 @@ impl Renderer {
                         "wizard hit: idx={} hp {} -> {} (dmg {}), fatal={}",
                         j, before, after, damage, fatal
                     );
-                    if fatal { self.remove_wizard_at(j); }
+                    if fatal {
+                        if j == self.pc_index { self.kill_pc(); }
+                        else { self.remove_wizard_at(j); }
+                    }
                     // impact burst
                     for _ in 0..14 {
                         let a = rand_unit() * std::f32::consts::TAU;
