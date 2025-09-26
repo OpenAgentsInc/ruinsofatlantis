@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.11–12 (Exploration, Vision and Light, Special Senses, Hiding, Interacting with Objects, Objects, Finding Hidden Objects, Carrying/Breaking Objects, Marching Order, Hazards, Travel, Travel Pace, Vehicles) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.11–12 (Exploration, Vision and Light, Special Senses, Hiding, Interacting with Objects, Objects, Finding Hidden Objects, Carrying/Breaking Objects, Marching Order, Hazards, Travel, Travel Pace, Vehicles) -->
 
 # Exploration
 
@@ -95,4 +95,3 @@ Each travel pace has a game effect, as defined below.
 ### Vehicles
 
 Travelers in wagons, carriages, or other land vehicles choose a pace as normal. Characters in a waterborne vessel are limited to the speed of the vessel, and they don’t choose a travel pace. Depending on the vessel and the size of the crew, ships might be able to travel for up to 24 hours per day. “Equipment” includes vehicles for sale.
-

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.112–113 (B spells and nearby) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.112–113 (B spells and nearby) -->
 
 # B Spells
 
@@ -84,6 +84,16 @@ Level 4 Conjuration (Wizard)
 
 Squirming, ebony tentacles fill a 20‑foot square on ground you can see within range. For the duration, the ground in that area is Difficult Terrain. Each creature in the area makes a Strength saving throw. On a failed save, it takes 3d6 Bludgeoning damage and has the Restrained condition until the spell ends. A creature also makes that save if it enters the area or ends its turn there (once per turn). A Restrained creature can take an action to make a Strength (Athletics) check against your spell save DC, ending the condition on a success.
 
+## Blade Ward
+Abjuration Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: V, S
+- Duration: 1 round
+
+You trace a sigil of warding in the air. Until the end of your next turn, you have Resistance to Bludgeoning, Piercing, and Slashing damage from weapon attacks.
+
 ## Blade Barrier
 Level 6 Evocation (Cleric)
 
@@ -161,4 +171,3 @@ Level 1 Evocation (Sorcerer, Wizard)
 - Duration: Instantaneous
 
 A thin sheet of flames shoots from your outstretched hands. Each creature in a 15‑foot Cone must make a Dexterity saving throw, taking 3d6 Fire damage on a failed save or half as much on a success. The fire ignites any flammable objects in the area that aren’t being worn or carried.
-

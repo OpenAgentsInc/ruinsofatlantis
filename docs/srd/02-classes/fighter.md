@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.47–49 (Fighter class, Champion) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.47–49 (Fighter class, Champion) -->
 
 # Fighter
 
@@ -145,4 +145,3 @@ You attain the pinnacle of resilience in battle:
 
 - Defy Death. You have Advantage on Death Saving Throws. Moreover, when you roll 18–20 on a Death Saving Throw, you gain the benefit of rolling a 20 on it.
 - Heroic Rally. At the start of each of your turns, you regain Hit Points equal to 5 plus your Constitution modifier if you are Bloodied and have at least 1 Hit Point.
-

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.41–46 (Druid class, Circle of the Land); Spell List pp.44–45 -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.41–46 (Druid class, Circle of the Land); Spell List pp.44–45 -->
 
 # Druid
 
@@ -73,4 +73,3 @@ Celebrate Connection to the Natural World
 - Level 6: Natural Recovery. Cast one Circle Spell of level 1+ without a slot (1/Long Rest). Also, on a Short Rest, recover spell slots with total levels up to half your Druid level (round up), none level 6+ (1/Long Rest).
 - Level 10: Nature’s Ward. Immunity to Poisoned; Resistance per land type (Arid Fire, Polar Cold, Temperate Lightning, Tropical Poison).
 - Level 14: Nature’s Sanctuary. As a Magic action, expend Wild Shape to create a 15‑foot Cube of spectral trees/vines within 120 feet (1 minute). Allies have Half Cover in the area and gain your current Nature’s Ward Resistance while there; move as a Bonus Action.
-

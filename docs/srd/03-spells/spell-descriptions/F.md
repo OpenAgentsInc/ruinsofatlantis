@@ -1,6 +1,18 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (F spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (F spells) -->
 
 # F Spells
+
+## Fire Bolt
+Evocation Cantrip (Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: V, S
+- Duration: Instantaneous
+
+You hurl a mote of fire at a creature or an object within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 Fire damage. A flammable object hit by this spell ignites if it isn’t being worn or carried.
+
+Cantrip Upgrade: The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).
 
 ## Feather Fall
 Level 1 Transmutation (Bard, Sorcerer, Wizard)
@@ -92,3 +104,12 @@ Level 7 Evocation (Cleric, Druid, Sorcerer)
 
 Up to ten 10‑foot Cubes of fire appear in range. Each creature in the area makes a Dexterity save, taking 7d10 Fire damage on a failed save or half as much on a success. Flammable objects in the area that aren’t being worn or carried ignite.
 
+## Friends
+Enchantment Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: S, M (a small amount of makeup applied to the face as part of the spell)
+- Duration: Concentration, up to 1 minute
+
+For the duration, you have Advantage on Charisma checks directed at one creature of your choice that isn’t Hostile toward you. When the spell ends, the creature realizes that you used magic to influence its mood and becomes Hostile toward you.

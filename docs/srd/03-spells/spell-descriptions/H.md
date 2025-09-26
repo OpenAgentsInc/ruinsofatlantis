@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (H spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (H spells) -->
 
 # H Spells
 
@@ -127,4 +127,3 @@ Level 3 Illusion (Bard, Sorcerer, Warlock, Wizard)
 - Duration: Concentration, up to 1 minute
 
 You create a twisting pattern of colors in a 30‑foot Cube within range. Each creature who sees the pattern must make a Wisdom saving throw. On a failed save, the creature has the Incapacitated condition and a Speed of 0 until the spell ends. The spell ends for an affected creature if it takes any damage or if someone else takes an action to shake the creature out of its stupor.
-

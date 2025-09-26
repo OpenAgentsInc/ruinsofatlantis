@@ -1,6 +1,18 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.113–116 (C spells and nearby) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.113–116 (C spells and nearby) -->
 
 # C Spells
+
+## Chill Touch
+Necromancy Cantrip (Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: V, S
+- Duration: 1 round
+
+You create a ghostly, skeletal hand in the space of a creature within range. Make a ranged spell attack against the creature to assail it with the chill of the grave. On a hit, the target takes 1d8 Necrotic damage, and it can’t regain Hit Points until the start of your next turn. If you hit an Undead target, it also has Disadvantage on attack rolls against you until the end of your next turn.
+
+Cantrip Upgrade: The damage increases by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).
 
 ## Call Lightning
 Level 3 Conjuration (Druid)
@@ -139,4 +151,3 @@ Level 4 Enchantment (Bard, Druid, Sorcerer, Wizard)
 - Duration: Concentration, up to 1 minute
 
 Each creature in a 10‑foot‑radius Sphere centered on a point within range must succeed on a Wisdom saving throw or be affected. An affected target can’t take Bonus Actions or Reactions and must roll 1d10 at the start of each of its turns to determine its behavior for that turn. See the spell’s behavior table for details. A target can make a Wisdom save at the end of each of its turns, ending the effect on itself on a success.
-

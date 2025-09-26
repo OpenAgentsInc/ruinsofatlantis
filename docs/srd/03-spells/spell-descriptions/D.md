@@ -1,6 +1,16 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.120–125 (D spells and nearby) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.120–125 (D spells and nearby) -->
 
 # D Spells
+
+## Dancing Lights
+Evocation Cantrip (Bard, Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: V, S, M (a bit of phosphorus or wychwood, or a glowworm)
+- Duration: Concentration, up to 1 minute
+
+You create up to four torch‑sized lights within range, making them appear as torches, lanterns, or glowing orbs that hover in the air. Each sheds Dim Light in a 10‑foot radius. As a Magic action, you can move the lights up to 60 feet to a new spot within range. A light must be within 20 feet of at least one other light created by this spell, and a light winks out if it exceeds the spell’s range. You can also combine the lights into a glowing, vaguely Humanoid form of Medium size that likewise gives off Dim Light in a 10‑foot radius.
 
 ## Darkness
 Level 2 Evocation (Sorcerer, Warlock, Wizard)
@@ -127,4 +137,3 @@ Level 4 Divination (Cleric, Druid, Wizard)
 - Duration: Instantaneous
 
 Put yourself in contact with a god or god’s servants and ask one question about a specific goal, event, or activity to occur within 7 days. The GM offers a truthful reply (often a short phrase or cryptic rhyme). The spell doesn’t account for circumstances that might change the answer. Casting more than once before a Long Rest incurs a cumulative 25% chance after the first casting that you get no answer.
-

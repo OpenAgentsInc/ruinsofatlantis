@@ -20,24 +20,33 @@ mod pipeline;
 mod types;
 pub use types::Vertex;
 mod util;
+mod anim;
+mod scene;
+mod material;
+mod fx;
+mod draw;
+mod camera_sys;
 
+use crate::assets::{AnimClip, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
+use crate::core::data::{loader as data_loader, spell::SpellSpec};
+// (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
-use camera::Camera;
-use types::{Globals, Instance, InstanceSkin, Model, VertexSkinned};
+use types::{Globals, Model, VertexSkinned, ParticleInstance};
 use util::scale_to_max;
-use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU};
-use crate::ecs::{World, Transform, RenderKind};
 
 use std::time::Instant;
- 
-use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt, SurfaceError, SurfaceTargetUnsafe};
+
+use wgpu::{
+    SurfaceError, SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt,
+};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
-use std::fs;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
+
+use fx::{Particle, Projectile};
 
 /// Renderer owns the GPU state and per‑scene resources.
 ///
@@ -57,6 +66,7 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     inst_pipeline: wgpu::RenderPipeline,
     wire_pipeline: Option<wgpu::RenderPipeline>,
+    particle_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     plane_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
@@ -85,14 +95,22 @@ pub struct Renderer {
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
+    // FX buffers
+    fx_instances: wgpu::Buffer,
+    _fx_capacity: u32,
+    fx_count: u32,
+    _fx_model_bg: wgpu::BindGroup,
+    quad_vb: wgpu::Buffer,
+
     // Wizard skinning palettes
     palettes_buf: wgpu::Buffer,
     palettes_bg: wgpu::BindGroup,
     joints_per_wizard: u32,
+    wizard_models: Vec<glam::Mat4>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
-    // (wizard simple/wire debug pipelines removed)
+
     wizard_mat_bg: wgpu::BindGroup,
     _wizard_mat_buf: wgpu::Buffer,
     _wizard_tex_view: wgpu::TextureView,
@@ -103,6 +121,7 @@ pub struct Renderer {
 
     // Time base for animation
     start: Instant,
+    last_time: f32,
 
     // Wizard animation selection and time offsets
     wizard_anim_index: Vec<usize>,
@@ -110,6 +129,18 @@ pub struct Renderer {
 
     // CPU-side skinned mesh data
     skinned_cpu: SkinnedMeshCPU,
+
+    // Animation-driven VFX
+    wizard_last_phase: Vec<f32>,
+    hand_right_node: Option<usize>,
+    root_node: Option<usize>,
+
+    // Projectile + particle pools
+    projectiles: Vec<Projectile>,
+    particles: Vec<Particle>,
+
+    // Data-driven spec
+    fire_bolt: Option<SpellSpec>,
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
@@ -142,7 +173,10 @@ impl Renderer {
             .context("request adapter")?;
 
         let mut req_features = wgpu::Features::empty();
-        if adapter.features().contains(wgpu::Features::POLYGON_MODE_LINE) {
+        if adapter
+            .features()
+            .contains(wgpu::Features::POLYGON_MODE_LINE)
+        {
             req_features |= wgpu::Features::POLYGON_MODE_LINE;
         }
         let (device, queue) = adapter
@@ -177,7 +211,11 @@ impl Renderer {
         if (w, h) != (size.width, size.height) {
             log::warn!(
                 "Clamping surface from {}x{} to {}x{} (max_dim={})",
-                size.width, size.height, w, h, max_dim
+                size.width,
+                size.height,
+                w,
+                h,
+                max_dim
             );
         }
         let config = wgpu::SurfaceConfiguration {
@@ -200,12 +238,25 @@ impl Renderer {
         let material_bgl = pipeline::create_material_bgl(&device);
         let (pipeline, inst_pipeline, wire_pipeline) =
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
-        let (wizard_pipeline, _wizard_wire_pipeline_unused) =
-            pipeline::create_wizard_pipelines(&device, &shader, &globals_bgl, &model_bgl, &palettes_bgl, &material_bgl, config.format);
+        let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
+            &device,
+            &shader,
+            &globals_bgl,
+            &model_bgl,
+            &palettes_bgl,
+            &material_bgl,
+            config.format,
+        );
+        let particle_pipeline =
+            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, config.format);
 
         // --- Buffers & bind groups ---
         // Globals
-        let globals_init = Globals { view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(), time_pad: [0.0; 4] };
+        let globals_init = Globals {
+            view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
+            cam_right_time: [1.0, 0.0, 0.0, 0.0],
+            cam_up_pad: [0.0, 1.0, 0.0, 0.0],
+        };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
             contents: bytemuck::bytes_of(&globals_init),
@@ -214,12 +265,20 @@ impl Renderer {
         let globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("globals-bg"),
             layout: &globals_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals_buf.as_entire_binding(),
+            }],
         });
 
         // Per-draw Model buffers (plane and shard base)
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
-        let plane_model_init = Model { model: glam::Mat4::from_translation(glam::vec3(0.0, -0.05, 0.0)).to_cols_array_2d(), color: [0.05, 0.80, 0.30], emissive: 0.0, _pad: [0.0; 4] };
+        let plane_model_init = Model {
+            model: glam::Mat4::from_translation(glam::vec3(0.0, -0.05, 0.0)).to_cols_array_2d(),
+            color: [0.05, 0.80, 0.30],
+            emissive: 0.0,
+            _pad: [0.0; 4],
+        };
         let plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("plane-model"),
             contents: bytemuck::bytes_of(&plane_model_init),
@@ -228,10 +287,18 @@ impl Renderer {
         let plane_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("plane-model-bg"),
             layout: &model_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: plane_model_buf.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: plane_model_buf.as_entire_binding(),
+            }],
         });
 
-        let shard_model_init = Model { model: glam::Mat4::IDENTITY.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.15, _pad: [0.0; 4] };
+        let shard_model_init = Model {
+            model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+            color: [0.85, 0.15, 0.15],
+            emissive: 0.15,
+            _pad: [0.0; 4],
+        };
         let shard_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shard-model"),
             contents: bytemuck::bytes_of(&shard_model_init),
@@ -240,7 +307,10 @@ impl Renderer {
         let shard_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shard-model-bg"),
             layout: &model_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: shard_model_buf.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: shard_model_buf.as_entire_binding(),
+            }],
         });
 
         // Ground plane (choose a generous extent for the plaza)
@@ -255,13 +325,22 @@ impl Renderer {
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
         // sidesteps any subtle attribute mismatches that can lead to banding.
-        let viewer_uv: Option<Vec<[f32;2]>> = (|| {
-            let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).ok()?;
+        let viewer_uv: Option<Vec<[f32; 2]>> = (|| {
+            let (doc, buffers, _images) =
+                gltf::import(asset_path("assets/models/wizard.gltf")).ok()?;
             let mesh = doc.meshes().next()?;
             let prim = mesh.primitives().next()?;
             let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-            let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
-            let uv = reader.read_tex_coords(uv_set)?.into_f32().collect::<Vec<[f32;2]>>();
+            let uv_set = prim
+                .material()
+                .pbr_metallic_roughness()
+                .base_color_texture()
+                .map(|ti| ti.tex_coord())
+                .unwrap_or(0);
+            let uv = reader
+                .read_tex_coords(uv_set)?
+                .into_f32()
+                .collect::<Vec<[f32; 2]>>();
             Some(uv)
         })();
 
@@ -270,12 +349,22 @@ impl Renderer {
             .iter()
             .enumerate()
             .map(|(i, v)| {
-                let uv = if let Some(ref uvs) = viewer_uv { uvs.get(i).copied().unwrap_or(v.uv) } else { v.uv };
-                VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv }
+                let uv = if let Some(ref uvs) = viewer_uv {
+                    uvs.get(i).copied().unwrap_or(v.uv)
+                } else {
+                    v.uv
+                };
+                VertexSkinned {
+                    pos: v.pos,
+                    nrm: v.nrm,
+                    joints: v.joints,
+                    weights: v.weights,
+                    uv,
+                }
             })
             .collect();
 
-        // (debug diagnostic logs removed)
+
         let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-vb"),
             contents: bytemuck::cast_slice(&wiz_vertices),
@@ -288,7 +377,7 @@ impl Renderer {
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
 
-        // (viewer-parity simple mesh removed)
+
 
         let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
             Ok(ruins_cpu) => {
@@ -307,100 +396,25 @@ impl Renderer {
             Err(e) => return Err(anyhow::anyhow!("failed to load ruins model: {e}")),
         };
 
-        // --- Build a tiny ECS world and spawn entities ---
-        let mut world = World::new();
-        use rand::{SeedableRng, Rng};
-        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(42);
-
-        let place_range = plane_extent * 0.4;
-
-        // Cluster wizards around a central one so the camera can see all of them.
-        let wizard_count = 10usize;
-        let center = glam::vec3(0.0, 0.0, 0.0);
-        // Spawn the central wizard first (becomes camera target)
-        world.spawn(Transform { translation: center, rotation: glam::Quat::IDENTITY, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
-        // Place remaining wizards on a small ring facing the center
-        let ring_radius = 3.5f32;
-        for i in 1..wizard_count {
-            let theta = (i as f32 - 1.0) / (wizard_count as f32 - 1.0) * std::f32::consts::TAU;
-            let translation = glam::vec3(ring_radius * theta.cos(), 0.0, ring_radius * theta.sin());
-            // Face the center with yaw that maps forward (-Z) toward (center - translation)
-            let dx = center.x - translation.x;
-            let dz = center.z - translation.z;
-            // Model forward is +Z; yaw that aligns +Z to (dx,dz)
-            let yaw = dx.atan2(dz);
-            let rotation = glam::Quat::from_rotation_y(yaw);
-            world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
-        }
-        // Place a set of ruins around the wizard circle
-        // 1) Keep a few large backdrop ruins
-        let ruins_positions = [
-            glam::vec3(-place_range, 0.0, -place_range * 0.6),
-            glam::vec3(place_range * 0.9, 0.0, 0.0),
-            glam::vec3(0.0, 0.0, place_range * 0.8),
-        ];
-        for pos in ruins_positions {
-            let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-            world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
-        }
-        // 2) Add a ring of smaller ruins close to the wizards
-        let ruins_ring_radius = 18.0f32; // push even farther so they never overlap the wizards
-        let ruins_ring_count = 3usize;   // very few near-circle ruins
-        for i in 0..ruins_ring_count {
-            let a = (i as f32) / (ruins_ring_count as f32) * std::f32::consts::TAU;
-            let jitter_r = rng.random_range(-0.2..0.2);
-            let pos = glam::vec3((ruins_ring_radius + jitter_r) * a.cos(), 0.0, (ruins_ring_radius + jitter_r) * a.sin());
-            // Face roughly outward from the center with some randomness
-            let yaw = a + std::f32::consts::PI + rng.random_range(-0.25..0.25);
-            let rot = glam::Quat::from_rotation_y(yaw);
-            let scale = glam::Vec3::splat(0.6 + rng.random_range(-0.05..0.05));
-            world.spawn(Transform { translation: pos, rotation: rot, scale }, RenderKind::Ruins);
-        }
-
-        // --- Create instance buffers per kind from ECS world ---
-        let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
-        let mut ruin_instances: Vec<Instance> = Vec::new();
-        let mut cam_target = glam::Vec3::ZERO;
-        let mut has_cam_target = false;
-        for (i, kind) in world.kinds.iter().enumerate() {
-            let t = world.transforms[i];
-            let m = t.matrix().to_cols_array_2d();
-            match kind {
-                RenderKind::Wizard => {
-                    if !has_cam_target { cam_target = t.translation + glam::vec3(0.0, 1.2, 0.0); has_cam_target = true; }
-                    wiz_instances.push(InstanceSkin { model: m, color: [0.20, 0.45, 0.95], selected: 0.0, palette_base: 0, _pad_inst: [0;3] })
-                }
-                RenderKind::Ruins => ruin_instances.push(Instance { model: m, color: [0.65, 0.66, 0.68], selected: 0.0 }),
-            }
-        }
-        // Assign palette bases and random animations
-        let joints_per_wizard = skinned_cpu.joints_nodes.len() as u32;
-        // Reuse existing RNG; already imported above
-        let mut rng2 = rand_chacha::ChaCha8Rng::seed_from_u64(4242);
-        let mut wizard_anim_index: Vec<usize> = Vec::with_capacity(wiz_instances.len());
-        let mut wizard_time_offset: Vec<f32> = Vec::with_capacity(wiz_instances.len());
-        for (i, inst) in wiz_instances.iter_mut().enumerate() {
-            inst.palette_base = (i as u32) * joints_per_wizard;
-            // Center wizard uses PortalOpen; ring uses Waiting
-            if i == 0 { wizard_anim_index.push(0); } else { wizard_anim_index.push(2); }
-            wizard_time_offset.push(rng2.random::<f32>() * 1.7);
-        }
-
-        let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("wizard-instances"),
-            contents: bytemuck::cast_slice(&wiz_instances),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-        let ruins_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("ruins-instances"),
-            contents: bytemuck::cast_slice(&ruin_instances),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-        log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
+        // Build scene instance buffers and camera target
+        let scene_build = scene::build_demo_scene(&device, &skinned_cpu, plane_extent);
+        // FX resources
+        let fx_res = fx::create_fx_resources(&device, &model_bgl);
+        let fx_instances = fx_res.instances;
+        let fx_model_bg = fx_res.model_bg;
+        let quad_vb = fx_res.quad_vb;
+        let fx_capacity = fx_res.capacity;
+        let fx_count: u32 = 0;
+        // Load Fire Bolt spec (optional)
+        let fire_bolt = data_loader::load_spell_spec("spells/fire_bolt.json").ok();
+        // Precompute strike times (or leave empty to use periodic fallback)
+        let hand_right_node = skinned_cpu.hand_right_node;
+        let root_node = skinned_cpu.root_node;
+        let _strikes_tmp = anim::compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
         // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
-        let total_mats = (wiz_instances.len() as u32 * joints_per_wizard) as usize;
+        let total_mats = scene_build.wizard_count as usize * scene_build.joints_per_wizard as usize;
         let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("palettes"),
             size: (total_mats * 64) as u64,
@@ -410,136 +424,21 @@ impl Renderer {
         let palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("palettes-bg"),
             layout: &palettes_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &palettes_buf, offset: 0, size: None }) }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &palettes_buf,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
         });
 
-        // Wizard material (albedo from glTF)
-        // Material transform defaults (can be overridden by KHR_texture_transform)
-        // Note: std140 layout for uniforms rounds vec2 members to 16 bytes each.
-        // Expand the struct to 48 bytes to satisfy backend expectations.
-        #[repr(C)]
-        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-        struct MaterialXform {
-            offset: [f32; 2], _pad0: [f32; 2], // 16 bytes
-            scale:  [f32; 2], _pad1: [f32; 2], // 16 bytes
-            rot: f32,       _pad2: [f32; 3],  // 16 bytes
-        }
-        let mut mat_xf = MaterialXform { offset: [0.0, 0.0], _pad0: [0.0;2], scale: [1.0, 1.0], _pad1: [0.0;2], rot: 0.0, _pad2: [0.0;3] };
-        // Try to read KHR_texture_transform from the wizard glTF for the first primitive's material
-        if let Ok(txt) = std::fs::read_to_string(asset_path("assets/models/wizard.gltf")) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&txt) {
-                // Resolve first primitive material index
-                let mat_index = json.get("meshes")
-                    .and_then(|m| m.get(0))
-                    .and_then(|m0| m0.get("primitives"))
-                    .and_then(|prims| prims.get(0))
-                    .and_then(|p0| p0.get("material"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as usize;
-                let base_tex = json.get("materials")
-                    .and_then(|arr| arr.get(mat_index))
-                    .and_then(|m| m.get("pbrMetallicRoughness"))
-                    .and_then(|p| p.get("baseColorTexture"));
-                if let Some(bct) = base_tex {
-                    // Optional: texCoord selection was already handled in loader; we only read transform here
-                    if let Some(ext) = bct.get("extensions").and_then(|e| e.get("KHR_texture_transform")) {
-                        if let Some(off) = ext.get("offset").and_then(|v| v.as_array()) {
-                            if off.len() == 2 { mat_xf.offset = [off[0].as_f64().unwrap_or(0.0) as f32, off[1].as_f64().unwrap_or(0.0) as f32]; }
-                        }
-                        if let Some(s) = ext.get("scale").and_then(|v| v.as_array()) {
-                            if s.len() == 2 { mat_xf.scale = [s[0].as_f64().unwrap_or(1.0) as f32, s[1].as_f64().unwrap_or(1.0) as f32]; }
-                        }
-                        if let Some(r) = ext.get("rotation").and_then(|v| v.as_f64()) { mat_xf.rot = r as f32; }
-                    }
-                }
-            }
-        }
-
-        log::info!(
-            "material xform: offset=({:.3},{:.3}) scale=({:.3},{:.3}) rot={:.3}",
-            mat_xf.offset[0], mat_xf.offset[1], mat_xf.scale[0], mat_xf.scale[1], mat_xf.rot
-        );
-        let wizard_mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("material-xform"),
-            contents: bytemuck::bytes_of(&mat_xf),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let (wizard_mat_bg, _wizard_tex_view, _wizard_sampler) = if let Some(tex) = &skinned_cpu.base_color_texture {
-            log::info!("wizard albedo: {}x{} (srgb={})", tex.width, tex.height, tex.srgb);
-            // Debug: dump CPU albedo to disk and basic stats
-            {
-                let dir = asset_path("data/debug"); let _ = fs::create_dir_all(&dir);
-                let out = dir.join("wizard_albedo_cpu.png");
-                let _ = image::save_buffer(&out, &tex.pixels, tex.width, tex.height, image::ExtendedColorType::Rgba8);
-                let mut rmin=255u8; let mut gmin=255u8; let mut bmin=255u8; let mut rmax=0u8; let mut gmax=0u8; let mut bmax=0u8;
-                for px in tex.pixels.chunks_exact(4) { rmin=rmin.min(px[0]); gmin=gmin.min(px[1]); bmin=bmin.min(px[2]); rmax=rmax.max(px[0]); gmax=gmax.max(px[1]); bmax=bmax.max(px[2]); }
-                log::info!("wizard albedo cpu rgb min=({},{},{}) max=({},{},{})", rmin,gmin,bmin,rmax,gmax,bmax);
-            }
-            let size3 = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
-            let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("wizard-albedo"), size: size3, mip_level_count: 1, sample_count: 1,
-                dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[]
-            });
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                &tex.pixels,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * tex.width),
-                    rows_per_image: Some(tex.height),
-                },
-                size3,
-            );
-            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("wizard-sampler"),
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                address_mode_u: wgpu::AddressMode::Repeat,
-                address_mode_v: wgpu::AddressMode::Repeat,
-                ..Default::default()
-            });
-            let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("wizard-material-bg"), layout: &material_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
-                    wgpu::BindGroupEntry { binding: 2, resource: wizard_mat_buf.as_entire_binding() },
-                ],
-            });
-
-            // Note: if further debugging is needed, implement a GPU readback copy here.
-            (bg, view, sampler)
-        } else {
-            log::warn!("wizard albedo: NONE; using 1x1 fallback");
-            let size3 = wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 };
-            let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("white-1x1"), size: size3, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                &[255,255,255,255],
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4),
-                    rows_per_image: Some(1),
-                },
-                size3,
-            );
-            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                address_mode_u: wgpu::AddressMode::Repeat,
-                address_mode_v: wgpu::AddressMode::Repeat,
-                ..Default::default()
-            });
-            let bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("wizard-material-bg"), layout: &material_bgl, entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
-                wgpu::BindGroupEntry { binding: 2, resource: wizard_mat_buf.as_entire_binding() },
-            ] });
-            (bg, view, sampler)
-        };
+        let material_res = material::create_wizard_material(&device, &queue, &material_bgl, &skinned_cpu);
+        let wizard_mat_bg = material_res.bind_group;
+        let _wizard_mat_buf = material_res.uniform_buf;
+        let _wizard_tex_view = material_res.texture_view;
+        let _wizard_sampler = material_res.sampler;
 
         Ok(Self {
             surface,
@@ -553,6 +452,7 @@ impl Renderer {
             pipeline,
             inst_pipeline,
             wire_pipeline,
+            particle_pipeline,
             globals_bg,
             plane_model_bg,
             shard_model_bg,
@@ -570,26 +470,39 @@ impl Renderer {
             ruins_vb,
             ruins_ib,
             ruins_index_count,
-            wizard_instances,
-            wizard_count: wiz_instances.len() as u32,
-            ruins_instances,
-            ruins_count: ruin_instances.len() as u32,
+            wizard_instances: scene_build.wizard_instances,
+            wizard_count: scene_build.wizard_count,
+            ruins_instances: scene_build.ruins_instances,
+            ruins_count: scene_build.ruins_count,
+            fx_instances,
+            _fx_capacity: fx_capacity,
+            fx_count,
+            _fx_model_bg: fx_model_bg,
+            quad_vb,
             palettes_buf,
             palettes_bg,
-            joints_per_wizard,
+            joints_per_wizard: scene_build.joints_per_wizard,
+            wizard_models: scene_build.wizard_models,
             wizard_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
-            _wizard_mat_buf: wizard_mat_buf,
+            _wizard_mat_buf,
             _wizard_tex_view,
             _wizard_sampler,
             wire_enabled: false,
 
             start: Instant::now(),
-            wizard_anim_index,
-            wizard_time_offset,
+            last_time: 0.0,
+            wizard_anim_index: scene_build.wizard_anim_index,
+            wizard_time_offset: scene_build.wizard_time_offset,
             skinned_cpu,
-            cam_target,
+            wizard_last_phase: vec![0.0; scene_build.wizard_count as usize],
+            hand_right_node,
+            root_node,
+            projectiles: Vec::new(),
+            particles: Vec::new(),
+            cam_target: scene_build.cam_target,
+            fire_bolt,
         })
     }
 
@@ -600,43 +513,65 @@ impl Renderer {
         }
         let (w, h) = scale_to_max((new_size.width, new_size.height), self.max_dim);
         if (w, h) != (new_size.width, new_size.height) {
-            log::warn!(
+            log::debug!(
                 "Resized {}x{} exceeds max {}, clamped to {}x{} (aspect kept)",
-                new_size.width, new_size.height, self.max_dim, w, h
+                new_size.width,
+                new_size.height,
+                self.max_dim,
+                w,
+                h
             );
         }
         self.size = PhysicalSize::new(w, h);
         self.config.width = w;
         self.config.height = h;
         self.surface.configure(&self.device, &self.config);
-        self.depth = util::create_depth_view(&self.device, self.config.width, self.config.height, self.config.format);
+        self.depth = util::create_depth_view(
+            &self.device,
+            self.config.width,
+            self.config.height,
+            self.config.format,
+        );
     }
 
     /// Render one frame.
     pub fn render(&mut self) -> Result<(), SurfaceError> {
         let frame = self.surface.get_current_texture()?;
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         // Update globals (camera + time)
         let t = self.start.elapsed().as_secs_f32();
         let aspect = self.config.width as f32 / self.config.height as f32;
-        // Orbit around the first wizard; ensure the whole ring is visible.
-        let cam_angle = t * 0.35; // radians/sec
-        let cam_radius = 8.5;     // closer framing while keeping the ring visible
-        let cam = Camera::orbit(self.cam_target, cam_radius, cam_angle, aspect);
-        let globals = Globals { view_proj: cam.view_proj().to_cols_array_2d(), time_pad: [t, 0.0, 0.0, 0.0] };
-        self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
+        let (_cam, globals) = camera_sys::orbit_and_globals(self.cam_target, 10.0, 0.35, aspect, t);
+        self.queue
+            .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
 
         // Keep model base identity to avoid moving instances globally
         let shard_mtx = glam::Mat4::IDENTITY;
-        let shard_model = Model { model: shard_mtx.to_cols_array_2d(), color: [0.85, 0.15, 0.15], emissive: 0.05, _pad: [0.0; 4] };
-        self.queue.write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
+        let shard_model = Model {
+            model: shard_mtx.to_cols_array_2d(),
+            color: [0.85, 0.15, 0.15],
+            emissive: 0.05,
+            _pad: [0.0; 4],
+        };
+        self.queue
+            .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
 
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
+        // FX update (projectiles/particles)
+        let dt = (t - self.last_time).max(0.0);
+        self.last_time = t;
+        self.update_fx(t, dt);
 
         // Begin commands
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("encoder"),
+            });
         {
             use wgpu::*;
             let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -645,11 +580,22 @@ impl Renderer {
                     view: &view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations { load: LoadOp::Clear(Color { r: 0.02, g: 0.08, b: 0.16, a: 1.0 }), store: StoreOp::Store },
+                    ops: Operations {
+                        load: LoadOp::Clear(Color {
+                            r: 0.02,
+                            g: 0.08,
+                            b: 0.16,
+                            a: 1.0,
+                        }),
+                        store: StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                     view: &self.depth,
-                    depth_ops: Some(Operations { load: LoadOp::Clear(1.0), store: StoreOp::Store }),
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: StoreOp::Store,
+                    }),
                     stencil_ops: None,
                 }),
                 occlusion_query_set: None,
@@ -664,31 +610,27 @@ impl Renderer {
             rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
 
-            // Wizards (animated skinning + instancing) using viewer-like sampling
-            rpass.set_pipeline(&self.wizard_pipeline);
-            // Bind groups: 0=globals, 1=model (identity), 2=palettes, 3=material
-            rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            rpass.set_bind_group(2, &self.palettes_bg, &[]);
-            rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
-            rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
-            rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
-            rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
+            // Wizards
+            self.draw_wizards(&mut rpass);
 
-            // Ruins (instanced)
-            let inst_pipe = if self.wire_enabled {
-                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
-            } else {
-                &self.inst_pipeline
-            };
-            rpass.set_pipeline(inst_pipe);
-            rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
-            rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
-            rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+            // Ruins (instanced) — only draw when we have instances
+            if self.ruins_count > 0 {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
+                rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+            }
+
+            // FX
+            self.draw_particles(&mut rpass);
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -699,121 +641,175 @@ impl Renderer {
 impl Renderer {
     fn update_wizard_palettes(&mut self, time_global: f32) {
         // Build palettes for each wizard with its animation + offset.
-        if self.wizard_count == 0 { return; }
+        if self.wizard_count == 0 {
+            return;
+        }
         let joints = self.joints_per_wizard as usize;
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
         for i in 0..(self.wizard_count as usize) {
-            let t = time_global + self.wizard_time_offset[i];
             let clip = self.select_clip(self.wizard_anim_index[i]);
-            let palette = sample_palette(&self.skinned_cpu, clip, t);
+            let palette = if i == 0 {
+                // Fixed 5s cycle with a gap: play clip at native speed, hold last frame until 5s boundary
+                let cycle = 5.0f32;
+                let phase = (time_global % cycle).max(0.0);
+                let clip_time = phase.min(clip.duration);
+                anim::sample_palette(&self.skinned_cpu, clip, clip_time)
+            } else {
+                let t = time_global + self.wizard_time_offset[i];
+                anim::sample_palette(&self.skinned_cpu, clip, t)
+            };
             mats.extend(palette);
         }
         // Upload as raw f32x16
-        // (debug diagnostic logs removed)
+
         let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
-        for m in mats { raw.push(m.to_cols_array()); }
-        self.queue.write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
+        for m in mats {
+            raw.push(m.to_cols_array());
+        }
+        self.queue
+            .write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
     }
 
     fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
-        // Choose a clip that actually affects the skin's joints.
-        let prefer = [
-            match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" },
-            "Waiting",
-            "Still",
-            "PortalOpen",
-        ];
-        let joints = &self.skinned_cpu.joints_nodes;
-        let mut best: Option<&AnimClip> = None;
-        let mut best_cov: usize = 0;
-        for name in prefer.iter() {
-            if let Some(clip) = self.skinned_cpu.animations.get(*name) {
-                if clip.duration <= 0.0 { continue; }
-                // Coverage: how many joints have any track
-                let cov = joints.iter().filter(|&&jn| clip.t_tracks.contains_key(&jn) || clip.r_tracks.contains_key(&jn) || clip.s_tracks.contains_key(&jn)).count();
-                if cov > best_cov { best_cov = cov; best = Some(clip); }
+        // Honor the requested clip first; fallback only if missing.
+        let requested = match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" };
+        if let Some(c) = self.skinned_cpu.animations.get(requested) {
+            return c;
+        }
+        // Fallback preference order
+        for name in ["Waiting", "Still", "PortalOpen"] {
+            if let Some(c) = self.skinned_cpu.animations.get(name) { return c; }
+        }
+        // Last resort: any available clip
+        self.skinned_cpu.animations.values().next().expect("at least one animation clip present")
+    }
+
+    // Update and render-side state for projectiles/particles
+    fn update_fx(&mut self, t: f32, dt: f32) {
+        // 1) Spawn firebolts for all wizards playing PortalOpen when their phase crosses the trigger.
+        if self.wizard_count > 0 {
+            let cycle = 5.0f32;        // synthetic cycle period
+            let bolt_offset = 1.5f32;  // trigger point in the cycle
+            for i in 0..(self.wizard_count as usize) {
+                if self.wizard_anim_index[i] != 0 { continue; } // only PortalOpen
+                let prev = self.wizard_last_phase[i];
+                let phase = (t + self.wizard_time_offset[i]) % cycle;
+                let crossed = (prev <= bolt_offset && phase >= bolt_offset)
+                    || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
+                if crossed {
+                    let clip = self.select_clip(self.wizard_anim_index[i]);
+                    let clip_time = if clip.duration > 0.0 { phase.min(clip.duration) } else { 0.0 };
+                    if let Some(origin_local) = self.right_hand_world(clip, clip_time) {
+                        let inst = self.wizard_models.get(i).copied().unwrap_or(glam::Mat4::IDENTITY);
+                        let origin_w = inst * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
+                        let dir_local = self.root_flat_forward(clip, clip_time).unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
+                        let dir_w = (inst * glam::Vec4::new(dir_local.x, dir_local.y, dir_local.z, 0.0)).truncate().normalize_or_zero();
+                        self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t);
+                    }
+                }
+                self.wizard_last_phase[i] = phase;
             }
         }
-        if let Some(c) = best { return c; }
-        // Fallback: any non-empty clip
-        self.skinned_cpu.animations.values().find(|c| c.duration > 0.0).or_else(|| self.skinned_cpu.animations.values().next()).expect("at least one animation clip present")
-    }
-}
 
-fn sample_palette(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32) -> Vec<glam::Mat4> {
-    use std::collections::HashMap;
-    let mut local_t: Vec<glam::Vec3> = mesh.base_t.clone();
-    let mut local_r: Vec<glam::Quat> = mesh.base_r.clone();
-    let mut local_s: Vec<glam::Vec3> = mesh.base_s.clone();
+        // 2) Integrate projectiles
+        for p in &mut self.projectiles {
+            p.pos += p.vel * dt;
+        }
+        // Ground hit or timeout
+        let mut burst: Vec<Particle> = Vec::new();
+        let mut i = 0;
+        while i < self.projectiles.len() {
+            let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
+            if kill {
+                let hit = self.projectiles[i].pos;
+                // much smaller flare + compact burst
+                burst.push(Particle {
+                    pos: hit,
+                    vel: glam::Vec3::ZERO,
+                    age: 0.0,
+                    life: 0.12,
+                    size: 0.06,
+                    color: [1.0, 0.8, 0.25],
+                });
+                for _ in 0..10 {
+                    let a = rand_unit() * std::f32::consts::TAU;
+                    let r = 3.0 + rand_unit() * 0.8;
+                    burst.push(Particle {
+                        pos: hit,
+                        vel: glam::vec3(a.cos() * r, 1.5 + rand_unit() * 1.0, a.sin() * r),
+                        age: 0.0,
+                        life: 0.12,
+                        size: 0.015,
+                        color: [1.0, 0.55, 0.15],
+                    });
+                }
+                self.projectiles.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
 
-    let time = if clip.duration > 0.0 { t % clip.duration } else { 0.0 };
+        // 3) (disabled trail for now to show a single bolt clearly)
+        self.particles.clear();
+        // keep burst off as well
 
-    // Apply tracks to local TRS
-    for (node, tr) in &clip.t_tracks {
-        local_t[*node] = sample_vec3(tr, time, mesh.base_t[*node]);
-    }
-    for (node, rr) in &clip.r_tracks {
-        local_r[*node] = sample_quat(rr, time, mesh.base_r[*node]);
-    }
-    for (node, sr) in &clip.s_tracks {
-        local_s[*node] = sample_vec3(sr, time, mesh.base_s[*node]);
-    }
-
-    // Compute global matrices for all nodes touched by joints
-    let mut global: HashMap<usize, glam::Mat4> = HashMap::new();
-    for &jn in &mesh.joints_nodes {
-        if jn < local_t.len() {
-            compute_global(jn, &mesh.parent, &local_t, &local_r, &local_s, &mut global);
+        // 4) Upload FX instances (billboard particles)
+        let mut inst: Vec<ParticleInstance> = Vec::with_capacity(self.projectiles.len());
+        for pr in &self.projectiles {
+            inst.push(ParticleInstance {
+                pos: [pr.pos.x, pr.pos.y, pr.pos.z],
+                size: 0.14,
+                color: [1.0, 0.35, 0.08],
+                _pad: 0.0,
+            });
+        }
+        self.fx_count = inst.len() as u32;
+        if self.fx_count > 0 {
+            self.queue
+                .write_buffer(&self.fx_instances, 0, bytemuck::cast_slice(&inst));
         }
     }
 
-    // Build palette: global * inverse_bind per joint in skin order
-    let mut out = Vec::with_capacity(mesh.joints_nodes.len());
-    for (i, &node_idx) in mesh.joints_nodes.iter().enumerate() {
-        let g = if node_idx < local_t.len() { *global.get(&node_idx).unwrap_or(&glam::Mat4::IDENTITY) } else { glam::Mat4::IDENTITY };
-        let ibm = mesh.inverse_bind.get(i).copied().unwrap_or(glam::Mat4::IDENTITY);
-        out.push(g * ibm);
+    fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
+        let mut speed = 40.0;
+        let life = 1.2;
+        if let Some(spec) = &self.fire_bolt {
+            if let Some(p) = &spec.projectile {
+                speed = p.speed_mps;
+            }
+        }
+        self.projectiles.push(Projectile {
+            pos: origin,
+            vel: dir * speed,
+            t_die: t + life,
+        });
     }
-    out
+
+    fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
+        let h = self.hand_right_node?;
+        let m = anim::global_of_node(&self.skinned_cpu, clip, phase, h)?;
+        let c = m.to_cols_array();
+        Some(glam::vec3(c[12], c[13], c[14]))
+    }
+    fn root_flat_forward(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
+        let r = self.root_node?;
+        let m = anim::global_of_node(&self.skinned_cpu, clip, phase, r)?;
+        let z = (m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0)).truncate();
+        let mut f = z;
+        f.y = 0.0;
+        if f.length_squared() > 1e-6 {
+            Some(f.normalize())
+        } else {
+            None
+        }
+    }
 }
 
-fn compute_global(
-    node: usize,
-    parent: &Vec<Option<usize>>,
-    lt: &Vec<glam::Vec3>,
-    lr: &Vec<glam::Quat>,
-    ls: &Vec<glam::Vec3>,
-    cache: &mut std::collections::HashMap<usize, glam::Mat4>,
-) -> glam::Mat4 {
-    if let Some(m) = cache.get(&node) { return *m; }
-    let local = glam::Mat4::from_scale_rotation_translation(ls[node], lr[node], lt[node]);
-    let m = if let Some(p) = parent[node] {
-        compute_global(p, parent, lt, lr, ls, cache) * local
-    } else {
-        local
-    };
-    cache.insert(node, m);
-    m
-}
 
-fn sample_vec3(tr: &crate::assets::TrackVec3, t: f32, default: glam::Vec3) -> glam::Vec3 {
-    if tr.times.is_empty() { return default; }
-    if t <= tr.times[0] { return tr.values[0]; }
-    if t >= *tr.times.last().unwrap() { return *tr.values.last().unwrap(); }
-    let mut i = 0;
-    while i + 1 < tr.times.len() && !(t >= tr.times[i] && t <= tr.times[i+1]) { i += 1; }
-    let t0 = tr.times[i]; let t1 = tr.times[i+1];
-    let f = (t - t0) / (t1 - t0);
-    tr.values[i].lerp(tr.values[i+1], f)
-}
 
-fn sample_quat(tr: &crate::assets::TrackQuat, t: f32, default: glam::Quat) -> glam::Quat {
-    if tr.times.is_empty() { return default; }
-    if t <= tr.times[0] { return tr.values[0]; }
-    if t >= *tr.times.last().unwrap() { return *tr.values.last().unwrap(); }
-    let mut i = 0;
-    while i + 1 < tr.times.len() && !(t >= tr.times[i] && t <= tr.times[i+1]) { i += 1; }
-    let t0 = tr.times[i]; let t1 = tr.times[i+1];
-    let f = (t - t0) / (t1 - t0);
-    tr.values[i].slerp(tr.values[i+1], f)
+
+fn rand_unit() -> f32 {
+    use rand::Rng as _;
+    let mut r = rand::rng();
+    r.random::<f32>() * 2.0 - 1.0
 }

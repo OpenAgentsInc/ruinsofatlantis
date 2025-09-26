@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.5 (section: Rhythm of Play) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.5 (section: Rhythm of Play) -->
 
 # Rhythm of Play
 
@@ -19,4 +19,3 @@ The game also includes elements—class features, feats, weapon properties, spel
 ### Round Down
 
 Whenever you divide or multiply a number in the game, round down if you end up with a fraction, even if the fraction is one-half or greater. Some rules make an exception and tell you to round up.
-

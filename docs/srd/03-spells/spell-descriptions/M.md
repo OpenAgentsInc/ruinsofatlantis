@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (M spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (M spells) -->
 
 # M Spells
 
@@ -143,4 +143,3 @@ Level 6 Transmutation (Druid, Sorcerer, Wizard)
 - Duration: Concentration, up to 2 hours
 
 Choose an area of terrain no larger than 40 feet on a side within range. You reshape dirt, sand, or clay in the area in any manner you choose for the duration (raising/lowering ground, forming trenches, walls, pillars). Each change takes 10 minutes to complete and can’t exceed half the area’s largest dimension. Because the transformation occurs slowly, creatures aren’t usually trapped or injured by the movement.
-

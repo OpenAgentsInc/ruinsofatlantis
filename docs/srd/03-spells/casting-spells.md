@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.104–105 (Casting Spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.104–105 (Casting Spells) -->
 
 # Casting Spells
 
@@ -27,4 +27,3 @@ Spell descriptions include some or all of the following entries:
 - Components. The physical requirements for casting the spell: V (verbal), S (somatic), and M (material). If a Material component is consumed or has a cost, the spell says so. A Spellcasting Focus can substitute for non‑consumed, costless materials.
 - Duration. How long the spell’s effects last. Some spells require Concentration to maintain; your Concentration can be broken under certain conditions (see “Rules Glossary”).
 - Description. What the spell does at the time of casting and for its duration. If the spell can be cast with a higher‑level spell slot, the description explains how the spell’s effects change.
-

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.30–35 (Bard class, College of Lore) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.30–35 (Bard class, College of Lore) -->
 
 # Bard
 

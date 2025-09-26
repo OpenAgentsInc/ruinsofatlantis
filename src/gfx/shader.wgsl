@@ -1,6 +1,6 @@
 // Basic WGSL used for both non-instanced and instanced draws.
 
-struct Globals { view_proj: mat4x4<f32>, time_pad: vec4<f32> };
+struct Globals { view_proj: mat4x4<f32>, camRightTime: vec4<f32>, camUpPad: vec4<f32> };
 @group(0) @binding(0) var<uniform> globals: Globals;
 
 struct Model { model: mat4x4<f32>, color: vec3<f32>, emissive: f32, _pad: vec2<f32> };
@@ -24,7 +24,7 @@ fn vs_main(input: VSIn) -> VSOut {
   if (abs(input.nrm.y) > 0.9 && abs(p.y) < 0.0001) {
     let amp = 0.05;
     let freq = 0.5;
-    let t = globals.time_pad.x;
+  let t = globals.camRightTime.w;
     p.y = amp * sin(p.x * freq + t * 1.5) + amp * cos(p.z * freq + t);
   }
   let world_pos = (model_u.model * vec4<f32>(p, 1.0)).xyz;
@@ -164,3 +164,31 @@ fn vs_wizard(input: WizIn) -> WizOut {
 @group(3) @binding(1) var base_sam: sampler;
 struct MaterialXform { offset: vec2<f32>, scale: vec2<f32>, rot: f32, _pad: vec3<f32> };
 @group(3) @binding(2) var<uniform> mat_xf: MaterialXform;
+
+// ---- Particle billboard pipeline ----
+struct PtcVert { @location(0) corner: vec2<f32> };
+struct PtcInst {
+  @location(1) pos: vec3<f32>,
+  @location(2) size: f32,
+  @location(3) color: vec3<f32>,
+};
+struct PtcOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) color: vec3<f32>,
+};
+
+@vertex
+fn vs_particle(v: PtcVert, i: PtcInst) -> PtcOut {
+  let right = globals.camRightTime.xyz;
+  let up = globals.camUpPad.xyz;
+  let world = i.pos + (right * v.corner.x + up * v.corner.y) * i.size;
+  var o: PtcOut;
+  o.pos = globals.view_proj * vec4<f32>(world, 1.0);
+  o.color = i.color;
+  return o;
+}
+
+@fragment
+fn fs_particle(i: PtcOut) -> @location(0) vec4<f32> {
+  return vec4<f32>(i.color, 1.0);
+}

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (Z spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (Z spells) -->
 
 # Z Spells
 
@@ -13,4 +13,3 @@ Level 2 Enchantment (Bard, Cleric, Paladin)
 You create a magical zone that guards against deception in a 15‑foot‑radius Sphere centered on a point of your choice within range. Until the spell ends, a creature that enters the spell’s area for the first time on a turn or starts its turn there must make a Charisma saving throw. On a failed save, a creature can’t speak a deliberate lie while in the radius. You know whether each creature succeeds or fails its save.
 
 An affected creature is aware of the spell and can thus avoid answering questions to which it would normally respond with a lie. A creature can be evasive in its answers as long as it remains within the boundaries of the truth.
-

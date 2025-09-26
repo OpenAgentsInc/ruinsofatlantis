@@ -5,7 +5,7 @@
 
 use wgpu::{BindGroupLayout, ColorTargetState, FragmentState, PipelineLayoutDescriptor, PolygonMode, RenderPipeline, ShaderModule, ShaderSource, VertexState};
 
-use crate::gfx::types::{Instance, InstanceSkin, Vertex, VertexSkinned, VertexPosUv};
+use crate::gfx::types::{Instance, InstanceSkin, Vertex, VertexSkinned, VertexPosUv, ParticleVertex, ParticleInstance};
 
 pub fn create_shader(device: &wgpu::Device) -> ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -190,6 +190,37 @@ pub fn create_wizard_pipelines(
     } else { None };
 
     (pipeline, wire_pipeline)
+}
+
+pub fn create_particle_pipeline(
+    device: &wgpu::Device,
+    shader: &ShaderModule,
+    globals_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("particle-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("particle-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState { module: shader, entry_point: Some("vs_particle"), buffers: &[ParticleVertex::LAYOUT, ParticleInstance::LAYOUT], compilation_options: Default::default() },
+        fragment: Some(FragmentState { module: shader, entry_point: Some("fs_particle"), targets: &[Some(ColorTargetState {
+            format: color_format,
+            blend: Some(wgpu::BlendState {
+                color: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add },
+                alpha: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add },
+            }),
+            write_mask: wgpu::ColorWrites::ALL,
+        })], compilation_options: Default::default() }),
+        primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleStrip, strip_index_format: None, ..Default::default() },
+        depth_stencil: Some(wgpu::DepthStencilState { format: wgpu::TextureFormat::Depth32Float, depth_write_enabled: false, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
 }
 
 #[allow(dead_code)]

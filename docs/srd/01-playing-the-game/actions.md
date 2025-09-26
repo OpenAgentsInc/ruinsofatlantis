@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.9–10 (Actions; One Thing at a Time; Bonus Actions; Reactions) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.9–10 (Actions; One Thing at a Time; Bonus Actions; Reactions) -->
 
 # Actions
 
@@ -44,4 +44,3 @@ Certain special abilities, spells, and situations allow you to take a special ac
 When you take a Reaction, you can’t take another one until the start of your next turn. If the reaction interrupts another creature’s turn, that creature can continue its turn right after the Reaction.
 
 In terms of timing, a Reaction takes place immediately after its trigger unless the Reaction’s description says otherwise.
-

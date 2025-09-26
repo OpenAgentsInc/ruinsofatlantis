@@ -44,6 +44,7 @@ See `NOTICE` at the repository root for the canonical attribution statement. Do 
   - `rogue.md`
   - `sorcerer.md`
   - `warlock.md`
+  - `wizard.md`
 - `03-spells/`
   - `README.md`
   - `gaining-spells.md`
@@ -56,7 +57,7 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
 ## Conversion Process
 
 1) Extract text per page
-   - Use `pdftotext -layout docs/SRD_CC_v5.2.1.pdf` with `-f/-l` to target pages.
+   - Use `pdftotext -layout docs/srd/SRD_CC_v5.2.1.pdf` with `-f/-l` to target pages.
    - Keep a note of PDF page ranges in each Markdown file’s header.
 
 2) Normalize and clean

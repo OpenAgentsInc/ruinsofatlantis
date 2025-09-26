@@ -9,7 +9,10 @@ use bytemuck::{Pod, Zeroable};
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Globals {
     pub view_proj: [[f32; 4]; 4],
-    pub time_pad: [f32; 4],
+    // cam_right_time.xyz = camera right in world, .w = time
+    pub cam_right_time: [f32; 4],
+    // cam_up_pad.xyz = camera up in world, .w unused
+    pub cam_up_pad: [f32; 4],
 }
 
 #[repr(C)]
@@ -125,6 +128,40 @@ impl InstanceSkin {
             wgpu::VertexAttribute { shader_location: 7, offset: 76, format: wgpu::VertexFormat::Float32 },
             // palette base
             wgpu::VertexAttribute { shader_location: 10, offset: 80, format: wgpu::VertexFormat::Uint32 },
+        ],
+    };
+}
+
+// Particle pipeline: unit quad (corner) + instance (pos/size/color)
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct ParticleVertex { pub corner: [f32; 2] }
+
+impl ParticleVertex {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<ParticleVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &wgpu::vertex_attr_array![0 => Float32x2],
+    };
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct ParticleInstance {
+    pub pos: [f32; 3],
+    pub size: f32,
+    pub color: [f32; 3],
+    pub _pad: f32,
+}
+
+impl ParticleInstance {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<ParticleInstance>() as u64,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &[
+            wgpu::VertexAttribute { shader_location: 1, offset: 0,  format: wgpu::VertexFormat::Float32x3 },
+            wgpu::VertexAttribute { shader_location: 2, offset: 12, format: wgpu::VertexFormat::Float32 },
+            wgpu::VertexAttribute { shader_location: 3, offset: 16, format: wgpu::VertexFormat::Float32x3 },
         ],
     };
 }

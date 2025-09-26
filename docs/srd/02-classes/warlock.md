@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.70–76 (Warlock class, Fiend Patron), pp.74–75 (Warlock Spell List) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.70–76 (Warlock class, Fiend Patron), pp.74–75 (Warlock Spell List) -->
 
 # Warlock
 
@@ -50,4 +50,3 @@ Make a Deal with the Lower Planes
 - Level 6: Dark One’s Own Luck. Add 1d10 to an ability check or saving throw (uses per Long Rest = Cha mod; max once per roll).
 - Level 10: Fiendish Resilience. Choose a damage type other than Force after a rest; gain Resistance to it until you choose another.
 - Level 14: Hurl Through Hell. On a hit, force Cha save or banish the target through the Lower Planes, dealing 8d10 Psychic and Incapacitating it until it returns at end of your next turn (Long Rest to reuse, or spend a Pact Magic slot to restore).
-

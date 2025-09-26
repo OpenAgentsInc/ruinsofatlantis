@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.13–18 (Combat, Movement and Position, Making an Attack, Cover, Ranged/Melee, Opportunity Attacks, Mounted/Underwater Combat, Damage and Healing) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.13–18 (Combat, Movement and Position, Making an Attack, Cover, Ranged/Melee, Opportunity Attacks, Mounted/Underwater Combat, Damage and Healing) -->
 
 # Combat
 
@@ -181,4 +181,3 @@ Some effects grant Temporary Hit Points, a buffer against losing actual Hit Poin
 - Duration. Temporary Hit Points last until depleted or until you finish a Long Rest.
 - They Don’t Stack. If you receive more Temporary Hit Points, choose to keep the old amount or the new amount; they don’t add together.
 - They’re Not Hit Points or Healing. You can be at full Hit Points and still have Temporary Hit Points. Receiving Temporary Hit Points isn’t healing and can’t restore consciousness at 0 Hit Points.
-
