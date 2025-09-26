@@ -293,9 +293,9 @@ impl Nameplates {
             }
             let mut cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
-            // Place name ABOVE the health bar with padding so they never overlap
-            // Bars are anchored ~48px above the head center; put text a bit higher (~64px)
-            let baseline_y = (cy - 64.0).max(0.0);
+            // Place name ABOVE the health bar with small padding (~8px above bar)
+            // Bars are anchored ~48px above the head center; text at ~56px.
+            let baseline_y = (cy - 56.0).max(0.0);
 
             // Measure label width
             let text = &labels[i];
@@ -572,6 +572,87 @@ impl Nameplates {
                 depth_or_array_layers: 1,
             },
         );
+    }
+}
+
+impl Nameplates {
+    #[allow(clippy::too_many_arguments)]
+    pub fn queue_npc_labels(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface_w: u32,
+        surface_h: u32,
+        view_proj: glam::Mat4,
+        positions: &[glam::Vec3],
+        label: &str,
+    ) {
+        let w = surface_w as f32;
+        let h = surface_h as f32;
+        let scaled = self.font.as_scaled(self.scale);
+        // measure label once
+        let mut width = 0.0f32;
+        let mut prev: Option<ab_glyph::GlyphId> = None;
+        for ch in label.chars() {
+            if let Some(gi) = self.glyphs.get(&ch) {
+                if let Some(pg) = prev { width += scaled.kern(pg, gi.id); }
+                width += gi.advance;
+                prev = Some(gi.id);
+            }
+        }
+        let mut verts: Vec<TextVertex> = Vec::new();
+        for world in positions {
+            let clip = view_proj * glam::Vec4::new(world.x, world.y, world.z, 1.0);
+            if clip.w <= 0.0 { continue; }
+            let ndc = clip.truncate() / clip.w;
+            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
+            let mut cx = (ndc.x * 0.5 + 0.5) * w;
+            let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
+            // Text just above the bar (same offset as wizards)
+            let baseline_y = (cy - 56.0).max(0.0);
+            cx -= width * 0.5;
+            // Emit quads for label
+            let mut pen_x = 0.0f32;
+            prev = None;
+            for ch in label.chars() {
+                let Some(gi) = self.glyphs.get(&ch) else { continue; };
+                if let Some(pg) = prev { pen_x += scaled.kern(pg, gi.id); }
+                let x = cx + pen_x + gi.bounds_min[0];
+                let y = baseline_y - self.ascent + gi.bounds_min[1];
+                let w_px = gi.size[0];
+                let h_px = gi.size[1];
+                let p0 = Self::ndc_from_px(x, y, w, h);
+                let p1 = Self::ndc_from_px(x + w_px, y, w, h);
+                let p2 = Self::ndc_from_px(x + w_px, y + h_px, w, h);
+                let p3 = Self::ndc_from_px(x, y + h_px, w, h);
+                let uv0 = gi.uv_min;
+                let uv1 = [gi.uv_max[0], gi.uv_min[1]];
+                let uv2 = gi.uv_max;
+                let uv3 = [gi.uv_min[0], gi.uv_max[1]];
+                verts.push(TextVertex { pos_ndc: p0, uv: uv0 });
+                verts.push(TextVertex { pos_ndc: p1, uv: uv1 });
+                verts.push(TextVertex { pos_ndc: p2, uv: uv2 });
+                verts.push(TextVertex { pos_ndc: p0, uv: uv0 });
+                verts.push(TextVertex { pos_ndc: p2, uv: uv2 });
+                verts.push(TextVertex { pos_ndc: p3, uv: uv3 });
+                pen_x += gi.advance;
+                prev = Some(gi.id);
+            }
+        }
+        self.vcount = verts.len() as u32;
+        if self.vcount == 0 { return; }
+        let bytes: &[u8] = bytemuck::cast_slice(&verts);
+        if bytes.len() as u64 > self.vcap_bytes {
+            let new_cap = (bytes.len() as u64).next_power_of_two();
+            self.vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("nameplate-vbuf"),
+                size: new_cap,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.vcap_bytes = new_cap;
+        }
+        queue.write_buffer(&self.vbuf, 0, bytes);
     }
 }
 

@@ -827,6 +827,7 @@ impl Renderer {
         );
         self.bars.draw(&mut encoder, &view);
 
+        // Draw wizard nameplates first
         self.nameplates.queue_labels(
             &self.device,
             &self.queue,
@@ -836,6 +837,25 @@ impl Renderer {
             &self.wizard_models,
         );
         self.nameplates.draw(&mut encoder, &view);
+
+        // Then NPC nameplates: fixed label "Zombie" above each alive NPC
+        let mut npc_positions: Vec<glam::Vec3> = Vec::new();
+        for npc in &self.server.npcs {
+            if !npc.alive { continue; }
+            npc_positions.push(npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0));
+        }
+        if !npc_positions.is_empty() {
+            self.nameplates.queue_npc_labels(
+                &self.device,
+                &self.queue,
+                self.config.width,
+                self.config.height,
+                view_proj,
+                &npc_positions,
+                "Zombie",
+            );
+            self.nameplates.draw(&mut encoder, &view);
+        }
 
         self.queue.submit(Some(encoder.finish()));
         frame.present();
