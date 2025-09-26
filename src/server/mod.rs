@@ -55,7 +55,8 @@ impl ServerState {
     pub fn ring_spawn(&mut self, count: usize, radius: f32, hp: i32) {
         for i in 0..count {
             let a = (i as f32) / (count as f32) * std::f32::consts::TAU;
-            let pos = Vec3::new(radius * a.cos(), 0.0, radius * a.sin());
+            // Raise to half-height so cubes sit on ground visually
+            let pos = Vec3::new(radius * a.cos(), 0.6, radius * a.sin());
             self.spawn_npc(pos, 0.6, hp);
         }
     }
@@ -96,14 +97,19 @@ impl ServerState {
 }
 
 fn segment_hits_sphere(p0: Vec3, p1: Vec3, center: Vec3, r: f32) -> bool {
+    // Treat collision in XZ plane (ignore Y) like a cylinder to make gameplay forgiving.
+    segment_hits_circle_xz(glam::vec2(p0.x, p0.z), glam::vec2(p1.x, p1.z), glam::vec2(center.x, center.z), r)
+}
+
+fn segment_hits_circle_xz(p0: glam::Vec2, p1: glam::Vec2, c: glam::Vec2, r: f32) -> bool {
     let d = p1 - p0;
-    let m = p0 - center;
+    let m = p0 - c;
     let a = d.dot(d);
     if a <= 1e-6 { return m.length() <= r; }
     let t = -(m.dot(d)) / a;
     let t = t.clamp(0.0, 1.0);
     let closest = p0 + d * t;
-    (closest - center).length() <= r
+    (closest - c).length() <= r
 }
 
 #[cfg(test)]
@@ -112,9 +118,10 @@ mod tests {
 
     #[test]
     fn segment_sphere_intersects() {
-        let c = Vec3::new(0.0, 0.0, 0.0);
-        let p0 = Vec3::new(-2.0, 0.0, 0.0);
-        let p1 = Vec3::new(2.0, 0.0, 0.0);
+        // XZ circle: path across origin should intersect regardless of Y difference
+        let c = Vec3::new(0.0, 10.0, 0.0);
+        let p0 = Vec3::new(-2.0, 1.6, 0.0);
+        let p1 = Vec3::new(2.0, 1.6, 0.0);
         assert!(segment_hits_sphere(p0, p1, c, 0.5));
     }
 

@@ -484,7 +484,7 @@ impl Renderer {
         let _wizard_tex_view = material_res.texture_view;
         let _wizard_sampler = material_res.sampler;
 
-        // NPCs: simple cubes as targets on a ring
+        // NPCs: simple cubes as targets on rings
         let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
         let mut server = crate::server::ServerState::new();
         // Far ring targets
@@ -514,6 +514,12 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        log::info!(
+            "spawned {} NPCs ({} far, {} near)",
+            server.npcs.len(),
+            12,
+            10
+        );
         Ok(Self {
             surface,
             device,
@@ -1002,7 +1008,7 @@ impl Renderer {
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
             let hits = self.server.collide_and_damage(&mut self.projectiles, dt, damage);
-            for h in hits {
+            for h in &hits {
                 log::info!(
                     "hit NPC id={} hp {} -> {} (dmg {}), fatal={}",
                     (h.npc).0,
@@ -1043,6 +1049,9 @@ impl Renderer {
                         self.queue.write_buffer(&self.npc_instances, offset, bytemuck::bytes_of(&inst));
                     }
                 }
+            }
+            if hits.is_empty() {
+                log::debug!("no hits this frame: projectiles={} npcs={}", self.projectiles.len(), self.server.npcs.len());
             }
         }
         // Ground hit or timeout
