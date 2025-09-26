@@ -22,7 +22,7 @@ pub use types::Vertex;
 mod anim;
 mod camera_sys;
 mod draw;
-mod fx;
+pub mod fx;
 mod material;
 mod scene;
 mod ui;
@@ -91,6 +91,15 @@ pub struct Renderer {
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
+
+    // NPC cubes
+    npc_vb: wgpu::Buffer,
+    npc_ib: wgpu::Buffer,
+    npc_index_count: u32,
+    npc_instances: wgpu::Buffer,
+    npc_count: u32,
+    npc_instances_cpu: Vec<types::Instance>,
+    npc_models: Vec<glam::Mat4>,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -166,6 +175,9 @@ pub struct Renderer {
     cam_look_height: f32,
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
+
+    // Server state (NPCs/health)
+    server: crate::server::ServerState,
 }
 
 impl Renderer {
@@ -472,6 +484,56 @@ impl Renderer {
         let _wizard_tex_view = material_res.texture_view;
         let _wizard_sampler = material_res.sampler;
 
+        // NPCs: simple cubes as targets on multiple rings
+        let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
+        let mut server = crate::server::ServerState::new();
+        // Configure ring distances and counts (keep existing ones, add more)
+        let near_count = 10usize; // existing close ring
+        let near_radius = 15.0f32;
+        let mid1_count = 16usize;
+        let mid1_radius = 30.0f32;
+        let mid2_count = 20usize;
+        let mid2_radius = 45.0f32;
+        let mid3_count = 24usize;
+        let mid3_radius = 60.0f32;
+        let far_count = 12usize; // existing far ring
+        let far_radius = plane_extent * 0.7;
+        // Spawn rings (hp scales mildly with distance)
+        server.ring_spawn(near_count, near_radius, 20);
+        server.ring_spawn(mid1_count, mid1_radius, 25);
+        server.ring_spawn(mid2_count, mid2_radius, 30);
+        server.ring_spawn(mid3_count, mid3_radius, 35);
+        server.ring_spawn(far_count, far_radius, 30);
+        let mut npc_instances_cpu: Vec<types::Instance> = Vec::new();
+        let mut npc_models: Vec<glam::Mat4> = Vec::new();
+        for npc in &server.npcs {
+            let m = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(1.2),
+                glam::Quat::IDENTITY,
+                npc.pos,
+            );
+            npc_models.push(m);
+            npc_instances_cpu.push(types::Instance {
+                model: m.to_cols_array_2d(),
+                color: [0.75, 0.2, 0.2],
+                selected: 0.0,
+            });
+        }
+        let npc_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("npc-instances"),
+            contents: bytemuck::cast_slice(&npc_instances_cpu),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
+        log::info!(
+            "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
+            server.npcs.len(),
+            near_count,
+            mid1_count,
+            mid2_count,
+            mid3_count,
+            far_count
+        );
         Ok(Self {
             surface,
             device,
@@ -554,6 +616,14 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
+            npc_vb,
+            npc_ib,
+            npc_index_count,
+            npc_instances,
+            npc_count: npc_instances_cpu.len() as u32,
+            npc_instances_cpu,
+            npc_models,
+            server,
         })
     }
 
@@ -701,6 +771,22 @@ impl Renderer {
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
             }
 
+            // NPCs (instanced cubes)
+            if self.npc_count > 0 {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.npc_instances.slice(..));
+                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
+            }
+
             // FX
             self.draw_particles(&mut rpass);
         }
@@ -737,9 +823,7 @@ impl Renderer {
                         self.input.run = pressed
                     }
                     PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1) => {
-                        if pressed {
-                            self.pc_cast_queued = true;
-                        }
+                        if pressed { self.pc_cast_queued = true; log::info!("PC cast queued: Fire Bolt"); }
                     }
                     _ => {}
                 }
@@ -920,6 +1004,9 @@ impl Renderer {
                             * glam::Vec4::new(dir_local.x, dir_local.y, dir_local.z, 0.0))
                         .truncate()
                         .normalize_or_zero();
+                        if i == self.pc_index {
+                            log::info!("PC Fire Bolt fired at t={:.2}", t);
+                        }
                         self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t);
                     }
                 }
@@ -930,6 +1017,56 @@ impl Renderer {
         // 2) Integrate projectiles
         for p in &mut self.projectiles {
             p.pos += p.vel * dt;
+        }
+        // 2.5) Server-side collision vs NPCs
+        if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
+            let damage = 10; // TODO: integrate with spell spec dice
+            let hits = self.server.collide_and_damage(&mut self.projectiles, dt, damage);
+            for h in &hits {
+                log::info!(
+                    "hit NPC id={} hp {} -> {} (dmg {}), fatal={}",
+                    (h.npc).0,
+                    h.hp_before,
+                    h.hp_after,
+                    h.damage,
+                    h.fatal
+                );
+                // Impact burst at hit position
+                for _ in 0..16 {
+                    let a = rand_unit() * std::f32::consts::TAU;
+                    let r = 4.0 + rand_unit() * 1.2;
+                    self.particles.push(Particle {
+                        pos: h.pos,
+                        vel: glam::vec3(a.cos() * r, 2.0 + rand_unit() * 1.0, a.sin() * r),
+                        age: 0.0,
+                        life: 0.18,
+                        size: 0.02,
+                        color: [1.0, 0.5, 0.2],
+                    });
+                }
+                // Update NPC visuals: darken color on hit; remove if dead
+                if let Some(idx) = self.server.npcs.iter().position(|n| n.id == h.npc) {
+                    if h.fatal {
+                        // swap remove from instance list and server vectors stay authoritative
+                        if (idx as u32) < self.npc_count {
+                            self.npc_instances_cpu.swap_remove(idx);
+                            self.npc_models.swap_remove(idx);
+                            self.npc_count -= 1;
+                            let bytes: &[u8] = bytemuck::cast_slice(&self.npc_instances_cpu);
+                            self.queue.write_buffer(&self.npc_instances, 0, bytes);
+                        }
+                    } else {
+                        let mut inst = self.npc_instances_cpu[idx];
+                        inst.color = [0.6, 0.15, 0.15];
+                        self.npc_instances_cpu[idx] = inst;
+                        let offset = (idx * std::mem::size_of::<types::Instance>()) as u64;
+                        self.queue.write_buffer(&self.npc_instances, offset, bytemuck::bytes_of(&inst));
+                    }
+                }
+            }
+            if hits.is_empty() {
+                log::debug!("no hits this frame: projectiles={} npcs={}", self.projectiles.len(), self.server.npcs.len());
+            }
         }
         // Ground hit or timeout
         let mut burst: Vec<Particle> = Vec::new();
@@ -965,9 +1102,7 @@ impl Renderer {
             }
         }
 
-        // 3) (disabled trail for now to show a single bolt clearly)
-        self.particles.clear();
-        // keep burst off as well
+        // 3) Upload FX instances (billboard particles) — show both bolts and impacts
 
         // 4) Upload FX instances (billboard particles)
         let mut inst: Vec<ParticleInstance> = Vec::with_capacity(self.projectiles.len());
