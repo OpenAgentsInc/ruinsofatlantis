@@ -1975,8 +1975,6 @@ dependencies = [
 [[package]]
 name = "draco_decoder"
 version = "0.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5bd5fc576a2036cf4f5b96b86c51fefc20a41bce41957f1f33e38ade4992ef4"
 dependencies = [
  "base64 0.21.7",
  "bytemuck",

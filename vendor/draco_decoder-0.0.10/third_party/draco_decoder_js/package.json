@@ -1,0 +1,36 @@
+{
+  "name": "draco_decoder_js",
+  "description": "",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "keywords": [],
+  "author": "jiang heng",
+  "license": "MIT&APACHE2.0",
+  "dependencies": {
+    "draco3d": "^1.5.7"
+  },
+  "devDependencies": {
+    "terser": "^5.43.1",
+    "vite": "^7.0.6",
+    "vite-plugin-static-copy": "^3.1.1",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0"
+  }
+}
