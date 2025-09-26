@@ -2,6 +2,10 @@
 
 This document summarizes the `src/` folder structure and what each module does.
 
+- Workspace crates (new)
+- shared/assets — Library crate re-exporting our asset loaders for tools.
+- tools/model-viewer — Standalone wgpu viewer that loads GLTF/GLB via shared/assets.
+
 - lib.rs — Crate root; re‑exports main modules.
 - main.rs — Binary entry; sets up logging and runs the winit platform loop.
 - platform_winit.rs — Window/event loop integration using winit 0.30.

@@ -1,5 +1,3 @@
-//! Asset utilities (paths, policy helpers).
-
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -23,16 +21,21 @@ pub fn prepare_gltf_path(path: &Path) -> Result<PathBuf> {
 mod tests {
     use super::*;
 
+    fn repo_root() -> PathBuf {
+        let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        for _ in 0..5 {
+            if p.join("assets/models/wizard.gltf").exists() { return p; }
+            p.pop();
+        }
+        panic!("could not locate repo root containing assets/models");
+    }
+
     #[test]
     fn returns_importable_path() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = repo_root();
         let orig = root.join("assets/models/wizard.gltf");
         let out = prepare_gltf_path(&orig).expect("prepare path");
         assert!(out.exists(), "resolved file must exist: {}", out.display());
-        assert!(
-            gltf::import(&out).is_ok(),
-            "resolved file must be importable: {}",
-            out.display()
-        );
+        assert!(gltf::import(&out).is_ok(), "resolved file must be importable: {}", out.display());
     }
 }
