@@ -132,6 +132,8 @@ pub struct Renderer {
     zombie_joints: u32,
     #[allow(dead_code)]
     zombie_models: Vec<glam::Mat4>,
+    zombie_cpu: SkinnedMeshCPU,
+    zombie_time_offset: Vec<f32>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -683,6 +685,8 @@ impl Renderer {
             zombie_palettes_bg,
             zombie_joints,
             zombie_models,
+            zombie_cpu,
+            zombie_time_offset: (0..zombie_count as usize).map(|i| i as f32 * 0.35).collect(),
             wizard_instances_cpu: scene_build.wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
@@ -971,21 +975,29 @@ impl Renderer {
 }
 
 impl Renderer {
-    fn update_zombie_palettes(&mut self, _time_global: f32) {
+    fn update_zombie_palettes(&mut self, time_global: f32) {
         if self.zombie_count == 0 { return; }
-        // Use the first available clip in zombie_cpu (stored originally in materials via textures);
-        // we don't keep zombie_cpu around, so sample T=0 using wizard CPU's anim if needed.
-        // For variety, apply small time offsets per instance.
-        // Here we approximate by reusing the wizard's first clip if present; otherwise identity.
-        // Simpler: advance phase = time_global + idx*0.3 and sample first zombie clip by index 0 stored in palette already.
-        // We can't access zombie_cpu here; rebuild via placeholder identity.
-        // Fallback: write identity matrices to keep static pose.
+        // Select an appropriate clip: prefer "Idle", then any available.
+        let clip = if let Some(c) = self.zombie_cpu.animations.get("Idle") {
+            c
+        } else if let Some(first) = self.zombie_cpu.animations.values().next() {
+            first
+        } else {
+            // No animations; keep bind pose
+            let joints = self.zombie_joints as usize;
+            let total = self.zombie_count as usize * joints;
+            let mats: Vec<[f32; 16]> = (0..total).map(|_| glam::Mat4::IDENTITY.to_cols_array()).collect();
+            self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats));
+            return;
+        };
         let joints = self.zombie_joints as usize;
-        let total = self.zombie_count as usize * joints;
-        let mut mats: Vec<[f32; 16]> = Vec::with_capacity(total);
-        // Use model matrices as identity for joints so mesh stays in bind pose.
-        for _ in 0..total { mats.push(glam::Mat4::IDENTITY.to_cols_array()); }
-        self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats));
+        let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
+        for i in 0..(self.zombie_count as usize) {
+            let t = time_global + self.zombie_time_offset.get(i).copied().unwrap_or(0.0);
+            let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
+            for m in palette { mats_all.push(m.to_cols_array()); }
+        }
+        self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats_all));
     }
     /// Handle platform window events that affect input (keyboard focus/keys).
     pub fn handle_window_event(&mut self, event: &WindowEvent) {
