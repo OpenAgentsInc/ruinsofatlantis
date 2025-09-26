@@ -58,7 +58,10 @@ impl ServerState {
     pub fn step_npc_ai(&mut self, dt: f32, wizards: &[Vec3]) -> Vec<(usize, i32)> {
         if wizards.is_empty() { return Vec::new(); }
         let speed = 2.0f32; // m/s
-        let attack_range = 1.2f32;
+        // Melee is considered in contact when circles touch plus a small pad.
+        // We use the same wizard radius as collision resolution for consistency.
+        let wizard_r = 0.7f32;
+        let melee_pad = 0.15f32;
         let attack_cd = 1.5f32;
         let damage = 5i32;
         let mut hits = Vec::new();
@@ -95,7 +98,8 @@ impl ServerState {
                 let target = wizards[best_i];
                 let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
                 let dist = to.length();
-                if dist <= attack_range && n.attack_cooldown <= 0.0 {
+                let contact = n.radius + wizard_r + melee_pad;
+                if dist <= contact && n.attack_cooldown <= 0.0 {
                     hits.push((best_i, damage));
                     n.attack_cooldown = attack_cd;
                 }
