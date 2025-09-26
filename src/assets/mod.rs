@@ -69,12 +69,6 @@ pub struct SkinnedMeshCPU {
     pub base_s: Vec<Vec3>,
     pub animations: HashMap<String, AnimClip>,
     pub base_color_texture: Option<TextureCPU>,
-<<<<<<< HEAD
-    pub node_names: Vec<String>,
-    pub hand_right_node: Option<usize>,
-    pub root_node: Option<usize>,
-=======
->>>>>>> origin/wizardandruins
 }
 
 pub struct TextureCPU { pub pixels: Vec<u8>, pub width: u32, pub height: u32, pub srgb: bool }
@@ -99,10 +93,6 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         let (t, r, s) = decompose_node(&n);
         base_t[n.index()] = t; base_r[n.index()] = r; base_s[n.index()] = s;
     }
-<<<<<<< HEAD
-    let node_names: Vec<String> = doc.nodes().map(|n| n.name().unwrap_or("").to_string()).collect();
-=======
->>>>>>> origin/wizardandruins
 
     // Find first mesh primitive with joints/weights and its skin via the node
     let mut skin_opt: Option<gltf::Skin> = None;
@@ -330,21 +320,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
 
     // (debug UV range log removed)
 
-<<<<<<< HEAD
-    // Try to identify a right-hand node for VFX emitters
-    let hand_right_node = node_names.iter().position(|n| {
-        let low = n.to_lowercase();
-        low.contains("hand right") || low.contains("right hand") || low.contains("hand_r") || low.contains("r_hand")
-    });
-    let root_node = node_names.iter().position(|n| {
-        let low = n.to_lowercase();
-        low == "root" || low.contains("armature")
-    });
-
-    Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture, node_names, hand_right_node, root_node })
-=======
     Ok(SkinnedMeshCPU { vertices: verts, indices, joints_nodes, inverse_bind, parent, base_t, base_r, base_s, animations, base_color_texture })
->>>>>>> origin/wizardandruins
 }
 
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
