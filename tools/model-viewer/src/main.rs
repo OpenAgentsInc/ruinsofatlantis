@@ -281,7 +281,7 @@ async fn run(cli: Cli) -> Result<()> {
         push_constant_ranges: &[],
     });
     let depth_format = wgpu::TextureFormat::Depth32Float;
-    let mut pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("pipe"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main_skinned"), buffers: &[VSkinned::LAYOUT], compilation_options: Default::default() },
