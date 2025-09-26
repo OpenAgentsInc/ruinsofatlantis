@@ -178,6 +178,7 @@ pub struct Renderer {
 
     // UI overlay
     nameplates: ui::Nameplates,
+    nameplates_npc: ui::Nameplates,
     bars: ui::HealthBars,
 
     // --- Player/Camera ---
@@ -310,6 +311,7 @@ impl Renderer {
 
         // UI: nameplates + health bars
         let nameplates = ui::Nameplates::new(&device, config.format)?;
+        let nameplates_npc = ui::Nameplates::new(&device, config.format)?;
         let bars = ui::HealthBars::new(&device, config.format)?;
 
         // --- Buffers & bind groups ---
@@ -489,8 +491,9 @@ impl Renderer {
             let c = m.to_cols_array();
             glam::vec3(c[12], c[13], c[14])
         };
-        // Upload text atlas once now that we have a queue
+        // Upload text atlases once now that we have a queue
         nameplates.upload_atlas(&queue);
+        nameplates_npc.upload_atlas(&queue);
         // FX resources
         let fx_res = fx::create_fx_resources(&device, &model_bgl);
         let fx_instances = fx_res.instances;
@@ -712,6 +715,7 @@ impl Renderer {
             particles: Vec::new(),
             fire_bolt,
             nameplates,
+            nameplates_npc,
             bars,
 
             // Player/camera
@@ -949,14 +953,14 @@ impl Renderer {
         );
         self.nameplates.draw(&mut encoder, &view);
 
-        // Then NPC nameplates: fixed label "Zombie" above each alive NPC
+        // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
         for npc in &self.server.npcs {
             if !npc.alive { continue; }
             npc_positions.push(npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0));
         }
         if !npc_positions.is_empty() {
-            self.nameplates.queue_npc_labels(
+            self.nameplates_npc.queue_npc_labels(
                 &self.device,
                 &self.queue,
                 self.config.width,
@@ -965,7 +969,7 @@ impl Renderer {
                 &npc_positions,
                 "Zombie",
             );
-            self.nameplates.draw(&mut encoder, &view);
+            self.nameplates_npc.draw(&mut encoder, &view);
         }
 
         self.queue.submit(Some(encoder.finish()));
