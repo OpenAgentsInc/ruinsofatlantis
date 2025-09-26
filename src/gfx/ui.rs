@@ -293,9 +293,9 @@ impl Nameplates {
             }
             let mut cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
-            // Place name below the health bar with padding so they never overlap
-            // Bars are anchored ~48px above the head center; keep text ~18px above head
-            let baseline_y = (cy - 18.0).max(0.0);
+            // Place name ABOVE the health bar with padding so they never overlap
+            // Bars are anchored ~48px above the head center; put text a bit higher (~64px)
+            let baseline_y = (cy - 64.0).max(0.0);
 
             // Measure label width
             let text = &labels[i];
@@ -472,7 +472,6 @@ impl HealthBars {
         let mut out: Vec<BarVertex> = Vec::new();
         let bar_w = 64.0f32;
         let bar_h = 6.0f32;
-        let pad = 2.0f32; // background padding
         for (world, frac) in entries {
             let clip = view_proj * glam::Vec4::new(world.x, world.y, world.z, 1.0);
             if clip.w <= 0.0 { continue; }
@@ -480,31 +479,17 @@ impl HealthBars {
             if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
             let cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
-            let bx0 = cx - bar_w * 0.5 - pad;
-            let bx1 = cx + bar_w * 0.5 + pad;
             // Anchor bar higher above the head to avoid overlapping the name text
             let by0 = (cy - 48.0).max(0.0);
-            let by1 = by0 + bar_h + pad * 2.0;
-            let bg = [0.0, 0.0, 0.0, 0.5];
-            // Background quad
-            let p0 = Self::ndc_from_px(bx0, by0, w, h);
-            let p1 = Self::ndc_from_px(bx1, by0, w, h);
-            let p2 = Self::ndc_from_px(bx1, by1, w, h);
-            let p3 = Self::ndc_from_px(bx0, by1, w, h);
-            out.push(BarVertex { pos_ndc: p0, color: bg });
-            out.push(BarVertex { pos_ndc: p1, color: bg });
-            out.push(BarVertex { pos_ndc: p2, color: bg });
-            out.push(BarVertex { pos_ndc: p0, color: bg });
-            out.push(BarVertex { pos_ndc: p2, color: bg });
-            out.push(BarVertex { pos_ndc: p3, color: bg });
+            let by1 = by0 + bar_h;
             // Foreground (filled) quad based on frac
             let frac = frac.clamp(0.0, 1.0);
             if frac > 0.0 {
                 let fw = bar_w * frac;
                 let fx0 = cx - bar_w * 0.5;
                 let fx1 = fx0 + fw;
-                let fy0 = by0 + pad;
-                let fy1 = fy0 + bar_h;
+                let fy0 = by0;
+                let fy1 = by1;
                 let col = Self::color_for_frac(frac);
                 let q0 = Self::ndc_from_px(fx0, fy0, w, h);
                 let q1 = Self::ndc_from_px(fx1, fy0, w, h);
@@ -607,11 +592,11 @@ mod bar_tests {
     #[test]
     fn build_vertices_counts_match_fill_fraction() {
         let vp = Mat4::IDENTITY;
-        // One entry at origin, full health -> background (6) + filled (6)
+        // One entry at origin, full health -> filled (6)
         let v_full = HealthBars::build_vertices(1920, 1080, vp, &[(glam::Vec3::ZERO, 1.0)]);
-        assert_eq!(v_full.len(), 12);
-        // Zero health -> only background (6)
+        assert_eq!(v_full.len(), 6);
+        // Zero health -> no vertices
         let v_zero = HealthBars::build_vertices(1920, 1080, vp, &[(glam::Vec3::ZERO, 0.0)]);
-        assert_eq!(v_zero.len(), 6);
+        assert_eq!(v_zero.len(), 0);
     }
 }

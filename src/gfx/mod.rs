@@ -1038,10 +1038,18 @@ impl Renderer {
                         let dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
                             .truncate()
                             .normalize_or_zero();
+                        // Nudge origin toward the character center so it doesn't look like it
+                        // emerges too far from the right-hand side. Shift slightly against the
+                        // instance right vector.
+                        let right_w = (inst * glam::Vec4::new(1.0, 0.0, 0.0, 0.0))
+                            .truncate()
+                            .normalize_or_zero();
+                        let lateral = 0.20; // meters to shift toward center
+                        let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
                         if i == self.pc_index {
                             log::info!("PC Fire Bolt fired at t={:.2}", t);
                         }
-                        self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t, Some(i));
+                        self.spawn_firebolt(spawn, dir_w, t, Some(i));
                     }
                 }
                 self.wizard_last_phase[i] = phase;
