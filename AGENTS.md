@@ -22,6 +22,7 @@
 - All new modules must start with a brief docblock explaining scope and how to extend it.
 - Add inline comments for non‑obvious math, layout decisions, and API quirks (e.g., WGSL/std140 padding, wgpu limits).
 - Prefer doc comments (`///`) on public types/functions so `cargo doc` is useful.
+- Do not add meta comments like "(unused helper removed)" or "(logs removed)". If code is unused, delete it; keep comments focused on behavior and intent, not change notes.
 
 ## Game Design Document (GDD)
 - Canonical design source: `GDD.md` at repo root.

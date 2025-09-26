@@ -212,3 +212,19 @@ Addendum (2025-09-26): Unit Tests Added (Assets)
   - `src/assets/util.rs`:
     - `returns_importable_path` — `prepare_gltf_path` returns a path importable by `gltf::import` (prefers original if valid; otherwise a sibling `*.decompressed.gltf`).
 - Rationale: Establish minimal invariants for loaders while keeping runtime side effects out of tests. These tests exercise both the standard and Draco paths deterministically using checked-in assets.
+
+Addendum (2025-09-26): GFX Monolith Split — Animation Helpers
+
+- What changed
+  - Extracted animation sampling helpers from `src/gfx/mod.rs` into `src/gfx/anim.rs`:
+    - `sample_palette()` builds joint palettes from clips
+    - `global_of_node()` queries per-node global transform
+    - `compute_portalopen_strikes()` derives timing cues from the PortalOpen clip
+    - internal helpers for TRS sampling and hierarchy composition
+  - Updated `Renderer` to call `anim::*` functions; removed duplicated definitions from `mod.rs`.
+- Rationale
+  - Reduces `mod.rs` surface and isolates CPU animation logic for reuse and testing.
+- Next suggested split (deferred until gfx changes stabilize)
+  - `scene.rs` for demo scene/world instancing and camera target selection
+  - `material.rs` for wizard material creation and bind groups
+  - `fx.rs` for projectile/particle pipelines and instance upload
