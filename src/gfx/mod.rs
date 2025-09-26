@@ -388,13 +388,15 @@ impl Renderer {
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
         let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
             .context("load skinned wizard.gltf")?;
-        let zombie_cpu = load_gltf_skinned(&asset_path("assets/models/zombie.glb"))
-            .context("load skinned zombie.glb")?;
+        // Load the original project zombie model
+        let zombie_model_path = "assets/models/zombie.glb";
+        let zombie_cpu = load_gltf_skinned(&asset_path(zombie_model_path))
+            .with_context(|| format!("load skinned {}", zombie_model_path))?;
         {
             let count = zombie_cpu.animations.len();
             let mut names: Vec<&str> = zombie_cpu.animations.keys().map(|s| s.as_str()).collect();
             names.sort_unstable();
-            log::info!("zombie.glb animations: {} -> {:?}", count, names);
+            log::info!("{} animations: {} -> {:?}", zombie_model_path, count, names);
         }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
 
