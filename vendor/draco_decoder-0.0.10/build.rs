@@ -55,7 +55,10 @@ fn main() {
         .include(format!("{}/{}", crate_dir, "third_party/draco/src"))
         .include(format!("{}/{}", crate_dir, "third_party/draco/build"))
         .include(format!("{}/{}/include", crate_dir, draco_install))
-        .flag_if_supported("-std=c++17");
+        .flag_if_supported("-std=c++17")
+        // Silence noisy third-party warnings in Draco headers
+        .warnings(false)
+        .flag_if_supported("-w");
 
     // Only set a macOS deployment target when building for macOS.
     // Passing this flag on Linux/Windows causes compiler errors.

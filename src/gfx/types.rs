@@ -13,6 +13,12 @@ pub struct Globals {
     pub cam_right_time: [f32; 4],
     // cam_up_pad.xyz = camera up in world, .w unused
     pub cam_up_pad: [f32; 4],
+    // sun_dir_time.xyz = sun direction (world), .w = day_frac
+    pub sun_dir_time: [f32; 4],
+    // SH-L2 irradiance coefficients (9), packed as vec4 RGB+pad
+    pub sh_coeffs: [[f32; 4]; 9],
+    // Fog params: color.rgb, density
+    pub fog_params: [f32; 4],
 }
 
 #[repr(C)]

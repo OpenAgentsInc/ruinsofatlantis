@@ -27,6 +27,7 @@ mod material;
 mod scene;
 mod ui;
 mod util;
+mod sky;
 
 use crate::assets::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned};
 use crate::assets::skinning::merge_gltf_animations;
@@ -71,12 +72,15 @@ pub struct Renderer {
     inst_pipeline: wgpu::RenderPipeline,
     wire_pipeline: Option<wgpu::RenderPipeline>,
     particle_pipeline: wgpu::RenderPipeline,
+    sky_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
+    sky_bg: wgpu::BindGroup,
     plane_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
+    sky_buf: wgpu::Buffer,
     _plane_model_buf: wgpu::Buffer,
     shard_model_buf: wgpu::Buffer,
 
@@ -155,6 +159,9 @@ pub struct Renderer {
 
     // Flags
     wire_enabled: bool,
+
+    // Sky/time-of-day state
+    sky: sky::SkyStateCPU,
 
     // Time base for animation
     start: Instant,
@@ -274,28 +281,56 @@ impl Renderer {
     }
     /// Create a renderer bound to a window surface.
     pub async fn new(window: &Window) -> anyhow::Result<Self> {
-        // --- Surface ---
-        let instance = wgpu::Instance::default();
-        // Create a surface without borrowing `window` for its lifetime.
+        // --- Instance + Surface + Adapter (with backend fallback) ---
+        fn backend_from_env() -> Option<wgpu::Backends> {
+            match std::env::var("RA_BACKEND").ok().as_deref() {
+                Some("vulkan" | "VULKAN" | "vk") => Some(wgpu::Backends::VULKAN),
+                Some("gl" | "GL" | "opengl") => Some(wgpu::Backends::GL),
+                Some("primary" | "PRIMARY" | "all") => Some(wgpu::Backends::PRIMARY),
+                _ => None,
+            }
+        }
+        let candidates: &[wgpu::Backends] = if let Some(b) = backend_from_env() {
+            if b == wgpu::Backends::PRIMARY { &[wgpu::Backends::PRIMARY] } else { &[b, wgpu::Backends::PRIMARY] }
+        } else if cfg!(target_os = "linux") {
+            &[wgpu::Backends::VULKAN, wgpu::Backends::GL, wgpu::Backends::PRIMARY]
+        } else {
+            &[wgpu::Backends::PRIMARY]
+        };
+
+        // Create a surface per candidate instance and try to get an adapter
         let raw_display = window.display_handle()?.as_raw();
         let raw_window = window.window_handle()?.as_raw();
-        let surface = unsafe {
-            instance.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: raw_display,
-                raw_window_handle: raw_window,
-            })
-        }
-        .context("create wgpu surface (unsafe)")?;
-
-        // --- Adapter / Device ---
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                compatible_surface: Some(&surface),
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                force_fallback_adapter: false,
-            })
-            .await
-            .context("request adapter")?;
+        let (_instance, surface, adapter) = {
+            let mut picked: Option<(wgpu::Instance, wgpu::Surface<'static>, wgpu::Adapter)> = None;
+            for &bmask in candidates {
+                let inst = wgpu::Instance::new(&wgpu::InstanceDescriptor { backends: bmask, flags: wgpu::InstanceFlags::empty(), ..Default::default() });
+                let surf = unsafe {
+                    inst.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle: raw_display,
+                        raw_window_handle: raw_window,
+                    })
+                }
+                .context("create wgpu surface (unsafe)")?;
+                match inst
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                        compatible_surface: Some(&surf),
+                        power_preference: wgpu::PowerPreference::HighPerformance,
+                        force_fallback_adapter: false,
+                    })
+                    .await
+                {
+                    Ok(a) => {
+                        picked = Some((inst, surf, a));
+                        break;
+                    }
+                    Err(_) => {
+                        // try next backend mask
+                    }
+                }
+            }
+            picked.ok_or_else(|| anyhow::anyhow!("no suitable GPU adapter across backends {:?}", candidates))?
+        };
 
         let mut req_features = wgpu::Features::empty();
         if adapter
@@ -363,6 +398,9 @@ impl Renderer {
         let material_bgl = pipeline::create_material_bgl(&device);
         let (pipeline, inst_pipeline, wire_pipeline) =
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
+        // Sky background
+        let sky_bgl = pipeline::create_sky_bgl(&device);
+        let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, config.format);
         let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
             &device,
             &shader,
@@ -387,6 +425,9 @@ impl Renderer {
             view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
             cam_right_time: [1.0, 0.0, 0.0, 0.0],
             cam_up_pad: [0.0, 1.0, 0.0, 0.0],
+            sun_dir_time: [0.0, 1.0, 0.0, 0.0],
+            sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
+            fog_params: [0.0, 0.0, 0.0, 0.0],
         };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
@@ -400,6 +441,19 @@ impl Renderer {
                 binding: 0,
                 resource: globals_buf.as_entire_binding(),
             }],
+        });
+
+        // Sky uniforms
+        let sky_state = sky::SkyStateCPU::new();
+        let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("sky-uniform"),
+            contents: bytemuck::bytes_of(&sky_state.sky_uniform),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let sky_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("sky-bg"),
+            layout: &sky_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: sky_buf.as_entire_binding() }],
         });
 
         // Per-draw Model buffers (plane and shard base)
@@ -738,11 +792,14 @@ impl Renderer {
             inst_pipeline,
             wire_pipeline,
             particle_pipeline,
+            sky_pipeline,
             globals_bg,
+            sky_bg,
             plane_model_bg,
             shard_model_bg,
 
             globals_buf,
+            sky_buf,
             _plane_model_buf: plane_model_buf,
             shard_model_buf,
 
@@ -794,6 +851,7 @@ impl Renderer {
             _zombie_tex_view,
             _zombie_sampler,
             wire_enabled: false,
+            sky: sky_state,
 
             start: Instant::now(),
             last_time: 0.0,
@@ -895,7 +953,7 @@ impl Renderer {
             self.cam_lift,
             self.cam_look_height,
         );
-        let (_cam, globals) = camera_sys::third_person_follow(
+        let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
             self.player.pos,
             glam::Quat::from_rotation_y(self.player.yaw),
@@ -904,8 +962,14 @@ impl Renderer {
             aspect,
             dt,
         );
-        self.queue
-            .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
+        // Advance sky & lighting
+        self.sky.update(dt);
+        globals.sun_dir_time = [self.sky.sun_dir.x, self.sky.sun_dir.y, self.sky.sun_dir.z, self.sky.day_frac];
+        for i in 0..9 { globals.sh_coeffs[i] = [self.sky.sh9_rgb[i][0], self.sky.sh9_rgb[i][1], self.sky.sh9_rgb[i][2], 0.0]; }
+        globals.fog_params = [0.6, 0.7, 0.8, 0.0];
+        self.queue.write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
+        // Sky raw params
+        self.queue.write_buffer(&self.sky_buf, 0, bytemuck::bytes_of(&self.sky.sky_uniform));
 
         // Keep model base identity to avoid moving instances globally
         let shard_mtx = glam::Mat4::IDENTITY;
@@ -961,11 +1025,32 @@ impl Renderer {
         self.update_fx(t, dt);
 
         // Begin commands
+        // Capture validation errors locally to avoid process-wide panic
+        self.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("encoder"),
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
+        // Sky-only pass (no depth)
+        {
+            use wgpu::*;
+            let mut sky = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("sky-pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: Operations { load: LoadOp::Clear(Color { r: 0.02, g: 0.02, b: 0.04, a: 1.0 }), store: StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             });
+            sky.set_pipeline(&self.sky_pipeline);
+            sky.set_bind_group(0, &self.globals_bg, &[]);
+            sky.set_bind_group(1, &self.sky_bg, &[]);
+            sky.draw(0..3, 0..1);
+        }
+        // Main pass with depth; load color from sky
         {
             use wgpu::*;
             let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -974,22 +1059,11 @@ impl Renderer {
                     view: &view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color {
-                            r: 0.02,
-                            g: 0.08,
-                            b: 0.16,
-                            a: 1.0,
-                        }),
-                        store: StoreOp::Store,
-                    },
+                    ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
                 })],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                     view: &self.depth,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
-                    }),
+                    depth_ops: Some(Operations { load: LoadOp::Clear(1.0), store: StoreOp::Store }),
                     stencil_ops: None,
                 }),
                 occlusion_query_set: None,
@@ -1119,8 +1193,14 @@ impl Renderer {
             self.nameplates_npc.draw(&mut encoder, &view);
         }
 
-        self.queue.submit(Some(encoder.finish()));
-        frame.present();
+        // Submit only if no validation errors occurred
+        if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+            // Skip submit on validation error to keep running without panicking
+            log::error!("wgpu validation error (skipping frame): {:?}", e);
+        } else {
+            self.queue.submit(Some(encoder.finish()));
+            frame.present();
+        }
         Ok(())
     }
 }
@@ -1296,6 +1376,12 @@ impl Renderer {
                     PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1) if self.pc_alive => {
                         if pressed { self.pc_cast_queued = true; log::info!("PC cast queued: Fire Bolt"); }
                     }
+                    // Sky controls (pause/scrub/speed)
+                    PhysicalKey::Code(KeyCode::Space) => { if pressed { self.sky.toggle_pause(); } }
+                    PhysicalKey::Code(KeyCode::BracketLeft) => { if pressed { self.sky.scrub(-0.01); } }
+                    PhysicalKey::Code(KeyCode::BracketRight) => { if pressed { self.sky.scrub(0.01); } }
+                    PhysicalKey::Code(KeyCode::Minus) => { if pressed { self.sky.speed_mul(0.5); log::info!("time_scale: {:.2}", self.sky.time_scale); } }
+                    PhysicalKey::Code(KeyCode::Equal) => { if pressed { self.sky.speed_mul(2.0); log::info!("time_scale: {:.2}", self.sky.time_scale); } }
                     _ => {}
                 }
             }

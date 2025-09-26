@@ -20,6 +20,9 @@ pub fn orbit_and_globals(
         view_proj: cam.view_proj().to_cols_array_2d(),
         cam_right_time: [right.x, right.y, right.z, t],
         cam_up_pad: [up.x, up.y, up.z, 0.0],
+        sun_dir_time: [0.0, 1.0, 0.0, 0.0],
+        sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
+        fog_params: [0.0, 0.0, 0.0, 0.0],
     };
     (cam, globals)
 }
@@ -77,6 +80,9 @@ pub fn third_person_follow(
         view_proj: cam.view_proj().to_cols_array_2d(),
         cam_right_time: [right.x, right.y, right.z, 0.0],
         cam_up_pad: [up.x, up.y, up.z, 0.0],
+        sun_dir_time: [0.0, 1.0, 0.0, 0.0],
+        sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
+        fog_params: [0.0, 0.0, 0.0, 0.0],
     };
     (cam, globals)
 }

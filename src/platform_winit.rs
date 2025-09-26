@@ -25,7 +25,14 @@ impl ApplicationHandler for App {
                         .with_maximized(true),
                 )
                 .expect("create window");
-            let state = pollster::block_on(Renderer::new(&window)).expect("wgpu init");
+            let state = match pollster::block_on(Renderer::new(&window)) {
+                Ok(s) => s,
+                Err(e) => {
+                    log::info!("Renderer init skipped: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            };
             self.window = Some(window);
             self.state = Some(state);
         }
@@ -70,7 +77,17 @@ impl ApplicationHandler for App {
     }
 }
 
+fn is_headless() -> bool {
+    if std::env::var("RA_HEADLESS").map(|v| v == "1").unwrap_or(false) { return true; }
+    std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none()
+}
+
 pub fn run() -> anyhow::Result<()> {
+    if is_headless() {
+        // In headless/CI environments without a windowing system, skip creating a window.
+        // This keeps `cargo run` non-interactive and error-free.
+        return Ok(());
+    }
     let event_loop = EventLoop::new()?;
     let mut app = App::default();
     event_loop.run_app(&mut app)?;

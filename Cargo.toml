@@ -12,6 +12,10 @@ members = [
 ]
 resolver = "2"
 
+[features]
+default = ["gfx-sky"]
+gfx-sky = []
+
 [dependencies]
 ab_glyph = "0.2.25"
 anyhow = "1.0.100"
@@ -36,6 +40,7 @@ wgpu = "26.0.1"
 which = "8.0.0"
 winit = "0.30.12"
 ra-assets = { version = "0.1.0", path = "shared/assets" }
+hw-skymodel = "0.1.1"
 
 [patch.crates-io]
 # Use a patched local copy of draco_decoder to avoid passing
