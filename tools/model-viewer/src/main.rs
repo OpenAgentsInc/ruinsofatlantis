@@ -103,8 +103,6 @@ fn scan_anim_library() -> Vec<LibAnim> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let repo_root = cwd; // assume running from repo root
     let mut candidates: Vec<std::path::PathBuf> = vec![repo_root.join("assets/anims")];
-    let qmmorpg = std::path::PathBuf::from("/Users/christopherdavid/code/Quick_3D_MMORPG");
-    if qmmorpg.exists() { candidates.push(qmmorpg); }
     if let Some(v) = std::env::var_os("FBX_LIB_DIR") && !v.is_empty() { candidates.push(std::path::PathBuf::from(v)); }
     for dir in candidates.into_iter().filter(|p| p.exists()) { collect_anim_files(&dir, 0, 4, &mut out); }
     out.sort_by(|a,b| a.name.cmp(&b.name));
