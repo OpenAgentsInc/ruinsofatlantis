@@ -246,7 +246,13 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
         let mut r_tracks = HashMap::new();
         let mut s_tracks = HashMap::new();
         let map_idx = |idx: &usize| -> Option<usize> {
-            other.node_names.get(*idx).and_then(|n| base.node_names.iter().position(|m| m == n))
+            other
+                .node_names
+                .get(*idx)
+                .and_then(|n| {
+                    let nn = normalize_bone_name(n);
+                    base.node_names.iter().position(|m| normalize_bone_name(m) == nn)
+                })
         };
         for (i, tr) in &clip.t_tracks { if let Some(di) = map_idx(i) { t_tracks.insert(di, tr.clone()); } }
         for (i, rr) in &clip.r_tracks { if let Some(di) = map_idx(i) { r_tracks.insert(di, rr.clone()); } }
@@ -255,6 +261,16 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
         merged += 1;
     }
     Ok(merged)
+}
+
+fn normalize_bone_name(s: &str) -> String {
+    let mut out = s.to_lowercase();
+    for pref in ["mixamorig:", "armature|", "armature/", "armature:", "skeleton|", "skeleton/"] {
+        if out.starts_with(pref) { out = out.trim_start_matches(pref).to_string(); }
+        out = out.replace(pref, "");
+    }
+    out = out.replace([' ', '_', '-'], "");
+    out
 }
 
 /// Merge animation clips from an FBX file into an existing skinned mesh by node-name mapping.
