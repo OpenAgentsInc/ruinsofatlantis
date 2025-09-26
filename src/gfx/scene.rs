@@ -171,8 +171,8 @@ pub fn build_demo_scene(
     for (i, inst) in wiz_instances.iter_mut().enumerate() {
         inst.palette_base = (i as u32) * joints_per_wizard;
         if i == 0 {
-            // Center wizard: Waiting
-            wizard_anim_index.push(2);
+            // Center wizard (PC): idle in Still until casting
+            wizard_anim_index.push(1);
             wizard_time_offset.push(0.0);
         } else if i < wizard_count {
             // Inner ring (excluding center): Still only

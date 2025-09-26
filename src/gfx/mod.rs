@@ -156,6 +156,8 @@ pub struct Renderer {
     player: crate::client::controller::PlayerController,
     input: crate::client::input::InputState,
     cam_follow: camera_sys::FollowState,
+    pc_cast_queued: bool,
+    pc_anim_start: Option<f32>,
     // Orbit params
     cam_orbit_yaw: f32,
     cam_orbit_pitch: f32,
@@ -543,6 +545,8 @@ impl Renderer {
                 current_pos: glam::vec3(0.0, 5.0, -10.0),
                 current_look: scene_build.cam_target,
             },
+            pc_cast_queued: false,
+            pc_anim_start: None,
             cam_orbit_yaw: 0.0,
             cam_orbit_pitch: 0.2,
             cam_distance: 8.5,
@@ -627,6 +631,8 @@ impl Renderer {
         self.queue
             .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
 
+        // Handle queued PC cast and update animation state
+        self.process_pc_cast(t);
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
         // FX update (projectiles/particles)
@@ -730,6 +736,11 @@ impl Renderer {
                     PhysicalKey::Code(KeyCode::ShiftLeft) | PhysicalKey::Code(KeyCode::ShiftRight) => {
                         self.input.run = pressed
                     }
+                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1) => {
+                        if pressed {
+                            self.pc_cast_queued = true;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -801,12 +812,13 @@ impl Renderer {
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
         for i in 0..(self.wizard_count as usize) {
             let clip = self.select_clip(self.wizard_anim_index[i]);
-            let palette = if i == 0 {
-                // Fixed 5s cycle with a gap: play clip at native speed, hold last frame until 5s boundary
-                let cycle = 5.0f32;
-                let phase = (time_global % cycle).max(0.0);
-                let clip_time = phase.min(clip.duration);
-                anim::sample_palette(&self.skinned_cpu, clip, clip_time)
+            let palette = if i == self.pc_index {
+                if let Some(start) = self.pc_anim_start {
+                    let lt = (time_global - start).clamp(0.0, clip.duration.max(0.0));
+                    anim::sample_palette(&self.skinned_cpu, clip, lt)
+                } else {
+                    anim::sample_palette(&self.skinned_cpu, clip, time_global)
+                }
             } else {
                 let t = time_global + self.wizard_time_offset[i];
                 anim::sample_palette(&self.skinned_cpu, clip, t)
@@ -845,6 +857,31 @@ impl Renderer {
             .values()
             .next()
             .expect("at least one animation clip present")
+    }
+
+    fn process_pc_cast(&mut self, t: f32) {
+        if self.pc_cast_queued {
+            self.pc_cast_queued = false;
+            if self.wizard_anim_index[self.pc_index] != 0 && self.pc_anim_start.is_none() {
+                // Start PortalOpen now
+                self.wizard_anim_index[self.pc_index] = 0;
+                self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
+                self.wizard_last_phase[self.pc_index] = 0.0;
+                self.pc_anim_start = Some(t);
+            }
+        }
+        if let Some(start) = self.pc_anim_start {
+            if self.wizard_anim_index[self.pc_index] == 0 {
+                let clip = self.select_clip(0);
+                if t - start >= clip.duration.max(0.0) {
+                    // Return to Still
+                    self.wizard_anim_index[self.pc_index] = 1;
+                    self.pc_anim_start = None;
+                }
+            } else {
+                self.pc_anim_start = None;
+            }
+        }
     }
 
     // Update and render-side state for projectiles/particles
