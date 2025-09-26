@@ -414,6 +414,7 @@ async fn run(cli: Cli) -> Result<()> {
             anim: Box<AnimData>,
             active_index: usize,
             time: f32,
+            base: Box<SkinnedMeshCPU>,
         },
         Basic {
             vb: wgpu::Buffer,
@@ -535,8 +536,10 @@ async fn run(cli: Cli) -> Result<()> {
                 // Collect animation names
                 let mut names: Vec<String> = skinned.animations.keys().cloned().collect();
                 names.sort();
-                let anim = Box::new(AnimData::from_skinned(&skinned, &names));
-                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, skin_buf, center, diag, anims: names, anim, active_index: 0, time: 0.0 })
+                // Move skinned into model state as base
+                let base = Box::new(skinned);
+                let anim = Box::new(AnimData::from_skinned(&base, &names));
+                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, skin_buf, center, diag, anims: names, anim, active_index: 0, time: 0.0, base })
             }
             Err(e) => {
                 log::warn!("skinned load failed, trying unskinned: {}", e);
@@ -832,7 +835,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
             // Library entries click handling
             if let Some(gpu) = model_gpu.as_mut()
-                && let ModelGpu::Skinned { anims, active_index, time, anim, .. } = gpu
+                && let ModelGpu::Skinned { anims, active_index, time, anim, base, .. } = gpu
                 && !lib_anims.is_empty()
             {
                 let base_y = m + s + 8.0;
@@ -844,20 +847,14 @@ async fn run(cli: Cli) -> Result<()> {
                     let tx0 = m; let ty0 = y_offset + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0);
                     let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
                     if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
-                        // Use merge APIs against a temporary to get new clips (future: enhance ra-assets to return names)
-                        let mut tmp = SkinnedMeshCPU {
-                            vertices: Vec::new(), indices: Vec::new(), joints_nodes: anim.joints_nodes.clone(), inverse_bind: anim.inverse_bind.clone(), parent: anim.parent.clone(), base_t: anim.base_t.clone(), base_r: anim.base_r.clone(), base_s: anim.base_s.clone(), animations: std::collections::HashMap::new(), base_color_texture: None, node_names: Vec::new(), hand_right_node: None, root_node: None,
-                        };
                         let ext = a.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-                        if ext == "gltf" || ext == "glb" {
-                            let _ = merge_gltf_animations(&mut tmp, &a.path);
-                        } else if ext == "fbx" {
-                            // Try native FBX; if feature not enabled, attempt local conversion to GLB and merge
-                            if merge_fbx_animations(&mut tmp, &a.path).is_err()
-                                && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(&mut tmp, &conv); }
-                        }
-                        // Append any animations that appeared in tmp into our UI/model data
-                        for (k, v) in tmp.animations.into_iter() { anim.clips.push(v); anims.push(k); }
+                        if ext == "gltf" || ext == "glb" { let _ = merge_gltf_animations(base, &a.path); }
+                        else if ext == "fbx" && merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
+                        // refresh AnimData and UI list
+                        let mut new_names: Vec<String> = base.animations.keys().cloned().collect();
+                        new_names.sort();
+                        *anim = Box::new(AnimData::from_skinned(base, &new_names));
+                        *anims = new_names;
                         *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
                     }
                 }

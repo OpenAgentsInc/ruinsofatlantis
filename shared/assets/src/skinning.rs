@@ -140,12 +140,10 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         (joints_nodes, inverse_bind)
     } else { (vec![0usize], vec![Mat4::IDENTITY]) };
 
-    // Animations (subset)
+    // Animations (all clips)
     let mut animations: HashMap<String, AnimClip> = HashMap::new();
-    let wanted = ["PortalOpen", "Still", "Waiting"];
     for anim in doc.animations() {
         let name = anim.name().unwrap_or("").to_string();
-        if !wanted.contains(&name.as_str()) { continue; }
         let mut t_tracks: HashMap<usize, TrackVec3> = HashMap::new();
         let mut r_tracks: HashMap<usize, TrackQuat> = HashMap::new();
         let mut s_tracks: HashMap<usize, TrackVec3> = HashMap::new();
