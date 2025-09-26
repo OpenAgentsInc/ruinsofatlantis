@@ -62,6 +62,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - material.rs — Wizard material creation (base color texture + transform uniform).
   - fx.rs — FX resources (instances buffer, model bind group, quad VB) and integration helpers.
   - draw.rs — Renderer draw methods for wizards and particles.
+  - ui.rs — On-screen UI overlays (nameplates/text) rendered in screen space.
 
 - sim/
   - mod.rs — Sim engine index and exports.
@@ -73,4 +74,3 @@ This document summarizes the `src/` folder structure and what each module does.
   - scheduler.rs — Tick scheduling helpers.
   - events.rs — Event definitions used across systems.
   - types.rs — Small shared sim types.
-

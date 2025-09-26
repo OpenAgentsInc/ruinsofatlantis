@@ -192,3 +192,31 @@ fn vs_particle(v: PtcVert, i: PtcInst) -> PtcOut {
 fn fs_particle(i: PtcOut) -> @location(0) vec4<f32> {
   return vec4<f32>(i.color, 1.0);
 }
+
+// ---- Text overlay pipeline (screen-space quads) ----
+struct TextIn {
+  @location(0) pos_ndc: vec2<f32>,
+  @location(1) uv: vec2<f32>,
+};
+struct TextOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs_text(v: TextIn) -> TextOut {
+  var o: TextOut;
+  o.pos = vec4<f32>(v.pos_ndc, 0.0, 1.0);
+  o.uv = v.uv;
+  return o;
+}
+
+@group(0) @binding(0) var text_atlas: texture_2d<f32>;
+@group(0) @binding(1) var text_sampler: sampler;
+
+@fragment
+fn fs_text(i: TextOut) -> @location(0) vec4<f32> {
+  let a = textureSample(text_atlas, text_sampler, i.uv).r;
+  // White text with alpha from atlas
+  return vec4<f32>(1.0, 1.0, 1.0, a);
+}

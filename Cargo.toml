@@ -5,6 +5,7 @@ edition = "2024"
 default-run = "ruinsofatlantis"
 
 [dependencies]
+ab_glyph = "0.2.25"
 anyhow = "1.0.100"
 base64 = "0.22.1"
 bevy = "0.14"

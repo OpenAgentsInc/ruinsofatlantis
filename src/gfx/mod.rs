@@ -26,6 +26,7 @@ mod material;
 mod fx;
 mod draw;
 mod camera_sys;
+mod ui;
 
 use crate::assets::{AnimClip, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
 use crate::core::data::{loader as data_loader, spell::SpellSpec};
@@ -144,6 +145,9 @@ pub struct Renderer {
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
+
+    // UI overlay
+    nameplates: ui::Nameplates,
 }
 
 impl Renderer {
@@ -249,6 +253,9 @@ impl Renderer {
         );
         let particle_pipeline =
             pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, config.format);
+
+        // UI: nameplates
+        let nameplates = ui::Nameplates::new(&device, config.format)?;
 
         // --- Buffers & bind groups ---
         // Globals
@@ -398,6 +405,8 @@ impl Renderer {
 
         // Build scene instance buffers and camera target
         let scene_build = scene::build_demo_scene(&device, &skinned_cpu, plane_extent);
+        // Upload text atlas once now that we have a queue
+        nameplates.upload_atlas(&queue);
         // FX resources
         let fx_res = fx::create_fx_resources(&device, &model_bgl);
         let fx_instances = fx_res.instances;
@@ -503,6 +512,7 @@ impl Renderer {
             particles: Vec::new(),
             cam_target: scene_build.cam_target,
             fire_bolt,
+            nameplates,
         })
     }
 
@@ -632,6 +642,18 @@ impl Renderer {
             // FX
             self.draw_particles(&mut rpass);
         }
+        // Overlay: nameplates after 3D content
+        let view_proj = glam::Mat4::from_cols_array_2d(&globals.view_proj);
+        self.nameplates.queue_labels(
+            &self.device,
+            &self.queue,
+            self.config.width,
+            self.config.height,
+            view_proj,
+            &self.wizard_models,
+        );
+        self.nameplates.draw(&mut encoder, &view);
+
         self.queue.submit(Some(encoder.finish()));
         frame.present();
         Ok(())
