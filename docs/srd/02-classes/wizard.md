@@ -128,6 +128,38 @@ You create an acidic bubble at a point within range, where it explodes in a 5‑
 
 Cantrip Upgrade: The damage increases by 1d6 when you reach levels 5 (2d6), 11 (3d6), and 17 (4d6).
 
+#### Blade Ward
+Abjuration Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: V, S
+- Duration: 1 round
+
+You trace a sigil of warding in the air. Until the end of your next turn, you have Resistance to Bludgeoning, Piercing, and Slashing damage from weapon attacks.
+
+#### Chill Touch
+Necromancy Cantrip (Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: V, S
+- Duration: 1 round
+
+You create a ghostly, skeletal hand in the space of a creature within range. Make a ranged spell attack against the creature to assail it with the chill of the grave. On a hit, the target takes 1d8 Necrotic damage, and it can’t regain Hit Points until the start of your next turn. If you hit an Undead target, it also has Disadvantage on attack rolls against you until the end of your next turn.
+
+Cantrip Upgrade: The damage increases by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).
+
+#### Dancing Lights
+Evocation Cantrip (Bard, Sorcerer, Wizard)
+
+- Casting Time: Action
+- Range: 120 feet
+- Components: V, S, M (a bit of phosphorus or wychwood, or a glowworm)
+- Duration: Concentration, up to 1 minute
+
+You create up to four torch‑sized lights within range, making them appear as torches, lanterns, or glowing orbs that hover in the air. Each sheds Dim Light in a 10‑foot radius. As a Magic action, you can move the lights up to 60 feet to a new spot within range. A light must be within 20 feet of at least one other light created by this spell, and a light winks out if it exceeds the spell’s range. You can also combine the lights into a glowing, vaguely Humanoid form of Medium size that likewise gives off Dim Light in a 10‑foot radius.
+
 #### Fire Bolt
 Evocation Cantrip (Sorcerer, Wizard)
 
@@ -139,6 +171,16 @@ Evocation Cantrip (Sorcerer, Wizard)
 You hurl a mote of fire at a creature or an object within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 Fire damage. A flammable object hit by this spell ignites if it isn’t being worn or carried.
 
 Cantrip Upgrade: The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).
+
+#### Friends
+Enchantment Cantrip (Bard, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: Self
+- Components: S, M (a small amount of makeup applied to the face as part of the spell)
+- Duration: Concentration, up to 1 minute
+
+For the duration, you have Advantage on Charisma checks directed at one creature of your choice that isn’t Hostile toward you. When the spell ends, the creature realizes that you used magic to influence its mood and becomes Hostile toward you.
 
 #### Light
 Evocation Cantrip (Bard, Cleric, Sorcerer, Wizard)
@@ -189,6 +231,18 @@ Illusion Cantrip (Bard, Sorcerer, Warlock, Wizard)
 - Duration: 1 minute
 
 You create a sound or an image of an object within range that lasts for the duration. A creature that studies the illusion can discern it with an Intelligence (Investigation) check against your spell save DC; a creature that discerns the illusion sees it as faint.
+
+#### Poison Spray
+Conjuration Cantrip (Druid, Sorcerer, Warlock, Wizard)
+
+- Casting Time: Action
+- Range: 10 feet
+- Components: V, S
+- Duration: Instantaneous
+
+You extend your hand toward a creature you can see within range and project a puff of noxious gas from your palm. The creature must succeed on a Constitution saving throw or take 1d12 Poison damage.
+
+Cantrip Upgrade: The damage increases by 1d12 when you reach levels 5 (2d12), 11 (3d12), and 17 (4d12).
 
 #### Prestidigitation
 Transmutation Cantrip (Bard, Sorcerer, Warlock, Wizard)
