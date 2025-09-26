@@ -5,12 +5,21 @@ use crate::core::data::ids::Id;
 
 /// Simple action FSM handling cast/channel/recovery and a separate GCD budget.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum ActionState {
+    #[default]
     Idle,
-    Casting { ability: Id, remaining_ms: u32 },
-    Channeling { ability: Id, remaining_ms: u32 },
-    Recovery { remaining_ms: u32 },
+    Casting {
+        ability: Id,
+        remaining_ms: u32,
+    },
+    Channeling {
+        ability: Id,
+        remaining_ms: u32,
+    },
+    Recovery {
+        remaining_ms: u32,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -23,11 +32,7 @@ pub struct ReactionWindow {
     pub remaining_ms: u32,
 }
 
-impl Default for ActionState {
-    fn default() -> Self {
-        ActionState::Idle
-    }
-}
+// Default is derived above; Idle is the default variant.
 
 impl ActionState {
     /// Advance timers by `dt_ms`, returning the updated state and any completion flag.

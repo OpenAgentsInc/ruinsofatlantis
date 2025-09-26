@@ -94,27 +94,27 @@ pub fn compute_portalopen_strikes(
     _root_node: Option<usize>,
 ) -> Vec<f32> {
     if let (Some(hand), Some(clip)) = (hand_right_node, mesh.animations.get("PortalOpen")) {
-        if let Some(trk) = clip.t_tracks.get(&hand) {
-            if trk.times.len() >= 3 {
-                let mut min_y = f32::INFINITY;
-                for v in &trk.values {
-                    if v.y < min_y {
-                        min_y = v.y;
-                    }
+        if let Some(trk) = clip.t_tracks.get(&hand)
+            && trk.times.len() >= 3
+        {
+            let mut min_y = f32::INFINITY;
+            for v in &trk.values {
+                if v.y < min_y {
+                    min_y = v.y;
                 }
-                let thresh = min_y + 0.02;
-                let mut out = Vec::new();
-                for i in 1..(trk.times.len() - 1) {
-                    let y0 = trk.values[i - 1].y;
-                    let y1 = trk.values[i].y;
-                    let y2 = trk.values[i + 1].y;
-                    if y1 < y0 && y1 < y2 && y1 <= thresh {
-                        out.push(trk.times[i]);
-                    }
+            }
+            let thresh = min_y + 0.02;
+            let mut out = Vec::new();
+            for i in 1..(trk.times.len() - 1) {
+                let y0 = trk.values[i - 1].y;
+                let y1 = trk.values[i].y;
+                let y2 = trk.values[i + 1].y;
+                if y1 < y0 && y1 < y2 && y1 <= thresh {
+                    out.push(trk.times[i]);
                 }
-                if !out.is_empty() {
-                    return out;
-                }
+            }
+            if !out.is_empty() {
+                return out;
             }
         }
         // Fallback: periodic triggers if hand track missing

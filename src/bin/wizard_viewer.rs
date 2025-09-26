@@ -464,7 +464,7 @@ fn load_gltf_mesh_and_basecolor(path: &str) -> Result<(MeshCpu, TextureCpu)> {
     };
     let vertices: Vec<Vertex> = pos
         .into_iter()
-        .zip(uv.into_iter())
+        .zip(uv)
         .map(|(p, t)| Vertex { pos: p, uv: t })
         .collect();
 

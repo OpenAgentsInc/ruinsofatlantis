@@ -66,15 +66,13 @@ pub fn run(state: &mut SimState) {
             dc,
             if ok { "SUCCEED" } else { "FAIL" }
         ));
-        if !ok {
-            if let Some(of) = on_fail {
-                if let Some(name) = of.apply_condition {
-                    if let Some(cond) = parse_condition(&name) {
-                        let dur = of.duration_ms.unwrap_or(6000);
-                        state.pending_status.push((tgt_idx, cond, dur));
-                    }
-                }
-            }
+        if !ok
+            && let Some(of) = on_fail
+            && let Some(name) = of.apply_condition
+            && let Some(cond) = parse_condition(&name)
+        {
+            let dur = of.duration_ms.unwrap_or(6000);
+            state.pending_status.push((tgt_idx, cond, dur));
         }
     }
 }
@@ -82,15 +80,12 @@ pub fn run(state: &mut SimState) {
 fn actor_save_mod(state: &mut SimState, idx: usize, kind: SaveKind) -> i32 {
     let mut bonus = 0;
     // Use simple defaults: Dex+1 for non-boss, +3 for boss
-    match kind {
-        SaveKind::Dex => {
-            bonus += if state.actors[idx].role == "boss" {
-                3
-            } else {
-                1
-            };
-        }
-        _ => {}
+    if let SaveKind::Dex = kind {
+        bonus += if state.actors[idx].role == "boss" {
+            3
+        } else {
+            1
+        };
     }
     // Bless adds 1d4 to saves if active
     if state.actors[idx].blessed_ms > 0 {

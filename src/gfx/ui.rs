@@ -210,7 +210,7 @@ impl Nameplates {
             text_pipeline,
             vbuf,
             vcount: 0,
-            vcap_bytes: vcap_bytes,
+            vcap_bytes,
         })
     }
 

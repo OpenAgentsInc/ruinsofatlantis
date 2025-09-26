@@ -16,9 +16,7 @@ pub fn run(state: &mut SimState) {
     for idx in 0..state.actors.len() {
         let start_ability: Option<(String, usize)> = {
             let a = &state.actors[idx];
-            if !matches!(a.action, ActionState::Idle) {
-                None
-            } else if a.ability_ids.is_empty() {
+            if !matches!(a.action, ActionState::Idle) || a.ability_ids.is_empty() {
                 None
             } else {
                 let i = a.next_ability_idx % a.ability_ids.len();

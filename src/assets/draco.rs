@@ -10,7 +10,7 @@ use crate::gfx::Vertex;
 /// Decode a Draco-compressed primitive into POSITION/NORMAL vertices and indices.
 pub(crate) fn decode_draco_primitive(
     doc: &gltf::Document,
-    buffers: &Vec<Data>,
+    buffers: &[Data],
     prim: &gltf::mesh::Primitive,
     out_vertices: &mut Vec<Vertex>,
     out_indices: &mut Vec<u16>,
@@ -186,10 +186,9 @@ pub(crate) fn decode_draco_primitive(
         }
     } else {
         let base = out_indices.len() - (index_count as usize);
-        for i in base..out_indices.len() {
-            let v = out_indices[i] as u32 + start_u;
-            out_indices[i] =
-                u16::try_from(v).map_err(|_| anyhow!("rebased index {} exceeds u16", v))?;
+        for item in out_indices.iter_mut().skip(base) {
+            let v = *item as u32 + start_u;
+            *item = u16::try_from(v).map_err(|_| anyhow!("rebased index {} exceeds u16", v))?;
         }
     }
     Ok(())
@@ -198,7 +197,7 @@ pub(crate) fn decode_draco_primitive(
 /// Draco decode for skinned primitive: fills VertexSkinCPU with JOINTS_0/WEIGHTS_0 and UVs.
 pub(crate) fn decode_draco_skinned_primitive(
     doc: &gltf::Document,
-    buffers: &Vec<Data>,
+    buffers: &[Data],
     prim: &gltf::mesh::Primitive,
     out_vertices: &mut Vec<VertexSkinCPU>,
     out_indices: &mut Vec<u16>,

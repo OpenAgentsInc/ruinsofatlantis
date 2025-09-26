@@ -10,7 +10,7 @@ pub fn run(state: &mut SimState) {
             || state
                 .spells
                 .get(&ability_id)
-                .map(|s| s.name.to_ascii_lowercase() == "bless")
+                .map(|s| s.name.eq_ignore_ascii_case("bless"))
                 .unwrap_or(false);
         if is_bless {
             // Apply Bless to all non-boss allies for 10s

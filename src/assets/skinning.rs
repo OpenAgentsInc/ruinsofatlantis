@@ -59,13 +59,11 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let joints_it = reader.read_joints(0);
                 let weights_it = reader.read_weights(0);
 
-                if pos_it.is_some()
-                    && nrm_it.is_some()
-                    && joints_it.is_some()
-                    && weights_it.is_some()
+                if let (Some(pos_it), Some(nrm_it), Some(joints_it), Some(weights_it)) =
+                    (pos_it, nrm_it, joints_it, weights_it)
                 {
-                    let pos: Vec<[f32; 3]> = pos_it.unwrap().collect();
-                    let nrm: Vec<[f32; 3]> = nrm_it.unwrap().collect();
+                    let pos: Vec<[f32; 3]> = pos_it.collect();
+                    let nrm: Vec<[f32; 3]> = nrm_it.collect();
                     let uv_set = prim
                         .material()
                         .pbr_metallic_roughness()
@@ -80,7 +78,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                             .map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]])
                             .collect()
                     };
-                    let joints: Vec<[u16; 4]> = match joints_it.unwrap() {
+                    let joints: Vec<[u16; 4]> = match joints_it {
                         gltf::mesh::util::ReadJoints::U16(it) => {
                             it.map(|v| [v[0], v[1], v[2], v[3]]).collect()
                         }
@@ -88,7 +86,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                             .map(|v| [v[0] as u16, v[1] as u16, v[2] as u16, v[3] as u16])
                             .collect(),
                     };
-                    let weights: Vec<[f32; 4]> = match weights_it.unwrap() {
+                    let weights: Vec<[f32; 4]> = match weights_it {
                         gltf::mesh::util::ReadWeights::F32(it) => it.collect(),
                         gltf::mesh::util::ReadWeights::U16(it) => it
                             .map(|v| {
@@ -241,10 +239,10 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 continue;
             };
             let times: Vec<f32> = inputs.collect();
-            if let Some(&last) = times.last() {
-                if last > max_t {
-                    max_t = last;
-                }
+            if let Some(&last) = times.last()
+                && last > max_t
+            {
+                max_t = last;
             }
             match target.property() {
                 gltf::animation::Property::Translation => {
@@ -253,7 +251,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     };
                     let vals: Vec<Vec3> = match outs {
                         gltf::animation::util::ReadOutputs::Translations(it) => {
-                            it.map(|v| Vec3::from(v)).collect()
+                            it.map(Vec3::from).collect()
                         }
                         _ => continue,
                     };
@@ -290,7 +288,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     };
                     let vals: Vec<Vec3> = match outs {
                         gltf::animation::util::ReadOutputs::Scales(it) => {
-                            it.map(|v| Vec3::from(v)).collect()
+                            it.map(Vec3::from).collect()
                         }
                         _ => continue,
                     };
@@ -337,38 +335,37 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         .next()
         .and_then(|m| m.primitives().next())
         .map(|p| p.material())
+        && let Some(texinfo) = material.pbr_metallic_roughness().base_color_texture()
     {
-        if let Some(texinfo) = material.pbr_metallic_roughness().base_color_texture() {
-            let tex = texinfo.texture();
-            let img_idx = tex.source().index();
-            if let Some(img) = images.get(img_idx) {
-                // Convert to RGBA8
-                let (w, h) = (img.width, img.height);
-                let pixels = match img.format {
-                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
-                    gltf::image::Format::R8G8B8 => {
-                        let mut out = Vec::with_capacity((w * h * 4) as usize);
-                        for c in img.pixels.chunks_exact(3) {
-                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
-                        }
-                        out
+        let tex = texinfo.texture();
+        let img_idx = tex.source().index();
+        if let Some(img) = images.get(img_idx) {
+            // Convert to RGBA8
+            let (w, h) = (img.width, img.height);
+            let pixels = match img.format {
+                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                gltf::image::Format::R8G8B8 => {
+                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                    for c in img.pixels.chunks_exact(3) {
+                        out.extend_from_slice(&[c[0], c[1], c[2], 255]);
                     }
-                    gltf::image::Format::R8 => {
-                        let mut out = Vec::with_capacity((w * h * 4) as usize);
-                        for &r in &img.pixels {
-                            out.extend_from_slice(&[r, r, r, 255]);
-                        }
-                        out
+                    out
+                }
+                gltf::image::Format::R8 => {
+                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                    for &r in &img.pixels {
+                        out.extend_from_slice(&[r, r, r, 255]);
                     }
-                    _ => img.pixels.clone(),
-                };
-                base_color_texture = Some(TextureCPU {
-                    pixels,
-                    width: w,
-                    height: h,
-                    srgb: true,
-                });
-            }
+                    out
+                }
+                _ => img.pixels.clone(),
+            };
+            base_color_texture = Some(TextureCPU {
+                pixels,
+                width: w,
+                height: h,
+                srgb: true,
+            });
         }
     }
 

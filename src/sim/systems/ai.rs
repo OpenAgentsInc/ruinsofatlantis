@@ -33,11 +33,12 @@ pub fn run(state: &mut SimState) {
     }
     // Ensure players target the boss
     let boss_target = boss_idxs.first().copied();
-    for (_i, a) in state.actors.iter_mut().enumerate() {
-        if a.team.as_deref() == Some("players") && a.hp > 0 {
-            if let Some(bi) = boss_target {
-                a.target = Some(bi);
-            }
+    for a in state.actors.iter_mut() {
+        if a.team.as_deref() == Some("players")
+            && a.hp > 0
+            && let Some(bi) = boss_target
+        {
+            a.target = Some(bi);
         }
     }
 }

@@ -18,13 +18,11 @@ pub fn run_scenario(scn: &Scenario, result_only: bool) {
         let (ac_base, hp, atk, dc) = if a.role == "boss" {
             let (ac, hp) = state.load_monster_defaults(&a.id).unwrap_or((17, 120));
             (ac, hp, 8, 13)
+        } else if let Some(class_id) = &a.class {
+            let (ac, atk, dc) = state.load_class_defaults(class_id).unwrap_or((12, 0, 0));
+            (ac, 30, atk, dc)
         } else {
-            if let Some(class_id) = &a.class {
-                let (ac, atk, dc) = state.load_class_defaults(class_id).unwrap_or((12, 0, 0));
-                (ac, 30, atk, dc)
-            } else {
-                (12, 30, 0, 0)
-            }
+            (12, 30, 0, 0)
         };
         // Team membership: use scenario team if present; else default to "players" for non-boss, "boss" for boss
         let team = a.team.clone().or_else(|| {

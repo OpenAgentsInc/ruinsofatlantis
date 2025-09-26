@@ -47,22 +47,21 @@ pub fn run(state: &mut SimState) {
             let mut target_ac = target_ac_initial;
             let would_hit = total >= target_ac;
             // Reaction: Shield (+5 AC) if target has shield and reaction ready and would be hit
-            if let Some(tgt_idx) = state.actors[actor_idx].target {
-                if would_hit
-                    && state.actors[tgt_idx].reaction_ready
-                    && state.actors[tgt_idx]
-                        .ability_ids
-                        .iter()
-                        .any(|s| s.contains("shield"))
-                {
-                    state.actors[tgt_idx].ac_temp_bonus += 5;
-                    state.actors[tgt_idx].reaction_ready = false;
-                    target_ac = target_ac + 5;
-                    state.log(format!(
-                        "shield_reaction tgt={} +5 AC -> {}",
-                        state.actors[tgt_idx].id, target_ac
-                    ));
-                }
+            if let Some(tgt_idx) = state.actors[actor_idx].target
+                && would_hit
+                && state.actors[tgt_idx].reaction_ready
+                && state.actors[tgt_idx]
+                    .ability_ids
+                    .iter()
+                    .any(|s| s.contains("shield"))
+            {
+                state.actors[tgt_idx].ac_temp_bonus += 5;
+                state.actors[tgt_idx].reaction_ready = false;
+                target_ac += 5;
+                state.log(format!(
+                    "shield_reaction tgt={} +5 AC -> {}",
+                    state.actors[tgt_idx].id, target_ac
+                ));
             }
             let hit = total >= target_ac;
             let actor_id = state.actors[actor_idx].id.clone();

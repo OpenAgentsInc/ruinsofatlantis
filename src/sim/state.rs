@@ -64,32 +64,32 @@ impl SimState {
             return Ok(spec);
         }
         // Try last segment after '.' (e.g., wiz.fire_bolt.srd521 -> srd521.json or fire_bolt.json)
-        if let Some(last) = id.split('.').last() {
+        if let Some(last) = id.rsplit('.').next() {
             let alt = format!("spells/{}.json", last);
             if let Ok(spec) = load_spell_spec(&alt) {
                 return Ok(spec);
             }
         }
         // Heuristic: if the id contains "fire_bolt", fall back to fire_bolt.json
-        if id.contains("fire_bolt") {
-            if let Ok(spec) = load_spell_spec("spells/fire_bolt.json") {
-                return Ok(spec);
-            }
+        if id.contains("fire_bolt")
+            && let Ok(spec) = load_spell_spec("spells/fire_bolt.json")
+        {
+            return Ok(spec);
         }
-        if id.contains("bless") {
-            if let Ok(spec) = load_spell_spec("spells/bless.json") {
-                return Ok(spec);
-            }
+        if id.contains("bless")
+            && let Ok(spec) = load_spell_spec("spells/bless.json")
+        {
+            return Ok(spec);
         }
-        if id.contains("shield") {
-            if let Ok(spec) = load_spell_spec("spells/shield.json") {
-                return Ok(spec);
-            }
+        if id.contains("shield")
+            && let Ok(spec) = load_spell_spec("spells/shield.json")
+        {
+            return Ok(spec);
         }
-        if id.contains("grease") {
-            if let Ok(spec) = load_spell_spec("spells/grease.json") {
-                return Ok(spec);
-            }
+        if id.contains("grease")
+            && let Ok(spec) = load_spell_spec("spells/grease.json")
+        {
+            return Ok(spec);
         }
         // Fallback: try the filename portion after a slash if present
         if let Some((_ns, tail)) = id.rsplit_once('/') {

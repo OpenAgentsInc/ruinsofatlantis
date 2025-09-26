@@ -210,7 +210,7 @@ impl Renderer {
             .find(|m| *m == wgpu::PresentMode::Mailbox)
             .unwrap_or(wgpu::PresentMode::Fifo);
         let alpha_mode = caps.alpha_modes[0];
-        let max_dim = device.limits().max_texture_dimension_2d.min(2048).max(1);
+        let max_dim = device.limits().max_texture_dimension_2d.clamp(1, 2048);
         let (w, h) = scale_to_max((size.width, size.height), max_dim);
         if (w, h) != (size.width, size.height) {
             log::warn!(
@@ -691,7 +691,7 @@ impl Renderer {
             .write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
     }
 
-    fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
+    fn select_clip(&self, idx: usize) -> &AnimClip {
         // Honor the requested clip first; fallback only if missing.
         let requested = match idx {
             0 => "PortalOpen",
@@ -820,10 +820,10 @@ impl Renderer {
     fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
         let mut speed = 40.0;
         let life = 1.2;
-        if let Some(spec) = &self.fire_bolt {
-            if let Some(p) = &spec.projectile {
-                speed = p.speed_mps;
-            }
+        if let Some(spec) = &self.fire_bolt
+            && let Some(p) = &spec.projectile
+        {
+            speed = p.speed_mps;
         }
         self.projectiles.push(Projectile {
             pos: origin,

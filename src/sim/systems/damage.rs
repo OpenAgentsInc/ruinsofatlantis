@@ -34,7 +34,7 @@ pub fn run(state: &mut SimState) {
             if state.underwater && dmg_type == "fire" {
                 total = (total / 2).max(0);
             }
-            state.actors[tgt_idx].hp -= total as i32;
+            state.actors[tgt_idx].hp -= total;
             state.log(format!(
                 "damage_applied src={} tgt={} ability={} dmg={} hp: {} -> {}",
                 state.actors[actor_idx].id,

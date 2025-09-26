@@ -23,7 +23,7 @@ fn save_kind_cov() {
         SaveKind::Cha,
     ];
     for k in kinds {
-        assert!(format!("{:?}", k).len() > 0);
+        assert!(!format!("{:?}", k).is_empty());
     }
 }
 

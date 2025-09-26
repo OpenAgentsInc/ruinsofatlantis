@@ -204,21 +204,21 @@ fn read_texture_transform() -> Option<MaterialXform> {
         rot: 0.0,
         _pad2: [0.0; 3],
     };
-    if let Some(off) = ext.get("offset").and_then(|v| v.as_array()) {
-        if off.len() == 2 {
-            xf.offset = [
-                off[0].as_f64().unwrap_or(0.0) as f32,
-                off[1].as_f64().unwrap_or(0.0) as f32,
-            ];
-        }
+    if let Some(off) = ext.get("offset").and_then(|v| v.as_array())
+        && off.len() == 2
+    {
+        xf.offset = [
+            off[0].as_f64().unwrap_or(0.0) as f32,
+            off[1].as_f64().unwrap_or(0.0) as f32,
+        ];
     }
-    if let Some(s) = ext.get("scale").and_then(|v| v.as_array()) {
-        if s.len() == 2 {
-            xf.scale = [
-                s[0].as_f64().unwrap_or(1.0) as f32,
-                s[1].as_f64().unwrap_or(1.0) as f32,
-            ];
-        }
+    if let Some(s) = ext.get("scale").and_then(|v| v.as_array())
+        && s.len() == 2
+    {
+        xf.scale = [
+            s[0].as_f64().unwrap_or(1.0) as f32,
+            s[1].as_f64().unwrap_or(1.0) as f32,
+        ];
     }
     if let Some(r) = ext.get("rotation").and_then(|v| v.as_f64()) {
         xf.rot = r as f32;

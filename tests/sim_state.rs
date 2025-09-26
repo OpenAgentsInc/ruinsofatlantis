@@ -79,7 +79,7 @@ fn target_ac_and_allies() {
 fn roll_dice_str_parses() {
     let mut s = SimState::new(50, 123);
     let v = s.roll_dice_str("2d6");
-    assert!(v >= 2 && v <= 12);
+    assert!((2..=12).contains(&v));
 }
 
 #[test]
