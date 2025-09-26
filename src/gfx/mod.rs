@@ -513,7 +513,7 @@ impl Renderer {
         }
         let (w, h) = scale_to_max((new_size.width, new_size.height), self.max_dim);
         if (w, h) != (new_size.width, new_size.height) {
-            log::warn!(
+            log::debug!(
                 "Resized {}x{} exceeds max {}, clamped to {}x{} (aspect kept)",
                 new_size.width,
                 new_size.height,
