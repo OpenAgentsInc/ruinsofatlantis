@@ -807,6 +807,8 @@ impl Renderer {
 
         // Update player transform from input (WASD) then camera follow
         self.update_player_and_camera(dt, aspect);
+        // Simple AI: rotate non-PC wizards to face nearest alive zombie so firebolts aim correctly
+        self.update_wizard_ai(dt);
         // Compute local orbit offsets (relative to PC orientation)
         let (off_local, look_local) = camera_sys::compute_local_orbit_offsets(
             self.cam_distance,
@@ -997,6 +999,57 @@ impl Renderer {
 }
 
 impl Renderer {
+    fn yaw_from_model(m: &glam::Mat4) -> f32 {
+        let f = *m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0);
+        f32::atan2(f.x, f.z)
+    }
+
+    fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
+        let mut delta = target - current;
+        while delta > std::f32::consts::PI { delta -= std::f32::consts::TAU; }
+        while delta < -std::f32::consts::PI { delta += std::f32::consts::TAU; }
+        if delta.abs() <= max_delta { target } else if delta > 0.0 { current + max_delta } else { current - max_delta }
+    }
+
+    fn update_wizard_ai(&mut self, dt: f32) {
+        if self.wizard_count == 0 { return; }
+        // Collect alive zombie positions once
+        let mut targets: Vec<glam::Vec3> = Vec::new();
+        for n in &self.server.npcs { if n.alive { targets.push(n.pos); } }
+        if targets.is_empty() { return; }
+        let yaw_rate = 2.5 * dt; // rad per frame
+        for i in 0..(self.wizard_count as usize) {
+            if i == self.pc_index { continue; }
+            // Wizard position
+            let m = self.wizard_models[i];
+            let pos = glam::vec3(m.to_cols_array()[12], m.to_cols_array()[13], m.to_cols_array()[14]);
+            // Find nearest target
+            let mut best_d2 = f32::INFINITY;
+            let mut best = None;
+            for t in &targets {
+                let d2 = (t.x - pos.x) * (t.x - pos.x) + (t.z - pos.z) * (t.z - pos.z);
+                if d2 < best_d2 { best_d2 = d2; best = Some(*t); }
+            }
+            let Some(tgt) = best else { continue; };
+            let desired_yaw = (tgt.x - pos.x).atan2(tgt.z - pos.z);
+            let cur_yaw = Self::yaw_from_model(&m);
+            let new_yaw = Self::turn_towards(cur_yaw, desired_yaw, yaw_rate);
+            if (new_yaw - cur_yaw).abs() > 1e-4 {
+                let new_m = glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::from_rotation_y(new_yaw),
+                    pos,
+                );
+                self.wizard_models[i] = new_m;
+                // Update instance CPU + upload one slot
+                let mut inst = self.wizard_instances_cpu[i];
+                inst.model = new_m.to_cols_array_2d();
+                self.wizard_instances_cpu[i] = inst;
+                let offset = (i * std::mem::size_of::<InstanceSkin>()) as u64;
+                self.queue.write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+            }
+        }
+    }
     fn select_zombie_clip(&self) -> Option<&AnimClip> {
         // Prefer common idle names, then walk/run, otherwise any
         let keys = [
