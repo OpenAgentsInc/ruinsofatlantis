@@ -5,6 +5,7 @@ use clap::Parser;
 use glam::{Mat4, Vec3};
 use log::info;
 use ra_assets::{load_gltf_skinned, SkinnedMeshCPU};
+use wgpu::util::DeviceExt;
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceTargetUnsafe};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
 
@@ -91,16 +92,13 @@ async fn run(cli: Cli) -> Result<()> {
         wgpu::Features::empty()
     };
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("viewer-device"),
-                required_features: needed_features,
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::default(),
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("viewer-device"),
+            required_features: needed_features,
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::default(),
+        })
         .await?;
 
     // Surface config
@@ -407,4 +405,3 @@ fn scale_to_max((w, h): (u32, u32), max_dim: u32) -> (u32, u32) {
         (nw, nh)
     }
 }
-
