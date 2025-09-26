@@ -3,7 +3,7 @@
 //! This controller implements a simple third-person scheme:
 //! - A/D turn the character in place (no strafing).
 //! - W moves forward along the character's facing.
-//! - S does not translate (as requested) — it can be wired to backwards later.
+//! - S moves straight back along the character's facing (no strafing).
 
 use glam::Vec3;
 
@@ -25,18 +25,22 @@ impl PlayerController {
         let speed = if input.run { 9.0 } else { 5.0 };
         let yaw_rate = 1.8; // rad/s
 
-        // In-place yaw
-        if input.left {
-            self.yaw = wrap_angle(self.yaw + yaw_rate * dt);
-        }
-        if input.right {
-            self.yaw = wrap_angle(self.yaw - yaw_rate * dt);
+        // To ensure S goes straight back, do not adjust yaw while S is held.
+        if !input.backward {
+            if input.left {
+                self.yaw = wrap_angle(self.yaw + yaw_rate * dt);
+            }
+            if input.right {
+                self.yaw = wrap_angle(self.yaw - yaw_rate * dt);
+            }
         }
 
-        // Forward-only translation
-        if input.forward {
-            let fwd = Vec3::new(self.yaw.sin(), 0.0, self.yaw.cos());
-            self.pos += fwd.normalize_or_zero() * speed * dt;
+        // Forward/backward translation only (no strafing)
+        let fwd = Vec3::new(self.yaw.sin(), 0.0, self.yaw.cos()).normalize_or_zero();
+        if input.forward && !input.backward {
+            self.pos += fwd * speed * dt;
+        } else if input.backward && !input.forward {
+            self.pos -= fwd * speed * dt;
         }
     }
 }
@@ -82,5 +86,21 @@ mod tests {
         pc.update(&input, 0.016, cam_fwd);
         // Should change yaw smoothly (magnitude less than 90deg)
         assert!(pc.yaw.abs() > 0.0 && pc.yaw.abs() < std::f32::consts::FRAC_PI_2);
+    }
+
+    #[test]
+    fn backward_moves_straight_back_no_yaw_change() {
+        let mut pc = PlayerController::new(Vec3::ZERO);
+        pc.yaw = 0.7; // arbitrary facing
+        let input = InputState { backward: true, ..Default::default() };
+        let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
+        let yaw0 = pc.yaw;
+        pc.update(&input, 0.2, cam_fwd);
+        // No yaw change when S is held alone
+        assert!((pc.yaw - yaw0).abs() < 1e-6);
+        // Displacement aligns with -forward
+        let fwd = Vec3::new(yaw0.sin(), 0.0, yaw0.cos()).normalize_or_zero();
+        let disp = pc.pos;
+        assert!(disp.dot(-fwd) > 0.0);
     }
 }
