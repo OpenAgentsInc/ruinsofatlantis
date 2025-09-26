@@ -13,7 +13,4 @@
 - docs/srd/02-classes/rogue.md
 - docs/srd/02-classes/sorcerer.md
 - docs/srd/02-classes/warlock.md
-<<<<<<< HEAD
 - docs/srd/02-classes/wizard.md
-=======
->>>>>>> origin/wizardandruins
