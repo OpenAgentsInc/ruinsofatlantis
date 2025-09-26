@@ -1,4 +1,4 @@
-<!-- Source: Adapted from docs/SRD_CC_v5.2.1.pdf pp.2–3; reorganized to match this Markdown hierarchy. -->
+<!-- Source: Adapted from docs/srd/SRD_CC_v5.2.1.pdf pp.2–3; reorganized to match this Markdown hierarchy. -->
 
 # Contents
 

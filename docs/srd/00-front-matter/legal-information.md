@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.1 -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.1 -->
 
 # Legal Information
 
@@ -9,4 +9,3 @@ The System Reference Document 5.2.1 (“SRD 5.2.1”) is provided to you free of
 Please do not include any other attribution to Wizards or its parent or affiliates other than that provided above. You may, however, include a statement on your work indicating that it is “compatible with fifth edition” or “5E compatible.”
 
 Section 5 of CC-BY-4.0 includes a Disclaimer of Warranties and Limitation of Liability that limits our liability to you.
-

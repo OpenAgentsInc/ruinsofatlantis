@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.61–64 (Rogue class, Thief) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.61–64 (Rogue class, Thief) -->
 
 # Rogue
 
@@ -51,4 +51,3 @@ Hunt for Treasure as a Classic Adventurer
 - Level 9: Supreme Sneak. New Cunning Strike option: Stealth Attack (1d6) that preserves Invisible condition if you end behind 3/4 or Total Cover.
 - Level 13: Use Magic Device. Attune to up to 4 items; on 1d6=6 don’t expend charges; use any Spell Scroll (Int used; checks for higher levels).
 - Level 17: Thief’s Reflexes. Two turns in the first round (normal Initiative and Initiative −10).
-

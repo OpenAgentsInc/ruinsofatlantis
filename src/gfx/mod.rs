@@ -685,19 +685,21 @@ impl Renderer {
             rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
 
-            // Ruins (instanced)
-            let inst_pipe = if self.wire_enabled {
-                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
-            } else {
-                &self.inst_pipeline
-            };
-            rpass.set_pipeline(inst_pipe);
-            rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
-            rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
-            rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+            // Ruins (instanced) — only draw when we have instances
+            if self.ruins_count > 0 {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
+                rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+            }
 
             // FX (instanced cubes/particles) — draw only if we have any
             if self.fx_count > 0 {

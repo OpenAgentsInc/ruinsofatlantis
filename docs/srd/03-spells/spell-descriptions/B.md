@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.112–113 (B spells and nearby) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.112–113 (B spells and nearby) -->
 
 # B Spells
 
@@ -161,4 +161,3 @@ Level 1 Evocation (Sorcerer, Wizard)
 - Duration: Instantaneous
 
 A thin sheet of flames shoots from your outstretched hands. Each creature in a 15‑foot Cone must make a Dexterity saving throw, taking 3d6 Fire damage on a failed save or half as much on a success. The fire ignites any flammable objects in the area that aren’t being worn or carried.
-

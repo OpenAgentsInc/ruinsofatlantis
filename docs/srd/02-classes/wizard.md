@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.76–82 (Wizard class, Evoker); spell list around p.79+ -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.76–82 (Wizard class, Evoker); spell list around p.79+ -->
 
 # Wizard
 
@@ -113,4 +113,3 @@ When you cast a Wizard spell with a spell slot of levels 1–5 that deals damage
 ## Wizard Spell List
 
 See the Wizard spell list in the SRD 5.2.1 (beginning around p.79) for the full list of cantrips and spells available to the class. Notable cantrips include Fire Bolt, Light, Mage Hand, Ray of Frost, Shocking Grasp, and True Strike.
-

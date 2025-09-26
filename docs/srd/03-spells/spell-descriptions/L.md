@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.2680–2760 (L spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.2680–2760 (L spells) -->
 
 # L Spells
 
@@ -93,4 +93,3 @@ Level 1 Transmutation (Bard, Druid, Ranger)
 - Duration: 1 hour
 
 You touch a creature. The target’s Speed increases by 10 feet until the spell ends.
-

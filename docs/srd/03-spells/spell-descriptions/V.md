@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (V spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (V spells) -->
 
 # V Spells
 
@@ -35,4 +35,3 @@ Level 4 Evocation (Sorcerer, Wizard)
 You point at a location within range, and a glowing 1‑foot‑diameter ball of emerald acid streaks there and explodes in a 20‑foot‑radius Sphere. Each creature in that area makes a Dexterity saving throw, taking 10d4 Acid damage on a failed save or half as much on a success. A creature that failed the save also takes 5d4 Acid damage at the end of its next turn.
 
 Using a Higher‑Level Spell Slot: The initial damage increases by 2d4 and the delayed damage increases by 1d4 for each slot level above 4.
-

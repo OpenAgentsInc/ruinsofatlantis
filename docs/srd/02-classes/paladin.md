@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.52–56 (Paladin class, Oath of Devotion); Spell List pp.55–56 -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.52–56 (Paladin class, Oath of Devotion); Spell List pp.55–56 -->
 
 # Paladin
 
@@ -61,4 +61,3 @@ Uphold the Ideals of Justice and Order
 - Level 3: Sacred Weapon (Channel Divinity). Add Cha mod to attack rolls (min +1); hits deal chosen normal or Radiant; emits light.
 - Level 7: Aura of Devotion. Immunity to Charmed within your Aura of Protection.
 - Level 20: Holy Nimbus. Bonus Action to empower your aura for 10 minutes: Holy Ward (Advantage on Fiend/Undead‑forced saves), Radiant Damage to enemies each turn (Cha mod + PB), and Sunlight in aura.
-

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.120–125 (D spells and nearby) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.120–125 (D spells and nearby) -->
 
 # D Spells
 
@@ -127,4 +127,3 @@ Level 4 Divination (Cleric, Druid, Wizard)
 - Duration: Instantaneous
 
 Put yourself in contact with a god or god’s servants and ask one question about a specific goal, event, or activity to occur within 7 days. The GM offers a truthful reply (often a short phrase or cryptic rhyme). The spell doesn’t account for circumstances that might change the answer. Casting more than once before a Long Rest incurs a cumulative 25% chance after the first casting that you get no answer.
-

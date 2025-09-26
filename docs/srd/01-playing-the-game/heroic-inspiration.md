@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.8 (Heroic Inspiration) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.8 (Heroic Inspiration) -->
 
 # Heroic Inspiration
 
@@ -13,4 +13,3 @@ You can never have more than one instance of Heroic Inspiration. If something gi
 Your GM can give you Heroic Inspiration for a variety of reasons. Typically, GMs award it when you do something particularly heroic, in character, or entertaining. It’s a reward for making the game more fun for everyone playing.
 
 Other rules might allow your character to gain Heroic Inspiration independent of the GM’s decision. For example, Human characters start each day with Heroic Inspiration.
-

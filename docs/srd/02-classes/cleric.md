@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.36–40 (Cleric class, Life Domain); Spell List pp.38–39 -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.36–40 (Cleric class, Life Domain); Spell List pp.38–39 -->
 
 # Cleric
 
@@ -91,4 +91,3 @@ Soothe the Hurts of the World
 - Level 3: Life Domain Spells. Always prepared per table: 3rd (Aid, Bless, Cure Wounds, Lesser Restoration); 5th (Mass Healing Word, Revivify); 7th (Aura of Life, Death Ward); 9th (Greater Restoration, Mass Cure Wounds).
 - Level 6: Blessed Healer. After you cast a healing spell on others with a spell slot, you regain Hit Points equal to 2 + the slot’s level.
 - Level 17: Supreme Healing. When you’d roll dice to restore Hit Points with a spell or Channel Divinity, use the highest number on each die instead.
-

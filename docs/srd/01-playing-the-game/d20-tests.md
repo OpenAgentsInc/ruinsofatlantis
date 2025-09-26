@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.6–7 (sections: Ability Modifiers table, D20 Tests, Ability Checks, Saving Throws, Attack Rolls) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.6–7 (sections: Ability Modifiers table, D20 Tests, Ability Checks, Saving Throws, Attack Rolls) -->
 
 # D20 Tests
 
@@ -135,4 +135,3 @@ If circumstances cause a roll to have both Advantage and Disadvantage, the roll 
 ### Interactions with Rerolls
 
 When you have Advantage or Disadvantage and something in the game lets you reroll or replace the d20, you can reroll or replace only one die, not both. You choose which one.
-

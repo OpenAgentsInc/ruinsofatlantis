@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.104 (Gaining Spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.104 (Gaining Spells) -->
 
 # Gaining Spells
 
@@ -26,4 +26,3 @@ Most spellcasting monsters don’t change their lists of prepared spells, but th
 ## Always‑Prepared Spells
 
 Certain features might give you a spell that you always have prepared. If you also have a list of prepared spells that you can change, a spell that you always have prepared doesn’t count against the number of spells on that list.
-

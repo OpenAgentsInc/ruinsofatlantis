@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (J spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (J spells) -->
 
 # J Spells
 
@@ -11,4 +11,3 @@ Level 1 Transmutation (Druid, Ranger, Sorcerer, Wizard)
 - Duration: 1 minute
 
 You touch a willing creature. The target’s jump distance is tripled until the spell ends.
-

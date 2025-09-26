@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.5–6 (section: The Six Abilities) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.5–6 (section: The Six Abilities) -->
 
 # The Six Abilities
 
@@ -51,4 +51,3 @@ Each ability has a modifier that you apply whenever you make a D20 Test with tha
 | 26–27  | +8       |
 | 28–29  | +9       |
 | 30     | +10      |
-

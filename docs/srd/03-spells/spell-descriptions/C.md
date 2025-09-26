@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.113–116 (C spells and nearby) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.113–116 (C spells and nearby) -->
 
 # C Spells
 
@@ -139,4 +139,3 @@ Level 4 Enchantment (Bard, Druid, Sorcerer, Wizard)
 - Duration: Concentration, up to 1 minute
 
 Each creature in a 10‑foot‑radius Sphere centered on a point within range must succeed on a Wisdom saving throw or be affected. An affected target can’t take Bonus Actions or Reactions and must roll 1d10 at the start of each of its turns to determine its behavior for that turn. See the spell’s behavior table for details. A target can make a Wisdom save at the end of each of its turns, ending the effect on itself on a success.
-

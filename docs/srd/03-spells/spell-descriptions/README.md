@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.104+ (Spell Descriptions) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.104+ (Spell Descriptions) -->
 
 # Spell Descriptions
 
@@ -26,4 +26,3 @@ Spell entries are organized alphabetically. Each entry reproduces the spell’s 
 - V — docs/srd/03-spells/spell-descriptions/V.md
 - W — docs/srd/03-spells/spell-descriptions/W.md
 - Z — docs/srd/03-spells/spell-descriptions/Z.md
-  

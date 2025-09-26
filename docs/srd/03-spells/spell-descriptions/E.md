@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (E spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (E spells) -->
 
 # E Spells
 
@@ -54,4 +54,3 @@ Your eyes become an inky void imbued with dread power. On each of your turns unt
 - Asleep: The target falls Unconscious. It awakens if it takes damage or if another creature uses an action to shake it awake.
 - Panicked: The target has the Frightened condition. On each of its turns, the Frightened target must take the Dash action and move away from you by the safest available route unless there is nowhere to move. If the target ends its turn in a location where it doesn’t have line of sight to you, the target can make a Wisdom saving throw to end the effect.
 - Sickened: The target has Disadvantage on attack rolls and ability checks. At the end of each of its turns, it can make a Wisdom saving throw to end the effect.
-

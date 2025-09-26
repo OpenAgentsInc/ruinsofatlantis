@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.49–52 (Monk class), pp.52 (Warrior of the Open Hand) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.49–52 (Monk class), pp.52 (Warrior of the Open Hand) -->
 
 # Monk
 
@@ -48,4 +48,3 @@ Key features include Martial Arts (Bonus Unarmed Strike, Martial Arts Die, Dexte
 - Level 6: Wholeness of Body. Bonus Action heal: Martial Arts die + Wisdom modifier; uses per Long Rest equal to Wisdom modifier.
 - Level 11: Fleet Step. After a Bonus Action other than Step of the Wind, you can immediately use Step of the Wind.
 - Level 17: Quivering Palm. Expend 4 Focus Points on hit to set lethal vibrations for days equal to Monk level; with an action, force Con save for 10d12 Force (half on save) and return; only one target at a time.
-

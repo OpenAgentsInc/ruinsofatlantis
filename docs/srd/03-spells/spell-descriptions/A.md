@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.104 (Acid Arrow, Acid Splash, Aid, Alarm, Alter Self, Animal Friendship) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.104 (Acid Arrow, Acid Splash, Aid, Alarm, Alter Self, Animal Friendship) -->
 
 # A Spells
 
@@ -73,4 +73,3 @@ Level 1 Enchantment (Bard, Druid, Ranger)
 - Duration: 24 hours
 
 This spell lets you convince a Beast that you mean it no harm. Choose a Beast that you can see within range. If the Beast’s Intelligence is 4 or higher, the spell fails. Otherwise, the Beast must succeed on a Wisdom saving throw or be Charmed by you for the spell’s duration.
-

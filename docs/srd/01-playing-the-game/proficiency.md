@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf p.8–9 (Proficiency, Proficiency Bonus, Skills, Saving Throw Proficiencies, Equipment Proficiencies) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.8–9 (Proficiency, Proficiency Bonus, Skills, Saving Throw Proficiencies, Equipment Proficiencies) -->
 
 # Proficiency
 
@@ -64,4 +64,3 @@ A character gains proficiency with various weapons and tools from their class an
 
 - Weapons. Anyone can wield a weapon, but proficiency makes you better at wielding it. If you have proficiency with a weapon, you add your Proficiency Bonus to attack rolls you make with it.
 - Tools. If you have proficiency with a tool, you can add your Proficiency Bonus to any ability check you make that uses the tool. If you have proficiency in the skill that’s also used with that check, you have Advantage on the check too. This means you can benefit from both skill proficiency and tool proficiency on the same ability check.
-

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (N spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (N spells) -->
 
 # N Spells
 
@@ -11,4 +11,3 @@ Level 3 Abjuration (Bard, Ranger, Wizard)
 - Duration: 8 hours
 
 For the duration, you hide a willing creature you touch, a place, or an object no larger than 10 feet in any dimension from Divination magic. The target can’t be targeted by any Divination spell or perceived through magical scrying sensors.
-

@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.57–61 (Ranger class, Hunter); Spell List p.60 -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.57–61 (Ranger class, Hunter); Spell List p.60 -->
 
 # Ranger
 
@@ -39,4 +39,3 @@ Protect Nature and People from Destruction
 - Level 7: Defensive Tactics. Choose Escape the Horde (Disadvantage on Opportunity Attacks against you) or Multiattack Defense (Disadvantage on subsequent attacks till turn end after one hits); swap on a rest.
 - Level 11: Superior Hunter’s Prey. When you damage your marked target, also deal the mark’s extra damage to another creature within 30 feet of it (once per turn).
 - Level 15: Superior Hunter’s Defense. Reaction to gain Resistance to a damage instance and the rest of that type until turn end.
-

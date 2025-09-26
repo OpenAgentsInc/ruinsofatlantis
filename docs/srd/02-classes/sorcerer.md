@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf pp.64–69 (Sorcerer class), pp.65–69 (Metamagic, Spell List), pp.70 (Draconic Spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.64–69 (Sorcerer class), pp.65–69 (Metamagic, Spell List), pp.70 (Draconic Spells) -->
 
 # Sorcerer
 

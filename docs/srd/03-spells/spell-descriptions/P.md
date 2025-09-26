@@ -1,4 +1,4 @@
-<!-- Source: docs/SRD_CC_v5.2.1.pdf (P spells) -->
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf (P spells) -->
 
 # P Spells
 
@@ -171,4 +171,3 @@ Level 1 Transmutation (Cleric, Druid, Paladin)
 - Duration: Instantaneous
 
 You remove poison and rot from nonmagical food and drink in a 5‑foot‑radius Sphere centered on a point within range.
-
