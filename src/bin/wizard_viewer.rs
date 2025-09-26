@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use log::info;
 use std::time::Instant;
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt, SurfaceTargetUnsafe};
-use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::{Window, WindowAttributes}};
+use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -34,6 +34,9 @@ fn main() -> Result<()> {
     pollster::block_on(run())
 }
 
+// NOTE: Uses deprecated EventLoop APIs for simplicity in this viewer.
+// When we bump winit here, migrate to `EventLoop::run_app` and `ActiveEventLoop::create_window`.
+#[allow(deprecated)]
 async fn run() -> Result<()> {
     let event_loop = EventLoop::new().context("create event loop")?;
     let window = event_loop.create_window(WindowAttributes::default().with_title("Wizard Viewer").with_inner_size(PhysicalSize::new(1280, 720))).context("create window")?;

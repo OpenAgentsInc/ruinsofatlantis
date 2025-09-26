@@ -85,6 +85,12 @@ pub struct Renderer {
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
+    // FX buffers
+    fx_instances: wgpu::Buffer,
+    _fx_capacity: u32,
+    fx_count: u32,
+    fx_model_bg: wgpu::BindGroup,
+
     // Wizard skinning palettes
     palettes_buf: wgpu::Buffer,
     palettes_bg: wgpu::BindGroup,
@@ -310,9 +316,7 @@ impl Renderer {
         // --- Build a tiny ECS world and spawn entities ---
         let mut world = World::new();
         use rand::{SeedableRng, Rng};
-        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(42);
-
-        let place_range = plane_extent * 0.4;
+        // rng for ruins placement removed; keep ring clean for VFX testing
 
         // Cluster wizards around a central one so the camera can see all of them.
         let wizard_count = 10usize;
@@ -333,29 +337,8 @@ impl Renderer {
             world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
         }
         // Place a set of ruins around the wizard circle
-        // 1) Keep a few large backdrop ruins
-        let ruins_positions = [
-            glam::vec3(-place_range, 0.0, -place_range * 0.6),
-            glam::vec3(place_range * 0.9, 0.0, 0.0),
-            glam::vec3(0.0, 0.0, place_range * 0.8),
-        ];
-        for pos in ruins_positions {
-            let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-            world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
-        }
-        // 2) Add a ring of smaller ruins close to the wizards
-        let ruins_ring_radius = 18.0f32; // push even farther so they never overlap the wizards
-        let ruins_ring_count = 3usize;   // very few near-circle ruins
-        for i in 0..ruins_ring_count {
-            let a = (i as f32) / (ruins_ring_count as f32) * std::f32::consts::TAU;
-            let jitter_r = rng.random_range(-0.2..0.2);
-            let pos = glam::vec3((ruins_ring_radius + jitter_r) * a.cos(), 0.0, (ruins_ring_radius + jitter_r) * a.sin());
-            // Face roughly outward from the center with some randomness
-            let yaw = a + std::f32::consts::PI + rng.random_range(-0.25..0.25);
-            let rot = glam::Quat::from_rotation_y(yaw);
-            let scale = glam::Vec3::splat(0.6 + rng.random_range(-0.05..0.05));
-            world.spawn(Transform { translation: pos, rotation: rot, scale }, RenderKind::Ruins);
-        }
+        // 1) Backdrop ruins disabled to keep horizon clear for VFX testing
+        // 2) Near-circle ruins disabled to keep space around the wizards clear
 
         // --- Create instance buffers per kind from ECS world ---
         let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
@@ -397,6 +380,28 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
+        // FX buffers (dynamic)
+        let fx_capacity = 2048u32; // particles + projectiles
+        let fx_instances = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("fx-instances"),
+            size: (fx_capacity as usize * std::mem::size_of::<Instance>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // FX model (bright emissive)
+        let fx_model = Model { model: glam::Mat4::IDENTITY.to_cols_array_2d(), color: [1.0, 0.7, 0.2], emissive: 1.0, _pad: [0.0; 4] };
+        let fx_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("fx-model"),
+            contents: bytemuck::bytes_of(&fx_model),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let fx_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fx-model-bg"),
+            layout: &model_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: fx_model_buf.as_entire_binding() }],
+        });
+        let fx_count: u32 = 0;
         // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
@@ -574,6 +579,10 @@ impl Renderer {
             wizard_count: wiz_instances.len() as u32,
             ruins_instances,
             ruins_count: ruin_instances.len() as u32,
+            fx_instances,
+            _fx_capacity: fx_capacity,
+            fx_count,
+            fx_model_bg,
             palettes_buf,
             palettes_bg,
             joints_per_wizard,
@@ -689,6 +698,18 @@ impl Renderer {
             rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
             rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+
+            // FX (instanced cubes/particles) — draw only if we have any
+            if self.fx_count > 0 {
+                rpass.set_pipeline(&self.inst_pipeline);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.fx_model_bg, &[]);
+                // Use ruins geometry as placeholder mesh for FX if present; count is what matters here
+                rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.fx_instances.slice(..));
+                rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.fx_count);
+            }
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
