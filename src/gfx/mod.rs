@@ -28,7 +28,7 @@ mod scene;
 mod ui;
 mod util;
 
-use crate::assets::{AnimClip, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
+use crate::assets::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned};
 use crate::core::data::{loader as data_loader, spell::SpellSpec};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
@@ -1000,7 +1000,7 @@ impl Renderer {
     fn select_zombie_clip(&self) -> Option<&AnimClip> {
         // Prefer common idle names, then walk/run, otherwise any
         let keys = [
-            "Idle", "idle", "IDLE",
+            "Idle", "idle", "IDLE", "ProcIdle",
             "Idle01", "StandingIdle", "Armature|mixamo.com|Layer0",
             "Walk", "walk", "Run", "run",
         ];
@@ -1009,10 +1009,45 @@ impl Renderer {
         }
         self.zombie_cpu.animations.values().next()
     }
+
+    fn ensure_proc_idle_clip(&mut self) -> String {
+        if self.zombie_cpu.animations.contains_key("ProcIdle") { return "ProcIdle".to_string(); }
+        use std::collections::HashMap;
+        let mut r_tracks: HashMap<usize, TrackQuat> = HashMap::new();
+        let t_tracks: HashMap<usize, TrackVec3> = HashMap::new();
+        let s_tracks: HashMap<usize, TrackVec3> = HashMap::new();
+        // Helper to find node index by partial name
+        let find = |name: &str, names: &Vec<String>| -> Option<usize> {
+            let lname = name.to_lowercase();
+            names.iter().position(|n| n.to_lowercase().contains(&lname))
+        };
+        let names = &self.zombie_cpu.node_names;
+        // Choose nodes
+        let root_idx = self.zombie_cpu.root_node.or(self.zombie_cpu.joints_nodes.first().copied());
+        let spine_idx = find("spine", names).or(find("hips", names)).or(root_idx);
+        let head_idx = find("head", names).or(find("neck", names));
+        let times = vec![0.0, 1.0, 2.0];
+        // Small yaw sway at spine/root
+        if let Some(si) = spine_idx {
+            let yaw0 = glam::Quat::from_rotation_y(0.0);
+            let yaw1 = glam::Quat::from_rotation_y(3.0_f32.to_radians());
+            r_tracks.insert(si, TrackQuat { times: times.clone(), values: vec![yaw0, yaw1, yaw0] });
+        }
+        // Gentle head nod
+        if let Some(hi) = head_idx {
+            let p0 = glam::Quat::from_rotation_x(0.0);
+            let p1 = glam::Quat::from_rotation_x((-2.5_f32).to_radians());
+            r_tracks.insert(hi, TrackQuat { times: times.clone(), values: vec![p0, p1, p0] });
+        }
+        let clip = AnimClip { name: "ProcIdle".to_string(), duration: 2.0, t_tracks, r_tracks, s_tracks };
+        self.zombie_cpu.animations.insert("ProcIdle".to_string(), clip);
+        "ProcIdle".to_string()
+    }
     fn update_zombie_palettes(&mut self, time_global: f32) {
         if self.zombie_count == 0 { return; }
         // Select an appropriate clip: prefer "Idle", then any available.
-        let Some(clip) = self.select_zombie_clip() else {
+        // Pick a clip; if only static exists, synthesize a procedural idle
+        let Some(clip_sel) = self.select_zombie_clip() else {
             // No animations; keep bind pose
             let joints = self.zombie_joints as usize;
             let total = self.zombie_count as usize * joints;
@@ -1020,10 +1055,16 @@ impl Renderer {
             self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats));
             return;
         };
+        let clip_name: String = if clip_sel.name == "__static" {
+            self.ensure_proc_idle_clip()
+        } else {
+            clip_sel.name.clone()
+        };
         let joints = self.zombie_joints as usize;
         let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
         for i in 0..(self.zombie_count as usize) {
             let t = time_global + self.zombie_time_offset.get(i).copied().unwrap_or(0.0);
+            let clip = self.zombie_cpu.animations.get(&clip_name).expect("zombie clip");
             let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
             for m in palette { mats_all.push(m.to_cols_array()); }
         }
