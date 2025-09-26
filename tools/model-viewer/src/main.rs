@@ -198,6 +198,7 @@ async fn run(cli: Cli) -> Result<()> {
             skin_bg: wgpu::BindGroup,
             center: Vec3,
             diag: f32,
+            anims: Vec<String>,
         },
         Basic {
             vb: wgpu::Buffer,
@@ -306,7 +307,10 @@ async fn run(cli: Cli) -> Result<()> {
                 let (min_b, max_b) = compute_bounds(&skinned);
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
-                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, center, diag })
+                // Collect animation names
+                let mut names: Vec<String> = skinned.animations.keys().cloned().collect();
+                names.sort();
+                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, center, diag, anims: names })
             }
             Err(e) => {
                 log::warn!("skinned load failed, trying unskinned: {}", e);
@@ -328,8 +332,15 @@ async fn run(cli: Cli) -> Result<()> {
     if let Some(p) = cli.path.as_ref() {
         if let Ok(gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
             match &gpu {
-                ModelGpu::Skinned { center: c, diag: d, .. } | ModelGpu::Basic { center: c, diag: d, .. } => {
+                ModelGpu::Skinned { center: c, diag: d, anims, .. } => {
                     center = *c; diag = *d;
+                    let title = format!("Model Viewer — {} | anims: {}", p.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
+                    window.set_title(&title);
+                }
+                ModelGpu::Basic { center: c, diag: d, .. } => {
+                    center = *c; diag = *d;
+                    let title = format!("Model Viewer — {} | anims: (none)", p.display());
+                    window.set_title(&title);
                 }
             }
             model_gpu = Some(gpu);
@@ -400,8 +411,15 @@ async fn run(cli: Cli) -> Result<()> {
         Event::WindowEvent { event: WindowEvent::DroppedFile(path), .. } => {
             if let Ok(gpu) = load_model(&path, &device, &queue, &mat_bgl, &skin_bgl) {
                 match &gpu {
-                    ModelGpu::Skinned { center: c, diag: d, .. } | ModelGpu::Basic { center: c, diag: d, .. } => {
+                    ModelGpu::Skinned { center: c, diag: d, anims, .. } => {
                         center = *c; diag = *d;
+                        let title = format!("Model Viewer — {} | anims: {}", path.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
+                        window.set_title(&title);
+                    }
+                    ModelGpu::Basic { center: c, diag: d, .. } => {
+                        center = *c; diag = *d;
+                        let title = format!("Model Viewer — {} | anims: (none)", path.display());
+                        window.set_title(&title);
                     }
                 }
                 model_gpu = Some(gpu);
