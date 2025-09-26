@@ -8,9 +8,9 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::assets::SkinnedMeshCPU;
-use wgpu::util::DeviceExt;
 use crate::ecs::{RenderKind, Transform, World};
 use crate::gfx::types::{Instance, InstanceSkin};
+use wgpu::util::DeviceExt;
 
 pub struct SceneBuild {
     pub wizard_instances: wgpu::Buffer,
@@ -38,7 +38,11 @@ pub fn build_demo_scene(
     let center = glam::vec3(0.0, 0.0, 0.0);
     // Spawn the central wizard first (becomes camera target)
     world.spawn(
-        Transform { translation: center, rotation: glam::Quat::IDENTITY, scale: glam::Vec3::splat(1.0) },
+        Transform {
+            translation: center,
+            rotation: glam::Quat::IDENTITY,
+            scale: glam::Vec3::splat(1.0),
+        },
         RenderKind::Wizard,
     );
     // Place remaining wizards on a small ring facing the center
@@ -51,7 +55,14 @@ pub fn build_demo_scene(
         let dz = center.z - translation.z;
         let yaw = dx.atan2(dz);
         let rotation = glam::Quat::from_rotation_y(yaw);
-        world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
+        world.spawn(
+            Transform {
+                translation,
+                rotation,
+                scale: glam::Vec3::splat(1.0),
+            },
+            RenderKind::Wizard,
+        );
     }
     // Place a set of ruins around the wizard circle
     let place_range = plane_extent * 0.9;
@@ -63,7 +74,14 @@ pub fn build_demo_scene(
     ];
     for pos in ruins_positions {
         let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-        world.spawn(Transform { translation: pos, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
+        world.spawn(
+            Transform {
+                translation: pos,
+                rotation,
+                scale: glam::Vec3::splat(1.0),
+            },
+            RenderKind::Ruins,
+        );
     }
     // Additional distant ruins distributed on a wide ring for background depth
     let far_count = 8usize;
@@ -73,7 +91,14 @@ pub fn build_demo_scene(
         let r = place_range * (0.78 + rng.random::<f32>() * 0.15);
         let pos = glam::vec3(r * a.cos(), 0.0, r * a.sin());
         let rot = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-        world.spawn(Transform { translation: pos, rotation: rot, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
+        world.spawn(
+            Transform {
+                translation: pos,
+                rotation: rot,
+                scale: glam::Vec3::splat(1.0),
+            },
+            RenderKind::Ruins,
+        );
     }
 
     // Add an outer ring of wizards facing outward
@@ -81,13 +106,24 @@ pub fn build_demo_scene(
     let outer_count = wizard_count; // same count as inner ring
     for i in 0..outer_count {
         let theta = (i as f32) / (outer_count as f32) * std::f32::consts::TAU;
-        let translation = glam::vec3(outer_ring_radius * theta.cos(), 0.0, outer_ring_radius * theta.sin());
+        let translation = glam::vec3(
+            outer_ring_radius * theta.cos(),
+            0.0,
+            outer_ring_radius * theta.sin(),
+        );
         // Face outward: yaw aligns +Z with (translation - center)
         let dx = translation.x - center.x;
         let dz = translation.z - center.z;
         let yaw = dx.atan2(dz);
         let rotation = glam::Quat::from_rotation_y(yaw);
-        world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
+        world.spawn(
+            Transform {
+                translation,
+                rotation,
+                scale: glam::Vec3::splat(1.0),
+            },
+            RenderKind::Wizard,
+        );
     }
 
     // Build instance lists
@@ -106,9 +142,19 @@ pub fn build_demo_scene(
                     has_cam_target = true;
                 }
                 wizard_models.push(glam::Mat4::from_cols_array_2d(&m));
-                wiz_instances.push(InstanceSkin { model: m, color: [0.20, 0.45, 0.95], selected: 0.0, palette_base: 0, _pad_inst: [0; 3] })
+                wiz_instances.push(InstanceSkin {
+                    model: m,
+                    color: [0.20, 0.45, 0.95],
+                    selected: 0.0,
+                    palette_base: 0,
+                    _pad_inst: [0; 3],
+                })
             }
-            RenderKind::Ruins => ruin_instances.push(Instance { model: m, color: [0.65, 0.66, 0.68], selected: 0.0 }),
+            RenderKind::Ruins => ruin_instances.push(Instance {
+                model: m,
+                color: [0.65, 0.66, 0.68],
+                selected: 0.0,
+            }),
         }
     }
 
@@ -145,7 +191,11 @@ pub fn build_demo_scene(
         contents: bytemuck::cast_slice(&ruin_instances),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
-    log::info!("spawned {} wizards and {} ruins", wiz_instances.len(), ruin_instances.len());
+    log::info!(
+        "spawned {} wizards and {} ruins",
+        wiz_instances.len(),
+        ruin_instances.len()
+    );
 
     SceneBuild {
         wizard_instances,

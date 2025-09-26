@@ -1,13 +1,15 @@
 //! Skinned mesh and animation clip loading from glTF.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use glam::{Mat4, Quat, Vec3};
 use gltf::mesh::util::ReadIndices;
 use std::collections::HashMap;
 use std::path::Path;
 
 use crate::assets::draco::decode_draco_skinned_primitive;
-use crate::assets::types::{AnimClip, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, VertexSkinCPU};
+use crate::assets::types::{
+    AnimClip, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, VertexSkinCPU,
+};
 use crate::assets::util::prepare_gltf_path;
 
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
@@ -57,9 +59,11 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                 let joints_it = reader.read_joints(0);
                 let weights_it = reader.read_weights(0);
 
-                if pos_it.is_some() && nrm_it.is_some() && joints_it.is_some() && weights_it.is_some() {
-                    let pos: Vec<[f32; 3]> = pos_it.unwrap().collect();
-                    let nrm: Vec<[f32; 3]> = nrm_it.unwrap().collect();
+                if let (Some(pos_it), Some(nrm_it), Some(joints_it), Some(weights_it)) =
+                    (pos_it, nrm_it, joints_it, weights_it)
+                {
+                    let pos: Vec<[f32; 3]> = pos_it.collect();
+                    let nrm: Vec<[f32; 3]> = nrm_it.collect();
                     let uv_set = prim
                         .material()
                         .pbr_metallic_roughness()
@@ -70,15 +74,19 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     let uv: Vec<[f32; 2]> = if let Some(it) = uv_opt {
                         it.collect()
                     } else {
-                        pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
+                        pos.iter()
+                            .map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]])
+                            .collect()
                     };
-                    let joints: Vec<[u16; 4]> = match joints_it.unwrap() {
-                        gltf::mesh::util::ReadJoints::U16(it) => it.map(|v| [v[0], v[1], v[2], v[3]]).collect(),
+                    let joints: Vec<[u16; 4]> = match joints_it {
+                        gltf::mesh::util::ReadJoints::U16(it) => {
+                            it.map(|v| [v[0], v[1], v[2], v[3]]).collect()
+                        }
                         gltf::mesh::util::ReadJoints::U8(it) => it
                             .map(|v| [v[0] as u16, v[1] as u16, v[2] as u16, v[3] as u16])
                             .collect(),
                     };
-                    let weights: Vec<[f32; 4]> = match weights_it.unwrap() {
+                    let weights: Vec<[f32; 4]> = match weights_it {
                         gltf::mesh::util::ReadWeights::F32(it) => it.collect(),
                         gltf::mesh::util::ReadWeights::U16(it) => it
                             .map(|v| {
@@ -124,7 +132,13 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     }
                     break 'outer;
                 } else if prim.extension_value("KHR_draco_mesh_compression").is_some() {
-                    decode_draco_skinned_primitive(&doc, &buffers, &prim, &mut verts, &mut indices)?;
+                    decode_draco_skinned_primitive(
+                        &doc,
+                        &buffers,
+                        &prim,
+                        &mut verts,
+                        &mut indices,
+                    )?;
                     break 'outer;
                 } else {
                     continue;
@@ -138,7 +152,9 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         'find_any: for mesh in doc.meshes() {
             for prim in mesh.primitives() {
                 let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-                let Some(pos_it) = reader.read_positions() else { continue };
+                let Some(pos_it) = reader.read_positions() else {
+                    continue;
+                };
                 let nrm_it = reader.read_normals();
                 let pos: Vec<[f32; 3]> = pos_it.collect();
                 let nrm: Vec<[f32; 3]> = nrm_it
@@ -174,7 +190,11 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         }
     }
 
-    if verts.is_empty() && doc.extensions_required().any(|e| e == "KHR_draco_mesh_compression") {
+    if verts.is_empty()
+        && doc
+            .extensions_required()
+            .any(|e| e == "KHR_draco_mesh_compression")
+    {
         bail!(
             "GLTF uses KHR_draco_mesh_compression; please provide a pre-decompressed copy (e.g., assets/models/<name>.decompressed.gltf) using the gltf_decompress tool"
         );
@@ -215,25 +235,38 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
             let target = ch.target();
             let node_idx = target.node().index();
             let rdr = ch.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-            let Some(inputs) = rdr.read_inputs() else { continue };
+            let Some(inputs) = rdr.read_inputs() else {
+                continue;
+            };
             let times: Vec<f32> = inputs.collect();
-            if let Some(&last) = times.last() {
-                if last > max_t {
-                    max_t = last;
-                }
+            if let Some(&last) = times.last()
+                && last > max_t
+            {
+                max_t = last;
             }
             match target.property() {
                 gltf::animation::Property::Translation => {
-                    let Some(outs) = rdr.read_outputs() else { continue };
+                    let Some(outs) = rdr.read_outputs() else {
+                        continue;
+                    };
                     let vals: Vec<Vec3> = match outs {
-                        gltf::animation::util::ReadOutputs::Translations(it) =>
-                            it.map(|v| Vec3::from(v)).collect(),
+                        gltf::animation::util::ReadOutputs::Translations(it) => {
+                            it.map(Vec3::from).collect()
+                        }
                         _ => continue,
                     };
-                    t_tracks.insert(node_idx, TrackVec3 { times: times.clone(), values: vals });
+                    t_tracks.insert(
+                        node_idx,
+                        TrackVec3 {
+                            times: times.clone(),
+                            values: vals,
+                        },
+                    );
                 }
                 gltf::animation::Property::Rotation => {
-                    let Some(outs) = rdr.read_outputs() else { continue };
+                    let Some(outs) = rdr.read_outputs() else {
+                        continue;
+                    };
                     let vals: Vec<Quat> = match outs {
                         gltf::animation::util::ReadOutputs::Rotations(it) => it
                             .into_f32()
@@ -241,23 +274,44 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                             .collect(),
                         _ => continue,
                     };
-                    r_tracks.insert(node_idx, TrackQuat { times: times.clone(), values: vals });
+                    r_tracks.insert(
+                        node_idx,
+                        TrackQuat {
+                            times: times.clone(),
+                            values: vals,
+                        },
+                    );
                 }
                 gltf::animation::Property::Scale => {
-                    let Some(outs) = rdr.read_outputs() else { continue };
+                    let Some(outs) = rdr.read_outputs() else {
+                        continue;
+                    };
                     let vals: Vec<Vec3> = match outs {
-                        gltf::animation::util::ReadOutputs::Scales(it) =>
-                            it.map(|v| Vec3::from(v)).collect(),
+                        gltf::animation::util::ReadOutputs::Scales(it) => {
+                            it.map(Vec3::from).collect()
+                        }
                         _ => continue,
                     };
-                    s_tracks.insert(node_idx, TrackVec3 { times: times.clone(), values: vals });
+                    s_tracks.insert(
+                        node_idx,
+                        TrackVec3 {
+                            times: times.clone(),
+                            values: vals,
+                        },
+                    );
                 }
                 _ => {}
             }
         }
         animations.insert(
             name.clone(),
-            AnimClip { name, duration: max_t, t_tracks, r_tracks, s_tracks },
+            AnimClip {
+                name,
+                duration: max_t,
+                t_tracks,
+                r_tracks,
+                s_tracks,
+            },
         );
     }
 
@@ -281,40 +335,47 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         .next()
         .and_then(|m| m.primitives().next())
         .map(|p| p.material())
+        && let Some(texinfo) = material.pbr_metallic_roughness().base_color_texture()
     {
-        if let Some(texinfo) = material.pbr_metallic_roughness().base_color_texture() {
-            let tex = texinfo.texture();
-            let img_idx = tex.source().index();
-            if let Some(img) = images.get(img_idx) {
-                // Convert to RGBA8
-                let (w, h) = (img.width, img.height);
-                let pixels = match img.format {
-                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
-                    gltf::image::Format::R8G8B8 => {
-                        let mut out = Vec::with_capacity((w * h * 4) as usize);
-                        for c in img.pixels.chunks_exact(3) {
-                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
-                        }
-                        out
+        let tex = texinfo.texture();
+        let img_idx = tex.source().index();
+        if let Some(img) = images.get(img_idx) {
+            // Convert to RGBA8
+            let (w, h) = (img.width, img.height);
+            let pixels = match img.format {
+                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                gltf::image::Format::R8G8B8 => {
+                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                    for c in img.pixels.chunks_exact(3) {
+                        out.extend_from_slice(&[c[0], c[1], c[2], 255]);
                     }
-                    gltf::image::Format::R8 => {
-                        let mut out = Vec::with_capacity((w * h * 4) as usize);
-                        for &r in &img.pixels {
-                            out.extend_from_slice(&[r, r, r, 255]);
-                        }
-                        out
+                    out
+                }
+                gltf::image::Format::R8 => {
+                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                    for &r in &img.pixels {
+                        out.extend_from_slice(&[r, r, r, 255]);
                     }
-                    _ => img.pixels.clone(),
-                };
-                base_color_texture = Some(TextureCPU { pixels, width: w, height: h, srgb: true });
-            }
+                    out
+                }
+                _ => img.pixels.clone(),
+            };
+            base_color_texture = Some(TextureCPU {
+                pixels,
+                width: w,
+                height: h,
+                srgb: true,
+            });
         }
     }
 
     // Identify useful nodes for VFX
     let hand_right_node = node_names.iter().position(|n| {
         let low = n.to_lowercase();
-        low.contains("hand right") || low.contains("right hand") || low.contains("hand_r") || low.contains("r_hand")
+        low.contains("hand right")
+            || low.contains("right hand")
+            || low.contains("hand_r")
+            || low.contains("r_hand")
     });
     let root_node = node_names.iter().position(|n| {
         let low = n.to_lowercase();
@@ -346,9 +407,15 @@ fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
             let (s, r, t) = m.to_scale_rotation_translation();
             (t, r, s)
         }
-        Transform::Decomposed { translation, rotation, scale } => {
-            (Vec3::from(translation), Quat::from_array(rotation).normalize(), Vec3::from(scale))
-        }
+        Transform::Decomposed {
+            translation,
+            rotation,
+            scale,
+        } => (
+            Vec3::from(translation),
+            Quat::from_array(rotation).normalize(),
+            Vec3::from(scale),
+        ),
     }
 }
 
@@ -363,7 +430,13 @@ mod tests {
         let skinned = load_gltf_skinned(&path).expect("load skinned wizard");
         assert!(!skinned.vertices.is_empty(), "vertices should not be empty");
         assert!(!skinned.indices.is_empty(), "indices should not be empty");
-        assert!(!skinned.joints_nodes.is_empty(), "joints_nodes should not be empty");
-        assert!(!skinned.animations.is_empty(), "animations should not be empty");
+        assert!(
+            !skinned.joints_nodes.is_empty(),
+            "joints_nodes should not be empty"
+        );
+        assert!(
+            !skinned.animations.is_empty(),
+            "animations should not be empty"
+        );
     }
 }

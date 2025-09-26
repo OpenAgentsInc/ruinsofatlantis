@@ -12,7 +12,9 @@ pub struct Spell {
 }
 
 impl Spell {
-    pub fn is_cantrip(&self) -> bool { self.level == 0 }
+    pub fn is_cantrip(&self) -> bool {
+        self.level == 0
+    }
 }
 
 // A more detailed, data-driven spell spec used by the simulator and tools.

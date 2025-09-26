@@ -43,11 +43,11 @@ impl Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct VertexSkinned {
-    pub pos: [f32; 3],   // 0
-    pub nrm: [f32; 3],   // 12
-    pub uv: [f32; 2],    // 24
-    pub joints: [u16; 4],// 32
-    pub weights: [f32; 4],// 40
+    pub pos: [f32; 3],     // 0
+    pub nrm: [f32; 3],     // 12
+    pub uv: [f32; 2],      // 24
+    pub joints: [u16; 4],  // 32
+    pub weights: [f32; 4], // 40
 }
 
 impl VertexSkinned {
@@ -57,11 +57,31 @@ impl VertexSkinned {
         array_stride: std::mem::size_of::<VertexSkinned>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &[
-            wgpu::VertexAttribute { shader_location: 0, offset: 0, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 1, offset: 12, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 11, offset: 24, format: wgpu::VertexFormat::Float32x2 },
-            wgpu::VertexAttribute { shader_location: 8, offset: 32, format: wgpu::VertexFormat::Uint16x4 },
-            wgpu::VertexAttribute { shader_location: 9, offset: 40, format: wgpu::VertexFormat::Float32x4 },
+            wgpu::VertexAttribute {
+                shader_location: 0,
+                offset: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 1,
+                offset: 12,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 11,
+                offset: 24,
+                format: wgpu::VertexFormat::Float32x2,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 8,
+                offset: 32,
+                format: wgpu::VertexFormat::Uint16x4,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 9,
+                offset: 40,
+                format: wgpu::VertexFormat::Float32x4,
+            },
         ],
     };
 }
@@ -119,15 +139,43 @@ impl InstanceSkin {
         step_mode: wgpu::VertexStepMode::Instance,
         attributes: &[
             // i0..i3 (mat4)
-            wgpu::VertexAttribute { shader_location: 2, offset: 0,  format: wgpu::VertexFormat::Float32x4 },
-            wgpu::VertexAttribute { shader_location: 3, offset: 16, format: wgpu::VertexFormat::Float32x4 },
-            wgpu::VertexAttribute { shader_location: 4, offset: 32, format: wgpu::VertexFormat::Float32x4 },
-            wgpu::VertexAttribute { shader_location: 5, offset: 48, format: wgpu::VertexFormat::Float32x4 },
+            wgpu::VertexAttribute {
+                shader_location: 2,
+                offset: 0,
+                format: wgpu::VertexFormat::Float32x4,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 3,
+                offset: 16,
+                format: wgpu::VertexFormat::Float32x4,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 4,
+                offset: 32,
+                format: wgpu::VertexFormat::Float32x4,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 5,
+                offset: 48,
+                format: wgpu::VertexFormat::Float32x4,
+            },
             // color + selected
-            wgpu::VertexAttribute { shader_location: 6, offset: 64, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 7, offset: 76, format: wgpu::VertexFormat::Float32 },
+            wgpu::VertexAttribute {
+                shader_location: 6,
+                offset: 64,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 7,
+                offset: 76,
+                format: wgpu::VertexFormat::Float32,
+            },
             // palette base
-            wgpu::VertexAttribute { shader_location: 10, offset: 80, format: wgpu::VertexFormat::Uint32 },
+            wgpu::VertexAttribute {
+                shader_location: 10,
+                offset: 80,
+                format: wgpu::VertexFormat::Uint32,
+            },
         ],
     };
 }
@@ -135,7 +183,9 @@ impl InstanceSkin {
 // Particle pipeline: unit quad (corner) + instance (pos/size/color)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct ParticleVertex { pub corner: [f32; 2] }
+pub struct ParticleVertex {
+    pub corner: [f32; 2],
+}
 
 impl ParticleVertex {
     pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -159,9 +209,21 @@ impl ParticleInstance {
         array_stride: std::mem::size_of::<ParticleInstance>() as u64,
         step_mode: wgpu::VertexStepMode::Instance,
         attributes: &[
-            wgpu::VertexAttribute { shader_location: 1, offset: 0,  format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 2, offset: 12, format: wgpu::VertexFormat::Float32 },
-            wgpu::VertexAttribute { shader_location: 3, offset: 16, format: wgpu::VertexFormat::Float32x3 },
+            wgpu::VertexAttribute {
+                shader_location: 1,
+                offset: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 2,
+                offset: 12,
+                format: wgpu::VertexFormat::Float32,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 3,
+                offset: 16,
+                format: wgpu::VertexFormat::Float32x3,
+            },
         ],
     };
 }

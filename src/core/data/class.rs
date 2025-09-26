@@ -9,4 +9,3 @@ pub struct ClassSpec {
     #[serde(default)]
     pub save_mods: std::collections::HashMap<String, i32>,
 }
-

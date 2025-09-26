@@ -18,7 +18,9 @@ impl Renderer {
     }
 
     pub(crate) fn draw_particles(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if self.fx_count == 0 { return; }
+        if self.fx_count == 0 {
+            return;
+        }
         rpass.set_pipeline(&self.particle_pipeline);
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_vertex_buffer(0, self.quad_vb.slice(..));
@@ -26,4 +28,3 @@ impl Renderer {
         rpass.draw(0..4, 0..self.fx_count);
     }
 }
-

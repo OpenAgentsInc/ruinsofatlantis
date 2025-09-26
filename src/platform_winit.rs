@@ -7,19 +7,13 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
+#[derive(Default)]
 struct App {
     window: Option<Window>,
     state: Option<Renderer>,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            window: None,
-            state: None,
-        }
-    }
-}
+// Default is derived
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {

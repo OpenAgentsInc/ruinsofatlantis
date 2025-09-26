@@ -1,12 +1,12 @@
 //! Data loaders. For now, stubs that resolve paths under `data/`.
 //! Implement JSON parsing later to avoid adding new deps mid-prototype.
 
-use std::path::{Path, PathBuf};
-use std::fs;
-use anyhow::{Context, Result};
-use super::spell::SpellSpec;
 use super::class::ClassSpec;
 use super::monster::MonsterSpec;
+use super::spell::SpellSpec;
+use anyhow::{Context, Result};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 fn data_root() -> PathBuf {
     // Assume running from project root during development

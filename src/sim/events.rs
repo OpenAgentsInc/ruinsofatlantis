@@ -9,4 +9,3 @@ pub enum Event {
     DamageApplied,
     ObjectIgnited,
 }
-

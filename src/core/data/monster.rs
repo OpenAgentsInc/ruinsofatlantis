@@ -8,4 +8,3 @@ pub struct MonsterSpec {
     #[serde(default)]
     pub save_mods: std::collections::HashMap<String, i32>,
 }
-

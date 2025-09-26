@@ -40,7 +40,10 @@ pub fn create_cube(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, u32) {
         ([-p, p, -p], [0.0, 0.0, -1.0]),
         ([p, p, -p], [0.0, 0.0, -1.0]),
     ];
-    let verts: Vec<Vertex> = vertices.iter().map(|(p, n)| Vertex { pos: *p, nrm: *n }).collect();
+    let verts: Vec<Vertex> = vertices
+        .iter()
+        .map(|(p, n)| Vertex { pos: *p, nrm: *n })
+        .collect();
     let indices: [u16; 36] = [
         0, 1, 2, 0, 2, 3, // +X
         4, 5, 6, 4, 6, 7, // -X
@@ -49,8 +52,16 @@ pub fn create_cube(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, u32) {
         16, 17, 18, 16, 18, 19, // +Z
         20, 21, 22, 20, 22, 23, // -Z
     ];
-    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("cube-vb"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
-    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("cube-ib"), contents: bytemuck::cast_slice(&indices), usage: wgpu::BufferUsages::INDEX });
+    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("cube-vb"),
+        contents: bytemuck::cast_slice(&verts),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("cube-ib"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
     (vb, ib, indices.len() as u32)
 }
 
@@ -58,13 +69,33 @@ pub fn create_plane(device: &wgpu::Device, extent: f32) -> (wgpu::Buffer, wgpu::
     // A large XZ plane centered at origin
     let s = extent;
     let verts = [
-        Vertex { pos: [-s, 0.0, -s], nrm: [0.0, 1.0, 0.0] },
-        Vertex { pos: [ s, 0.0, -s], nrm: [0.0, 1.0, 0.0] },
-        Vertex { pos: [ s, 0.0,  s], nrm: [0.0, 1.0, 0.0] },
-        Vertex { pos: [-s, 0.0,  s], nrm: [0.0, 1.0, 0.0] },
+        Vertex {
+            pos: [-s, 0.0, -s],
+            nrm: [0.0, 1.0, 0.0],
+        },
+        Vertex {
+            pos: [s, 0.0, -s],
+            nrm: [0.0, 1.0, 0.0],
+        },
+        Vertex {
+            pos: [s, 0.0, s],
+            nrm: [0.0, 1.0, 0.0],
+        },
+        Vertex {
+            pos: [-s, 0.0, s],
+            nrm: [0.0, 1.0, 0.0],
+        },
     ];
     let idx: [u16; 6] = [0, 1, 2, 0, 2, 3];
-    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("plane-vb"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
-    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("plane-ib"), contents: bytemuck::cast_slice(&idx), usage: wgpu::BufferUsages::INDEX });
+    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("plane-vb"),
+        contents: bytemuck::cast_slice(&verts),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("plane-ib"),
+        contents: bytemuck::cast_slice(&idx),
+        usage: wgpu::BufferUsages::INDEX,
+    });
     (vb, ib, idx.len() as u32)
 }

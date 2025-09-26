@@ -2,10 +2,10 @@
 //!
 //! Loaders should read from top-level `data/` and provide stable IDs + provenance.
 
-pub mod ids;
 pub mod ability;
-pub mod spell;
-pub mod loader;
-pub mod scenario;
 pub mod class;
+pub mod ids;
+pub mod loader;
 pub mod monster;
+pub mod scenario;
+pub mod spell;
