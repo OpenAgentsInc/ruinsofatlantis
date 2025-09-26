@@ -25,7 +25,7 @@ impl PlayerController {
         // Flatten forward and compute right
         fwd.y = 0.0;
         fwd = fwd.normalize_or_zero();
-        let mut right = fwd.cross(Vec3::Y);
+        let mut right = Vec3::Y.cross(fwd);
         right = right.normalize_or_zero();
         if input.forward { move_dir += fwd; }
         if input.backward { move_dir -= fwd; }
@@ -34,8 +34,53 @@ impl PlayerController {
         if move_dir.length_squared() > 1e-6 {
             move_dir = move_dir.normalize();
             self.pos += move_dir * speed * dt;
-            self.yaw = move_dir.x.atan2(move_dir.z);
+            // Smoothly rotate toward target yaw
+            let target_yaw = move_dir.x.atan2(move_dir.z);
+            let max_turn = 6.0 * dt; // rad/s
+            self.yaw = turn_towards(self.yaw, target_yaw, max_turn);
         }
     }
 }
 
+fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
+    let delta = wrap_angle(target - current);
+    if delta.abs() <= max_delta {
+        return target;
+    }
+    if delta > 0.0 {
+        wrap_angle(current + max_delta)
+    } else {
+        wrap_angle(current - max_delta)
+    }
+}
+
+fn wrap_angle(a: f32) -> f32 {
+    let mut x = a;
+    while x > std::f32::consts::PI { x -= std::f32::consts::TAU; }
+    while x < -std::f32::consts::PI { x += std::f32::consts::TAU; }
+    x
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn turn_towards_limits_angular_velocity() {
+        let cur = 0.0;
+        let target = std::f32::consts::FRAC_PI_2; // 90 deg
+        let next = turn_towards(cur, target, 0.1);
+        assert!((next - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn update_rotates_smoothly() {
+        let mut pc = PlayerController::new(Vec3::ZERO);
+        let input = InputState { right: true, ..Default::default() };
+        // camera forward along +Z
+        let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
+        pc.update(&input, 0.016, cam_fwd);
+        // Should not instantly snap to 90deg
+        assert!(pc.yaw > 0.0 && pc.yaw < std::f32::consts::FRAC_PI_2);
+    }
+}

@@ -156,6 +156,14 @@ pub struct Renderer {
     player: crate::client::controller::PlayerController,
     input: crate::client::input::InputState,
     cam_follow: camera_sys::FollowState,
+    // Orbit params
+    cam_orbit_yaw: f32,
+    cam_orbit_pitch: f32,
+    cam_distance: f32,
+    cam_lift: f32,
+    cam_look_height: f32,
+    rmb_down: bool,
+    last_cursor_pos: Option<(f64, f64)>,
 }
 
 impl Renderer {
@@ -535,6 +543,13 @@ impl Renderer {
                 current_pos: glam::vec3(0.0, 5.0, -10.0),
                 current_look: scene_build.cam_target,
             },
+            cam_orbit_yaw: 0.0,
+            cam_orbit_pitch: 0.2,
+            cam_distance: 8.5,
+            cam_lift: 3.5,
+            cam_look_height: 1.6,
+            rmb_down: false,
+            last_cursor_pos: None,
         })
     }
 
@@ -581,12 +596,20 @@ impl Renderer {
 
         // Update player transform from input (WASD) then camera follow
         self.update_player_and_camera(dt, aspect);
+        // Compute local orbit offsets (relative to PC orientation)
+        let (off_local, look_local) = camera_sys::compute_local_orbit_offsets(
+            self.cam_distance,
+            self.cam_orbit_yaw,
+            self.cam_orbit_pitch,
+            self.cam_lift,
+            self.cam_look_height,
+        );
         let (_cam, globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
             self.player.pos,
             glam::Quat::from_rotation_y(self.player.yaw),
-            glam::vec3(0.0, 4.0, -8.5),
-            glam::vec3(0.0, 1.8, 6.0),
+            off_local,
+            look_local,
             aspect,
             dt,
         );
@@ -708,6 +731,36 @@ impl Renderer {
                         self.input.run = pressed
                     }
                     _ => {}
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let mut step = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => *y,
+                    winit::event::MouseScrollDelta::PixelDelta(p) => (p.y as f32) * 0.05,
+                };
+                if step.abs() < 1e-3 { step = 0.0; }
+                if step != 0.0 {
+                    self.cam_distance = (self.cam_distance - step).clamp(3.0, 25.0);
+                }
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if *button == winit::event::MouseButton::Right {
+                    self.rmb_down = state.is_pressed();
+                    if !self.rmb_down {
+                        self.last_cursor_pos = None; // reset deltas
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                if self.rmb_down {
+                    if let Some((lx, ly)) = self.last_cursor_pos {
+                        let dx = position.x - lx;
+                        let dy = position.y - ly;
+                        let sens = 0.005;
+                        self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx as f32 * sens);
+                        self.cam_orbit_pitch = (self.cam_orbit_pitch - dy as f32 * sens).clamp(-0.6, 1.2);
+                    }
+                    self.last_cursor_pos = Some((position.x, position.y));
                 }
             }
             WindowEvent::Focused(false) => {
@@ -928,6 +981,13 @@ impl Renderer {
             None
         }
     }
+}
+
+fn wrap_angle(a: f32) -> f32 {
+    let mut x = a;
+    while x > std::f32::consts::PI { x -= std::f32::consts::TAU; }
+    while x < -std::f32::consts::PI { x += std::f32::consts::TAU; }
+    x
 }
 
 fn rand_unit() -> f32 {
