@@ -159,6 +159,7 @@ pub struct Renderer {
 
     // UI overlay
     nameplates: ui::Nameplates,
+    bars: ui::HealthBars,
 
     // --- Player/Camera ---
     pc_index: usize,
@@ -178,6 +179,10 @@ pub struct Renderer {
 
     // Server state (NPCs/health)
     server: crate::server::ServerState,
+
+    // Wizard health (including PC at pc_index)
+    wizard_hp: Vec<i32>,
+    wizard_hp_max: i32,
 }
 
 impl Renderer {
@@ -284,8 +289,9 @@ impl Renderer {
         let particle_pipeline =
             pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, config.format);
 
-        // UI: nameplates
+        // UI: nameplates + health bars
         let nameplates = ui::Nameplates::new(&device, config.format)?;
+        let bars = ui::HealthBars::new(&device, config.format)?;
 
         // --- Buffers & bind groups ---
         // Globals
@@ -598,6 +604,7 @@ impl Renderer {
             particles: Vec::new(),
             fire_bolt,
             nameplates,
+            bars,
 
             // Player/camera
             pc_index: scene_build.pc_index,
@@ -624,6 +631,8 @@ impl Renderer {
             npc_instances_cpu,
             npc_models,
             server,
+            wizard_hp: vec![100; scene_build.wizard_count as usize],
+            wizard_hp_max: 100,
         })
     }
 
@@ -790,8 +799,33 @@ impl Renderer {
             // FX
             self.draw_particles(&mut rpass);
         }
-        // Overlay: nameplates after 3D content
+        // Overlay: health bars, then nameplates after 3D content
         let view_proj = glam::Mat4::from_cols_array_2d(&globals.view_proj);
+        // Build bar entries: wizards (including PC)
+        let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
+        for (i, m) in self.wizard_models.iter().enumerate() {
+            let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
+            let frac = (self.wizard_hp.get(i).copied().unwrap_or(self.wizard_hp_max) as f32)
+                / (self.wizard_hp_max as f32);
+            bar_entries.push((head.truncate(), frac));
+        }
+        // NPC boxes: use server authoritative pos; offset slightly above top
+        for npc in &self.server.npcs {
+            if !npc.alive { continue; }
+            let pos = npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0);
+            let frac = (npc.hp.max(0) as f32) / (npc.max_hp.max(1) as f32);
+            bar_entries.push((pos, frac));
+        }
+        self.bars.queue_entries(
+            &self.device,
+            &self.queue,
+            self.config.width,
+            self.config.height,
+            view_proj,
+            &bar_entries,
+        );
+        self.bars.draw(&mut encoder, &view);
+
         self.nameplates.queue_labels(
             &self.device,
             &self.queue,

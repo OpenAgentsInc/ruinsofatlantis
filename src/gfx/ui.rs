@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use ab_glyph::{Font, FontArc, Glyph, PxScale, ScaleFont};
 
 use crate::gfx::pipeline;
-use crate::gfx::types::TextVertex;
+use crate::gfx::types::{TextVertex, BarVertex};
 
 struct GlyphInfo {
     uv_min: [f32; 2],
@@ -409,6 +409,161 @@ impl Nameplates {
         rpass.draw(0..self.vcount, 0..1);
     }
 }
+
+// ---- Health Bars Overlay ----
+pub struct HealthBars {
+    pipeline: wgpu::RenderPipeline,
+    vbuf: wgpu::Buffer,
+    vcount: u32,
+    vcap_bytes: u64,
+}
+
+impl HealthBars {
+    pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("bars-shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
+        });
+        let pipeline = pipeline::create_bar_pipeline(device, &shader, color_format);
+        let vcap_bytes = 64 * 1024;
+        let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("healthbar-vbuf"),
+            size: vcap_bytes,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        Ok(Self { pipeline, vbuf, vcount: 0, vcap_bytes })
+    }
+
+    fn color_for_frac(frac: f32) -> [f32; 4] {
+        let f = frac.clamp(0.0, 1.0);
+        if f >= 0.5 {
+            // yellow -> green
+            let t = (f - 0.5) / 0.5;
+            let r = 1.0 - t;
+            let g = 1.0;
+            let b = 0.0;
+            [r, g, b, 1.0]
+        } else {
+            // red -> yellow
+            let t = f / 0.5;
+            let r = 1.0;
+            let g = t;
+            let b = 0.0;
+            [r, g, b, 1.0]
+        }
+    }
+
+    fn ndc_from_px(px: f32, py: f32, w: f32, h: f32) -> [f32; 2] {
+        let x = (px / w) * 2.0 - 1.0;
+        let y = 1.0 - (py / h) * 2.0;
+        [x, y]
+    }
+
+    fn build_vertices(
+        surface_w: u32,
+        surface_h: u32,
+        view_proj: glam::Mat4,
+        entries: &[(glam::Vec3, f32)],
+    ) -> Vec<BarVertex> {
+        let w = surface_w as f32;
+        let h = surface_h as f32;
+        let mut out: Vec<BarVertex> = Vec::new();
+        let bar_w = 64.0f32;
+        let bar_h = 6.0f32;
+        let pad = 2.0f32; // background padding
+        for (world, frac) in entries {
+            let clip = view_proj * glam::Vec4::new(world.x, world.y, world.z, 1.0);
+            if clip.w <= 0.0 { continue; }
+            let ndc = clip.truncate() / clip.w;
+            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
+            let cx = (ndc.x * 0.5 + 0.5) * w;
+            let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
+            let bx0 = cx - bar_w * 0.5 - pad;
+            let bx1 = cx + bar_w * 0.5 + pad;
+            let by0 = (cy - 34.0).max(0.0);
+            let by1 = by0 + bar_h + pad * 2.0;
+            let bg = [0.0, 0.0, 0.0, 0.5];
+            // Background quad
+            let p0 = Self::ndc_from_px(bx0, by0, w, h);
+            let p1 = Self::ndc_from_px(bx1, by0, w, h);
+            let p2 = Self::ndc_from_px(bx1, by1, w, h);
+            let p3 = Self::ndc_from_px(bx0, by1, w, h);
+            out.push(BarVertex { pos_ndc: p0, color: bg });
+            out.push(BarVertex { pos_ndc: p1, color: bg });
+            out.push(BarVertex { pos_ndc: p2, color: bg });
+            out.push(BarVertex { pos_ndc: p0, color: bg });
+            out.push(BarVertex { pos_ndc: p2, color: bg });
+            out.push(BarVertex { pos_ndc: p3, color: bg });
+            // Foreground (filled) quad based on frac
+            let frac = frac.clamp(0.0, 1.0);
+            if frac > 0.0 {
+                let fw = bar_w * frac;
+                let fx0 = cx - bar_w * 0.5;
+                let fx1 = fx0 + fw;
+                let fy0 = by0 + pad;
+                let fy1 = fy0 + bar_h;
+                let col = Self::color_for_frac(frac);
+                let q0 = Self::ndc_from_px(fx0, fy0, w, h);
+                let q1 = Self::ndc_from_px(fx1, fy0, w, h);
+                let q2 = Self::ndc_from_px(fx1, fy1, w, h);
+                let q3 = Self::ndc_from_px(fx0, fy1, w, h);
+                out.push(BarVertex { pos_ndc: q0, color: col });
+                out.push(BarVertex { pos_ndc: q1, color: col });
+                out.push(BarVertex { pos_ndc: q2, color: col });
+                out.push(BarVertex { pos_ndc: q0, color: col });
+                out.push(BarVertex { pos_ndc: q2, color: col });
+                out.push(BarVertex { pos_ndc: q3, color: col });
+            }
+        }
+        out
+    }
+
+    pub fn queue_entries(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        surface_w: u32,
+        surface_h: u32,
+        view_proj: glam::Mat4,
+        entries: &[(glam::Vec3, f32)],
+    ) {
+        let verts = Self::build_vertices(surface_w, surface_h, view_proj, entries);
+        self.vcount = verts.len() as u32;
+        let bytes: &[u8] = bytemuck::cast_slice(&verts);
+        if bytes.len() as u64 > self.vcap_bytes {
+            let new_cap = (bytes.len() as u64).next_power_of_two();
+            self.vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("healthbar-vbuf"),
+                size: new_cap,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.vcap_bytes = new_cap;
+        }
+        queue.write_buffer(&self.vbuf, 0, bytes);
+    }
+
+    pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        if self.vcount == 0 { return; }
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("healthbar-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_vertex_buffer(0, self.vbuf.slice(..));
+        rpass.draw(0..self.vcount, 0..1);
+    }
+}
+
 impl Nameplates {
     pub fn upload_atlas(&self, queue: &wgpu::Queue) {
         queue.write_texture(
@@ -430,5 +585,19 @@ impl Nameplates {
                 depth_or_array_layers: 1,
             },
         );
+    }
+}
+
+#[cfg(test)]
+mod bar_tests {
+    use super::HealthBars;
+    #[test]
+    fn color_mapping_is_monotonic() {
+        let g = HealthBars::color_for_frac(1.0);
+        let y = HealthBars::color_for_frac(0.5);
+        let r = HealthBars::color_for_frac(0.0);
+        assert!((g[1] - 1.0).abs() < 1e-6 && g[0] < 0.5);
+        assert!((y[0] - 1.0).abs() < 1e-6 && (y[1] - 1.0).abs() < 1e-6);
+        assert!((r[0] - 1.0).abs() < 1e-6 && r[1] < 0.1);
     }
 }

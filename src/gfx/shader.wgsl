@@ -220,3 +220,20 @@ fn fs_text(i: TextOut) -> @location(0) vec4<f32> {
   // White text with alpha from atlas
   return vec4<f32>(1.0, 1.0, 1.0, a);
 }
+
+// ---- Health bar pipeline (screen-space colored quads) ----
+struct BarIn { @location(0) pos_ndc: vec2<f32>, @location(1) color: vec4<f32> };
+struct BarOut { @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32> };
+
+@vertex
+fn vs_bar(v: BarIn) -> BarOut {
+  var o: BarOut;
+  o.pos = vec4<f32>(v.pos_ndc, 0.0, 1.0);
+  o.color = v.color;
+  return o;
+}
+
+@fragment
+fn fs_bar(i: BarOut) -> @location(0) vec4<f32> {
+  return i.color;
+}

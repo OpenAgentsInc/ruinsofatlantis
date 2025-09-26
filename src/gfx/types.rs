@@ -243,3 +243,19 @@ impl TextVertex {
         attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
     };
 }
+
+// Screen-space colored quad vertex for health bars
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct BarVertex {
+    pub pos_ndc: [f32; 2],
+    pub color: [f32; 4],
+}
+
+impl BarVertex {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<BarVertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4],
+    };
+}
