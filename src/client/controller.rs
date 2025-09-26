@@ -19,7 +19,8 @@ impl PlayerController {
     }
 
     pub fn update(&mut self, input: &InputState, dt: f32, cam_forward: Vec3) {
-        let speed = if input.run { 6.0 } else { 3.0 };
+        // Tunables: faster forward movement, slower turning
+        let speed = if input.run { 9.0 } else { 5.0 };
         let mut fwd = cam_forward;
         let mut move_dir = Vec3::ZERO;
         // Flatten forward and compute right
@@ -40,7 +41,7 @@ impl PlayerController {
             self.pos += move_dir * speed * dt;
             // Smoothly rotate toward target yaw
             let target_yaw = move_dir.x.atan2(move_dir.z);
-            let max_turn = 6.0 * dt; // rad/s
+            let max_turn = 2.5 * dt; // rad/s (slower for smoother turns)
             self.yaw = turn_towards(self.yaw, target_yaw, max_turn);
         }
     }
