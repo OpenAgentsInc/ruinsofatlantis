@@ -682,8 +682,9 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
                 if !lines.is_empty() {
+                    let anim_cell: f32 = 6.0; // smaller animation text
                     let start_px = (m, m + s + 8.0);
-                    build_text_quads(&lines, start_px, (width as f32, height as f32), &mut text_verts, [0.9, 0.9, 0.95, 1.0], 10.0);
+                    build_text_quads(&lines, start_px, (width as f32, height as f32), &mut text_verts, [0.9, 0.9, 0.95, 1.0], anim_cell);
                     let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-text"), contents: bytemuck::cast_slice(&text_verts), usage: wgpu::BufferUsages::VERTEX });
                     rpass.set_pipeline(&ui_pipe);
                     rpass.set_vertex_buffer(0, tvb.slice(..));
@@ -750,12 +751,12 @@ async fn run(cli: Cli) -> Result<()> {
                 && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
                 && !anims.is_empty()
             {
-                        let list_x = m; let list_y = m + s + 8.0; let cell_big = 10.0; let glyph_w = 5.0 * cell_big; let glyph_h = 7.0 * cell_big;
+                        let list_x = m; let list_y = m + s + 8.0; let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
                         // Header line occupies first row; buttons start at i=1
                         for (i, name) in anims.iter().enumerate() {
                             let text = format!("{}: {}", i + 1, name.to_uppercase());
-                            let tx0 = list_x; let ty0 = list_y + (i as f32 + 1.0) * (glyph_h + cell_big * 2.0); // +1 to skip header
-                            let tw = text.len() as f32 * (glyph_w + cell_big); let th = glyph_h;
+                            let tx0 = list_x; let ty0 = list_y + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0); // +1 to skip header
+                            let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
                             if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
                                 *active_index = i; *time = 0.0;
                             }
