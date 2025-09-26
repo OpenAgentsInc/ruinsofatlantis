@@ -18,11 +18,12 @@ pub struct Npc {
     pub hp: i32,
     pub max_hp: i32,
     pub alive: bool,
+    pub attack_cooldown: f32,
 }
 
 impl Npc {
     pub fn new(id: NpcId, pos: Vec3, radius: f32, hp: i32) -> Self {
-        Self { id, pos, radius, hp, max_hp: hp, alive: true }
+        Self { id, pos, radius, hp, max_hp: hp, alive: true, attack_cooldown: 0.0 }
     }
 }
 
@@ -52,6 +53,42 @@ impl ServerState {
         id
     }
 
+    /// Simple melee step: move NPCs toward nearest wizard and attack when in range.
+    /// Returns list of (wizard_idx, damage) applied this step.
+    pub fn step_npc_ai(&mut self, dt: f32, wizards: &[Vec3]) -> Vec<(usize, i32)> {
+        if wizards.is_empty() { return Vec::new(); }
+        let speed = 2.0f32; // m/s
+        let attack_range = 1.2f32;
+        let attack_cd = 1.5f32;
+        let damage = 5i32;
+        let mut hits = Vec::new();
+        for n in &mut self.npcs {
+            if !n.alive { continue; }
+            // reduce cooldown
+            n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
+            // nearest wizard in XZ
+            let mut best_i = 0usize;
+            let mut best_d2 = f32::INFINITY;
+            for (i, w) in wizards.iter().enumerate() {
+                let dx = w.x - n.pos.x;
+                let dz = w.z - n.pos.z;
+                let d2 = dx*dx + dz*dz;
+                if d2 < best_d2 { best_d2 = d2; best_i = i; }
+            }
+            let target = wizards[best_i];
+            let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
+            let dist = to.length();
+            if dist > 1e-3 {
+                let step = (speed * dt).min(dist);
+                n.pos += to.normalize() * step;
+            }
+            if dist <= attack_range && n.attack_cooldown <= 0.0 {
+                hits.push((best_i, damage));
+                n.attack_cooldown = attack_cd;
+            }
+        }
+        hits
+    }
     pub fn ring_spawn(&mut self, count: usize, radius: f32, hp: i32) {
         for i in 0..count {
             let a = (i as f32) / (count as f32) * std::f32::consts::TAU;

@@ -399,6 +399,32 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     })
 }
 
+/// Merge animation clips from another GLTF/GLB into an existing skinned mesh by node-name mapping.
+pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Result<usize> {
+    let other = load_gltf_skinned(anim_path)?;
+    let mut merged = 0usize;
+    for (name, clip) in other.animations.iter() {
+        let mut t_tracks = HashMap::new();
+        let mut r_tracks = HashMap::new();
+        let mut s_tracks = HashMap::new();
+        let map_idx = |idx: &usize| -> Option<usize> {
+            other
+                .node_names
+                .get(*idx)
+                .and_then(|n| base.node_names.iter().position(|m| m == n))
+        };
+        for (i, tr) in &clip.t_tracks { if let Some(di) = map_idx(i) { t_tracks.insert(di, tr.clone()); } }
+        for (i, rr) in &clip.r_tracks { if let Some(di) = map_idx(i) { r_tracks.insert(di, rr.clone()); } }
+        for (i, sr) in &clip.s_tracks { if let Some(di) = map_idx(i) { s_tracks.insert(di, sr.clone()); } }
+        base.animations.insert(
+            name.clone(),
+            AnimClip { name: name.clone(), duration: clip.duration, t_tracks, r_tracks, s_tracks },
+        );
+        merged += 1;
+    }
+    Ok(merged)
+}
+
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
     use gltf::scene::Transform;
     match n.transform() {

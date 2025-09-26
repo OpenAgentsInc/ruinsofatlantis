@@ -29,6 +29,7 @@ mod ui;
 mod util;
 
 use crate::assets::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned};
+use crate::assets::skinning::merge_gltf_animations;
 use crate::core::data::{loader as data_loader, spell::SpellSpec};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
@@ -138,6 +139,7 @@ pub struct Renderer {
     zombie_cpu: SkinnedMeshCPU,
     zombie_time_offset: Vec<f32>,
     zombie_ids: Vec<crate::server::NpcId>,
+    zombie_prev_pos: Vec<glam::Vec3>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -210,6 +212,32 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    fn remove_wizard_at(&mut self, idx: usize) {
+        if idx >= self.wizard_count as usize { return; }
+        // Keep PC for now; skip removal if it's the player character to avoid breaking input/camera
+        if idx == self.pc_index { return; }
+        self.wizard_models.swap_remove(idx);
+        self.wizard_instances_cpu.swap_remove(idx);
+        self.wizard_anim_index.swap_remove(idx);
+        self.wizard_time_offset.swap_remove(idx);
+        self.wizard_last_phase.swap_remove(idx);
+        self.wizard_hp.swap_remove(idx);
+        // If swap removed moved the old PC index, adjust pc_index
+        if self.pc_index == self.wizard_count as usize - 1 && idx < self.pc_index {
+            // if PC was last element and we removed a lower index, PC index shifts down by 1
+            self.pc_index -= 1;
+        } else if idx < self.pc_index {
+            self.pc_index -= 1;
+        }
+        // Recompute palette_base for contiguous layout
+        for (i, inst) in self.wizard_instances_cpu.iter_mut().enumerate() {
+            inst.palette_base = (i as u32) * self.joints_per_wizard;
+        }
+        self.wizard_count = self.wizard_instances_cpu.len() as u32;
+        // Upload full instances buffer
+        let bytes: &[u8] = bytemuck::cast_slice(&self.wizard_instances_cpu);
+        self.queue.write_buffer(&self.wizard_instances, 0, bytes);
+    }
     /// Create a renderer bound to a window surface.
     pub async fn new(window: &Window) -> anyhow::Result<Self> {
         // --- Surface ---
@@ -390,13 +418,24 @@ impl Renderer {
             .context("load skinned wizard.gltf")?;
         // Load the original project zombie model
         let zombie_model_path = "assets/models/zombie.glb";
-        let zombie_cpu = load_gltf_skinned(&asset_path(zombie_model_path))
+        let mut zombie_cpu = load_gltf_skinned(&asset_path(zombie_model_path))
             .with_context(|| format!("load skinned {}", zombie_model_path))?;
         {
             let count = zombie_cpu.animations.len();
             let mut names: Vec<&str> = zombie_cpu.animations.keys().map(|s| s.as_str()).collect();
             names.sort_unstable();
             log::info!("{} animations: {} -> {:?}", zombie_model_path, count, names);
+        }
+        // Optional external clips in assets/models/zombie_clips/*.glb
+        for (_alias, file) in [("Idle", "idle.glb"), ("Walk", "walk.glb"), ("Run", "run.glb"), ("Attack", "attack.glb")] {
+            let p = asset_path(&format!("assets/models/zombie_clips/{}", file));
+            if p.exists() {
+                let before = zombie_cpu.animations.len();
+                if let Ok(n) = merge_gltf_animations(&mut zombie_cpu, &p) {
+                    let after = zombie_cpu.animations.len();
+                    log::info!("merged {} clips from {} ({} -> {})", n, p.display(), before, after);
+                }
+            }
         }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
 
@@ -702,10 +741,11 @@ impl Renderer {
             zombie_palettes_buf,
             zombie_palettes_bg,
             zombie_joints,
-            zombie_models,
+            zombie_models: zombie_models.clone(),
             zombie_cpu,
             zombie_time_offset: (0..zombie_count as usize).map(|i| i as f32 * 0.35).collect(),
             zombie_ids,
+            zombie_prev_pos: zombie_models.iter().map(|m| glam::vec3(m.to_cols_array()[12], m.to_cols_array()[13], m.to_cols_array()[14])).collect(),
             wizard_instances_cpu: scene_build.wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
@@ -844,8 +884,28 @@ impl Renderer {
         self.process_pc_cast(t);
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
-        // Update zombie skinning palettes
-        self.update_zombie_palettes(t);
+        // Zombie AI/movement on server; then update local transforms and palettes
+        {
+            // Wizard positions for AI
+            let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_count as usize);
+            for m in &self.wizard_models {
+                let c = m.to_cols_array();
+                wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+            }
+            let hits = self.server.step_npc_ai(dt, &wiz_pos);
+            // Apply melee hits to wizard HP
+            for (widx, dmg) in hits {
+                if let Some(hp) = self.wizard_hp.get_mut(widx) {
+                    let before = *hp;
+                    *hp = (*hp - dmg).max(0);
+                    let fatal = *hp == 0;
+                    log::info!("wizard melee hit: idx={} hp {} -> {} (dmg {}), fatal={}", widx, before, *hp, dmg, fatal);
+                    if fatal { self.remove_wizard_at(widx); }
+                }
+            }
+            self.update_zombies_from_server();
+            self.update_zombie_palettes(t);
+        }
         // FX update (projectiles/particles)
         self.update_fx(t, dt);
 
@@ -1050,6 +1110,7 @@ impl Renderer {
             }
         }
     }
+    #[allow(dead_code)]
     fn select_zombie_clip(&self) -> Option<&AnimClip> {
         // Prefer common idle names, then walk/run, otherwise any
         let keys = [
@@ -1098,30 +1159,58 @@ impl Renderer {
     }
     fn update_zombie_palettes(&mut self, time_global: f32) {
         if self.zombie_count == 0 { return; }
-        // Select an appropriate clip: prefer "Idle", then any available.
-        // Pick a clip; if only static exists, synthesize a procedural idle
-        let Some(clip_sel) = self.select_zombie_clip() else {
-            // No animations; keep bind pose
-            let joints = self.zombie_joints as usize;
-            let total = self.zombie_count as usize * joints;
-            let mats: Vec<[f32; 16]> = (0..total).map(|_| glam::Mat4::IDENTITY.to_cols_array()).collect();
-            self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats));
-            return;
-        };
-        let clip_name: String = if clip_sel.name == "__static" {
-            self.ensure_proc_idle_clip()
-        } else {
-            clip_sel.name.clone()
-        };
+        // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
         let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
         for i in 0..(self.zombie_count as usize) {
+            let c = self.zombie_models[i].to_cols_array();
+            let pos = glam::vec3(c[12], c[13], c[14]);
+            let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(pos);
+            let moving = (pos - prev).length_squared() > 1e-4;
+            self.zombie_prev_pos[i] = pos;
+            let has_walk = self.zombie_cpu.animations.contains_key("Walk");
+            let has_run = self.zombie_cpu.animations.contains_key("Run");
+            let has_idle = self.zombie_cpu.animations.contains_key("Idle");
+            let has_proc = self.zombie_cpu.animations.contains_key("ProcIdle");
+            let has_static = self.zombie_cpu.animations.contains_key("__static");
+            let any_owned: String = self.zombie_cpu.animations.keys().next().cloned().unwrap_or("__static".to_string());
+            let clip_name = if moving {
+                if has_walk { "Walk" } else if has_run { "Run" } else if has_idle { "Idle" } else if has_proc { "ProcIdle" } else if has_static { "__static" } else { &any_owned }
+            } else if has_idle { "Idle" } else if has_proc { "ProcIdle" } else if has_static { "__static" } else { &any_owned };
+            
+            let need_proc = clip_name == "__static" && !has_idle && !has_proc;
+            let proc_name_str = if need_proc { Some(self.ensure_proc_idle_clip()) } else { None };
             let t = time_global + self.zombie_time_offset.get(i).copied().unwrap_or(0.0);
-            let clip = self.zombie_cpu.animations.get(&clip_name).expect("zombie clip");
+            let lookup = proc_name_str.as_deref().unwrap_or(clip_name);
+            let clip = self.zombie_cpu.animations.get(lookup).unwrap();
             let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
             for m in palette { mats_all.push(m.to_cols_array()); }
         }
         self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats_all));
+    }
+
+    fn update_zombies_from_server(&mut self) {
+        // Build map from id -> pos
+        use std::collections::HashMap;
+        let mut pos_map: HashMap<crate::server::NpcId, glam::Vec3> = HashMap::new();
+        for n in &self.server.npcs { pos_map.insert(n.id, n.pos); }
+        let mut any = false;
+        for (i, id) in self.zombie_ids.clone().iter().enumerate() {
+            if let Some(p) = pos_map.get(id) {
+                let m_old = self.zombie_models[i];
+                let yaw = Self::yaw_from_model(&m_old);
+                let new_m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), glam::Quat::from_rotation_y(yaw), *p);
+                self.zombie_models[i] = new_m;
+                let mut inst = self.zombie_instances_cpu[i];
+                inst.model = new_m.to_cols_array_2d();
+                self.zombie_instances_cpu[i] = inst;
+                any = true;
+            }
+        }
+        if any {
+            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+        }
     }
     /// Handle platform window events that affect input (keyboard focus/keys).
     pub fn handle_window_event(&mut self, event: &WindowEvent) {
@@ -1466,6 +1555,7 @@ impl Renderer {
                         "wizard hit: idx={} hp {} -> {} (dmg {}), fatal={}",
                         j, before, after, damage, fatal
                     );
+                    if fatal { self.remove_wizard_at(j); }
                     // impact burst
                     for _ in 0..14 {
                         let a = rand_unit() * std::f32::consts::TAU;
