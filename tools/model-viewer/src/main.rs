@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use glam::{Mat4, Vec3};
 use log::info;
-use ra_assets::{load_gltf_skinned, SkinnedMeshCPU};
+use ra_assets::{load_gltf_mesh, load_gltf_skinned, CpuMesh, SkinnedMeshCPU};
 use wgpu::util::DeviceExt;
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceTargetUnsafe};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
@@ -47,6 +47,24 @@ impl VSkinned {
             wgpu::VertexAttribute { shader_location: 2, offset: 24, format: wgpu::VertexFormat::Float32x2 },
             wgpu::VertexAttribute { shader_location: 3, offset: 32, format: wgpu::VertexFormat::Uint16x4 },
             wgpu::VertexAttribute { shader_location: 4, offset: 40, format: wgpu::VertexFormat::Float32x4 },
+        ],
+    };
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct VBasic {
+    pos: [f32; 3],
+    nrm: [f32; 3],
+}
+
+impl VBasic {
+    const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<VBasic>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute { shader_location: 0, offset: 0, format: wgpu::VertexFormat::Float32x3 },
+            wgpu::VertexAttribute { shader_location: 1, offset: 12, format: wgpu::VertexFormat::Float32x3 },
         ],
     };
 }
@@ -171,14 +189,23 @@ async fn run(cli: Cli) -> Result<()> {
         ],
     });
     // Model GPU state (populated on load)
-    struct ModelGpu {
-        vb: wgpu::Buffer,
-        ib: wgpu::Buffer,
-        index_count: u32,
-        mat_bg: wgpu::BindGroup,
-        skin_bg: wgpu::BindGroup,
-        center: Vec3,
-        diag: f32,
+    enum ModelGpu {
+        Skinned {
+            vb: wgpu::Buffer,
+            ib: wgpu::Buffer,
+            index_count: u32,
+            mat_bg: wgpu::BindGroup,
+            skin_bg: wgpu::BindGroup,
+            center: Vec3,
+            diag: f32,
+        },
+        Basic {
+            vb: wgpu::Buffer,
+            ib: wgpu::Buffer,
+            index_count: u32,
+            center: Vec3,
+            diag: f32,
+        },
     }
     let mut model_gpu: Option<ModelGpu> = None;
 
@@ -186,6 +213,10 @@ async fn run(cli: Cli) -> Result<()> {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("skinned-shader"),
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader_skinned.wgsl"))),
+    });
+    let basic_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("basic-shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader_basic.wgsl"))),
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pl"),
@@ -198,6 +229,24 @@ async fn run(cli: Cli) -> Result<()> {
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main_skinned"), buffers: &[VSkinned::LAYOUT], compilation_options: Default::default() },
         fragment: Some(wgpu::FragmentState { module: &shader, entry_point: Some("fs_main"), targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+        primitive: wgpu::PrimitiveState { polygon_mode: if cli.wireframe { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill }, ..Default::default() },
+        depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    });
+
+    // Basic (unskinned) pipeline: only globals bind group
+    let basic_pl_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("pl-basic"),
+        bind_group_layouts: &[&globals_bgl],
+        push_constant_ranges: &[],
+    });
+    let basic_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("pipe-basic"),
+        layout: Some(&basic_pl_layout),
+        vertex: wgpu::VertexState { module: &basic_shader, entry_point: Some("vs_main"), buffers: &[VBasic::LAYOUT], compilation_options: Default::default() },
+        fragment: Some(wgpu::FragmentState { module: &basic_shader, entry_point: Some("fs_main"), targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::REPLACE), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
         primitive: wgpu::PrimitiveState { polygon_mode: if cli.wireframe { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill }, ..Default::default() },
         depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
         multisample: wgpu::MultisampleState::default(),
@@ -221,119 +270,68 @@ async fn run(cli: Cli) -> Result<()> {
         skin_bgl: &wgpu::BindGroupLayout,
     | -> Result<ModelGpu> {
         let prepared = ra_assets::util::prepare_gltf_path(path)?;
-        let skinned: SkinnedMeshCPU = load_gltf_skinned(&prepared)?;
-        info!(
-            "loaded: {} (verts={}, indices={}, joints={}, anims={})",
-            prepared.display(),
-            skinned.vertices.len(),
-            skinned.indices.len(),
-            skinned.joints_nodes.len(),
-            skinned.animations.len()
-        );
-
-        // Build vertex/index buffers
-        let vtx: Vec<VSkinned> = skinned
-            .vertices
-            .iter()
-            .map(|v| VSkinned { pos: v.pos, nrm: v.nrm, uv: v.uv, joints: v.joints, weights: v.weights })
-            .collect();
-        let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vb"),
-            contents: bytemuck::cast_slice(&vtx),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("ib"),
-            contents: bytemuck::cast_slice(&skinned.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let index_count = skinned.indices.len() as u32;
-
-        // Skin palette for bind pose
-        let palette = compute_bind_pose_palette(&skinned);
-        let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("skin-palette"),
-            contents: bytemuck::cast_slice(&palette),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
-        let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("skin-bg"),
-            layout: skin_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: skin_buf.as_entire_binding() }],
-        });
-
-        // Material (base color)
-        let (tex_view, sampler) = if let Some(tex) = &skinned.base_color_texture {
-            let size = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
-            let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("albedo"),
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                &tex.pixels,
-                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) },
-                size,
-            );
-            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-            let samp = device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("samp"),
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            });
-            (view, samp)
-        } else {
-            // 1x1 white fallback
-            let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("white"),
-                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                &[255, 255, 255, 255],
-                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
-                wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
-            );
-            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-            let samp = device.create_sampler(&wgpu::SamplerDescriptor::default());
-            (view, samp)
-        };
-        let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("mat-bg"),
-            layout: mat_bgl,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) },
-            ],
-        });
-
-        // Update camera fit
-        let (min_b, max_b) = compute_bounds(&skinned);
-        let center = 0.5 * (min_b + max_b);
-        let diag = (max_b - min_b).length().max(1.0);
-
-        Ok(ModelGpu { vb, ib, index_count, mat_bg, skin_bg, center, diag })
+        match load_gltf_skinned(&prepared) {
+            Ok(skinned) => {
+                info!(
+                    "loaded (skinned): {} (verts={}, indices={}, joints={}, anims={})",
+                    prepared.display(),
+                    skinned.vertices.len(), skinned.indices.len(), skinned.joints_nodes.len(), skinned.animations.len()
+                );
+                let vtx: Vec<VSkinned> = skinned
+                    .vertices
+                    .iter()
+                    .map(|v| VSkinned { pos: v.pos, nrm: v.nrm, uv: v.uv, joints: v.joints, weights: v.weights })
+                    .collect();
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("vb"), contents: bytemuck::cast_slice(&vtx), usage: wgpu::BufferUsages::VERTEX });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ib"), contents: bytemuck::cast_slice(&skinned.indices), usage: wgpu::BufferUsages::INDEX });
+                let index_count = skinned.indices.len() as u32;
+                let palette = compute_bind_pose_palette(&skinned);
+                let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("skin-palette"), contents: bytemuck::cast_slice(&palette), usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST });
+                let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("skin-bg"), layout: skin_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: skin_buf.as_entire_binding() }] });
+                let (tex_view, sampler) = if let Some(tex) = &skinned.base_color_texture {
+                    let size = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
+                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("albedo"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
+                    queue.write_texture(wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All }, &tex.pixels, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) }, size);
+                    let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+                    let samp = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("samp"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
+                    (view, samp)
+                } else {
+                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("white"), size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
+                    queue.write_texture(wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All }, &[255, 255, 255, 255], wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) }, wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 });
+                    let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+                    let samp = device.create_sampler(&wgpu::SamplerDescriptor::default());
+                    (view, samp)
+                };
+                let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("mat-bg"), layout: mat_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) }] });
+                let (min_b, max_b) = compute_bounds(&skinned);
+                let center = 0.5 * (min_b + max_b);
+                let diag = (max_b - min_b).length().max(1.0);
+                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, center, diag })
+            }
+            Err(e) => {
+                log::warn!("skinned load failed, trying unskinned: {}", e);
+                let cpu: CpuMesh = load_gltf_mesh(&prepared)?;
+                info!("loaded (basic): {} (verts={}, indices={})", prepared.display(), cpu.vertices.len(), cpu.indices.len());
+                let verts: Vec<VBasic> = cpu.vertices.iter().map(|v| VBasic { pos: v.pos, nrm: v.nrm }).collect();
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("vb-basic"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ib-basic"), contents: bytemuck::cast_slice(&cpu.indices), usage: wgpu::BufferUsages::INDEX });
+                let index_count = cpu.indices.len() as u32;
+                let (min_b, max_b) = compute_bounds_basic(&cpu);
+                let center = 0.5 * (min_b + max_b);
+                let diag = (max_b - min_b).length().max(1.0);
+                Ok(ModelGpu::Basic { vb, ib, index_count, center, diag })
+            }
+        }
     };
 
     // Load from CLI if provided
     if let Some(p) = cli.path.as_ref() {
         if let Ok(gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
-            center = gpu.center;
-            diag = gpu.diag;
+            match &gpu {
+                ModelGpu::Skinned { center: c, diag: d, .. } | ModelGpu::Basic { center: c, diag: d, .. } => {
+                    center = *c; diag = *d;
+                }
+            }
             model_gpu = Some(gpu);
         } else {
             log::error!("failed to load {}", p.display());
@@ -372,13 +370,24 @@ async fn run(cli: Cli) -> Result<()> {
                     timestamp_writes: None,
                 });
                 if let Some(ref gpu) = model_gpu {
-                    rpass.set_pipeline(&pipeline);
-                    rpass.set_bind_group(0, &globals_bg, &[]);
-                    rpass.set_bind_group(1, &gpu.mat_bg, &[]);
-                    rpass.set_bind_group(2, &gpu.skin_bg, &[]);
-                    rpass.set_vertex_buffer(0, gpu.vb.slice(..));
-                    rpass.set_index_buffer(gpu.ib.slice(..), wgpu::IndexFormat::Uint16);
-                    rpass.draw_indexed(0..gpu.index_count, 0, 0..1);
+                    match gpu {
+                        ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, .. } => {
+                            rpass.set_pipeline(&pipeline);
+                            rpass.set_bind_group(0, &globals_bg, &[]);
+                            rpass.set_bind_group(1, mat_bg, &[]);
+                            rpass.set_bind_group(2, skin_bg, &[]);
+                            rpass.set_vertex_buffer(0, vb.slice(..));
+                            rpass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rpass.draw_indexed(0..*index_count, 0, 0..1);
+                        }
+                        ModelGpu::Basic { vb, ib, index_count, .. } => {
+                            rpass.set_pipeline(&basic_pipeline);
+                            rpass.set_bind_group(0, &globals_bg, &[]);
+                            rpass.set_vertex_buffer(0, vb.slice(..));
+                            rpass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rpass.draw_indexed(0..*index_count, 0, 0..1);
+                        }
+                    }
                 }
             }
             queue.submit(Some(enc.finish()));
@@ -386,8 +395,11 @@ async fn run(cli: Cli) -> Result<()> {
         }
         Event::WindowEvent { event: WindowEvent::DroppedFile(path), .. } => {
             if let Ok(gpu) = load_model(&path, &device, &queue, &mat_bgl, &skin_bgl) {
-                center = gpu.center;
-                diag = gpu.diag;
+                match &gpu {
+                    ModelGpu::Skinned { center: c, diag: d, .. } | ModelGpu::Basic { center: c, diag: d, .. } => {
+                        center = *c; diag = *d;
+                    }
+                }
                 model_gpu = Some(gpu);
             } else {
                 log::error!("failed to load {}", path.display());
@@ -420,6 +432,17 @@ fn compute_bind_pose_palette(model: &SkinnedMeshCPU) -> Vec<[[f32; 4]; 4]> {
 }
 
 fn compute_bounds(model: &SkinnedMeshCPU) -> (Vec3, Vec3) {
+    let mut min_b = Vec3::splat(f32::INFINITY);
+    let mut max_b = Vec3::splat(f32::NEG_INFINITY);
+    for v in &model.vertices {
+        let p = Vec3::from(v.pos);
+        min_b = min_b.min(p);
+        max_b = max_b.max(p);
+    }
+    (min_b, max_b)
+}
+
+fn compute_bounds_basic(model: &CpuMesh) -> (Vec3, Vec3) {
     let mut min_b = Vec3::splat(f32::INFINITY);
     let mut max_b = Vec3::splat(f32::NEG_INFINITY);
     for v in &model.vertices {
