@@ -94,6 +94,85 @@ fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f3
     }
 }
 
+// Animation CPU sampling helpers
+struct AnimData {
+    parent: Vec<Option<usize>>,
+    base_t: Vec<Vec3>,
+    base_r: Vec<glam::Quat>,
+    base_s: Vec<Vec3>,
+    joints_nodes: Vec<usize>,
+    inverse_bind: Vec<Mat4>,
+    // Ordered clips parallel to displayed anims
+    clips: Vec<ra_assets::AnimClip>,
+}
+
+impl AnimData {
+    fn from_skinned(sk: &SkinnedMeshCPU, ordered_names: &[String]) -> Self {
+        let mut clips = Vec::new();
+        for name in ordered_names {
+            if let Some(c) = sk.animations.get(name) { clips.push(c.clone()); } else { clips.push(ra_assets::AnimClip { name: name.clone(), duration: 0.0, t_tracks: Default::default(), r_tracks: Default::default(), s_tracks: Default::default() }); }
+        }
+        Self {
+            parent: sk.parent.clone(),
+            base_t: sk.base_t.clone(),
+            base_r: sk.base_r.clone(),
+            base_s: sk.base_s.clone(),
+            joints_nodes: sk.joints_nodes.clone(),
+            inverse_bind: sk.inverse_bind.clone(),
+            clips,
+        }
+    }
+
+    fn sample_palette(&self, clip_idx: usize, t: f32) -> Vec<[[f32; 4]; 4]> {
+        let n = self.parent.len();
+        let mut lt = self.base_t.clone();
+        let mut lr = self.base_r.clone();
+        let mut ls = self.base_s.clone();
+        if let Some(clip) = self.clips.get(clip_idx) {
+            let tt = &clip.t_tracks; let rt = &clip.r_tracks; let st = &clip.s_tracks;
+            for (idx, tr) in tt { lt[*idx] = sample_vec3(tr, t); }
+            for (idx, rr) in rt { lr[*idx] = sample_quat(rr, t); }
+            for (idx, sr) in st { ls[*idx] = sample_vec3(sr, t); }
+        }
+        // globals
+        let mut g = vec![Mat4::IDENTITY; n];
+        fn ensure(i: usize, parent: &[Option<usize>], lt:&[Vec3], lr:&[glam::Quat], ls:&[Vec3], g:&mut [Mat4]) {
+            if g[i] != Mat4::IDENTITY { return; }
+            if let Some(p) = parent[i] { if g[p] == Mat4::IDENTITY { ensure(p, parent, lt, lr, ls, g); } g[i] = g[p] * Mat4::from_scale_rotation_translation(ls[i], lr[i], lt[i]); } else { g[i] = Mat4::from_scale_rotation_translation(ls[i], lr[i], lt[i]); }
+        }
+        for i in 0..n { ensure(i, &self.parent, &lt, &lr, &ls, &mut g); }
+        let mut out = Vec::with_capacity(self.joints_nodes.len());
+        for (j, &node) in self.joints_nodes.iter().enumerate() {
+            out.push((g[node] * self.inverse_bind[j]).to_cols_array_2d());
+        }
+        out
+    }
+}
+
+fn sample_vec3(track: &ra_assets::TrackVec3, t: f32) -> Vec3 {
+    let times = &track.times; let vals = &track.values;
+    if times.is_empty() { return vals.first().copied().unwrap_or(Vec3::ZERO); }
+    let dur = *times.last().unwrap_or(&0.0); let tt = if dur > 0.0 { t % dur } else { 0.0 };
+    // find segment
+    let mut i = 0; while i + 1 < times.len() && !(times[i] <= tt && tt <= times[i+1]) { i += 1; }
+    if i + 1 >= times.len() { return *vals.last().unwrap(); }
+    let t0 = times[i]; let t1 = times[i+1]; let a = vals[i]; let b = vals[i+1];
+    let w = if t1 > t0 { (tt - t0) / (t1 - t0) } else { 0.0 };
+    a.lerp(b, w)
+}
+
+fn sample_quat(track: &ra_assets::TrackQuat, t: f32) -> glam::Quat {
+    let times = &track.times; let vals = &track.values;
+    if times.is_empty() { return vals.first().copied().unwrap_or(glam::Quat::IDENTITY); }
+    let dur = *times.last().unwrap_or(&0.0); let tt = if dur > 0.0 { t % dur } else { 0.0 };
+    let mut i = 0; while i + 1 < times.len() && !(times[i] <= tt && tt <= times[i+1]) { i += 1; }
+    if i + 1 >= times.len() { return *vals.last().unwrap(); }
+    let t0 = times[i]; let t1 = times[i+1]; let a = vals[i]; let b = vals[i+1];
+    let w = if t1 > t0 { (tt - t0) / (t1 - t0) } else { 0.0 };
+    // Nlerp-then-normalize for stability
+    (a + (b - a) * w).normalize()
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "model-viewer")]
 #[command(about = "Minimal wgpu model viewer (GLTF/GLB, baseColor, skin bind pose)")]
@@ -281,9 +360,13 @@ async fn run(cli: Cli) -> Result<()> {
             index_count: u32,
             mat_bg: wgpu::BindGroup,
             skin_bg: wgpu::BindGroup,
+            skin_buf: wgpu::Buffer,
             center: Vec3,
             diag: f32,
             anims: Vec<String>,
+            anim: Box<AnimData>,
+            active_index: usize,
+            time: f32,
         },
         Basic {
             vb: wgpu::Buffer,
@@ -402,7 +485,8 @@ async fn run(cli: Cli) -> Result<()> {
                 // Collect animation names
                 let mut names: Vec<String> = skinned.animations.keys().cloned().collect();
                 names.sort();
-                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, center, diag, anims: names })
+                let anim = Box::new(AnimData::from_skinned(&skinned, &names));
+                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, skin_buf, center, diag, anims: names, anim, active_index: 0, time: 0.0 })
             }
             Err(e) => {
                 log::warn!("skinned load failed, trying unskinned: {}", e);
@@ -457,6 +541,15 @@ async fn run(cli: Cli) -> Result<()> {
             window.request_redraw();
         }
         Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+            // Update animation palette (if skinned)
+            if let Some(ModelGpu::Skinned { skin_buf, anim, active_index, time, .. }) = model_gpu.as_mut() {
+                let now = std::time::Instant::now();
+                static mut LAST: Option<std::time::Instant> = None;
+                let dt = unsafe { match LAST { Some(prev) => { let d = now.duration_since(prev).as_secs_f32(); LAST = Some(now); d }, None => { LAST = Some(now); 0.0 } } };
+                *time += dt;
+                let palette = anim.sample_palette(*active_index, *time);
+                queue.write_buffer(skin_buf, 0, bytemuck::cast_slice(&palette));
+            }
             // Orbit camera (mouse + optional autorotate)
             if autorotate { yaw += 0.6 / 60.0; }
             let cp = pitch.clamp(-1.2, 1.2);
@@ -643,6 +736,22 @@ async fn run(cli: Cli) -> Result<()> {
             let lx0 = m + s + 8.0; let ly0 = m; let lx1 = lx0 + label_w; let ly1 = ly0 + label_h;
             let in_label = mx >= lx0 && mx <= lx1 && my >= ly0 && my <= ly1;
             if in_box || in_label { autorotate = !autorotate; }
+            // Animation buttons (skinned): click lines under header
+            if let Some(gpu) = model_gpu.as_mut()
+                && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
+                && !anims.is_empty()
+            {
+                        let list_x = m; let list_y = m + s + 8.0; let cell_big = 10.0; let glyph_w = 5.0 * cell_big; let glyph_h = 7.0 * cell_big;
+                        // Header line occupies first row; buttons start at i=1
+                        for (i, name) in anims.iter().enumerate() {
+                            let text = format!("{}: {}", i + 1, name.to_uppercase());
+                            let tx0 = list_x; let ty0 = list_y + (i as f32 + 1.0) * (glyph_h + cell_big * 2.0); // +1 to skip header
+                            let tw = text.len() as f32 * (glyph_w + cell_big); let th = glyph_h;
+                            if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
+                                *active_index = i; *time = 0.0;
+                            }
+                        }
+            }
         }
         _ => {}
     })?)
