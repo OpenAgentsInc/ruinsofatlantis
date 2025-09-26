@@ -88,6 +88,10 @@ pub struct Renderer {
     wizard_vb: wgpu::Buffer,
     wizard_ib: wgpu::Buffer,
     wizard_index_count: u32,
+    // Zombie skinned geometry
+    zombie_vb: wgpu::Buffer,
+    zombie_ib: wgpu::Buffer,
+    zombie_index_count: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -104,6 +108,8 @@ pub struct Renderer {
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
     wizard_count: u32,
+    zombie_instances: wgpu::Buffer,
+    zombie_count: u32,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
@@ -120,6 +126,12 @@ pub struct Renderer {
     joints_per_wizard: u32,
     wizard_models: Vec<glam::Mat4>,
     wizard_instances_cpu: Vec<InstanceSkin>,
+    // Zombies
+    zombie_palettes_buf: wgpu::Buffer,
+    zombie_palettes_bg: wgpu::BindGroup,
+    zombie_joints: u32,
+    #[allow(dead_code)]
+    zombie_models: Vec<glam::Mat4>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -128,6 +140,10 @@ pub struct Renderer {
     _wizard_mat_buf: wgpu::Buffer,
     _wizard_tex_view: wgpu::TextureView,
     _wizard_sampler: wgpu::Sampler,
+    zombie_mat_bg: wgpu::BindGroup,
+    _zombie_mat_buf: wgpu::Buffer,
+    _zombie_tex_view: wgpu::TextureView,
+    _zombie_sampler: wgpu::Sampler,
 
     // Flags
     wire_enabled: bool,
@@ -364,6 +380,8 @@ impl Renderer {
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
         let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
             .context("load skinned wizard.gltf")?;
+        let zombie_cpu = load_gltf_skinned(&asset_path("assets/models/zombie.glb"))
+            .context("load skinned zombie.glb")?;
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
@@ -419,6 +437,30 @@ impl Renderer {
             usage: wgpu::BufferUsages::INDEX,
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
+
+        // Zombie vertex buffer (use same VertexSkinned layout)
+        let zom_vertices: Vec<VertexSkinned> = zombie_cpu
+            .vertices
+            .iter()
+            .map(|v| VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                joints: v.joints,
+                weights: v.weights,
+                uv: v.uv,
+            })
+            .collect();
+        let zombie_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("zombie-vb"),
+            contents: bytemuck::cast_slice(&zom_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let zombie_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("zombie-ib"),
+            contents: bytemuck::cast_slice(&zombie_cpu.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let zombie_index_count = zombie_cpu.indices.len() as u32;
 
         let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
             Ok(ruins_cpu) => {
@@ -484,12 +526,22 @@ impl Renderer {
             }],
         });
 
+        // Zombie joints count (palettes allocated after instances are built)
+        let zombie_joints = zombie_cpu.joints_nodes.len() as u32;
+
         let material_res =
             material::create_wizard_material(&device, &queue, &material_bgl, &skinned_cpu);
         let wizard_mat_bg = material_res.bind_group;
         let _wizard_mat_buf = material_res.uniform_buf;
         let _wizard_tex_view = material_res.texture_view;
         let _wizard_sampler = material_res.sampler;
+
+        // Zombie material
+        let zmat = material::create_wizard_material(&device, &queue, &material_bgl, &zombie_cpu);
+        let zombie_mat_bg = zmat.bind_group;
+        let _zombie_mat_buf = zmat.uniform_buf;
+        let _zombie_tex_view = zmat.texture_view;
+        let _zombie_sampler = zmat.sampler;
 
         // NPCs: simple cubes as targets on multiple rings
         let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
@@ -541,6 +593,44 @@ impl Renderer {
             mid3_count,
             far_count
         );
+        // Build zombie instances from server NPCs
+        let mut zombie_instances_cpu: Vec<InstanceSkin> = Vec::new();
+        let mut zombie_models: Vec<glam::Mat4> = Vec::new();
+        for (idx, npc) in server.npcs.iter().enumerate() {
+            let m = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(1.0),
+                glam::Quat::IDENTITY,
+                npc.pos,
+            );
+            zombie_models.push(m);
+            zombie_instances_cpu.push(InstanceSkin {
+                model: m.to_cols_array_2d(),
+                color: [1.0, 1.0, 1.0],
+                selected: 0.0,
+                palette_base: (idx as u32) * zombie_joints,
+                _pad_inst: [0; 3],
+            });
+        }
+        let zombie_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("zombie-instances"),
+            contents: bytemuck::cast_slice(&zombie_instances_cpu),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        // Zombie palettes storage sized to instance count
+        let zombie_count = zombie_instances_cpu.len() as u32;
+        let total_z_mats = zombie_count as usize * zombie_joints as usize;
+        let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("zombie-palettes"),
+            size: (total_z_mats * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let zombie_palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("zombie-palettes-bg"),
+            layout: &palettes_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: zombie_palettes_buf.as_entire_binding() }],
+        });
+
         Ok(Self {
             surface,
             device,
@@ -568,11 +658,16 @@ impl Renderer {
             wizard_vb,
             wizard_ib,
             wizard_index_count,
+            zombie_vb,
+            zombie_ib,
+            zombie_index_count,
             ruins_vb,
             ruins_ib,
             ruins_index_count,
             wizard_instances: scene_build.wizard_instances,
             wizard_count: scene_build.wizard_count,
+            zombie_instances,
+            zombie_count: zombie_instances_cpu.len() as u32,
             ruins_instances: scene_build.ruins_instances,
             ruins_count: scene_build.ruins_count,
             fx_instances,
@@ -584,6 +679,10 @@ impl Renderer {
             palettes_bg,
             joints_per_wizard: scene_build.joints_per_wizard,
             wizard_models: scene_build.wizard_models,
+            zombie_palettes_buf,
+            zombie_palettes_bg,
+            zombie_joints,
+            zombie_models,
             wizard_instances_cpu: scene_build.wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
@@ -591,6 +690,10 @@ impl Renderer {
             _wizard_mat_buf,
             _wizard_tex_view,
             _wizard_sampler,
+            zombie_mat_bg,
+            _zombie_mat_buf,
+            _zombie_tex_view,
+            _zombie_sampler,
             wire_enabled: false,
 
             start: Instant::now(),
@@ -628,7 +731,7 @@ impl Renderer {
             npc_ib,
             npc_index_count,
             npc_instances,
-            npc_count: npc_instances_cpu.len() as u32,
+            npc_count: 0, // cubes hidden; zombies replace them visually
             npc_instances_cpu,
             npc_models,
             server,
@@ -715,6 +818,8 @@ impl Renderer {
         self.process_pc_cast(t);
         // Update wizard skinning palettes on CPU then upload
         self.update_wizard_palettes(t);
+        // Update zombie skinning palettes
+        self.update_zombie_palettes(t);
         // FX update (projectiles/particles)
         self.update_fx(t, dt);
 
@@ -764,6 +869,8 @@ impl Renderer {
 
             // Wizards
             self.draw_wizards(&mut rpass);
+            // Zombies
+            self.draw_zombies(&mut rpass);
 
             // Ruins (instanced) — only draw when we have instances
             if self.ruins_count > 0 {
@@ -864,6 +971,22 @@ impl Renderer {
 }
 
 impl Renderer {
+    fn update_zombie_palettes(&mut self, _time_global: f32) {
+        if self.zombie_count == 0 { return; }
+        // Use the first available clip in zombie_cpu (stored originally in materials via textures);
+        // we don't keep zombie_cpu around, so sample T=0 using wizard CPU's anim if needed.
+        // For variety, apply small time offsets per instance.
+        // Here we approximate by reusing the wizard's first clip if present; otherwise identity.
+        // Simpler: advance phase = time_global + idx*0.3 and sample first zombie clip by index 0 stored in palette already.
+        // We can't access zombie_cpu here; rebuild via placeholder identity.
+        // Fallback: write identity matrices to keep static pose.
+        let joints = self.zombie_joints as usize;
+        let total = self.zombie_count as usize * joints;
+        let mut mats: Vec<[f32; 16]> = Vec::with_capacity(total);
+        // Use model matrices as identity for joints so mesh stays in bind pose.
+        for _ in 0..total { mats.push(glam::Mat4::IDENTITY.to_cols_array()); }
+        self.queue.write_buffer(&self.zombie_palettes_buf, 0, bytemuck::cast_slice(&mats));
+    }
     /// Handle platform window events that affect input (keyboard focus/keys).
     pub fn handle_window_event(&mut self, event: &WindowEvent) {
         match event {

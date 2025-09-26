@@ -27,4 +27,17 @@ impl Renderer {
         rpass.set_vertex_buffer(1, self.fx_instances.slice(..));
         rpass.draw(0..4, 0..self.fx_count);
     }
+
+    pub(crate) fn draw_zombies(&self, rpass: &mut wgpu::RenderPass<'_>) {
+        if self.zombie_count == 0 { return; }
+        rpass.set_pipeline(&self.wizard_pipeline);
+        rpass.set_bind_group(0, &self.globals_bg, &[]);
+        rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        rpass.set_bind_group(2, &self.zombie_palettes_bg, &[]);
+        rpass.set_bind_group(3, &self.zombie_mat_bg, &[]);
+        rpass.set_vertex_buffer(0, self.zombie_vb.slice(..));
+        rpass.set_vertex_buffer(1, self.zombie_instances.slice(..));
+        rpass.set_index_buffer(self.zombie_ib.slice(..), IndexFormat::Uint16);
+        rpass.draw_indexed(0..self.zombie_index_count, 0, 0..self.zombie_count);
+    }
 }
