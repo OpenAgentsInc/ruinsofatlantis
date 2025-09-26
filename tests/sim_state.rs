@@ -1,4 +1,3 @@
-use ruinsofatlantis::core::data::ids::Id;
 use ruinsofatlantis::sim::state::SimState;
 
 #[test]

@@ -58,7 +58,6 @@ fn load_monster_boss_defaults() {
 
 #[test]
 fn scenario_yaml_example_loads() {
-    use std::path::PathBuf;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let path = root.join("data/scenarios/example.yaml");
     let scn = scenario::load_yaml(&path).expect("yaml");

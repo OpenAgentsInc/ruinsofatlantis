@@ -27,9 +27,9 @@ fn mk_actor(id: &str, role: &str, team: Option<&str>) -> ActorSim {
 #[test]
 fn ai_assigns_targets() {
     let mut s = SimState::new(50, 1);
-    let mut boss = mk_actor("boss", "boss", Some("boss"));
-    let mut p1 = mk_actor("p1", "dps", Some("players"));
-    let mut p2 = mk_actor("p2", "dps", Some("players"));
+    let boss = mk_actor("boss", "boss", Some("boss"));
+    let p1 = mk_actor("p1", "dps", Some("players"));
+    let p2 = mk_actor("p2", "dps", Some("players"));
     s.actors.push(boss);
     s.actors.push(p1);
     s.actors.push(p2);
