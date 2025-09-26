@@ -65,6 +65,7 @@ pub fn create_cube(device: &wgpu::Device) -> (wgpu::Buffer, wgpu::Buffer, u32) {
     (vb, ib, indices.len() as u32)
 }
 
+#[allow(dead_code)]
 pub fn create_plane(device: &wgpu::Device, extent: f32) -> (wgpu::Buffer, wgpu::Buffer, u32) {
     // A large XZ plane centered at origin
     let s = extent;
