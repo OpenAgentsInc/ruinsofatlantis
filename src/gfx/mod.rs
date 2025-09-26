@@ -106,6 +106,7 @@ pub struct Renderer {
     palettes_buf: wgpu::Buffer,
     palettes_bg: wgpu::BindGroup,
     joints_per_wizard: u32,
+    wizard_models: Vec<glam::Mat4>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -130,7 +131,7 @@ pub struct Renderer {
     skinned_cpu: SkinnedMeshCPU,
 
     // Animation-driven VFX
-    last_center_phase: f32,
+    wizard_last_phase: Vec<f32>,
     hand_right_node: Option<usize>,
     root_node: Option<usize>,
 
@@ -140,8 +141,6 @@ pub struct Renderer {
 
     // Data-driven spec
     fire_bolt: Option<SpellSpec>,
-    // Per-cycle trigger
-    center_fired_this_cycle: bool,
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
@@ -483,6 +482,7 @@ impl Renderer {
             palettes_buf,
             palettes_bg,
             joints_per_wizard: scene_build.joints_per_wizard,
+            wizard_models: scene_build.wizard_models,
             wizard_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
@@ -496,14 +496,13 @@ impl Renderer {
             wizard_anim_index: scene_build.wizard_anim_index,
             wizard_time_offset: scene_build.wizard_time_offset,
             skinned_cpu,
-            last_center_phase: 0.0,
+            wizard_last_phase: vec![0.0; scene_build.wizard_count as usize],
             hand_right_node,
             root_node,
             projectiles: Vec::new(),
             particles: Vec::new(),
             cam_target: scene_build.cam_target,
             fire_bolt,
-            center_fired_this_cycle: false,
         })
     }
 
@@ -672,86 +671,44 @@ impl Renderer {
     }
 
     fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
-        // Choose a clip that actually affects the skin's joints.
-        let prefer = [
-            match idx {
-                0 => "PortalOpen",
-                1 => "Still",
-                _ => "Waiting",
-            },
-            "Waiting",
-            "Still",
-            "PortalOpen",
-        ];
-        let joints = &self.skinned_cpu.joints_nodes;
-        let mut best: Option<&AnimClip> = None;
-        let mut best_cov: usize = 0;
-        for name in prefer.iter() {
-            if let Some(clip) = self.skinned_cpu.animations.get(*name) {
-                if clip.duration <= 0.0 {
-                    continue;
-                }
-                // Coverage: how many joints have any track
-                let cov = joints
-                    .iter()
-                    .filter(|&&jn| {
-                        clip.t_tracks.contains_key(&jn)
-                            || clip.r_tracks.contains_key(&jn)
-                            || clip.s_tracks.contains_key(&jn)
-                    })
-                    .count();
-                if cov > best_cov {
-                    best_cov = cov;
-                    best = Some(clip);
-                }
-            }
-        }
-        if let Some(c) = best {
+        // Honor the requested clip first; fallback only if missing.
+        let requested = match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" };
+        if let Some(c) = self.skinned_cpu.animations.get(requested) {
             return c;
         }
-        // Fallback: any non-empty clip
-        self.skinned_cpu
-            .animations
-            .values()
-            .find(|c| c.duration > 0.0)
-            .or_else(|| self.skinned_cpu.animations.values().next())
-            .expect("at least one animation clip present")
+        // Fallback preference order
+        for name in ["Waiting", "Still", "PortalOpen"] {
+            if let Some(c) = self.skinned_cpu.animations.get(name) { return c; }
+        }
+        // Last resort: any available clip
+        self.skinned_cpu.animations.values().next().expect("at least one animation clip present")
     }
 
     // Update and render-side state for projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
-        // 1) Spawn once per animation cycle when phase crosses event time for center wizard.
+        // 1) Spawn firebolts for all wizards playing PortalOpen when their phase crosses the trigger.
         if self.wizard_count > 0 {
-            let idx = 0usize;
-            // Fixed 5s cycle: fire at offset 2.5s
-            let cycle = 5.0f32;
-            let bolt_offset = 1.5f32; // fire at 2s into the 5s cycle
-            let phase = (t % cycle).max(0.0);
-            // Reset per-cycle when loop wraps
-            let mut fired = self.center_fired_this_cycle;
-            if phase < self.last_center_phase {
-                fired = false;
-            }
-            let crossed = (self.last_center_phase <= bolt_offset && phase >= bolt_offset)
-                || (self.last_center_phase > phase
-                    && (self.last_center_phase <= bolt_offset || phase >= bolt_offset));
-            if crossed && !fired {
-                let clip = self.select_clip(self.wizard_anim_index[idx]);
-                let clip_time = if clip.duration > 0.0 {
-                    phase * (clip.duration / cycle)
-                } else {
-                    0.0
-                };
-                if let Some(origin) = self.right_hand_world(clip, clip_time) {
-                    let dir = self
-                        .root_flat_forward(clip, clip_time)
-                        .unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
-                    self.spawn_firebolt(origin + dir * 0.3, dir, t);
-                    fired = true;
+            let cycle = 5.0f32;        // synthetic cycle period
+            let bolt_offset = 1.5f32;  // trigger point in the cycle
+            for i in 0..(self.wizard_count as usize) {
+                if self.wizard_anim_index[i] != 0 { continue; } // only PortalOpen
+                let prev = self.wizard_last_phase[i];
+                let phase = (t + self.wizard_time_offset[i]) % cycle;
+                let crossed = (prev <= bolt_offset && phase >= bolt_offset)
+                    || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
+                if crossed {
+                    let clip = self.select_clip(self.wizard_anim_index[i]);
+                    let clip_time = if clip.duration > 0.0 { phase.min(clip.duration) } else { 0.0 };
+                    if let Some(origin_local) = self.right_hand_world(clip, clip_time) {
+                        let inst = self.wizard_models.get(i).copied().unwrap_or(glam::Mat4::IDENTITY);
+                        let origin_w = inst * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
+                        let dir_local = self.root_flat_forward(clip, clip_time).unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
+                        let dir_w = (inst * glam::Vec4::new(dir_local.x, dir_local.y, dir_local.z, 0.0)).truncate().normalize_or_zero();
+                        self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t);
+                    }
                 }
+                self.wizard_last_phase[i] = phase;
             }
-            self.last_center_phase = phase;
-            self.center_fired_this_cycle = fired;
         }
 
         // 2) Integrate projectiles

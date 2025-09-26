@@ -21,6 +21,7 @@ pub struct SceneBuild {
     pub wizard_anim_index: Vec<usize>,
     pub wizard_time_offset: Vec<f32>,
     pub cam_target: glam::Vec3,
+    pub wizard_models: Vec<glam::Mat4>,
 }
 
 pub fn build_demo_scene(
@@ -75,8 +76,23 @@ pub fn build_demo_scene(
         world.spawn(Transform { translation: pos, rotation: rot, scale: glam::Vec3::splat(1.0) }, RenderKind::Ruins);
     }
 
+    // Add an outer ring of wizards facing outward
+    let outer_ring_radius = ring_radius * 2.1;
+    let outer_count = wizard_count; // same count as inner ring
+    for i in 0..outer_count {
+        let theta = (i as f32) / (outer_count as f32) * std::f32::consts::TAU;
+        let translation = glam::vec3(outer_ring_radius * theta.cos(), 0.0, outer_ring_radius * theta.sin());
+        // Face outward: yaw aligns +Z with (translation - center)
+        let dx = translation.x - center.x;
+        let dz = translation.z - center.z;
+        let yaw = dx.atan2(dz);
+        let rotation = glam::Quat::from_rotation_y(yaw);
+        world.spawn(Transform { translation, rotation, scale: glam::Vec3::splat(1.0) }, RenderKind::Wizard);
+    }
+
     // Build instance lists
     let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
+    let mut wizard_models: Vec<glam::Mat4> = Vec::new();
     let mut ruin_instances: Vec<Instance> = Vec::new();
     let mut cam_target = glam::Vec3::ZERO;
     let mut has_cam_target = false;
@@ -89,21 +105,34 @@ pub fn build_demo_scene(
                     cam_target = t.translation + glam::vec3(0.0, 1.2, 0.0);
                     has_cam_target = true;
                 }
+                wizard_models.push(glam::Mat4::from_cols_array_2d(&m));
                 wiz_instances.push(InstanceSkin { model: m, color: [0.20, 0.45, 0.95], selected: 0.0, palette_base: 0, _pad_inst: [0; 3] })
             }
             RenderKind::Ruins => ruin_instances.push(Instance { model: m, color: [0.65, 0.66, 0.68], selected: 0.0 }),
         }
     }
 
-    // Assign palette bases and random animations
+    // Assign palette bases and animations: inner ring faces inward (center uses PortalOpen,
+    // others Waiting); outer ring faces outward (all PortalOpen). Stagger PortalOpen starts by 0.5s.
     let joints_per_wizard = skinned_cpu.joints_nodes.len() as u32;
-    let mut rng2 = ChaCha8Rng::seed_from_u64(4242);
     let mut wizard_anim_index: Vec<usize> = Vec::with_capacity(wiz_instances.len());
     let mut wizard_time_offset: Vec<f32> = Vec::with_capacity(wiz_instances.len());
     for (i, inst) in wiz_instances.iter_mut().enumerate() {
         inst.palette_base = (i as u32) * joints_per_wizard;
-        if i == 0 { wizard_anim_index.push(0); } else { wizard_anim_index.push(2); }
-        wizard_time_offset.push(rng2.random::<f32>() * 1.7);
+        if i == 0 {
+            // Center wizard: Waiting
+            wizard_anim_index.push(2);
+            wizard_time_offset.push(0.0);
+        } else if i < wizard_count {
+            // Inner ring (excluding center): Still only
+            wizard_anim_index.push(1);
+            wizard_time_offset.push(0.0);
+        } else {
+            // Outer ring: PortalOpen, staggered by 0.5s
+            wizard_anim_index.push(0);
+            let outer_idx = i - wizard_count;
+            wizard_time_offset.push(outer_idx as f32 * 0.5);
+        }
     }
 
     let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -127,5 +156,6 @@ pub fn build_demo_scene(
         wizard_anim_index,
         wizard_time_offset,
         cam_target,
+        wizard_models,
     }
 }
