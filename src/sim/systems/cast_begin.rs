@@ -44,6 +44,16 @@ pub fn run(state: &mut SimState) {
         // Cast time / GCD in ms
         let cast_ms = (spec.cast_time_s * 1000.0) as u32;
         let gcd_ms = (spec.gcd_s * 1000.0) as u32;
+        // Respect per-ability cooldowns
+        if state.actors[idx]
+            .ability_cooldowns
+            .get(&first)
+            .copied()
+            .unwrap_or(0)
+            > 0
+        {
+            continue;
+        }
         // Mutate actor in a dedicated scope, then log
         let mut started = false;
         let actor_id = {
@@ -57,6 +67,11 @@ pub fn run(state: &mut SimState) {
                 a.action = new_state;
                 started = true;
                 a.next_ability_idx = sel_idx.wrapping_add(1);
+                // Begin per-ability cooldown immediately upon cast start
+                let cd_ms = (spec.cooldown_s * 1000.0) as u32;
+                if cd_ms > 0 {
+                    a.ability_cooldowns.insert(first.clone(), cd_ms);
+                }
             }
             a.id.clone()
         };

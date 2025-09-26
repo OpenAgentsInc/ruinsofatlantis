@@ -28,6 +28,12 @@ pub struct ActorSim {
     pub blessed_ms: u32,
     pub reaction_ready: bool,
     pub next_ability_idx: usize,
+    // Temporary Hit Points (THP) applied before real HP. Non-stacking: take the higher value.
+    pub temp_hp: i32,
+    // Active concentration effect (by ability id). Starting a new one ends the old one.
+    pub concentration: Option<String>,
+    // Per-ability cooldown timers in milliseconds.
+    pub ability_cooldowns: HashMap<String, u32>,
 }
 
 pub struct SimState {
@@ -91,6 +97,11 @@ impl SimState {
         {
             return Ok(spec);
         }
+        if id.contains("heroism")
+            && let Ok(spec) = load_spell_spec("spells/heroism.json")
+        {
+            return Ok(spec);
+        }
         // Fallback: try the filename portion after a slash if present
         if let Some((_ns, tail)) = id.rsplit_once('/') {
             let alt = format!("spells/{}.json", tail);
@@ -120,6 +131,10 @@ impl SimState {
                 let a = &mut self.actors[idx];
                 if a.hp <= 0 {
                     continue;
+                }
+                // Tick per-ability cooldowns
+                for v in a.ability_cooldowns.values_mut() {
+                    *v = v.saturating_sub(dt);
                 }
                 let (next, done) = a.action.clone().tick(dt);
                 a.action = next;

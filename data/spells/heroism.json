@@ -1,0 +1,31 @@
+{
+  "id": "pal.heroism.srd521",
+  "name": "Heroism",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "enchantment",
+  "level": 1,
+  "classes": ["paladin", "bard"],
+  "tags": ["buff", "concentration", "temp_hp"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 6.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "self",
+  "requires_line_of_sight": false,
+  "range_ft": 0,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 0,
+
+  "attack": null,
+  "damage": null,
+  "projectile": null,
+  "save": null,
+
+  "events": ["CastStarted","CastCompleted","BuffApplied"],
+  "metrics": null,
+  "policy": { "role": "support", "priority_index": 1 }
+}

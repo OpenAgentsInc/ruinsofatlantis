@@ -78,7 +78,12 @@ impl ApplicationHandler for App {
 }
 
 fn is_headless() -> bool {
-    if std::env::var("RA_HEADLESS").map(|v| v == "1").unwrap_or(false) { return true; }
+    if std::env::var("RA_HEADLESS")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        return true;
+    }
     std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none()
 }
 

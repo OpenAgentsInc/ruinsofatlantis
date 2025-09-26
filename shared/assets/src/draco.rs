@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use draco_decoder::{AttributeDataType, MeshDecodeConfig, decode_mesh};
 use gltf::{buffer::Data, mesh::Semantic};
 
-use crate::types::{VertexSkinCPU, Vertex};
+use crate::types::{Vertex, VertexSkinCPU};
 
 /// Decode a Draco-compressed primitive into POSITION/NORMAL vertices and indices.
 pub(crate) fn decode_draco_primitive(
@@ -131,7 +131,9 @@ pub(crate) fn decode_draco_primitive(
         };
         // Match the types requested in the config above
         let ty = match sem {
-            Semantic::Positions | Semantic::Normals | Semantic::TexCoords(_) => AttributeDataType::Float32,
+            Semantic::Positions | Semantic::Normals | Semantic::TexCoords(_) => {
+                AttributeDataType::Float32
+            }
             _ => match acc.data_type() {
                 gltf::accessor::DataType::F32 => AttributeDataType::Float32,
                 gltf::accessor::DataType::U16 => AttributeDataType::UInt16,
@@ -183,7 +185,10 @@ pub(crate) fn decode_draco_primitive(
     let pos = pos_opt.context("decoded POSITION missing")?;
     let nrm = nrm_opt.unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
     for i in 0..pos.len() {
-        out_vertices.push(Vertex { pos: pos[i], nrm: nrm[i] });
+        out_vertices.push(Vertex {
+            pos: pos[i],
+            nrm: nrm[i],
+        });
     }
     // Rebase indices for this primitive
     let start_u = start as u32;
@@ -342,7 +347,11 @@ pub(crate) fn decode_draco_skinned_primitive(
                 for c in slice.chunks_exact(4 * dim) {
                     let x = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
                     let y = f32::from_le_bytes([c[4], c[5], c[6], c[7]]);
-                    let z = if dim > 2 { f32::from_le_bytes([c[8], c[9], c[10], c[11]]) } else { 0.0 };
+                    let z = if dim > 2 {
+                        f32::from_le_bytes([c[8], c[9], c[10], c[11]])
+                    } else {
+                        0.0
+                    };
                     v.push([x, y, z]);
                 }
                 pos_opt = Some(v);
@@ -352,7 +361,11 @@ pub(crate) fn decode_draco_skinned_primitive(
                 for c in slice.chunks_exact(4 * dim) {
                     let x = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
                     let y = f32::from_le_bytes([c[4], c[5], c[6], c[7]]);
-                    let z = if dim > 2 { f32::from_le_bytes([c[8], c[9], c[10], c[11]]) } else { 1.0 };
+                    let z = if dim > 2 {
+                        f32::from_le_bytes([c[8], c[9], c[10], c[11]])
+                    } else {
+                        1.0
+                    };
                     v.push([x, y, z]);
                 }
                 nrm_opt = Some(v);
@@ -381,9 +394,21 @@ pub(crate) fn decode_draco_skinned_primitive(
                 let mut v = Vec::with_capacity(vertex_count as usize);
                 for c in slice.chunks_exact(2 * dim) {
                     let a = u16::from_le_bytes([c[0], c[1]]);
-                    let b = if dim > 1 { u16::from_le_bytes([c[2], c[3]]) } else { 0 };
-                    let d = if dim > 2 { u16::from_le_bytes([c[4], c[5]]) } else { 0 };
-                    let e = if dim > 3 { u16::from_le_bytes([c[6], c[7]]) } else { 0 };
+                    let b = if dim > 1 {
+                        u16::from_le_bytes([c[2], c[3]])
+                    } else {
+                        0
+                    };
+                    let d = if dim > 2 {
+                        u16::from_le_bytes([c[4], c[5]])
+                    } else {
+                        0
+                    };
+                    let e = if dim > 3 {
+                        u16::from_le_bytes([c[6], c[7]])
+                    } else {
+                        0
+                    };
                     v.push([a, b, d, e]);
                 }
                 joints_opt = Some(v);
@@ -392,9 +417,21 @@ pub(crate) fn decode_draco_skinned_primitive(
                 let mut v = Vec::with_capacity(vertex_count as usize);
                 for c in slice.chunks_exact(4 * dim) {
                     let a = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
-                    let b = if dim > 1 { f32::from_le_bytes([c[4], c[5], c[6], c[7]]) } else { 0.0 };
-                    let d = if dim > 2 { f32::from_le_bytes([c[8], c[9], c[10], c[11]]) } else { 0.0 };
-                    let e = if dim > 3 { f32::from_le_bytes([c[12], c[13], c[14], c[15]]) } else { 0.0 };
+                    let b = if dim > 1 {
+                        f32::from_le_bytes([c[4], c[5], c[6], c[7]])
+                    } else {
+                        0.0
+                    };
+                    let d = if dim > 2 {
+                        f32::from_le_bytes([c[8], c[9], c[10], c[11]])
+                    } else {
+                        0.0
+                    };
+                    let e = if dim > 3 {
+                        f32::from_le_bytes([c[12], c[13], c[14], c[15]])
+                    } else {
+                        0.0
+                    };
                     v.push([a, b, d, e]);
                 }
                 weights_opt = Some(v);
@@ -403,9 +440,21 @@ pub(crate) fn decode_draco_skinned_primitive(
                 let mut v = Vec::with_capacity(vertex_count as usize);
                 for c in slice.chunks_exact(2 * dim) {
                     let a = u16::from_le_bytes([c[0], c[1]]) as f32 / 65535.0;
-                    let b = if dim > 1 { u16::from_le_bytes([c[2], c[3]]) as f32 / 65535.0 } else { 0.0 };
-                    let d = if dim > 2 { u16::from_le_bytes([c[4], c[5]]) as f32 / 65535.0 } else { 0.0 };
-                    let e = if dim > 3 { u16::from_le_bytes([c[6], c[7]]) as f32 / 65535.0 } else { 0.0 };
+                    let b = if dim > 1 {
+                        u16::from_le_bytes([c[2], c[3]]) as f32 / 65535.0
+                    } else {
+                        0.0
+                    };
+                    let d = if dim > 2 {
+                        u16::from_le_bytes([c[4], c[5]]) as f32 / 65535.0
+                    } else {
+                        0.0
+                    };
+                    let e = if dim > 3 {
+                        u16::from_le_bytes([c[6], c[7]]) as f32 / 65535.0
+                    } else {
+                        0.0
+                    };
                     v.push([a, b, d, e]);
                 }
                 weights_opt = Some(v);
@@ -428,12 +477,20 @@ pub(crate) fn decode_draco_skinned_primitive(
     let pos = pos_opt.context("decoded POSITION missing")?;
     let nrm = nrm_opt.unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
     let uv = uv_opt.unwrap_or_else(|| {
-        pos.iter().map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]]).collect()
+        pos.iter()
+            .map(|p| [0.5 + 0.5 * p[0], 0.5 - 0.5 * p[2]])
+            .collect()
     });
     let joints = joints_opt.context("decoded JOINTS_0 missing")?;
     let weights = weights_opt.context("decoded WEIGHTS_0 missing")?;
     for i in 0..pos.len() {
-        out_vertices.push(VertexSkinCPU { pos: pos[i], nrm: nrm[i], joints: joints[i], weights: weights[i], uv: uv[i] });
+        out_vertices.push(VertexSkinCPU {
+            pos: pos[i],
+            nrm: nrm[i],
+            joints: joints[i],
+            weights: weights[i],
+            uv: uv[i],
+        });
     }
     Ok(())
 }

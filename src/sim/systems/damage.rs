@@ -30,9 +30,20 @@ pub fn run(state: &mut SimState) {
                 continue;
             }
             let hp_before = state.actors[tgt_idx].hp;
+            let original_total = total;
             // Underwater fire resistance (prototype): halve fire damage
             if state.underwater && dmg_type == "fire" {
                 total = (total / 2).max(0);
+            }
+            // Apply Temporary Hit Points before HP
+            if state.actors[tgt_idx].temp_hp > 0 && total > 0 {
+                let absorbed = total.min(state.actors[tgt_idx].temp_hp);
+                state.actors[tgt_idx].temp_hp -= absorbed;
+                total -= absorbed;
+                state.log(format!(
+                    "temp_hp_absorb tgt={} absorbed={} thp_now={}",
+                    state.actors[tgt_idx].id, absorbed, state.actors[tgt_idx].temp_hp
+                ));
             }
             state.actors[tgt_idx].hp -= total;
             state.log(format!(
@@ -44,6 +55,33 @@ pub fn run(state: &mut SimState) {
                 hp_before,
                 state.actors[tgt_idx].hp
             ));
+            // Concentration check (SRD): DC = max(10, floor(damage/2)), cap 30
+            if state.actors[tgt_idx].concentration.is_some() && original_total > 0 {
+                let mut dc = (original_total / 2).max(10);
+                if dc > 30 {
+                    dc = 30;
+                }
+                let (roll, _nat20) = state.roll_d20(crate::core::rules::attack::Advantage::Normal);
+                // Simple Con save modifier: 0 for now; Bless adds 1d4 via existing logic if we reused it, but keep simple here.
+                let total_save = roll; // + con_mod (0)
+                let ok = total_save >= dc;
+                state.log(format!(
+                    "concentration_check tgt={} roll={} vs DC{} => {}",
+                    state.actors[tgt_idx].id,
+                    total_save,
+                    dc,
+                    if ok { "KEEP" } else { "BREAK" }
+                ));
+                if !ok {
+                    let ended = state.actors[tgt_idx].concentration.take();
+                    if let Some(old) = ended {
+                        state.log(format!(
+                            "concentration_broken tgt={} ability={}",
+                            state.actors[tgt_idx].id, old
+                        ));
+                    }
+                }
+            }
         }
     }
 }

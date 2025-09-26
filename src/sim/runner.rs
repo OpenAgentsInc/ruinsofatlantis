@@ -50,6 +50,9 @@ pub fn run_scenario(scn: &Scenario, result_only: bool) {
             blessed_ms: 0,
             reaction_ready: true,
             next_ability_idx: 0,
+            temp_hp: 0,
+            concentration: None,
+            ability_cooldowns: std::collections::HashMap::new(),
         };
         if actor.role == "boss" && actor.ability_ids.is_empty() {
             actor.ability_ids.push("boss.tentacle".into());

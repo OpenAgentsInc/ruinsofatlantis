@@ -4,64 +4,156 @@ use anyhow::Result;
 use clap::Parser;
 use glam::{Mat4, Vec3};
 use log::info;
-use ra_assets::{load_gltf_mesh, load_gltf_skinned, CpuMesh, SkinnedMeshCPU};
-use ra_assets::skinning::{merge_gltf_animations, merge_fbx_animations};
+use ra_assets::skinning::{merge_fbx_animations, merge_gltf_animations};
+use ra_assets::{CpuMesh, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
 use wgpu::util::DeviceExt;
-use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceTargetUnsafe};
+use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
 
 // 5x7 bitmap rows for ASCII A-Z, 0-9, space, colon, underscore, hyphen
 fn glyph5x7_rows(c: char) -> [u8; 7] {
     match c {
-        'A' => [0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
-        'B' => [0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110],
-        'C' => [0b01111,0b10000,0b10000,0b10000,0b10000,0b10000,0b01111],
-        'D' => [0b11110,0b10001,0b10001,0b10001,0b10001,0b10001,0b11110],
-        'E' => [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b11111],
-        'F' => [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000],
-        'G' => [0b01111,0b10000,0b10000,0b10011,0b10001,0b10001,0b01110],
-        'H' => [0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
-        'I' => [0b01110,0b00100,0b00100,0b00100,0b00100,0b00100,0b01110],
-        'J' => [0b00001,0b00001,0b00001,0b00001,0b10001,0b10001,0b01110],
-        'K' => [0b10001,0b10010,0b10100,0b11000,0b10100,0b10010,0b10001],
-        'L' => [0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b11111],
-        'M' => [0b10001,0b11011,0b10101,0b10101,0b10001,0b10001,0b10001],
-        'N' => [0b10001,0b10001,0b11001,0b10101,0b10011,0b10001,0b10001],
-        'O' => [0b01110,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
-        'P' => [0b11110,0b10001,0b10001,0b11110,0b10000,0b10000,0b10000],
-        'Q' => [0b01110,0b10001,0b10001,0b10001,0b10101,0b10010,0b01101],
-        'R' => [0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001],
-        'S' => [0b01111,0b10000,0b10000,0b01110,0b00001,0b00001,0b11110],
-        'T' => [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100],
-        'U' => [0b10001,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
-        'V' => [0b10001,0b10001,0b10001,0b01010,0b01010,0b00100,0b00100],
-        'W' => [0b10001,0b10001,0b10101,0b10101,0b10101,0b11011,0b10001],
-        'X' => [0b10001,0b01010,0b00100,0b01010,0b10001,0b10001,0b10001],
-        'Y' => [0b10001,0b01010,0b00100,0b00100,0b00100,0b00100,0b00100],
-        'Z' => [0b11111,0b00010,0b00100,0b01000,0b10000,0b10000,0b11111],
-        '0' => [0b01110,0b10001,0b10011,0b10101,0b11001,0b10001,0b01110],
-        '1' => [0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110],
-        '2' => [0b01110,0b10001,0b00001,0b00010,0b00100,0b01000,0b11111],
-        '3' => [0b11110,0b00001,0b00001,0b01110,0b00001,0b00001,0b11110],
-        '4' => [0b00010,0b00110,0b01010,0b10010,0b11111,0b00010,0b00010],
-        '5' => [0b11111,0b10000,0b10000,0b11110,0b00001,0b00001,0b11110],
-        '6' => [0b01110,0b10000,0b10000,0b11110,0b10001,0b10001,0b01110],
-        '7' => [0b11111,0b00001,0b00010,0b00100,0b01000,0b01000,0b01000],
-        '8' => [0b01110,0b10001,0b10001,0b01110,0b10001,0b10001,0b01110],
-        '9' => [0b01110,0b10001,0b10001,0b01111,0b00001,0b00001,0b01110],
-        ':' => [0b00000,0b00100,0b00000,0b00000,0b00100,0b00000,0b00000],
-        ' ' => [0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000],
-        '_' => [0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b11111],
-        '-' => [0b00000,0b00000,0b11111,0b00000,0b00000,0b00000,0b00000],
-        _ => [0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000],
+        'A' => [
+            0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
+        ],
+        'B' => [
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,
+        ],
+        'C' => [
+            0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111,
+        ],
+        'D' => [
+            0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110,
+        ],
+        'E' => [
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111,
+        ],
+        'F' => [
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000,
+        ],
+        'G' => [
+            0b01111, 0b10000, 0b10000, 0b10011, 0b10001, 0b10001, 0b01110,
+        ],
+        'H' => [
+            0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
+        ],
+        'I' => [
+            0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+        ],
+        'J' => [
+            0b00001, 0b00001, 0b00001, 0b00001, 0b10001, 0b10001, 0b01110,
+        ],
+        'K' => [
+            0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001,
+        ],
+        'L' => [
+            0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111,
+        ],
+        'M' => [
+            0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001,
+        ],
+        'N' => [
+            0b10001, 0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001,
+        ],
+        'O' => [
+            0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
+        ],
+        'P' => [
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000,
+        ],
+        'Q' => [
+            0b01110, 0b10001, 0b10001, 0b10001, 0b10101, 0b10010, 0b01101,
+        ],
+        'R' => [
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001,
+        ],
+        'S' => [
+            0b01111, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110,
+        ],
+        'T' => [
+            0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ],
+        'U' => [
+            0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
+        ],
+        'V' => [
+            0b10001, 0b10001, 0b10001, 0b01010, 0b01010, 0b00100, 0b00100,
+        ],
+        'W' => [
+            0b10001, 0b10001, 0b10101, 0b10101, 0b10101, 0b11011, 0b10001,
+        ],
+        'X' => [
+            0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001, 0b10001,
+        ],
+        'Y' => [
+            0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ],
+        'Z' => [
+            0b11111, 0b00010, 0b00100, 0b01000, 0b10000, 0b10000, 0b11111,
+        ],
+        '0' => [
+            0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
+        ],
+        '1' => [
+            0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+        ],
+        '2' => [
+            0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111,
+        ],
+        '3' => [
+            0b11110, 0b00001, 0b00001, 0b01110, 0b00001, 0b00001, 0b11110,
+        ],
+        '4' => [
+            0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010,
+        ],
+        '5' => [
+            0b11111, 0b10000, 0b10000, 0b11110, 0b00001, 0b00001, 0b11110,
+        ],
+        '6' => [
+            0b01110, 0b10000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110,
+        ],
+        '7' => [
+            0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+        ],
+        '8' => [
+            0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110,
+        ],
+        '9' => [
+            0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00001, 0b01110,
+        ],
+        ':' => [
+            0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000,
+        ],
+        ' ' => [
+            0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000,
+        ],
+        '_' => [
+            0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b11111,
+        ],
+        '-' => [
+            0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000, 0b00000,
+        ],
+        _ => [
+            0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000,
+        ],
     }
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct UiVertex { pos: [f32; 2], color: [f32; 4] }
+struct UiVertex {
+    pos: [f32; 2],
+    color: [f32; 4],
+}
 
-fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f32), out: &mut Vec<UiVertex>, color: [f32; 4], cell: f32) {
+fn build_text_quads(
+    lines: &[String],
+    start_px: (f32, f32),
+    surface_px: (f32, f32),
+    out: &mut Vec<UiVertex>,
+    color: [f32; 4],
+    cell: f32,
+) {
     let (sx, sy) = start_px;
     let (sw, sh) = surface_px;
     let glyph_w = 5.0 * cell;
@@ -84,8 +176,30 @@ fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f3
                         let x1 = -1.0 + px1 * 2.0 / sw;
                         let y1 = 1.0 - py1 * 2.0 / sh;
                         out.extend_from_slice(&[
-                            UiVertex { pos: [x0, y0], color }, UiVertex { pos: [x1, y0], color }, UiVertex { pos: [x1, y1], color },
-                            UiVertex { pos: [x0, y0], color }, UiVertex { pos: [x1, y1], color }, UiVertex { pos: [x0, y1], color },
+                            UiVertex {
+                                pos: [x0, y0],
+                                color,
+                            },
+                            UiVertex {
+                                pos: [x1, y0],
+                                color,
+                            },
+                            UiVertex {
+                                pos: [x1, y1],
+                                color,
+                            },
+                            UiVertex {
+                                pos: [x0, y0],
+                                color,
+                            },
+                            UiVertex {
+                                pos: [x1, y1],
+                                color,
+                            },
+                            UiVertex {
+                                pos: [x0, y1],
+                                color,
+                            },
                         ]);
                     }
                 }
@@ -96,29 +210,55 @@ fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f3
 }
 
 #[derive(Clone)]
-struct LibAnim { name: String, path: std::path::PathBuf }
+struct LibAnim {
+    name: String,
+    path: std::path::PathBuf,
+}
 
 fn scan_anim_library() -> Vec<LibAnim> {
     let mut out: Vec<LibAnim> = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();
     let repo_root = cwd; // assume running from repo root
     let mut candidates: Vec<std::path::PathBuf> = vec![repo_root.join("assets/anims")];
-    if let Some(v) = std::env::var_os("FBX_LIB_DIR") && !v.is_empty() { candidates.push(std::path::PathBuf::from(v)); }
-    for dir in candidates.into_iter().filter(|p| p.exists()) { collect_anim_files(&dir, 0, 4, &mut out); }
-    out.sort_by(|a,b| a.name.cmp(&b.name));
+    if let Some(v) = std::env::var_os("FBX_LIB_DIR")
+        && !v.is_empty()
+    {
+        candidates.push(std::path::PathBuf::from(v));
+    }
+    for dir in candidates.into_iter().filter(|p| p.exists()) {
+        collect_anim_files(&dir, 0, 4, &mut out);
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }
 
-fn collect_anim_files(dir: &std::path::Path, depth: usize, max_depth: usize, out: &mut Vec<LibAnim>) {
-    if depth > max_depth { return; }
-    let rd = match std::fs::read_dir(dir) { Ok(d) => d, Err(_) => return };
+fn collect_anim_files(
+    dir: &std::path::Path,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<LibAnim>,
+) {
+    if depth > max_depth {
+        return;
+    }
+    let rd = match std::fs::read_dir(dir) {
+        Ok(d) => d,
+        Err(_) => return,
+    };
     for ent in rd.flatten() {
         let p = ent.path();
-        if p.is_dir() { collect_anim_files(&p, depth + 1, max_depth, out); continue; }
+        if p.is_dir() {
+            collect_anim_files(&p, depth + 1, max_depth, out);
+            continue;
+        }
         if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
             let ext_l = ext.to_ascii_lowercase();
             if ext_l == "fbx" || ext_l == "gltf" || ext_l == "glb" {
-                let name = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                let name = p
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
                 out.push(LibAnim { name, path: p });
             }
         }
@@ -131,12 +271,27 @@ fn try_convert_fbx_to_gltf(src: &std::path::Path) -> Option<std::path::PathBuf> 
     let stem = src.file_stem()?.to_str()?;
     let out_path = out_dir.join(format!("{}.glb", stem));
     if which::which("fbx2gltf").is_ok() {
-        let status = std::process::Command::new("fbx2gltf").arg("-b").arg("-o").arg(out_dir).arg(src).status().ok()?;
-        if status.success() && out_path.exists() { return Some(out_path); }
+        let status = std::process::Command::new("fbx2gltf")
+            .arg("-b")
+            .arg("-o")
+            .arg(out_dir)
+            .arg(src)
+            .status()
+            .ok()?;
+        if status.success() && out_path.exists() {
+            return Some(out_path);
+        }
     }
     if which::which("assimp").is_ok() {
-        let status = std::process::Command::new("assimp").arg("export").arg(src).arg(&out_path).status().ok()?;
-        if status.success() && out_path.exists() { return Some(out_path); }
+        let status = std::process::Command::new("assimp")
+            .arg("export")
+            .arg(src)
+            .arg(&out_path)
+            .status()
+            .ok()?;
+        if status.success() && out_path.exists() {
+            return Some(out_path);
+        }
     }
     None
 }
@@ -157,7 +312,17 @@ impl AnimData {
     fn from_skinned(sk: &SkinnedMeshCPU, ordered_names: &[String]) -> Self {
         let mut clips = Vec::new();
         for name in ordered_names {
-            if let Some(c) = sk.animations.get(name) { clips.push(c.clone()); } else { clips.push(ra_assets::AnimClip { name: name.clone(), duration: 0.0, t_tracks: Default::default(), r_tracks: Default::default(), s_tracks: Default::default() }); }
+            if let Some(c) = sk.animations.get(name) {
+                clips.push(c.clone());
+            } else {
+                clips.push(ra_assets::AnimClip {
+                    name: name.clone(),
+                    duration: 0.0,
+                    t_tracks: Default::default(),
+                    r_tracks: Default::default(),
+                    s_tracks: Default::default(),
+                });
+            }
         }
         Self {
             parent: sk.parent.clone(),
@@ -176,18 +341,44 @@ impl AnimData {
         let mut lr = self.base_r.clone();
         let mut ls = self.base_s.clone();
         if let Some(clip) = self.clips.get(clip_idx) {
-            let tt = &clip.t_tracks; let rt = &clip.r_tracks; let st = &clip.s_tracks;
-            for (idx, tr) in tt { lt[*idx] = sample_vec3(tr, t); }
-            for (idx, rr) in rt { lr[*idx] = sample_quat(rr, t); }
-            for (idx, sr) in st { ls[*idx] = sample_vec3(sr, t); }
+            let tt = &clip.t_tracks;
+            let rt = &clip.r_tracks;
+            let st = &clip.s_tracks;
+            for (idx, tr) in tt {
+                lt[*idx] = sample_vec3(tr, t);
+            }
+            for (idx, rr) in rt {
+                lr[*idx] = sample_quat(rr, t);
+            }
+            for (idx, sr) in st {
+                ls[*idx] = sample_vec3(sr, t);
+            }
         }
         // globals
         let mut g = vec![Mat4::IDENTITY; n];
-        fn ensure(i: usize, parent: &[Option<usize>], lt:&[Vec3], lr:&[glam::Quat], ls:&[Vec3], g:&mut [Mat4]) {
-            if g[i] != Mat4::IDENTITY { return; }
-            if let Some(p) = parent[i] { if g[p] == Mat4::IDENTITY { ensure(p, parent, lt, lr, ls, g); } g[i] = g[p] * Mat4::from_scale_rotation_translation(ls[i], lr[i], lt[i]); } else { g[i] = Mat4::from_scale_rotation_translation(ls[i], lr[i], lt[i]); }
+        fn ensure(
+            i: usize,
+            parent: &[Option<usize>],
+            lt: &[Vec3],
+            lr: &[glam::Quat],
+            ls: &[Vec3],
+            g: &mut [Mat4],
+        ) {
+            if g[i] != Mat4::IDENTITY {
+                return;
+            }
+            if let Some(p) = parent[i] {
+                if g[p] == Mat4::IDENTITY {
+                    ensure(p, parent, lt, lr, ls, g);
+                }
+                g[i] = g[p] * Mat4::from_scale_rotation_translation(ls[i], lr[i], lt[i]);
+            } else {
+                g[i] = Mat4::from_scale_rotation_translation(ls[i], lr[i], lt[i]);
+            }
         }
-        for i in 0..n { ensure(i, &self.parent, &lt, &lr, &ls, &mut g); }
+        for i in 0..n {
+            ensure(i, &self.parent, &lt, &lr, &ls, &mut g);
+        }
         let mut out = Vec::with_capacity(self.joints_nodes.len());
         for (j, &node) in self.joints_nodes.iter().enumerate() {
             out.push((g[node] * self.inverse_bind[j]).to_cols_array_2d());
@@ -197,28 +388,54 @@ impl AnimData {
 }
 
 fn sample_vec3(track: &ra_assets::TrackVec3, t: f32) -> Vec3 {
-    let times = &track.times; let vals = &track.values;
-    if times.is_empty() { return vals.first().copied().unwrap_or(Vec3::ZERO); }
-    let dur = *times.last().unwrap_or(&0.0); let tt = if dur > 0.0 { t % dur } else { 0.0 };
+    let times = &track.times;
+    let vals = &track.values;
+    if times.is_empty() {
+        return vals.first().copied().unwrap_or(Vec3::ZERO);
+    }
+    let dur = *times.last().unwrap_or(&0.0);
+    let tt = if dur > 0.0 { t % dur } else { 0.0 };
     // find segment
-    let mut i = 0; while i + 1 < times.len() && !(times[i] <= tt && tt <= times[i+1]) { i += 1; }
-    if i + 1 >= times.len() { return *vals.last().unwrap(); }
-    let t0 = times[i]; let t1 = times[i+1]; let a = vals[i]; let b = vals[i+1];
+    let mut i = 0;
+    while i + 1 < times.len() && !(times[i] <= tt && tt <= times[i + 1]) {
+        i += 1;
+    }
+    if i + 1 >= times.len() {
+        return *vals.last().unwrap();
+    }
+    let t0 = times[i];
+    let t1 = times[i + 1];
+    let a = vals[i];
+    let b = vals[i + 1];
     let w = if t1 > t0 { (tt - t0) / (t1 - t0) } else { 0.0 };
     a.lerp(b, w)
 }
 
 fn sample_quat(track: &ra_assets::TrackQuat, t: f32) -> glam::Quat {
-    let times = &track.times; let vals = &track.values;
-    if times.is_empty() { return vals.first().copied().unwrap_or(glam::Quat::IDENTITY); }
-    let dur = *times.last().unwrap_or(&0.0); let tt = if dur > 0.0 { t % dur } else { 0.0 };
-    let mut i = 0; while i + 1 < times.len() && !(times[i] <= tt && tt <= times[i+1]) { i += 1; }
-    if i + 1 >= times.len() { return *vals.last().unwrap(); }
-    let t0 = times[i]; let t1 = times[i+1]; let a = vals[i]; let b = vals[i+1];
+    let times = &track.times;
+    let vals = &track.values;
+    if times.is_empty() {
+        return vals.first().copied().unwrap_or(glam::Quat::IDENTITY);
+    }
+    let dur = *times.last().unwrap_or(&0.0);
+    let tt = if dur > 0.0 { t % dur } else { 0.0 };
+    let mut i = 0;
+    while i + 1 < times.len() && !(times[i] <= tt && tt <= times[i + 1]) {
+        i += 1;
+    }
+    if i + 1 >= times.len() {
+        return *vals.last().unwrap();
+    }
+    let t0 = times[i];
+    let t1 = times[i + 1];
+    let a = vals[i];
+    let b = vals[i + 1];
     let w = if t1 > t0 { (tt - t0) / (t1 - t0) } else { 0.0 };
     // Use shortest-arc slerp to avoid sudden flips at antipodal quats
     let mut bb = b;
-    if a.dot(b) < 0.0 { bb = -b; }
+    if a.dot(b) < 0.0 {
+        bb = -b;
+    }
     a.slerp(bb, w).normalize()
 }
 
@@ -255,11 +472,31 @@ impl VSkinned {
         array_stride: std::mem::size_of::<VSkinned>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &[
-            wgpu::VertexAttribute { shader_location: 0, offset: 0, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 1, offset: 12, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 2, offset: 24, format: wgpu::VertexFormat::Float32x2 },
-            wgpu::VertexAttribute { shader_location: 3, offset: 32, format: wgpu::VertexFormat::Uint16x4 },
-            wgpu::VertexAttribute { shader_location: 4, offset: 40, format: wgpu::VertexFormat::Float32x4 },
+            wgpu::VertexAttribute {
+                shader_location: 0,
+                offset: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 1,
+                offset: 12,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 2,
+                offset: 24,
+                format: wgpu::VertexFormat::Float32x2,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 3,
+                offset: 32,
+                format: wgpu::VertexFormat::Uint16x4,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 4,
+                offset: 40,
+                format: wgpu::VertexFormat::Float32x4,
+            },
         ],
     };
 }
@@ -276,8 +513,16 @@ impl VBasic {
         array_stride: std::mem::size_of::<VBasic>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &[
-            wgpu::VertexAttribute { shader_location: 0, offset: 0, format: wgpu::VertexFormat::Float32x3 },
-            wgpu::VertexAttribute { shader_location: 1, offset: 12, format: wgpu::VertexFormat::Float32x3 },
+            wgpu::VertexAttribute {
+                shader_location: 0,
+                offset: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 1,
+                offset: 12,
+                format: wgpu::VertexFormat::Float32x3,
+            },
         ],
     };
 }
@@ -292,12 +537,11 @@ fn main() -> Result<()> {
 async fn run(cli: Cli) -> Result<()> {
     // Window + surface
     let event_loop = EventLoop::new()?;
-    let window = event_loop
-        .create_window(
-            WindowAttributes::default()
-                .with_title("Model Viewer")
-                .with_inner_size(PhysicalSize::new(1920, 1080)),
-        )?;
+    let window = event_loop.create_window(
+        WindowAttributes::default()
+            .with_title("Model Viewer")
+            .with_inner_size(PhysicalSize::new(1920, 1080)),
+    )?;
     let instance = wgpu::Instance::default();
     let raw_display = window.display_handle()?.as_raw();
     let raw_window = window.window_handle()?.as_raw();
@@ -363,7 +607,9 @@ async fn run(cli: Cli) -> Result<()> {
     surface.configure(&device, &config);
 
     // Globals
-    let globals = Globals { view_proj: Mat4::IDENTITY.to_cols_array_2d() };
+    let globals = Globals {
+        view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+    };
     let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("globals"),
         contents: bytemuck::bytes_of(&globals),
@@ -374,14 +620,21 @@ async fn run(cli: Cli) -> Result<()> {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
             count: None,
         }],
     });
     let globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("globals-bg"),
         layout: &globals_bgl,
-        entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: globals_buf.as_entire_binding(),
+        }],
     });
 
     let skin_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -389,7 +642,11 @@ async fn run(cli: Cli) -> Result<()> {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None },
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
             count: None,
         }],
     });
@@ -397,8 +654,22 @@ async fn run(cli: Cli) -> Result<()> {
     let mat_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mat-bgl"),
         entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } }, count: None },
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
         ],
     });
     // Model GPU state (populated on load)
@@ -434,11 +705,15 @@ async fn run(cli: Cli) -> Result<()> {
     // Pipeline
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("skinned-shader"),
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader_skinned.wgsl"))),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+            "shader_skinned.wgsl"
+        ))),
     });
     let basic_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("basic-shader"),
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader_basic.wgsl"))),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+            "shader_basic.wgsl"
+        ))),
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("pl"),
@@ -449,10 +724,37 @@ async fn run(cli: Cli) -> Result<()> {
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("pipe"),
         layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main_skinned"), buffers: &[VSkinned::LAYOUT], compilation_options: Default::default() },
-        fragment: Some(wgpu::FragmentState { module: &shader, entry_point: Some("fs_main"), targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
-        primitive: wgpu::PrimitiveState { polygon_mode: if cli.wireframe { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill }, ..Default::default() },
-        depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main_skinned"),
+            buffers: &[VSkinned::LAYOUT],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            polygon_mode: if cli.wireframe {
+                wgpu::PolygonMode::Line
+            } else {
+                wgpu::PolygonMode::Fill
+            },
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: depth_format,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
         cache: None,
@@ -467,10 +769,37 @@ async fn run(cli: Cli) -> Result<()> {
     let basic_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("pipe-basic"),
         layout: Some(&basic_pl_layout),
-        vertex: wgpu::VertexState { module: &basic_shader, entry_point: Some("vs_main"), buffers: &[VBasic::LAYOUT], compilation_options: Default::default() },
-        fragment: Some(wgpu::FragmentState { module: &basic_shader, entry_point: Some("fs_main"), targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::REPLACE), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
-        primitive: wgpu::PrimitiveState { polygon_mode: if cli.wireframe { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill }, ..Default::default() },
-        depth_stencil: Some(wgpu::DepthStencilState { format: depth_format, depth_write_enabled: true, depth_compare: wgpu::CompareFunction::Less, stencil: wgpu::StencilState::default(), bias: wgpu::DepthBiasState::default() }),
+        vertex: wgpu::VertexState {
+            module: &basic_shader,
+            entry_point: Some("vs_main"),
+            buffers: &[VBasic::LAYOUT],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &basic_shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            polygon_mode: if cli.wireframe {
+                wgpu::PolygonMode::Line
+            } else {
+                wgpu::PolygonMode::Fill
+            },
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: depth_format,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
         cache: None,
@@ -483,7 +812,7 @@ async fn run(cli: Cli) -> Result<()> {
     let mut diag = 1.0f32;
     // Orbit state
     let mut autorotate = true;
-    let mut yaw: f32 = 0.0;   // radians
+    let mut yaw: f32 = 0.0; // radians
     let mut pitch: f32 = 0.35; // radians, clamped
     let mut radius: f32 = 3.0;
     let mut rmb_down = false;
@@ -491,47 +820,151 @@ async fn run(cli: Cli) -> Result<()> {
     let mut mouse_pos_px: (f32, f32) = (0.0, 0.0);
 
     // Helper to upload a model: called on CLI path (if provided) and Drag&Drop
-    let load_model = |
-        path: &PathBuf,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        mat_bgl: &wgpu::BindGroupLayout,
-        skin_bgl: &wgpu::BindGroupLayout,
-    | -> Result<ModelGpu> {
+    let load_model = |path: &PathBuf,
+                      device: &wgpu::Device,
+                      queue: &wgpu::Queue,
+                      mat_bgl: &wgpu::BindGroupLayout,
+                      skin_bgl: &wgpu::BindGroupLayout|
+     -> Result<ModelGpu> {
         let prepared = ra_assets::util::prepare_gltf_path(path)?;
         match load_gltf_skinned(&prepared) {
             Ok(skinned) => {
                 info!(
                     "loaded (skinned): {} (verts={}, indices={}, joints={}, anims={})",
                     prepared.display(),
-                    skinned.vertices.len(), skinned.indices.len(), skinned.joints_nodes.len(), skinned.animations.len()
+                    skinned.vertices.len(),
+                    skinned.indices.len(),
+                    skinned.joints_nodes.len(),
+                    skinned.animations.len()
                 );
                 let vtx: Vec<VSkinned> = skinned
                     .vertices
                     .iter()
-                    .map(|v| VSkinned { pos: v.pos, nrm: v.nrm, uv: v.uv, joints: v.joints, weights: v.weights })
+                    .map(|v| VSkinned {
+                        pos: v.pos,
+                        nrm: v.nrm,
+                        uv: v.uv,
+                        joints: v.joints,
+                        weights: v.weights,
+                    })
                     .collect();
-                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("vb"), contents: bytemuck::cast_slice(&vtx), usage: wgpu::BufferUsages::VERTEX });
-                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ib"), contents: bytemuck::cast_slice(&skinned.indices), usage: wgpu::BufferUsages::INDEX });
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("vb"),
+                    contents: bytemuck::cast_slice(&vtx),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("ib"),
+                    contents: bytemuck::cast_slice(&skinned.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
                 let index_count = skinned.indices.len() as u32;
                 let palette = compute_bind_pose_palette(&skinned);
-                let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("skin-palette"), contents: bytemuck::cast_slice(&palette), usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST });
-                let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("skin-bg"), layout: skin_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: skin_buf.as_entire_binding() }] });
+                let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("skin-palette"),
+                    contents: bytemuck::cast_slice(&palette),
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
+                let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("skin-bg"),
+                    layout: skin_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: skin_buf.as_entire_binding(),
+                    }],
+                });
                 let (tex_view, sampler) = if let Some(tex) = &skinned.base_color_texture {
-                    let size = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
-                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("albedo"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
-                    queue.write_texture(wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All }, &tex.pixels, wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) }, size);
+                    let size = wgpu::Extent3d {
+                        width: tex.width,
+                        height: tex.height,
+                        depth_or_array_layers: 1,
+                    };
+                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some("albedo"),
+                        size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+                    queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &tex_obj,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &tex.pixels,
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * tex.width),
+                            rows_per_image: Some(tex.height),
+                        },
+                        size,
+                    );
                     let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-                    let samp = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("samp"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
+                    let samp = device.create_sampler(&wgpu::SamplerDescriptor {
+                        label: Some("samp"),
+                        mag_filter: wgpu::FilterMode::Linear,
+                        min_filter: wgpu::FilterMode::Linear,
+                        mipmap_filter: wgpu::FilterMode::Nearest,
+                        ..Default::default()
+                    });
                     (view, samp)
                 } else {
-                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor { label: Some("white"), size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb, usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[] });
-                    queue.write_texture(wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All }, &[255, 255, 255, 255], wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) }, wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 });
+                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some("white"),
+                        size: wgpu::Extent3d {
+                            width: 1,
+                            height: 1,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+                    queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &tex_obj,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &[255, 255, 255, 255],
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: Some(1),
+                        },
+                        wgpu::Extent3d {
+                            width: 1,
+                            height: 1,
+                            depth_or_array_layers: 1,
+                        },
+                    );
                     let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
                     let samp = device.create_sampler(&wgpu::SamplerDescriptor::default());
                     (view, samp)
                 };
-                let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("mat-bg"), layout: mat_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) }] });
+                let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("mat-bg"),
+                    layout: mat_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Sampler(&sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(&tex_view),
+                        },
+                    ],
+                });
                 let (min_b, max_b) = compute_bounds(&skinned);
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
@@ -541,20 +974,60 @@ async fn run(cli: Cli) -> Result<()> {
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
                 let anim = Box::new(AnimData::from_skinned(&base, &names));
-                Ok(ModelGpu::Skinned { vb, ib, index_count, mat_bg, skin_bg, skin_buf, center, diag, anims: names, anim, active_index: 0, time: 0.0, base })
+                Ok(ModelGpu::Skinned {
+                    vb,
+                    ib,
+                    index_count,
+                    mat_bg,
+                    skin_bg,
+                    skin_buf,
+                    center,
+                    diag,
+                    anims: names,
+                    anim,
+                    active_index: 0,
+                    time: 0.0,
+                    base,
+                })
             }
             Err(e) => {
                 log::warn!("skinned load failed, trying unskinned: {}", e);
                 let cpu: CpuMesh = load_gltf_mesh(&prepared)?;
-                info!("loaded (basic): {} (verts={}, indices={})", prepared.display(), cpu.vertices.len(), cpu.indices.len());
-                let verts: Vec<VBasic> = cpu.vertices.iter().map(|v| VBasic { pos: v.pos, nrm: v.nrm }).collect();
-                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("vb-basic"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
-                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ib-basic"), contents: bytemuck::cast_slice(&cpu.indices), usage: wgpu::BufferUsages::INDEX });
+                info!(
+                    "loaded (basic): {} (verts={}, indices={})",
+                    prepared.display(),
+                    cpu.vertices.len(),
+                    cpu.indices.len()
+                );
+                let verts: Vec<VBasic> = cpu
+                    .vertices
+                    .iter()
+                    .map(|v| VBasic {
+                        pos: v.pos,
+                        nrm: v.nrm,
+                    })
+                    .collect();
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("vb-basic"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("ib-basic"),
+                    contents: bytemuck::cast_slice(&cpu.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
                 let index_count = cpu.indices.len() as u32;
                 let (min_b, max_b) = compute_bounds_basic(&cpu);
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
-                Ok(ModelGpu::Basic { vb, ib, index_count, center, diag })
+                Ok(ModelGpu::Basic {
+                    vb,
+                    ib,
+                    index_count,
+                    center,
+                    diag,
+                })
             }
         }
     };
@@ -563,13 +1036,36 @@ async fn run(cli: Cli) -> Result<()> {
     if let Some(p) = cli.path.as_ref() {
         if let Ok(gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
             match &gpu {
-                ModelGpu::Skinned { center: c, diag: d, anims, .. } => {
-                    center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
-                    let title = format!("Model Viewer — {} | anims: {}", p.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
+                ModelGpu::Skinned {
+                    center: c,
+                    diag: d,
+                    anims,
+                    ..
+                } => {
+                    center = *c;
+                    diag = *d;
+                    radius = *d * 1.0;
+                    yaw = 0.0;
+                    pitch = 0.35;
+                    let title = format!(
+                        "Model Viewer — {} | anims: {}",
+                        p.display(),
+                        if anims.is_empty() {
+                            "(none)".to_string()
+                        } else {
+                            anims.join(", ")
+                        }
+                    );
                     window.set_title(&title);
                 }
-                ModelGpu::Basic { center: c, diag: d, .. } => {
-                    center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
+                ModelGpu::Basic {
+                    center: c, diag: d, ..
+                } => {
+                    center = *c;
+                    diag = *d;
+                    radius = *d * 1.0;
+                    yaw = 0.0;
+                    pitch = 0.35;
                     let title = format!("Model Viewer — {} | anims: (none)", p.display());
                     window.set_title(&title);
                 }
@@ -921,16 +1417,36 @@ fn compute_bind_pose_palette(model: &SkinnedMeshCPU) -> Vec<[[f32; 4]; 4]> {
     let n = model.parent.len();
     let mut globals = vec![Mat4::IDENTITY; n];
     // Compute global matrices via DFS
-    fn compute(i: usize, parent: &[Option<usize>], t: &[Vec3], r: &[glam::Quat], s: &[Vec3], out: &mut [Mat4]) {
-        if out[i] != Mat4::IDENTITY { return; }
+    fn compute(
+        i: usize,
+        parent: &[Option<usize>],
+        t: &[Vec3],
+        r: &[glam::Quat],
+        s: &[Vec3],
+        out: &mut [Mat4],
+    ) {
+        if out[i] != Mat4::IDENTITY {
+            return;
+        }
         if let Some(p) = parent[i] {
-            if out[p] == Mat4::IDENTITY { compute(p, parent, t, r, s, out); }
+            if out[p] == Mat4::IDENTITY {
+                compute(p, parent, t, r, s, out);
+            }
             out[i] = out[p] * Mat4::from_scale_rotation_translation(s[i], r[i], t[i]);
         } else {
             out[i] = Mat4::from_scale_rotation_translation(s[i], r[i], t[i]);
         }
     }
-    for i in 0..n { compute(i, &model.parent, &model.base_t, &model.base_r, &model.base_s, &mut globals); }
+    for i in 0..n {
+        compute(
+            i,
+            &model.parent,
+            &model.base_t,
+            &model.base_r,
+            &model.base_s,
+            &mut globals,
+        );
+    }
     let mut palette: Vec<[[f32; 4]; 4]> = Vec::with_capacity(model.joints_nodes.len());
     for (j, &node_idx) in model.joints_nodes.iter().enumerate() {
         let m = globals[node_idx] * model.inverse_bind[j];
@@ -961,10 +1477,19 @@ fn compute_bounds_basic(model: &CpuMesh) -> (Vec3, Vec3) {
     (min_b, max_b)
 }
 
-fn create_depth(device: &wgpu::Device, w: u32, h: u32, fmt: wgpu::TextureFormat) -> wgpu::TextureView {
+fn create_depth(
+    device: &wgpu::Device,
+    w: u32,
+    h: u32,
+    fmt: wgpu::TextureFormat,
+) -> wgpu::TextureView {
     let tex = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("depth"),
-        size: wgpu::Extent3d { width: w.max(1), height: h.max(1), depth_or_array_layers: 1 },
+        size: wgpu::Extent3d {
+            width: w.max(1),
+            height: h.max(1),
+            depth_or_array_layers: 1,
+        },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -976,7 +1501,9 @@ fn create_depth(device: &wgpu::Device, w: u32, h: u32, fmt: wgpu::TextureFormat)
 }
 
 fn scale_to_max((w, h): (u32, u32), max_dim: u32) -> (u32, u32) {
-    if w <= max_dim && h <= max_dim { return (w, h); }
+    if w <= max_dim && h <= max_dim {
+        return (w, h);
+    }
     let aspect = (w as f32) / (h as f32);
     if w >= h {
         let nw = max_dim;

@@ -29,7 +29,9 @@ impl Renderer {
     }
 
     pub(crate) fn draw_zombies(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if self.zombie_count == 0 { return; }
+        if self.zombie_count == 0 {
+            return;
+        }
         rpass.set_pipeline(&self.wizard_pipeline);
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
