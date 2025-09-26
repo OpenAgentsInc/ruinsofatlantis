@@ -487,8 +487,12 @@ impl Renderer {
         // NPCs: simple cubes as targets on a ring
         let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
         let mut server = crate::server::ServerState::new();
+        // Far ring targets
         let npc_ring_radius = plane_extent * 0.7;
         server.ring_spawn(12, npc_ring_radius, 30);
+        // Add a closer ring of NPCs just beyond the outer wizard ring
+        let npc_close_radius = 15.0;
+        server.ring_spawn(10, npc_close_radius, 20);
         let mut npc_instances_cpu: Vec<types::Instance> = Vec::new();
         let mut npc_models: Vec<glam::Mat4> = Vec::new();
         for npc in &server.npcs {

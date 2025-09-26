@@ -62,7 +62,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - mod.rs — In‑process server scaffold: authoritative NPC state (positions/health) and projectile collision/damage resolution. Designed to move into its own crate/process in a future workspace split.
 
 Gameplay wiring (prototype)
-- NPCs: a ring of simple cube NPCs spawn further out as targets. They have health and can be killed.
+- NPCs: two rings of simple cube NPCs spawn — one further out and one closer just beyond the outer wizard ring. They have health and can be killed.
 - Fire Bolt: on hit, applies damage to NPCs (logs hits/deaths). Impact spawns a small particle burst.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
@@ -76,6 +76,14 @@ Gameplay wiring (prototype)
   - fx.rs — FX resources (instances buffer, model bind group, quad VB) and integration helpers.
   - draw.rs — Renderer draw methods for wizards and particles.
   - ui.rs — On-screen UI overlays (nameplates/text) rendered in screen space.
+
+## Build & Dev Loop
+- Run: `cargo run`
+- Tests: `cargo test`
+- Lints: `cargo clippy --all-targets -- -D warnings`
+- Auto-reload: `cargo install cargo-watch` then:
+  - `cargo watch -x run` (rebuild and rerun on change), or
+  - `cargo dev` / `cargo dev-test` via Cargo aliases in `Cargo.toml`.
 
 - sim/
   - mod.rs — Sim engine index and exports.

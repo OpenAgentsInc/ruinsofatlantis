@@ -27,3 +27,8 @@ serde_yaml = "0.9.34"
 wgpu = "26.0.1"
 which = "8.0.0"
 winit = "0.30.12"
+
+[alias]
+# Dev loop (requires `cargo install cargo-watch`)
+dev = "watch -x run"
+dev-test = "watch -x test"
