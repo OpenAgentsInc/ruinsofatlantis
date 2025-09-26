@@ -60,10 +60,9 @@ fn glyph_5x7(c: char) -> [u8; 5] {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct UiVertex { pos: [f32; 2], color: [f32; 4] }
 
-fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f32), out: &mut Vec<UiVertex>, color: [f32; 4]) {
+fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f32), out: &mut Vec<UiVertex>, color: [f32; 4], cell: f32) {
     let (sx, sy) = start_px;
     let (sw, sh) = surface_px;
-    let cell: f32 = 10.0; // pixel size per dot
     let glyph_w = 5.0 * cell;
     let glyph_h = 7.0 * cell;
     let line_gap = cell * 2.0;
@@ -565,8 +564,12 @@ async fn run(cli: Cli) -> Result<()> {
                 rpass.set_vertex_buffer(0, ui_vb.slice(..));
                 rpass.draw(0..(verts.len() as u32), 0..1);
 
-                // Text overlay: list animations (skinned) beneath the checkbox
+                // Text overlay: label next to checkbox + list animations beneath
                 let mut text_verts: Vec<UiVertex> = Vec::new();
+                // Label
+                let label = vec!["AUTO ROTATE".to_string()];
+                let label_start = (m + s + 8.0, m);
+                build_text_quads(&label, label_start, (width as f32, height as f32), &mut text_verts, [0.85, 0.85, 0.9, 1.0], 3.0);
                 let mut lines: Vec<String> = Vec::new();
                 if let Some(ref gpu) = model_gpu
                     && let ModelGpu::Skinned { anims, .. } = gpu
@@ -579,7 +582,7 @@ async fn run(cli: Cli) -> Result<()> {
                 }
                 if !lines.is_empty() {
                     let start_px = (m, m + s + 8.0);
-                    build_text_quads(&lines, start_px, (width as f32, height as f32), &mut text_verts, [0.9, 0.9, 0.95, 1.0]);
+                    build_text_quads(&lines, start_px, (width as f32, height as f32), &mut text_verts, [0.9, 0.9, 0.95, 1.0], 10.0);
                     let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-text"), contents: bytemuck::cast_slice(&text_verts), usage: wgpu::BufferUsages::VERTEX });
                     rpass.set_pipeline(&ui_pipe);
                     rpass.set_vertex_buffer(0, tvb.slice(..));
@@ -631,10 +634,15 @@ async fn run(cli: Cli) -> Result<()> {
             radius *= (1.0 - scroll * 0.001).max(0.1);
         }
         Event::WindowEvent { event: WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. }, .. } => {
-            // Toggle autorotate if clicking checkbox area
+            // Toggle autorotate if clicking checkbox or its label area
             let s: f32 = 20.0; let m: f32 = 16.0;
             let (mx, my) = mouse_pos_px;
-            if mx >= m && mx <= m + s && my >= m && my <= m + s { autorotate = !autorotate; }
+            let in_box = mx >= m && mx <= m + s && my >= m && my <= m + s;
+            // Label rect
+            let cell = 3.0; let label = "AUTO ROTATE"; let label_w = label.len() as f32 * 6.0 * cell; let label_h = 7.0 * cell;
+            let lx0 = m + s + 8.0; let ly0 = m; let lx1 = lx0 + label_w; let ly1 = ly0 + label_h;
+            let in_label = mx >= lx0 && mx <= lx1 && my >= ly0 && my <= ly1;
+            if in_box || in_label { autorotate = !autorotate; }
         }
         _ => {}
     })?)
