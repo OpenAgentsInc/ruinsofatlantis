@@ -2,4 +2,3 @@
 
 #[derive(Default)]
 pub struct AbilityBook;
-

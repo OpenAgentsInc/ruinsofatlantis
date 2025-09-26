@@ -19,20 +19,20 @@ mod mesh;
 mod pipeline;
 mod types;
 pub use types::Vertex;
-mod util;
 mod anim;
-mod scene;
-mod material;
-mod fx;
-mod draw;
 mod camera_sys;
+mod draw;
+mod fx;
+mod material;
+mod scene;
 mod ui;
+mod util;
 
 use crate::assets::{AnimClip, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
 use crate::core::data::{loader as data_loader, spell::SpellSpec};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
-use types::{Globals, Model, VertexSkinned, ParticleInstance};
+use types::{Globals, Model, ParticleInstance, VertexSkinned};
 use util::scale_to_max;
 
 use std::time::Instant;
@@ -371,7 +371,6 @@ impl Renderer {
             })
             .collect();
 
-
         let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("wizard-vb"),
             contents: bytemuck::cast_slice(&wiz_vertices),
@@ -383,8 +382,6 @@ impl Renderer {
             usage: wgpu::BufferUsages::INDEX,
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
-
-
 
         let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
             Ok(ruins_cpu) => {
@@ -419,7 +416,8 @@ impl Renderer {
         // Precompute strike times (or leave empty to use periodic fallback)
         let hand_right_node = skinned_cpu.hand_right_node;
         let root_node = skinned_cpu.root_node;
-        let _strikes_tmp = anim::compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
+        let _strikes_tmp =
+            anim::compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
         // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
@@ -443,7 +441,8 @@ impl Renderer {
             }],
         });
 
-        let material_res = material::create_wizard_material(&device, &queue, &material_bgl, &skinned_cpu);
+        let material_res =
+            material::create_wizard_material(&device, &queue, &material_bgl, &skinned_cpu);
         let wizard_mat_bg = material_res.bind_group;
         let _wizard_mat_buf = material_res.uniform_buf;
         let _wizard_tex_view = material_res.texture_view;
@@ -694,38 +693,64 @@ impl Renderer {
 
     fn select_clip<'a>(&'a self, idx: usize) -> &'a AnimClip {
         // Honor the requested clip first; fallback only if missing.
-        let requested = match idx { 0 => "PortalOpen", 1 => "Still", _ => "Waiting" };
+        let requested = match idx {
+            0 => "PortalOpen",
+            1 => "Still",
+            _ => "Waiting",
+        };
         if let Some(c) = self.skinned_cpu.animations.get(requested) {
             return c;
         }
         // Fallback preference order
         for name in ["Waiting", "Still", "PortalOpen"] {
-            if let Some(c) = self.skinned_cpu.animations.get(name) { return c; }
+            if let Some(c) = self.skinned_cpu.animations.get(name) {
+                return c;
+            }
         }
         // Last resort: any available clip
-        self.skinned_cpu.animations.values().next().expect("at least one animation clip present")
+        self.skinned_cpu
+            .animations
+            .values()
+            .next()
+            .expect("at least one animation clip present")
     }
 
     // Update and render-side state for projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
         // 1) Spawn firebolts for all wizards playing PortalOpen when their phase crosses the trigger.
         if self.wizard_count > 0 {
-            let cycle = 5.0f32;        // synthetic cycle period
-            let bolt_offset = 1.5f32;  // trigger point in the cycle
+            let cycle = 5.0f32; // synthetic cycle period
+            let bolt_offset = 1.5f32; // trigger point in the cycle
             for i in 0..(self.wizard_count as usize) {
-                if self.wizard_anim_index[i] != 0 { continue; } // only PortalOpen
+                if self.wizard_anim_index[i] != 0 {
+                    continue;
+                } // only PortalOpen
                 let prev = self.wizard_last_phase[i];
                 let phase = (t + self.wizard_time_offset[i]) % cycle;
                 let crossed = (prev <= bolt_offset && phase >= bolt_offset)
                     || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
                 if crossed {
                     let clip = self.select_clip(self.wizard_anim_index[i]);
-                    let clip_time = if clip.duration > 0.0 { phase.min(clip.duration) } else { 0.0 };
+                    let clip_time = if clip.duration > 0.0 {
+                        phase.min(clip.duration)
+                    } else {
+                        0.0
+                    };
                     if let Some(origin_local) = self.right_hand_world(clip, clip_time) {
-                        let inst = self.wizard_models.get(i).copied().unwrap_or(glam::Mat4::IDENTITY);
-                        let origin_w = inst * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
-                        let dir_local = self.root_flat_forward(clip, clip_time).unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
-                        let dir_w = (inst * glam::Vec4::new(dir_local.x, dir_local.y, dir_local.z, 0.0)).truncate().normalize_or_zero();
+                        let inst = self
+                            .wizard_models
+                            .get(i)
+                            .copied()
+                            .unwrap_or(glam::Mat4::IDENTITY);
+                        let origin_w = inst
+                            * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
+                        let dir_local = self
+                            .root_flat_forward(clip, clip_time)
+                            .unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
+                        let dir_w = (inst
+                            * glam::Vec4::new(dir_local.x, dir_local.y, dir_local.z, 0.0))
+                        .truncate()
+                        .normalize_or_zero();
                         self.spawn_firebolt(origin_w.truncate() + dir_w * 0.3, dir_w, t);
                     }
                 }
@@ -826,9 +851,6 @@ impl Renderer {
         }
     }
 }
-
-
-
 
 fn rand_unit() -> f32 {
     use rand::Rng as _;

@@ -1,8 +1,8 @@
 //! GLTF loading: unskinned CPU mesh and Draco JSON fallback.
 
-use anyhow::{anyhow, bail, Context, Result};
-use base64::engine::general_purpose::STANDARD as BASE64;
+use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use gltf::mesh::util::ReadIndices;
 use std::path::{Path, PathBuf};
 
@@ -48,7 +48,10 @@ pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
             };
             let start = vertices.len();
             for i in 0..pos.len() {
-                vertices.push(Vertex { pos: pos[i], nrm: nrm[i] });
+                vertices.push(Vertex {
+                    pos: pos[i],
+                    nrm: nrm[i],
+                });
             }
             let start_u = start as u32;
             let indices_read: Vec<u32> = match reader.read_indices() {
@@ -64,7 +67,10 @@ pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
             } else {
                 for v in indices_read {
                     let vv = start_u + v;
-                    indices.push(u16::try_from(vv).map_err(|_| anyhow!("rebased index {} exceeds u16", vv))?);
+                    indices.push(
+                        u16::try_from(vv)
+                            .map_err(|_| anyhow!("rebased index {} exceeds u16", vv))?,
+                    );
                 }
             }
         }
@@ -85,8 +91,14 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let path = root.join("assets/models/wizard.gltf");
         let mesh = load_gltf_mesh(&path).expect("load wizard.gltf");
-        assert!(!mesh.vertices.is_empty(), "wizard vertices should not be empty");
-        assert!(!mesh.indices.is_empty(), "wizard indices should not be empty");
+        assert!(
+            !mesh.vertices.is_empty(),
+            "wizard vertices should not be empty"
+        );
+        assert!(
+            !mesh.indices.is_empty(),
+            "wizard indices should not be empty"
+        );
     }
 
     #[test]
@@ -94,13 +106,20 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let path = root.join("assets/models/ruins.gltf");
         let mesh = load_gltf_mesh(&path).expect("load ruins.gltf (Draco)");
-        assert!(!mesh.vertices.is_empty(), "ruins vertices should not be empty");
-        assert!(!mesh.indices.is_empty(), "ruins indices should not be empty");
+        assert!(
+            !mesh.vertices.is_empty(),
+            "ruins vertices should not be empty"
+        );
+        assert!(
+            !mesh.indices.is_empty(),
+            "ruins indices should not be empty"
+        );
     }
 }
 
 fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
-    let text = std::fs::read_to_string(path).with_context(|| format!("read glTF json: {}", path.display()))?;
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("read glTF json: {}", path.display()))?;
     let v: serde_json::Value = serde_json::from_str(&text).context("parse glTF JSON")?;
     let empty = Vec::new();
     let ext_req = v
@@ -127,7 +146,9 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
             .context("buffer.uri missing")?;
         if let Some(idx) = uri.find(',') {
             let b64 = &uri[(idx + 1)..];
-            let data = BASE64.decode(b64.as_bytes()).context("base64 decode buffer")?;
+            let data = BASE64
+                .decode(b64.as_bytes())
+                .context("base64 decode buffer")?;
             bin_bytes.push(data);
         } else {
             bail!("only data: URIs are supported in JSON fallback");
@@ -199,7 +220,12 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
             let index_count = prim
                 .get("indices")
                 .and_then(|i| i.as_u64())
-                .map(|idx| accessors[idx as usize].get("count").and_then(|c| c.as_u64()).unwrap_or(0) as u32)
+                .map(|idx| {
+                    accessors[idx as usize]
+                        .get("count")
+                        .and_then(|c| c.as_u64())
+                        .unwrap_or(0) as u32
+                })
                 .unwrap_or(0);
 
             let mut cfg = draco_decoder::MeshDecodeConfig::new(vertex_count, index_count);
@@ -223,7 +249,10 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
                     "VEC4" => 4,
                     _ => 3,
                 };
-                let ctype = acc.get("componentType").and_then(|c| c.as_u64()).unwrap_or(5126);
+                let ctype = acc
+                    .get("componentType")
+                    .and_then(|c| c.as_u64())
+                    .unwrap_or(5126);
                 let ty = match ctype {
                     5126 => draco_decoder::AttributeDataType::Float32,
                     5123 => draco_decoder::AttributeDataType::UInt16,
@@ -256,7 +285,10 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
                 } else {
                     for c in idx_slice.chunks_exact(4) {
                         let v = u32::from_le_bytes([c[0], c[1], c[2], c[3]]);
-                        indices.push(u16::try_from(v).map_err(|_| anyhow!("decoded index {} exceeds u16", v))?);
+                        indices.push(
+                            u16::try_from(v)
+                                .map_err(|_| anyhow!("decoded index {} exceeds u16", v))?,
+                        );
                     }
                 }
             }
@@ -274,7 +306,10 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
                     "VEC4" => 4usize,
                     _ => 3usize,
                 };
-                let ctype = acc.get("componentType").and_then(|c| c.as_u64()).unwrap_or(5126);
+                let ctype = acc
+                    .get("componentType")
+                    .and_then(|c| c.as_u64())
+                    .unwrap_or(5126);
                 let comp_size = match ctype {
                     5126 | 5125 | 5124 => 4usize,
                     5123 | 5122 => 2usize,
@@ -291,7 +326,11 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
                         for c in slice.chunks_exact(4 * dim) {
                             let x = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
                             let y = f32::from_le_bytes([c[4], c[5], c[6], c[7]]);
-                            let z = if dim > 2 { f32::from_le_bytes([c[8], c[9], c[10], c[11]]) } else { 0.0 };
+                            let z = if dim > 2 {
+                                f32::from_le_bytes([c[8], c[9], c[10], c[11]])
+                            } else {
+                                0.0
+                            };
                             v.push([x, y, z]);
                         }
                         pos_opt = Some(v);
@@ -301,7 +340,11 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
                         for c in slice.chunks_exact(4 * dim) {
                             let x = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
                             let y = f32::from_le_bytes([c[4], c[5], c[6], c[7]]);
-                            let z = if dim > 2 { f32::from_le_bytes([c[8], c[9], c[10], c[11]]) } else { 1.0 };
+                            let z = if dim > 2 {
+                                f32::from_le_bytes([c[8], c[9], c[10], c[11]])
+                            } else {
+                                1.0
+                            };
                             v.push([x, y, z]);
                         }
                         nrm_opt = Some(v);
@@ -314,7 +357,10 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
             let pos = pos_opt.context("decoded POSITION missing")?;
             let nrm = nrm_opt.unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
             for i in 0..pos.len() {
-                vertices.push(Vertex { pos: pos[i], nrm: nrm[i] });
+                vertices.push(Vertex {
+                    pos: pos[i],
+                    nrm: nrm[i],
+                });
             }
             // Rebase indices for this primitive
             let start_u = start as u32;
@@ -326,7 +372,8 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
                 let base = indices.len() - (index_count as usize);
                 for i in base..indices.len() {
                     let v = indices[i] as u32 + start_u;
-                    indices[i] = u16::try_from(v).map_err(|_| anyhow!("rebased index {} exceeds u16", v))?;
+                    indices[i] =
+                        u16::try_from(v).map_err(|_| anyhow!("rebased index {} exceeds u16", v))?;
                 }
             }
         }

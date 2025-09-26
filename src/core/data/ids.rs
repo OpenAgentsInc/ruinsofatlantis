@@ -4,6 +4,7 @@
 pub struct Id(pub String);
 
 impl Id {
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
-

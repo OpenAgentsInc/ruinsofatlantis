@@ -60,32 +60,54 @@ impl SimState {
     pub fn load_spell(&self, id: &str) -> anyhow::Result<SpellSpec> {
         // Try exact id.json under spells/
         let primary = format!("spells/{}.json", id);
-        if let Ok(spec) = load_spell_spec(&primary) { return Ok(spec); }
+        if let Ok(spec) = load_spell_spec(&primary) {
+            return Ok(spec);
+        }
         // Try last segment after '.' (e.g., wiz.fire_bolt.srd521 -> srd521.json or fire_bolt.json)
         if let Some(last) = id.split('.').last() {
             let alt = format!("spells/{}.json", last);
-            if let Ok(spec) = load_spell_spec(&alt) { return Ok(spec); }
+            if let Ok(spec) = load_spell_spec(&alt) {
+                return Ok(spec);
+            }
         }
         // Heuristic: if the id contains "fire_bolt", fall back to fire_bolt.json
-        if id.contains("fire_bolt") { if let Ok(spec) = load_spell_spec("spells/fire_bolt.json") { return Ok(spec); } }
-        if id.contains("bless") { if let Ok(spec) = load_spell_spec("spells/bless.json") { return Ok(spec); } }
-        if id.contains("shield") { if let Ok(spec) = load_spell_spec("spells/shield.json") { return Ok(spec); } }
-        if id.contains("grease") { if let Ok(spec) = load_spell_spec("spells/grease.json") { return Ok(spec); } }
+        if id.contains("fire_bolt") {
+            if let Ok(spec) = load_spell_spec("spells/fire_bolt.json") {
+                return Ok(spec);
+            }
+        }
+        if id.contains("bless") {
+            if let Ok(spec) = load_spell_spec("spells/bless.json") {
+                return Ok(spec);
+            }
+        }
+        if id.contains("shield") {
+            if let Ok(spec) = load_spell_spec("spells/shield.json") {
+                return Ok(spec);
+            }
+        }
+        if id.contains("grease") {
+            if let Ok(spec) = load_spell_spec("spells/grease.json") {
+                return Ok(spec);
+            }
+        }
         // Fallback: try the filename portion after a slash if present
         if let Some((_ns, tail)) = id.rsplit_once('/') {
             let alt = format!("spells/{}.json", tail);
-            if let Ok(spec) = load_spell_spec(&alt) { return Ok(spec); }
+            if let Ok(spec) = load_spell_spec(&alt) {
+                return Ok(spec);
+            }
         }
         load_spell_spec(&primary)
     }
 
-    pub fn load_class_defaults(&self, id: &str) -> anyhow::Result<(i32,i32,i32)> {
+    pub fn load_class_defaults(&self, id: &str) -> anyhow::Result<(i32, i32, i32)> {
         let rel = format!("classes/{}.json", id);
         let spec = load_class_spec(rel)?;
         Ok((spec.base_ac, spec.spell_attack_bonus, spec.spell_save_dc))
     }
 
-    pub fn load_monster_defaults(&self, id: &str) -> anyhow::Result<(i32,i32)> {
+    pub fn load_monster_defaults(&self, id: &str) -> anyhow::Result<(i32, i32)> {
         let rel = format!("monsters/{}.json", id);
         let spec = load_monster_spec(rel)?;
         Ok((spec.ac, spec.hp))
@@ -96,7 +118,9 @@ impl SimState {
         for idx in 0..self.actors.len() {
             let (done, actor_id) = {
                 let a = &mut self.actors[idx];
-                if a.hp <= 0 { continue; }
+                if a.hp <= 0 {
+                    continue;
+                }
                 let (next, done) = a.action.clone().tick(dt);
                 a.action = next;
                 (done, a.id.clone())
@@ -133,20 +157,26 @@ impl SimState {
         // Very small parser for NdM
         let (n, m) = if let Some((n, m)) = dice.split_once('d') {
             (n.parse::<i32>().unwrap_or(1), m.parse::<i32>().unwrap_or(1))
-        } else { (1, 1) };
+        } else {
+            (1, 1)
+        };
         let mut sum = 0;
-        for _ in 0..n { sum += (self.rng.random::<u32>() % (m as u32) + 1) as i32; }
+        for _ in 0..n {
+            sum += (self.rng.random::<u32>() % (m as u32) + 1) as i32;
+        }
         sum
     }
 
-    pub fn actor_alive(&self, idx: usize) -> bool { self.actors.get(idx).map(|a| a.hp > 0).unwrap_or(false) }
+    pub fn actor_alive(&self, idx: usize) -> bool {
+        self.actors.get(idx).map(|a| a.hp > 0).unwrap_or(false)
+    }
 }
 
 // Built-in fallback specs
 impl SimState {
     pub fn builtin_basic_attack_spec() -> crate::core::data::spell::SpellSpec {
+        use crate::core::data::spell::{AttackSpec, DamageSpec, SpellSpec};
         use std::collections::HashMap;
-        use crate::core::data::spell::{SpellSpec, AttackSpec, DamageSpec};
         let mut dice = HashMap::new();
         dice.insert("1-4".to_string(), "1d6".to_string());
         SpellSpec {
@@ -168,8 +198,16 @@ impl SimState {
             range_ft: 5,
             minimum_range_ft: 0,
             firing_arc_deg: 180,
-            attack: Some(AttackSpec { kind: "melee_weapon_attack".into(), rng_stream: Some("attack".into()), crit_rule: Some("nat20_double_dice".into()) }),
-            damage: Some(DamageSpec { damage_type: "slashing".into(), add_spell_mod_to_damage: false, dice_by_level_band: Some(dice) }),
+            attack: Some(AttackSpec {
+                kind: "melee_weapon_attack".into(),
+                rng_stream: Some("attack".into()),
+                crit_rule: Some("nat20_double_dice".into()),
+            }),
+            damage: Some(DamageSpec {
+                damage_type: "slashing".into(),
+                add_spell_mod_to_damage: false,
+                dice_by_level_band: Some(dice),
+            }),
             projectile: None,
             secondary: None,
             latency: None,
@@ -181,8 +219,8 @@ impl SimState {
     }
 
     pub fn builtin_boss_tentacle_spec() -> crate::core::data::spell::SpellSpec {
+        use crate::core::data::spell::{AttackSpec, DamageSpec, SpellSpec};
         use std::collections::HashMap;
-        use crate::core::data::spell::{SpellSpec, AttackSpec, DamageSpec};
         let mut dice = HashMap::new();
         dice.insert("1-4".to_string(), "3d10".to_string());
         SpellSpec {
@@ -204,8 +242,16 @@ impl SimState {
             range_ft: 10,
             minimum_range_ft: 0,
             firing_arc_deg: 180,
-            attack: Some(AttackSpec { kind: "melee_attack".into(), rng_stream: Some("attack".into()), crit_rule: Some("nat20_double_dice".into()) }),
-            damage: Some(DamageSpec { damage_type: "bludgeoning".into(), add_spell_mod_to_damage: false, dice_by_level_band: Some(dice) }),
+            attack: Some(AttackSpec {
+                kind: "melee_attack".into(),
+                rng_stream: Some("attack".into()),
+                crit_rule: Some("nat20_double_dice".into()),
+            }),
+            damage: Some(DamageSpec {
+                damage_type: "bludgeoning".into(),
+                add_spell_mod_to_damage: false,
+                dice_by_level_band: Some(dice),
+            }),
             projectile: None,
             secondary: None,
             latency: None,

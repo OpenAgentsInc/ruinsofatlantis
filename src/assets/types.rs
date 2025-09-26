@@ -65,4 +65,3 @@ pub struct SkinnedMeshCPU {
     pub hand_right_node: Option<usize>,
     pub root_node: Option<usize>,
 }
-

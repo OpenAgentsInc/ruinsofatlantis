@@ -69,7 +69,11 @@ impl Nameplates {
         for ch_u in 32u8..=126u8 {
             let ch = ch_u as char;
             let gid = font.glyph_id(ch);
-            let g0 = Glyph { id: gid, scale, position: ab_glyph::point(0.0, ascent) };
+            let g0 = Glyph {
+                id: gid,
+                scale,
+                position: ab_glyph::point(0.0, ascent),
+            };
             if let Some(og) = font.outline_glyph(g0) {
                 let bounds = og.px_bounds();
                 // Round up width/height
@@ -138,7 +142,11 @@ impl Nameplates {
         // Upload atlas to GPU
         let atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("nameplate-atlas"),
-            size: wgpu::Extent3d { width: atlas_w, height: atlas_h, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: atlas_w,
+                height: atlas_h,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -164,12 +172,19 @@ impl Nameplates {
             label: Some("nameplate-texture-bg"),
             layout: &text_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&atlas_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&atlas_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
             ],
         });
         let shader = crate::gfx::pipeline::create_shader(device);
-        let text_pipeline = pipeline::create_text_pipeline(device, &shader, &text_bgl, color_format);
+        let text_pipeline =
+            pipeline::create_text_pipeline(device, &shader, &text_bgl, color_format);
 
         // Initial vertex buffer
         let vcap_bytes = 64 * 1024; // 64KB initial
@@ -211,14 +226,34 @@ impl Nameplates {
             "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
         ];
         let teens = [
-            "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen",
+            "Ten",
+            "Eleven",
+            "Twelve",
+            "Thirteen",
+            "Fourteen",
+            "Fifteen",
+            "Sixteen",
+            "Seventeen",
+            "Eighteen",
+            "Nineteen",
         ];
-        let tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-        if n < 10 { return ones[n].to_string(); }
-        if n < 20 { return teens[n - 10].to_string(); }
+        let tens = [
+            "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety",
+        ];
+        if n < 10 {
+            return ones[n].to_string();
+        }
+        if n < 20 {
+            return teens[n - 10].to_string();
+        }
         if n < 100 {
-            let t = n / 10; let o = n % 10;
-            if o == 0 { tens[t].to_string() } else { format!("{}{}", tens[t], ones[o]) }
+            let t = n / 10;
+            let o = n % 10;
+            if o == 0 {
+                tens[t].to_string()
+            } else {
+                format!("{}{}", tens[t], ones[o])
+            }
         } else {
             n.to_string()
         }
@@ -249,9 +284,13 @@ impl Nameplates {
             // World-space head position: model * (0, 1.7, 0)
             let p = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
             let clip = view_proj * p;
-            if clip.w <= 0.0 { continue; }
+            if clip.w <= 0.0 {
+                continue;
+            }
             let ndc = clip.truncate() / clip.w;
-            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
+            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 {
+                continue;
+            }
             let mut cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
             // baseline a bit above the head (slightly lower than before)
@@ -262,8 +301,13 @@ impl Nameplates {
             let mut prev: Option<ab_glyph::GlyphId> = None;
             let mut width = 0.0f32;
             for ch in text.chars() {
-                let gi = match self.glyphs.get(&ch) { Some(g) => g, None => continue };
-                if let Some(pg) = prev { width += scaled.kern(pg, gi.id); }
+                let gi = match self.glyphs.get(&ch) {
+                    Some(g) => g,
+                    None => continue,
+                };
+                if let Some(pg) = prev {
+                    width += scaled.kern(pg, gi.id);
+                }
                 width += gi.advance;
                 prev = Some(gi.id);
             }
@@ -273,8 +317,13 @@ impl Nameplates {
             let mut pen_x = 0.0f32;
             prev = None;
             for ch in text.chars() {
-                let gi = match self.glyphs.get(&ch) { Some(g) => g, None => continue };
-                if let Some(pg) = prev { pen_x += scaled.kern(pg, gi.id); }
+                let gi = match self.glyphs.get(&ch) {
+                    Some(g) => g,
+                    None => continue,
+                };
+                if let Some(pg) = prev {
+                    pen_x += scaled.kern(pg, gi.id);
+                }
 
                 let x = cx + pen_x + gi.bounds_min[0];
                 let y = baseline_y - ascent + gi.bounds_min[1];
@@ -290,12 +339,30 @@ impl Nameplates {
                 let uv2 = gi.uv_max;
                 let uv3 = [gi.uv_min[0], gi.uv_max[1]];
 
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0 });
-                verts.push(TextVertex { pos_ndc: p1, uv: uv1 });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2 });
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0 });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2 });
-                verts.push(TextVertex { pos_ndc: p3, uv: uv3 });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p1,
+                    uv: uv1,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p3,
+                    uv: uv3,
+                });
 
                 pen_x += gi.advance;
                 prev = Some(gi.id);
@@ -315,18 +382,22 @@ impl Nameplates {
             self.vcap_bytes = new_cap;
         }
         queue.write_buffer(&self.vbuf, 0, bytes);
-
     }
 
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
-        if self.vcount == 0 { return; }
+        if self.vcount == 0 {
+            return;
+        }
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("nameplate-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -341,10 +412,23 @@ impl Nameplates {
 impl Nameplates {
     pub fn upload_atlas(&self, queue: &wgpu::Queue) {
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &self.atlas_tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.atlas_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
             &self.atlas_cpu,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(self.atlas_size.0), rows_per_image: Some(self.atlas_size.1) },
-            wgpu::Extent3d { width: self.atlas_size.0, height: self.atlas_size.1, depth_or_array_layers: 1 },
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.atlas_size.0),
+                rows_per_image: Some(self.atlas_size.1),
+            },
+            wgpu::Extent3d {
+                width: self.atlas_size.0,
+                height: self.atlas_size.1,
+                depth_or_array_layers: 1,
+            },
         );
     }
 }

@@ -32,10 +32,13 @@ pub struct Actor {
     pub abilities: Vec<String>,
 }
 
-fn default_tick_ms() -> u32 { 50 }
+fn default_tick_ms() -> u32 {
+    50
+}
 
 pub fn load_yaml(path: &Path) -> Result<Scenario> {
-    let txt = std::fs::read_to_string(path).with_context(|| format!("read scenario: {}", path.display()))?;
+    let txt = std::fs::read_to_string(path)
+        .with_context(|| format!("read scenario: {}", path.display()))?;
     let scn: Scenario = serde_yaml::from_str(&txt).context("parse scenario yaml")?;
     Ok(scn)
 }

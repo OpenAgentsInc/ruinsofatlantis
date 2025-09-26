@@ -24,12 +24,18 @@ pub struct Transform {
 
 impl Default for Transform {
     fn default() -> Self {
-        Self { translation: Vec3::ZERO, rotation: Quat::IDENTITY, scale: Vec3::ONE }
+        Self {
+            translation: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        }
     }
 }
 
 impl Transform {
-    pub fn matrix(&self) -> Mat4 { Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation) }
+    pub fn matrix(&self) -> Mat4 {
+        Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
+    }
 }
 
 pub struct World {
@@ -41,7 +47,12 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        Self { next_id: 1, ids: Vec::new(), transforms: Vec::new(), kinds: Vec::new() }
+        Self {
+            next_id: 1,
+            ids: Vec::new(),
+            transforms: Vec::new(),
+            kinds: Vec::new(),
+        }
     }
 
     pub fn spawn(&mut self, t: Transform, k: RenderKind) -> Entity {
@@ -53,4 +64,3 @@ impl World {
         e
     }
 }
-

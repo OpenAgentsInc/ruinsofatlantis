@@ -22,4 +22,3 @@ pub fn orbit_and_globals(
     };
     (cam, globals)
 }
-

@@ -7,4 +7,3 @@ use super::ids::Id;
 pub struct AbilityRef {
     pub id: Id,
 }
-

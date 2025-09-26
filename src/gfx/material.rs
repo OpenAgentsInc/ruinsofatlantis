@@ -46,64 +46,136 @@ pub fn create_wizard_material(
     });
 
     let (bg, view, sampler) = if let Some(tex) = &skinned_cpu.base_color_texture {
-        log::info!("wizard albedo: {}x{} (srgb={})", tex.width, tex.height, tex.srgb);
-        let size3 = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
+        log::info!(
+            "wizard albedo: {}x{} (srgb={})",
+            tex.width,
+            tex.height,
+            tex.srgb
+        );
+        let size3 = wgpu::Extent3d {
+            width: tex.width,
+            height: tex.height,
+            depth_or_array_layers: 1,
+        };
         let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("wizard-albedo"), size: size3, mip_level_count: 1, sample_count: 1,
-            dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[]
+            label: Some("wizard-albedo"),
+            size: size3,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
         });
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex_obj,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
             &tex.pixels,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) },
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * tex.width),
+                rows_per_image: Some(tex.height),
+            },
             size3,
         );
         let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("wizard-sampler"), mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest, address_mode_u: wgpu::AddressMode::Repeat, address_mode_v: wgpu::AddressMode::Repeat,
+            label: Some("wizard-sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
             ..Default::default()
         });
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("wizard-material-bg"), layout: material_bgl,
+            label: Some("wizard-material-bg"),
+            layout: material_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
-                wgpu::BindGroupEntry { binding: 2, resource: wizard_mat_buf.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wizard_mat_buf.as_entire_binding(),
+                },
             ],
         });
         (bg, view, sampler)
     } else {
         log::warn!("wizard albedo: NONE; using 1x1 fallback");
-        let size3 = wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 };
+        let size3 = wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        };
         let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("white-1x1"), size: size3, mip_level_count: 1, sample_count: 1,
-            dimension: wgpu::TextureDimension::D2, format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST, view_formats: &[]
+            label: Some("white-1x1"),
+            size: size3,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
         });
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex_obj,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
             &[255, 255, 255, 255],
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
             size3,
         );
         let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat, address_mode_v: wgpu::AddressMode::Repeat, ..Default::default()
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            ..Default::default()
         });
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("wizard-material-bg"), layout: material_bgl,
+            label: Some("wizard-material-bg"),
+            layout: material_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
-                wgpu::BindGroupEntry { binding: 2, resource: wizard_mat_buf.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wizard_mat_buf.as_entire_binding(),
+                },
             ],
         });
         (bg, view, sampler)
     };
 
-    WizardMaterial { bind_group: bg, uniform_buf: wizard_mat_buf, texture_view: view, sampler }
+    WizardMaterial {
+        bind_group: bg,
+        uniform_buf: wizard_mat_buf,
+        texture_view: view,
+        sampler,
+    }
 }
 
 fn read_texture_transform() -> Option<MaterialXform> {
@@ -112,17 +184,44 @@ fn read_texture_transform() -> Option<MaterialXform> {
     let txt = std::fs::read_to_string(&path).ok()?;
     let json: serde_json::Value = serde_json::from_str(&txt).ok()?;
     let mat_index = json
-        .get("meshes")?.get(0)?.get("primitives")?.get(0)?.get("material")?.as_u64()? as usize;
+        .get("meshes")?
+        .get(0)?
+        .get("primitives")?
+        .get(0)?
+        .get("material")?
+        .as_u64()? as usize;
     let bct = json
-        .get("materials")?.get(mat_index)?.get("pbrMetallicRoughness")?.get("baseColorTexture")?;
+        .get("materials")?
+        .get(mat_index)?
+        .get("pbrMetallicRoughness")?
+        .get("baseColorTexture")?;
     let ext = bct.get("extensions")?.get("KHR_texture_transform")?;
-    let mut xf = MaterialXform { offset: [0.0, 0.0], _pad0: [0.0; 2], scale: [1.0, 1.0], _pad1: [0.0; 2], rot: 0.0, _pad2: [0.0; 3] };
+    let mut xf = MaterialXform {
+        offset: [0.0, 0.0],
+        _pad0: [0.0; 2],
+        scale: [1.0, 1.0],
+        _pad1: [0.0; 2],
+        rot: 0.0,
+        _pad2: [0.0; 3],
+    };
     if let Some(off) = ext.get("offset").and_then(|v| v.as_array()) {
-        if off.len() == 2 { xf.offset = [off[0].as_f64().unwrap_or(0.0) as f32, off[1].as_f64().unwrap_or(0.0) as f32]; }
+        if off.len() == 2 {
+            xf.offset = [
+                off[0].as_f64().unwrap_or(0.0) as f32,
+                off[1].as_f64().unwrap_or(0.0) as f32,
+            ];
+        }
     }
     if let Some(s) = ext.get("scale").and_then(|v| v.as_array()) {
-        if s.len() == 2 { xf.scale = [s[0].as_f64().unwrap_or(1.0) as f32, s[1].as_f64().unwrap_or(1.0) as f32]; }
+        if s.len() == 2 {
+            xf.scale = [
+                s[0].as_f64().unwrap_or(1.0) as f32,
+                s[1].as_f64().unwrap_or(1.0) as f32,
+            ];
+        }
     }
-    if let Some(r) = ext.get("rotation").and_then(|v| v.as_f64()) { xf.rot = r as f32; }
+    if let Some(r) = ext.get("rotation").and_then(|v| v.as_f64()) {
+        xf.rot = r as f32;
+    }
     Some(xf)
 }

@@ -29,6 +29,10 @@ mod tests {
         let orig = root.join("assets/models/wizard.gltf");
         let out = prepare_gltf_path(&orig).expect("prepare path");
         assert!(out.exists(), "resolved file must exist: {}", out.display());
-        assert!(gltf::import(&out).is_ok(), "resolved file must be importable: {}", out.display());
+        assert!(
+            gltf::import(&out).is_ok(),
+            "resolved file must be importable: {}",
+            out.display()
+        );
     }
 }
