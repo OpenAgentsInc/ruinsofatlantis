@@ -197,10 +197,12 @@ fn fs_particle(i: PtcOut) -> @location(0) vec4<f32> {
 struct TextIn {
   @location(0) pos_ndc: vec2<f32>,
   @location(1) uv: vec2<f32>,
+  @location(2) color: vec4<f32>,
 };
 struct TextOut {
   @builtin(position) pos: vec4<f32>,
   @location(0) uv: vec2<f32>,
+  @location(1) color: vec4<f32>,
 };
 
 @vertex
@@ -208,6 +210,7 @@ fn vs_text(v: TextIn) -> TextOut {
   var o: TextOut;
   o.pos = vec4<f32>(v.pos_ndc, 0.0, 1.0);
   o.uv = v.uv;
+  o.color = v.color;
   return o;
 }
 
@@ -217,8 +220,8 @@ fn vs_text(v: TextIn) -> TextOut {
 @fragment
 fn fs_text(i: TextOut) -> @location(0) vec4<f32> {
   let a = textureSample(text_atlas, text_sampler, i.uv).r;
-  // White text with alpha from atlas
-  return vec4<f32>(1.0, 1.0, 1.0, a);
+  // Tinted text with alpha from atlas
+  return vec4<f32>(i.color.rgb, i.color.a * a);
 }
 
 // ---- Health bar pipeline (screen-space colored quads) ----

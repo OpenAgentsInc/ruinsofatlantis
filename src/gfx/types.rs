@@ -228,19 +228,20 @@ impl ParticleInstance {
     };
 }
 
-// Text rendering vertex: NDC position and UV
+// Text rendering vertex: NDC position, UV, and vertex color (RGBA)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct TextVertex {
     pub pos_ndc: [f32; 2],
     pub uv: [f32; 2],
+    pub color: [f32; 4],
 }
 
 impl TextVertex {
     pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: std::mem::size_of::<TextVertex>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2],
+        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4],
     };
 }
 

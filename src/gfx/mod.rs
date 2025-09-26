@@ -186,6 +186,7 @@ pub struct Renderer {
     nameplates: ui::Nameplates,
     nameplates_npc: ui::Nameplates,
     bars: ui::HealthBars,
+    damage: ui::DamageFloaters,
 
     // --- Player/Camera ---
     pc_index: usize,
@@ -378,6 +379,7 @@ impl Renderer {
         let nameplates = ui::Nameplates::new(&device, config.format)?;
         let nameplates_npc = ui::Nameplates::new(&device, config.format)?;
         let bars = ui::HealthBars::new(&device, config.format)?;
+        let damage = ui::DamageFloaters::new(&device, config.format)?;
 
         // --- Buffers & bind groups ---
         // Globals
@@ -578,6 +580,7 @@ impl Renderer {
         // Upload text atlases once now that we have a queue
         nameplates.upload_atlas(&queue);
         nameplates_npc.upload_atlas(&queue);
+        damage.upload_atlas(&queue);
         // FX resources
         let fx_res = fx::create_fx_resources(&device, &model_bgl);
         let fx_instances = fx_res.instances;
@@ -806,6 +809,7 @@ impl Renderer {
             nameplates,
             nameplates_npc,
             bars,
+            damage,
 
             // Player/camera
             pc_index: scene_build.pc_index,
@@ -939,6 +943,11 @@ impl Renderer {
                     *hp = (*hp - dmg).max(0);
                     let fatal = *hp == 0;
                     log::info!("wizard melee hit: idx={} hp {} -> {} (dmg {}), fatal={}", widx, before, *hp, dmg, fatal);
+                    // Spawn damage floater above head
+                    if widx < self.wizard_models.len() {
+                        let head = self.wizard_models[widx] * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
+                        self.damage.spawn(head.truncate(), dmg);
+                    }
                     if fatal {
                         if widx == self.pc_index { self.kill_pc(); }
                         else { self.remove_wizard_at(widx); }
@@ -1035,7 +1044,7 @@ impl Renderer {
             // FX
             self.draw_particles(&mut rpass);
         }
-        // Overlay: health bars, then nameplates after 3D content
+        // Overlay: health bars, floating damage numbers, then nameplates
         let view_proj = glam::Mat4::from_cols_array_2d(&globals.view_proj);
         // Build bar entries: wizards (including PC)
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
@@ -1061,6 +1070,16 @@ impl Renderer {
             &bar_entries,
         );
         self.bars.draw(&mut encoder, &view);
+        // Damage numbers
+        self.damage.update(dt);
+        self.damage.queue(
+            &self.device,
+            &self.queue,
+            self.config.width,
+            self.config.height,
+            view_proj,
+        );
+        self.damage.draw(&mut encoder, &view);
 
         // Draw wizard nameplates first
         self.nameplates.queue_labels(
@@ -1514,6 +1533,13 @@ impl Renderer {
                             self.queue.write_buffer(&self.zombie_instances, 0, bytes);
                         }
                 }
+                // Damage floater above NPC head
+                if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
+                    let pos = n.pos + glam::vec3(0.0, n.radius + 0.9, 0.0);
+                    self.damage.spawn(pos, h.damage);
+                } else {
+                    self.damage.spawn(h.pos + glam::vec3(0.0, 0.9, 0.0), h.damage);
+                }
             }
             if hits.is_empty() {
                 log::debug!("no hits this frame: projectiles={} npcs={}", self.projectiles.len(), self.server.npcs.len());
@@ -1600,6 +1626,9 @@ impl Renderer {
                         "wizard hit: idx={} hp {} -> {} (dmg {}), fatal={}",
                         j, before, after, damage, fatal
                     );
+                    // Floating damage number
+                    let head = center + glam::vec3(0.0, 1.7, 0.0);
+                    self.damage.spawn(head, damage);
                     if fatal {
                         if j == self.pc_index { self.kill_pc(); }
                         else { self.remove_wizard_at(j); }
