@@ -5,6 +5,7 @@ use clap::Parser;
 use glam::{Mat4, Vec3};
 use log::info;
 use ra_assets::{load_gltf_mesh, load_gltf_skinned, CpuMesh, SkinnedMeshCPU};
+use ra_assets::skinning::{merge_gltf_animations, merge_fbx_animations};
 use wgpu::util::DeviceExt;
 use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceTargetUnsafe};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
@@ -92,6 +93,31 @@ fn build_text_quads(lines: &[String], start_px: (f32, f32), surface_px: (f32, f3
             x_cursor += glyph_w + cell; // 1 cell spacing
         }
     }
+}
+
+#[derive(Clone)]
+struct LibAnim { name: String, path: std::path::PathBuf }
+
+fn scan_anim_library() -> Vec<LibAnim> {
+    let mut out: Vec<LibAnim> = Vec::new();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let repo_root = cwd; // assume running from repo root
+    let mut candidates: Vec<std::path::PathBuf> = vec![repo_root.join("assets/anims")];
+    if let Some(v) = std::env::var_os("FBX_LIB_DIR") && !v.is_empty() { candidates.push(std::path::PathBuf::from(v)); }
+    for dir in candidates.into_iter().filter(|p| p.exists()) {
+        for ent in std::fs::read_dir(dir).unwrap_or_else(|_| std::fs::read_dir(".").unwrap()).flatten() {
+            let p = ent.path();
+            if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                let ext_l = ext.to_ascii_lowercase();
+                if ext_l == "fbx" || ext_l == "gltf" || ext_l == "glb" {
+                    let name = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                    out.push(LibAnim { name, path: p });
+                }
+            }
+        }
+    }
+    out.sort_by(|a,b| a.name.cmp(&b.name));
+    out
 }
 
 // Animation CPU sampling helpers
@@ -377,6 +403,9 @@ async fn run(cli: Cli) -> Result<()> {
         },
     }
     let mut model_gpu: Option<ModelGpu> = None;
+
+    // Animation library (scan assets/anims/* and optional env var FBX_LIB_DIR)
+    let lib_anims: Vec<LibAnim> = scan_anim_library();
 
     // Pipeline
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -690,6 +719,24 @@ async fn run(cli: Cli) -> Result<()> {
                     rpass.set_vertex_buffer(0, tvb.slice(..));
                     rpass.draw(0..(text_verts.len() as u32), 0..1);
                 }
+
+                // Library animations (if any)
+                if !lib_anims.is_empty() {
+                    let mut lib_lines: Vec<String> = vec!["LIBRARY:".to_string()];
+                    for (i, a) in lib_anims.iter().enumerate() { lib_lines.push(format!("{}: {}", i + 1, a.name.to_uppercase())); }
+                    let anim_cell: f32 = 6.0;
+                    let base_y = m + s + 8.0;
+                    let model_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
+                    let y_offset = base_y + model_lines * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
+                    let mut lib_text: Vec<UiVertex> = Vec::new();
+                    build_text_quads(&lib_lines, (m, y_offset), (width as f32, height as f32), &mut lib_text, [0.8,0.85,0.95,1.0], anim_cell);
+                    if !lib_text.is_empty() {
+                        let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-lib"), contents: bytemuck::cast_slice(&lib_text), usage: wgpu::BufferUsages::VERTEX });
+                        rpass.set_pipeline(&ui_pipe);
+                        rpass.set_vertex_buffer(0, tvb.slice(..));
+                        rpass.draw(0..(lib_text.len() as u32), 0..1);
+                    }
+                }
             }
 
             queue.submit(Some(enc.finish()));
@@ -761,6 +808,32 @@ async fn run(cli: Cli) -> Result<()> {
                                 *active_index = i; *time = 0.0;
                             }
                         }
+            }
+            // Library entries click handling
+            if let Some(gpu) = model_gpu.as_mut()
+                && let ModelGpu::Skinned { anims, active_index, time, anim, .. } = gpu
+                && !lib_anims.is_empty()
+            {
+                let base_y = m + s + 8.0;
+                let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
+                let model_lines = (anims.len() as f32 + 1.0).max(0.0);
+                let y_offset = base_y + model_lines * (glyph_h + anim_cell*2.0) + 10.0;
+                for (i, a) in lib_anims.clone().into_iter().enumerate() {
+                    let text = format!("{}: {}", i + 1, a.name.to_uppercase());
+                    let tx0 = m; let ty0 = y_offset + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0);
+                    let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
+                    if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
+                        // Use merge APIs against a temporary to get new clips (future: enhance ra-assets to return names)
+                        let mut tmp = SkinnedMeshCPU {
+                            vertices: Vec::new(), indices: Vec::new(), joints_nodes: anim.joints_nodes.clone(), inverse_bind: anim.inverse_bind.clone(), parent: anim.parent.clone(), base_t: anim.base_t.clone(), base_r: anim.base_r.clone(), base_s: anim.base_s.clone(), animations: std::collections::HashMap::new(), base_color_texture: None, node_names: Vec::new(), hand_right_node: None, root_node: None,
+                        };
+                        let ext = a.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+                        if ext == "gltf" || ext == "glb" { let _ = merge_gltf_animations(&mut tmp, &a.path); } else { let _ = merge_fbx_animations(&mut tmp, &a.path); }
+                        // Append any animations that appeared in tmp into our UI/model data
+                        for (k, v) in tmp.animations.into_iter() { anim.clips.push(v); anims.push(k); }
+                        *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
+                    }
+                }
             }
         }
         _ => {}
