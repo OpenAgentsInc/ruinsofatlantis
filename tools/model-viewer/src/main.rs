@@ -833,7 +833,7 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                         }
             }
-            // Library entries click handling
+            // Library entries click handling (merge into loaded model)
             if let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, anim, base, .. } = gpu
                 && !lib_anims.is_empty()
@@ -856,6 +856,37 @@ async fn run(cli: Cli) -> Result<()> {
                         *anim = Box::new(AnimData::from_skinned(base, &new_names));
                         *anims = new_names;
                         *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
+                    }
+                }
+            }
+            // Library entries click handling when no model is loaded: load as base model
+            if model_gpu.is_none() && !lib_anims.is_empty() {
+                let base_y = m + s + 8.0;
+                let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
+                let model_lines = 0.0f32; // no animations yet
+                let y_offset = base_y + model_lines * (glyph_h + anim_cell*2.0) + 10.0;
+                for (i, a) in lib_anims.clone().into_iter().enumerate() {
+                    let text = format!("{}: {}", i + 1, a.name.to_uppercase());
+                    let tx0 = m; let ty0 = y_offset + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0);
+                    let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
+                    if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
+                        // Load this library model as the base
+                        if let Ok(gpu) = load_model(&a.path, &device, &queue, &mat_bgl, &skin_bgl) {
+                            match &gpu {
+                                ModelGpu::Skinned { center: c, diag: d, anims, .. } => {
+                                    center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
+                                    let title = format!("Model Viewer — {} | anims: {}", a.path.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
+                                    window.set_title(&title);
+                                }
+                                ModelGpu::Basic { center: c, diag: d, .. } => {
+                                    center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
+                                    let title = format!("Model Viewer — {} | anims: (none)", a.path.display());
+                                    window.set_title(&title);
+                                }
+                            }
+                            model_gpu = Some(gpu);
+                        }
+                        break;
                     }
                 }
             }
