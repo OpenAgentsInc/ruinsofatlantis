@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use ab_glyph::{Font, FontArc, Glyph, PxScale, ScaleFont};
 
 use crate::gfx::pipeline;
-use crate::gfx::types::{TextVertex, BarVertex};
+use crate::gfx::types::{BarVertex, TextVertex};
 use glam::Vec3;
 
 struct GlyphInfo {
@@ -82,14 +82,22 @@ impl DamageFloaters {
         let mut glyphs = std::collections::HashMap::new();
         for ch in "0123456789-".chars() {
             let gid = font.glyph_id(ch);
-            let g0 = Glyph { id: gid, scale, position: ab_glyph::point(0.0, ascent) };
+            let g0 = Glyph {
+                id: gid,
+                scale,
+                position: ab_glyph::point(0.0, ascent),
+            };
             if let Some(og) = font.outline_glyph(g0) {
                 let bounds = og.px_bounds();
                 let gw = bounds.width().ceil() as u32;
                 let gh = bounds.height().ceil() as u32;
                 let gw = gw.max(1);
                 let gh = gh.max(1);
-                if cursor_x + gw + 1 >= atlas_w { cursor_x = 1; cursor_y += row_h + 1; row_h = 0; }
+                if cursor_x + gw + 1 >= atlas_w {
+                    cursor_x = 1;
+                    cursor_y += row_h + 1;
+                    row_h = 0;
+                }
                 if cursor_y + gh + 1 >= atlas_h {
                     let new_h = (atlas_h * 2).max(cursor_y + gh + 2);
                     let mut new_buf = vec![0u8; (atlas_w * new_h) as usize];
@@ -115,8 +123,14 @@ impl DamageFloaters {
                 glyphs.insert(
                     ch,
                     GlyphInfo {
-                        uv_min: [(ox.max(0) as f32) / atlas_w as f32, (oy.max(0) as f32) / atlas_h as f32],
-                        uv_max: [((ox.max(0) as u32 + gw) as f32) / atlas_w as f32, ((oy.max(0) as u32 + gh) as f32) / atlas_h as f32],
+                        uv_min: [
+                            (ox.max(0) as f32) / atlas_w as f32,
+                            (oy.max(0) as f32) / atlas_h as f32,
+                        ],
+                        uv_max: [
+                            ((ox.max(0) as u32 + gw) as f32) / atlas_w as f32,
+                            ((oy.max(0) as u32 + gh) as f32) / atlas_h as f32,
+                        ],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
                         advance: adv,
@@ -131,7 +145,11 @@ impl DamageFloaters {
         // Upload atlas
         let atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("damage-atlas"),
-            size: wgpu::Extent3d { width: atlas_w, height: atlas_h, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: atlas_w,
+                height: atlas_h,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -156,8 +174,14 @@ impl DamageFloaters {
             label: Some("damage-texture-bg"),
             layout: &text_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&atlas_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&atlas_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
             ],
         });
         let shader = crate::gfx::pipeline::create_shader(device);
@@ -193,20 +217,43 @@ impl DamageFloaters {
 
     pub fn upload_atlas(&self, queue: &wgpu::Queue) {
         queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &self.atlas_tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.atlas_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
             &self.atlas_cpu,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(self.atlas_size.0), rows_per_image: Some(self.atlas_size.1) },
-            wgpu::Extent3d { width: self.atlas_size.0, height: self.atlas_size.1, depth_or_array_layers: 1 },
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.atlas_size.0),
+                rows_per_image: Some(self.atlas_size.1),
+            },
+            wgpu::Extent3d {
+                width: self.atlas_size.0,
+                height: self.atlas_size.1,
+                depth_or_array_layers: 1,
+            },
         );
     }
 
     pub fn spawn(&mut self, world: Vec3, value: i32) {
         let jitter = (rand_unit() * 12.0).clamp(-12.0, 12.0);
-        self.items.push(Floater { world, value, age: 0.0, life: 0.9, jitter_x: jitter, rise_px_s: -45.0 });
+        self.items.push(Floater {
+            world,
+            value,
+            age: 0.0,
+            life: 0.9,
+            jitter_x: jitter,
+            rise_px_s: -45.0,
+        });
     }
 
     pub fn update(&mut self, dt: f32) {
-        self.items.retain_mut(|f| { f.age += dt; f.age < f.life });
+        self.items.retain_mut(|f| {
+            f.age += dt;
+            f.age < f.life
+        });
     }
 
     fn build_vertices(
@@ -221,9 +268,13 @@ impl DamageFloaters {
         let mut verts: Vec<TextVertex> = Vec::new();
         for f in &self.items {
             let clip = view_proj * glam::Vec4::new(f.world.x, f.world.y, f.world.z, 1.0);
-            if clip.w <= 0.0 { continue; }
+            if clip.w <= 0.0 {
+                continue;
+            }
             let ndc = clip.truncate() / clip.w;
-            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
+            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 {
+                continue;
+            }
             let mut cx = (ndc.x * 0.5 + 0.5) * w;
             let mut cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
             // Position baseline slightly above bars and rising over time
@@ -234,7 +285,9 @@ impl DamageFloaters {
             let mut prev: Option<ab_glyph::GlyphId> = None;
             for ch in s.chars() {
                 if let Some(gi) = self.glyphs.get(&ch) {
-                    if let Some(pg) = prev { width += scaled.kern(pg, gi.id); }
+                    if let Some(pg) = prev {
+                        width += scaled.kern(pg, gi.id);
+                    }
                     width += gi.advance;
                     prev = Some(gi.id);
                 }
@@ -248,8 +301,12 @@ impl DamageFloaters {
             let mut pen_x = 0.0f32;
             prev = None;
             for ch in s.chars() {
-                let Some(gi) = self.glyphs.get(&ch) else { continue; };
-                if let Some(pg) = prev { pen_x += scaled.kern(pg, gi.id); }
+                let Some(gi) = self.glyphs.get(&ch) else {
+                    continue;
+                };
+                if let Some(pg) = prev {
+                    pen_x += scaled.kern(pg, gi.id);
+                }
                 let x = cx + pen_x + gi.bounds_min[0];
                 let y = cy - self.ascent + gi.bounds_min[1];
                 let w_px = gi.size[0];
@@ -262,12 +319,36 @@ impl DamageFloaters {
                 let uv1 = [gi.uv_max[0], gi.uv_min[1]];
                 let uv2 = gi.uv_max;
                 let uv3 = [gi.uv_min[0], gi.uv_max[1]];
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
-                verts.push(TextVertex { pos_ndc: p1, uv: uv1, color });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
-                verts.push(TextVertex { pos_ndc: p3, uv: uv3, color });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p1,
+                    uv: uv1,
+                    color,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p3,
+                    uv: uv3,
+                    color,
+                });
                 pen_x += gi.advance;
                 prev = Some(gi.id);
             }
@@ -285,7 +366,9 @@ impl DamageFloaters {
     ) {
         let verts = self.build_vertices(surface_w, surface_h, view_proj);
         self.vcount = verts.len() as u32;
-        if self.vcount == 0 { return; }
+        if self.vcount == 0 {
+            return;
+        }
         let bytes: &[u8] = bytemuck::cast_slice(&verts);
         if bytes.len() as u64 > self.vcap_bytes {
             let new_cap = (bytes.len() as u64).next_power_of_two();
@@ -301,14 +384,19 @@ impl DamageFloaters {
     }
 
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
-        if self.vcount == 0 { return; }
+        if self.vcount == 0 {
+            return;
+        }
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("damage-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -334,11 +422,28 @@ mod floater_tests {
     #[test]
     fn prune_expired() {
         let mut items = vec![
-            Floater { world: glam::Vec3::ZERO, value: 10, age: 0.8, life: 0.9, jitter_x: 0.0, rise_px_s: -45.0 },
-            Floater { world: glam::Vec3::ZERO, value: 5, age: 0.1, life: 0.9, jitter_x: 0.0, rise_px_s: -45.0 },
+            Floater {
+                world: glam::Vec3::ZERO,
+                value: 10,
+                age: 0.8,
+                life: 0.9,
+                jitter_x: 0.0,
+                rise_px_s: -45.0,
+            },
+            Floater {
+                world: glam::Vec3::ZERO,
+                value: 5,
+                age: 0.1,
+                life: 0.9,
+                jitter_x: 0.0,
+                rise_px_s: -45.0,
+            },
         ];
         // Emulate update(dt)
-        items.retain_mut(|f| { f.age += 0.2; f.age < f.life });
+        items.retain_mut(|f| {
+            f.age += 0.2;
+            f.age < f.life
+        });
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].value, 5);
     }
@@ -665,12 +770,36 @@ impl Nameplates {
                 let uv3 = [gi.uv_min[0], gi.uv_max[1]];
 
                 let white = [1.0, 1.0, 1.0, 1.0];
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0, color: white });
-                verts.push(TextVertex { pos_ndc: p1, uv: uv1, color: white });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2, color: white });
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0, color: white });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2, color: white });
-                verts.push(TextVertex { pos_ndc: p3, uv: uv3, color: white });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p1,
+                    uv: uv1,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p3,
+                    uv: uv3,
+                    color: white,
+                });
 
                 pen_x += gi.advance;
                 prev = Some(gi.id);
@@ -730,7 +859,9 @@ impl HealthBars {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("bars-shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "shader.wgsl"
+            ))),
         });
         let pipeline = pipeline::create_bar_pipeline(device, &shader, color_format);
         let vcap_bytes = 64 * 1024;
@@ -740,7 +871,12 @@ impl HealthBars {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        Ok(Self { pipeline, vbuf, vcount: 0, vcap_bytes })
+        Ok(Self {
+            pipeline,
+            vbuf,
+            vcount: 0,
+            vcap_bytes,
+        })
     }
 
     fn color_for_frac(frac: f32) -> [f32; 4] {
@@ -781,9 +917,13 @@ impl HealthBars {
         let bar_h = 6.0f32;
         for (world, frac) in entries {
             let clip = view_proj * glam::Vec4::new(world.x, world.y, world.z, 1.0);
-            if clip.w <= 0.0 { continue; }
+            if clip.w <= 0.0 {
+                continue;
+            }
             let ndc = clip.truncate() / clip.w;
-            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
+            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 {
+                continue;
+            }
             let cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
             // Anchor bar higher above the head to avoid overlapping the name text
@@ -802,12 +942,30 @@ impl HealthBars {
                 let q1 = Self::ndc_from_px(fx1, fy0, w, h);
                 let q2 = Self::ndc_from_px(fx1, fy1, w, h);
                 let q3 = Self::ndc_from_px(fx0, fy1, w, h);
-                out.push(BarVertex { pos_ndc: q0, color: col });
-                out.push(BarVertex { pos_ndc: q1, color: col });
-                out.push(BarVertex { pos_ndc: q2, color: col });
-                out.push(BarVertex { pos_ndc: q0, color: col });
-                out.push(BarVertex { pos_ndc: q2, color: col });
-                out.push(BarVertex { pos_ndc: q3, color: col });
+                out.push(BarVertex {
+                    pos_ndc: q0,
+                    color: col,
+                });
+                out.push(BarVertex {
+                    pos_ndc: q1,
+                    color: col,
+                });
+                out.push(BarVertex {
+                    pos_ndc: q2,
+                    color: col,
+                });
+                out.push(BarVertex {
+                    pos_ndc: q0,
+                    color: col,
+                });
+                out.push(BarVertex {
+                    pos_ndc: q2,
+                    color: col,
+                });
+                out.push(BarVertex {
+                    pos_ndc: q3,
+                    color: col,
+                });
             }
         }
         out
@@ -839,14 +997,19 @@ impl HealthBars {
     }
 
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
-        if self.vcount == 0 { return; }
+        if self.vcount == 0 {
+            return;
+        }
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("healthbar-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -902,7 +1065,9 @@ impl Nameplates {
         let mut prev: Option<ab_glyph::GlyphId> = None;
         for ch in label.chars() {
             if let Some(gi) = self.glyphs.get(&ch) {
-                if let Some(pg) = prev { width += scaled.kern(pg, gi.id); }
+                if let Some(pg) = prev {
+                    width += scaled.kern(pg, gi.id);
+                }
                 width += gi.advance;
                 prev = Some(gi.id);
             }
@@ -910,9 +1075,13 @@ impl Nameplates {
         let mut verts: Vec<TextVertex> = Vec::new();
         for world in positions {
             let clip = view_proj * glam::Vec4::new(world.x, world.y, world.z, 1.0);
-            if clip.w <= 0.0 { continue; }
+            if clip.w <= 0.0 {
+                continue;
+            }
             let ndc = clip.truncate() / clip.w;
-            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 { continue; }
+            if ndc.x < -1.2 || ndc.x > 1.2 || ndc.y < -1.2 || ndc.y > 1.2 {
+                continue;
+            }
             let mut cx = (ndc.x * 0.5 + 0.5) * w;
             let cy = (1.0 - (ndc.y * 0.5 + 0.5)) * h;
             // Text just above the bar (same offset as wizards)
@@ -922,8 +1091,12 @@ impl Nameplates {
             let mut pen_x = 0.0f32;
             prev = None;
             for ch in label.chars() {
-                let Some(gi) = self.glyphs.get(&ch) else { continue; };
-                if let Some(pg) = prev { pen_x += scaled.kern(pg, gi.id); }
+                let Some(gi) = self.glyphs.get(&ch) else {
+                    continue;
+                };
+                if let Some(pg) = prev {
+                    pen_x += scaled.kern(pg, gi.id);
+                }
                 let x = cx + pen_x + gi.bounds_min[0];
                 let y = baseline_y - self.ascent + gi.bounds_min[1];
                 let w_px = gi.size[0];
@@ -937,18 +1110,44 @@ impl Nameplates {
                 let uv2 = gi.uv_max;
                 let uv3 = [gi.uv_min[0], gi.uv_max[1]];
                 let white = [1.0, 1.0, 1.0, 1.0];
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0, color: white });
-                verts.push(TextVertex { pos_ndc: p1, uv: uv1, color: white });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2, color: white });
-                verts.push(TextVertex { pos_ndc: p0, uv: uv0, color: white });
-                verts.push(TextVertex { pos_ndc: p2, uv: uv2, color: white });
-                verts.push(TextVertex { pos_ndc: p3, uv: uv3, color: white });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p1,
+                    uv: uv1,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color: white,
+                });
+                verts.push(TextVertex {
+                    pos_ndc: p3,
+                    uv: uv3,
+                    color: white,
+                });
                 pen_x += gi.advance;
                 prev = Some(gi.id);
             }
         }
         self.vcount = verts.len() as u32;
-        if self.vcount == 0 { return; }
+        if self.vcount == 0 {
+            return;
+        }
         let bytes: &[u8] = bytemuck::cast_slice(&verts);
         if bytes.len() as u64 > self.vcap_bytes {
             let new_cap = (bytes.len() as u64).next_power_of_two();

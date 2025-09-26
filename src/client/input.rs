@@ -18,4 +18,3 @@ impl InputState {
         *self = Self::default();
     }
 }
-

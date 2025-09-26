@@ -4,10 +4,10 @@
 //! simple types suitable for GPU upload. It is renderer-agnostic.
 
 pub mod draco;
-pub mod gltf;
-pub mod skinning;
 /// Experimental/feature-gated loaders and helpers.
 pub mod fbx;
+pub mod gltf;
+pub mod skinning;
 pub mod types;
 pub mod util;
 
@@ -15,6 +15,5 @@ pub mod util;
 pub use gltf::load_gltf_mesh;
 pub use skinning::{load_gltf_skinned, merge_gltf_animations};
 pub use types::{
-    AnimClip, CpuMesh, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, Vertex,
-    VertexSkinCPU,
+    AnimClip, CpuMesh, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, Vertex, VertexSkinCPU,
 };
