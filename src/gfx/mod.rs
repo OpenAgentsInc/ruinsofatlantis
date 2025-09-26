@@ -102,7 +102,9 @@ pub struct Renderer {
     npc_index_count: u32,
     npc_instances: wgpu::Buffer,
     npc_count: u32,
+    #[allow(dead_code)]
     npc_instances_cpu: Vec<types::Instance>,
+    #[allow(dead_code)]
     npc_models: Vec<glam::Mat4>,
 
     // Instancing buffers
@@ -110,6 +112,7 @@ pub struct Renderer {
     wizard_count: u32,
     zombie_instances: wgpu::Buffer,
     zombie_count: u32,
+    zombie_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
@@ -134,6 +137,7 @@ pub struct Renderer {
     zombie_models: Vec<glam::Mat4>,
     zombie_cpu: SkinnedMeshCPU,
     zombie_time_offset: Vec<f32>,
+    zombie_ids: Vec<crate::server::NpcId>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -607,6 +611,7 @@ impl Renderer {
         // Build zombie instances from server NPCs
         let mut zombie_instances_cpu: Vec<InstanceSkin> = Vec::new();
         let mut zombie_models: Vec<glam::Mat4> = Vec::new();
+        let mut zombie_ids: Vec<crate::server::NpcId> = Vec::new();
         for (idx, npc) in server.npcs.iter().enumerate() {
             let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),
@@ -614,6 +619,7 @@ impl Renderer {
                 npc.pos,
             );
             zombie_models.push(m);
+            zombie_ids.push(npc.id);
             zombie_instances_cpu.push(InstanceSkin {
                 model: m.to_cols_array_2d(),
                 color: [1.0, 1.0, 1.0],
@@ -679,6 +685,7 @@ impl Renderer {
             wizard_count: scene_build.wizard_count,
             zombie_instances,
             zombie_count: zombie_instances_cpu.len() as u32,
+            zombie_instances_cpu,
             ruins_instances: scene_build.ruins_instances,
             ruins_count: scene_build.ruins_count,
             fx_instances,
@@ -696,6 +703,7 @@ impl Renderer {
             zombie_models,
             zombie_cpu,
             zombie_time_offset: (0..zombie_count as usize).map(|i| i as f32 * 0.35).collect(),
+            zombie_ids,
             wizard_instances_cpu: scene_build.wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
@@ -1261,24 +1269,20 @@ impl Renderer {
                         color: [1.0, 0.5, 0.2],
                     });
                 }
-                // Update NPC visuals: darken color on hit; remove if dead
-                if let Some(idx) = self.server.npcs.iter().position(|n| n.id == h.npc) {
-                    if h.fatal {
-                        // swap remove from instance list and server vectors stay authoritative
-                        if (idx as u32) < self.npc_count {
-                            self.npc_instances_cpu.swap_remove(idx);
-                            self.npc_models.swap_remove(idx);
-                            self.npc_count -= 1;
-                            let bytes: &[u8] = bytemuck::cast_slice(&self.npc_instances_cpu);
-                            self.queue.write_buffer(&self.npc_instances, 0, bytes);
+                // Update zombie visuals: remove model/instance if dead; otherwise keep
+                if h.fatal && let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                        self.zombie_ids.swap_remove(idx);
+                        self.zombie_models.swap_remove(idx);
+                        if (idx as u32) < self.zombie_count {
+                            self.zombie_instances_cpu.swap_remove(idx);
+                            self.zombie_count -= 1;
+                            // Recompute palette_base for contiguity
+                            for (i, inst) in self.zombie_instances_cpu.iter_mut().enumerate() {
+                                inst.palette_base = (i as u32) * self.zombie_joints;
+                            }
+                            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
                         }
-                    } else {
-                        let mut inst = self.npc_instances_cpu[idx];
-                        inst.color = [0.6, 0.15, 0.15];
-                        self.npc_instances_cpu[idx] = inst;
-                        let offset = (idx * std::mem::size_of::<types::Instance>()) as u64;
-                        self.queue.write_buffer(&self.npc_instances, offset, bytemuck::bytes_of(&inst));
-                    }
                 }
             }
             if hits.is_empty() {
