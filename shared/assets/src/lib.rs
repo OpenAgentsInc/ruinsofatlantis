@@ -6,6 +6,8 @@
 pub mod draco;
 pub mod gltf;
 pub mod skinning;
+/// Experimental/feature-gated loaders and helpers.
+pub mod fbx;
 pub mod types;
 pub mod util;
 

@@ -257,6 +257,14 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
     Ok(merged)
 }
 
+/// Merge animation clips from an FBX file into an existing skinned mesh by node-name mapping.
+///
+/// See also: `crate::fbx::merge_fbx_animations`. This entry point is stable and available
+/// in all builds; without the `fbx` feature it returns an error explaining how to enable it.
+pub fn merge_fbx_animations(base: &mut SkinnedMeshCPU, fbx_path: &Path) -> Result<usize> {
+    crate::fbx::merge_fbx_animations(base, fbx_path)
+}
+
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
     use gltf::scene::Transform;
     match n.transform() {
@@ -297,4 +305,3 @@ mod tests {
         assert!(!skinned.animations.is_empty(), "animations should not be empty");
     }
 }
-
