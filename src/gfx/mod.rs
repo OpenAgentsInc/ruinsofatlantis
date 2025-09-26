@@ -386,6 +386,12 @@ impl Renderer {
             .context("load skinned wizard.gltf")?;
         let zombie_cpu = load_gltf_skinned(&asset_path("assets/models/zombie.glb"))
             .context("load skinned zombie.glb")?;
+        {
+            let count = zombie_cpu.animations.len();
+            let mut names: Vec<&str> = zombie_cpu.animations.keys().map(|s| s.as_str()).collect();
+            names.sort_unstable();
+            log::info!("zombie.glb animations: {} -> {:?}", count, names);
+        }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
@@ -981,14 +987,22 @@ impl Renderer {
 }
 
 impl Renderer {
+    fn select_zombie_clip(&self) -> Option<&AnimClip> {
+        // Prefer common idle names, then walk/run, otherwise any
+        let keys = [
+            "Idle", "idle", "IDLE",
+            "Idle01", "StandingIdle", "Armature|mixamo.com|Layer0",
+            "Walk", "walk", "Run", "run",
+        ];
+        for k in keys {
+            if let Some(c) = self.zombie_cpu.animations.get(k) { return Some(c); }
+        }
+        self.zombie_cpu.animations.values().next()
+    }
     fn update_zombie_palettes(&mut self, time_global: f32) {
         if self.zombie_count == 0 { return; }
         // Select an appropriate clip: prefer "Idle", then any available.
-        let clip = if let Some(c) = self.zombie_cpu.animations.get("Idle") {
-            c
-        } else if let Some(first) = self.zombie_cpu.animations.values().next() {
-            first
-        } else {
+        let Some(clip) = self.select_zombie_clip() else {
             // No animations; keep bind pose
             let joints = self.zombie_joints as usize;
             let total = self.zombie_count as usize * joints;
