@@ -484,15 +484,26 @@ impl Renderer {
         let _wizard_tex_view = material_res.texture_view;
         let _wizard_sampler = material_res.sampler;
 
-        // NPCs: simple cubes as targets on rings
+        // NPCs: simple cubes as targets on multiple rings
         let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
         let mut server = crate::server::ServerState::new();
-        // Far ring targets
-        let npc_ring_radius = plane_extent * 0.7;
-        server.ring_spawn(12, npc_ring_radius, 30);
-        // Add a closer ring of NPCs just beyond the outer wizard ring
-        let npc_close_radius = 15.0;
-        server.ring_spawn(10, npc_close_radius, 20);
+        // Configure ring distances and counts (keep existing ones, add more)
+        let near_count = 10usize; // existing close ring
+        let near_radius = 15.0f32;
+        let mid1_count = 16usize;
+        let mid1_radius = 30.0f32;
+        let mid2_count = 20usize;
+        let mid2_radius = 45.0f32;
+        let mid3_count = 24usize;
+        let mid3_radius = 60.0f32;
+        let far_count = 12usize; // existing far ring
+        let far_radius = plane_extent * 0.7;
+        // Spawn rings (hp scales mildly with distance)
+        server.ring_spawn(near_count, near_radius, 20);
+        server.ring_spawn(mid1_count, mid1_radius, 25);
+        server.ring_spawn(mid2_count, mid2_radius, 30);
+        server.ring_spawn(mid3_count, mid3_radius, 35);
+        server.ring_spawn(far_count, far_radius, 30);
         let mut npc_instances_cpu: Vec<types::Instance> = Vec::new();
         let mut npc_models: Vec<glam::Mat4> = Vec::new();
         for npc in &server.npcs {
@@ -515,10 +526,13 @@ impl Renderer {
         });
 
         log::info!(
-            "spawned {} NPCs ({} far, {} near)",
+            "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
             server.npcs.len(),
-            12,
-            10
+            near_count,
+            mid1_count,
+            mid2_count,
+            mid3_count,
+            far_count
         );
         Ok(Self {
             surface,

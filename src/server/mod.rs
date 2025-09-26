@@ -57,7 +57,9 @@ impl ServerState {
             let a = (i as f32) / (count as f32) * std::f32::consts::TAU;
             // Raise to half-height so cubes sit on ground visually
             let pos = Vec3::new(radius * a.cos(), 0.6, radius * a.sin());
-            self.spawn_npc(pos, 0.6, hp);
+            // Cube scale ~1.2 => half extent ~0.6, bounding circle ~0.6*sqrt(2) ~ 0.85.
+            // Add projectile radius (~0.1) => ~0.95 to reduce miss-through.
+            self.spawn_npc(pos, 0.95, hp);
         }
     }
 
@@ -128,7 +130,7 @@ mod tests {
     #[test]
     fn server_applies_damage_and_kills() {
         let mut s = ServerState::new();
-        let id = s.spawn_npc(Vec3::ZERO, 0.5, 10);
+        let id = s.spawn_npc(Vec3::ZERO, 0.95, 10);
         let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(0.25, 0.0, 0.0), vel: Vec3::new(1.0, 0.0, 0.0), t_die: 1.0 }];
         let ev = s.collide_and_damage(&mut projs, 0.1, 10);
         assert!(projs.is_empty());
@@ -137,5 +139,18 @@ mod tests {
         assert!(ev[0].fatal);
         assert!(!s.npcs[0].alive);
         assert_eq!(s.npcs[0].hp, 0);
+    }
+
+    #[test]
+    fn diagonal_graze_hits_due_to_radius_padding() {
+        let mut s = ServerState::new();
+        // Target at origin with larger radius ~0.95
+        s.spawn_npc(Vec3::ZERO, 0.95, 10);
+        // Projectile path just outside cube half-extent but within padded circle
+        // Simulate a step where p0 -> p1 crosses near the circle's edge
+        // Here p1 is current position (after integration in the runtime), dt=0.5s
+        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(-1.0, 0.0, 0.8), vel: Vec3::new(-5.0, 0.0, 0.0), t_die: 1.0 }];
+        let ev = s.collide_and_damage(&mut projs, 0.5, 5);
+        assert_eq!(ev.len(), 1);
     }
 }
