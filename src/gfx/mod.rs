@@ -1215,7 +1215,8 @@ impl Renderer {
 
     fn spawn_firebolt(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32, owner: Option<usize>) {
         let mut speed = 40.0;
-        let life = 1.2;
+        // Extend projectile lifetime by 50% so paths travel farther.
+        let life = 1.2 * 1.5;
         if let Some(spec) = &self.fire_bolt
             && let Some(p) = &spec.projectile
         {
