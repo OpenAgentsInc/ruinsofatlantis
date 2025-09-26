@@ -1,0 +1,7 @@
+{
+  "id": "zombie",
+  "ac": 8,
+  "hp": 22,
+  "save_mods": { "wis": 0, "int": -2, "con": 3, "dex": -2 }
+}
+

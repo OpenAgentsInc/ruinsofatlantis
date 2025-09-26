@@ -24,6 +24,10 @@
 - Prefer doc comments (`///`) on public types/functions so `cargo doc` is useful.
 - Do not add meta comments like "(unused helper removed)" or "(logs removed)". If code is unused, delete it; keep comments focused on behavior and intent, not change notes.
 
+IMPORTANT: Keep `src/README.md` current
+- Whenever you add, move, or significantly change files under `src/`, immediately update `src/README.md` to reflect the real file/folder hierarchy and module responsibilities.
+- Document new pipelines, shaders, UI overlays, systems, and data flows so future contributors can navigate quickly.
+
 ## Game Design Document (GDD)
 - Canonical design source: `GDD.md` at repo root.
 - Keep these sections current: Philosophy, Game Mechanics, SRD Usage and Attribution, SRD Scope & Implementation, and any Design Differences from SRD.
@@ -38,6 +42,9 @@
 - Tests: `cargo test`
 - Format/lint: `cargo fmt` and `cargo clippy -- -D warnings`
 - Optional dev loop: `cargo install cargo-watch` then `cargo watch -x run`
+
+NOTE FOR AGENTS
+- Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`). The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
 
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
@@ -75,6 +82,11 @@
 - Unit tests co‑located via `#[cfg(test)]` modules.
 - Integration tests in `tests/` with descriptive names (e.g., `combat_turns_test.rs`).
 - Keep tests deterministic; gate network/time‑sensitive cases behind feature flags.
+
+ALWAYS add tests with new functionality
+- Any new behavior (parsing, math/transform helpers, animation sampling, collision, UI vertex generation, etc.) must ship with unit tests.
+- Prefer small, focused tests co‑located with the code. For renderer‑adjacent CPU work (math, CPU‑built buffers), add CPU‑only tests that don’t require a GPU device.
+- PRs that introduce features without tests should be considered incomplete.
 
 ## Commit & Pull Request Guidelines
 - Commit style: `<area>: <imperative summary>` (e.g., `server: add login flow`).

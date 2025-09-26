@@ -450,6 +450,44 @@ pub fn create_text_pipeline(
     })
 }
 
+// Health bar pipeline (screen-space solid-color quads)
+pub fn create_bar_pipeline(
+    device: &wgpu::Device,
+    shader: &ShaderModule,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("bar-pipeline-layout"),
+        bind_group_layouts: &[],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("bar-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module: shader,
+            entry_point: Some("vs_bar"),
+            buffers: &[crate::gfx::types::BarVertex::LAYOUT],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: shader,
+            entry_point: Some("fs_bar"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 #[allow(dead_code)]
 pub fn create_wizard_simple_pipeline(
     device: &wgpu::Device,

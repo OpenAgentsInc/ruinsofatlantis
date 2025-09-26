@@ -8,6 +8,7 @@ pub struct Projectile {
     pub pos: glam::Vec3,
     pub vel: glam::Vec3,
     pub t_die: f32,
+    pub owner_wizard: Option<usize>,
 }
 
 #[allow(dead_code)]
