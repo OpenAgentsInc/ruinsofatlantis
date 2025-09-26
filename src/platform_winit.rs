@@ -78,8 +78,35 @@ impl ApplicationHandler for App {
 }
 
 fn is_headless() -> bool {
-    if std::env::var("RA_HEADLESS").map(|v| v == "1").unwrap_or(false) { return true; }
-    std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none()
+    // Explicit override for CI or scripted runs
+    if std::env::var("RA_HEADLESS")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    // Common CI indicator
+    if std::env::var("CI")
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    // On Linux/BSD, infer headless when no X/Wayland is available. On macOS/Windows,
+    // do NOT infer headless from env vars (DISPLAY is typically unset on macOS).
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "netbsd",
+        target_os = "openbsd",
+    ))]
+    {
+        if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+            return true;
+        }
+    }
+    false
 }
 
 pub fn run() -> anyhow::Result<()> {

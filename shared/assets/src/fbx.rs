@@ -5,7 +5,7 @@
 //! Cargo feature (`fbx`) using `fbxcel`/`fbxcel-dom`. Until then, this stub
 //! returns an informative error so callers can handle the absence gracefully.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::Path;
 
 use crate::types::SkinnedMeshCPU;

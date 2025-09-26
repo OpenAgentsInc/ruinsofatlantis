@@ -17,7 +17,10 @@ pub struct PlayerController {
 
 impl PlayerController {
     pub fn new(initial_pos: Vec3) -> Self {
-        Self { pos: initial_pos, yaw: 0.0 }
+        Self {
+            pos: initial_pos,
+            yaw: 0.0,
+        }
     }
 
     pub fn update(&mut self, input: &InputState, dt: f32, _cam_forward: Vec3) {
@@ -63,8 +66,12 @@ fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
 
 fn wrap_angle(a: f32) -> f32 {
     let mut x = a;
-    while x > std::f32::consts::PI { x -= std::f32::consts::TAU; }
-    while x < -std::f32::consts::PI { x += std::f32::consts::TAU; }
+    while x > std::f32::consts::PI {
+        x -= std::f32::consts::TAU;
+    }
+    while x < -std::f32::consts::PI {
+        x += std::f32::consts::TAU;
+    }
     x
 }
 
@@ -83,7 +90,10 @@ mod tests {
     #[test]
     fn update_rotates_smoothly() {
         let mut pc = PlayerController::new(Vec3::ZERO);
-        let input = InputState { right: true, ..Default::default() };
+        let input = InputState {
+            right: true,
+            ..Default::default()
+        };
         // camera forward along +Z
         let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
         pc.update(&input, 0.016, cam_fwd);
@@ -95,7 +105,10 @@ mod tests {
     fn backward_moves_straight_back_no_yaw_change() {
         let mut pc = PlayerController::new(Vec3::ZERO);
         pc.yaw = 0.7; // arbitrary facing
-        let input = InputState { backward: true, ..Default::default() };
+        let input = InputState {
+            backward: true,
+            ..Default::default()
+        };
         let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
         let yaw0 = pc.yaw;
         pc.update(&input, 0.2, cam_fwd);
@@ -111,7 +124,11 @@ mod tests {
     fn backward_with_turn_changes_yaw() {
         let mut pc = PlayerController::new(Vec3::ZERO);
         pc.yaw = 0.7;
-        let input = InputState { backward: true, left: true, ..Default::default() };
+        let input = InputState {
+            backward: true,
+            left: true,
+            ..Default::default()
+        };
         let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
         let yaw0 = pc.yaw;
         pc.update(&input, 0.2, cam_fwd);

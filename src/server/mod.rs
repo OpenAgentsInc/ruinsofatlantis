@@ -23,7 +23,15 @@ pub struct Npc {
 
 impl Npc {
     pub fn new(id: NpcId, pos: Vec3, radius: f32, hp: i32) -> Self {
-        Self { id, pos, radius, hp, max_hp: hp, alive: true, attack_cooldown: 0.0 }
+        Self {
+            id,
+            pos,
+            radius,
+            hp,
+            max_hp: hp,
+            alive: true,
+            attack_cooldown: 0.0,
+        }
     }
 }
 
@@ -44,7 +52,12 @@ pub struct ServerState {
 }
 
 impl ServerState {
-    pub fn new() -> Self { Self { next_id: 1, npcs: Vec::new() } }
+    pub fn new() -> Self {
+        Self {
+            next_id: 1,
+            npcs: Vec::new(),
+        }
+    }
 
     pub fn spawn_npc(&mut self, pos: Vec3, radius: f32, hp: i32) -> NpcId {
         let id = NpcId(self.next_id);
@@ -56,7 +69,9 @@ impl ServerState {
     /// Simple melee step: move NPCs toward nearest wizard and attack when in range.
     /// Returns list of (wizard_idx, damage) applied this step.
     pub fn step_npc_ai(&mut self, dt: f32, wizards: &[Vec3]) -> Vec<(usize, i32)> {
-        if wizards.is_empty() { return Vec::new(); }
+        if wizards.is_empty() {
+            return Vec::new();
+        }
         let speed = 2.0f32; // m/s
         // Melee is considered in contact when circles touch plus a small pad.
         // We use the same wizard radius as collision resolution for consistency.
@@ -68,7 +83,9 @@ impl ServerState {
         // Keep each NPC's chosen target index for hit evaluation after resolving collisions.
         let mut chosen: Vec<Option<usize>> = vec![None; self.npcs.len()];
         for (idx, n) in self.npcs.iter_mut().enumerate() {
-            if !n.alive { continue; }
+            if !n.alive {
+                continue;
+            }
             // reduce cooldown
             n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
             // nearest wizard in XZ
@@ -77,8 +94,11 @@ impl ServerState {
             for (i, w) in wizards.iter().enumerate() {
                 let dx = w.x - n.pos.x;
                 let dz = w.z - n.pos.z;
-                let d2 = dx*dx + dz*dz;
-                if d2 < best_d2 { best_d2 = d2; best_i = i; }
+                let d2 = dx * dx + dz * dz;
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                    best_i = i;
+                }
             }
             chosen[idx] = Some(best_i);
             let target = wizards[best_i];
@@ -93,7 +113,9 @@ impl ServerState {
         self.resolve_collisions(wizards);
         // Evaluate attacks post-resolution
         for (idx, n) in self.npcs.iter_mut().enumerate() {
-            if !n.alive { continue; }
+            if !n.alive {
+                continue;
+            }
             if let Some(best_i) = chosen[idx] {
                 let target = wizards[best_i];
                 let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
@@ -113,17 +135,26 @@ impl ServerState {
         // NPC vs NPC separation
         let nlen = self.npcs.len();
         for i in 0..nlen {
-            if !self.npcs[i].alive { continue; }
-            for j in (i+1)..nlen {
-                if !self.npcs[j].alive { continue; }
+            if !self.npcs[i].alive {
+                continue;
+            }
+            for j in (i + 1)..nlen {
+                if !self.npcs[j].alive {
+                    continue;
+                }
                 let mut dx = self.npcs[j].pos.x - self.npcs[i].pos.x;
                 let mut dz = self.npcs[j].pos.z - self.npcs[i].pos.z;
-                let d2 = dx*dx + dz*dz;
+                let d2 = dx * dx + dz * dz;
                 let min_d = self.npcs[i].radius + self.npcs[j].radius;
                 if d2 < min_d * min_d {
                     let mut d = d2.sqrt();
-                    if d < 1e-4 { dx = 1.0; dz = 0.0; d = 1e-4; }
-                    dx /= d; dz /= d;
+                    if d < 1e-4 {
+                        dx = 1.0;
+                        dz = 0.0;
+                        d = 1e-4;
+                    }
+                    dx /= d;
+                    dz /= d;
                     let overlap = min_d - d;
                     let push = overlap * 0.5;
                     // push apart equally in XZ
@@ -137,16 +168,23 @@ impl ServerState {
         // NPC vs Wizard obstacles (simple circle-circle with wizard_radius)
         let wiz_r = 0.7f32;
         for n in &mut self.npcs {
-            if !n.alive { continue; }
+            if !n.alive {
+                continue;
+            }
             for w in wizards {
                 let mut dx = n.pos.x - w.x;
                 let mut dz = n.pos.z - w.z;
-                let d2 = dx*dx + dz*dz;
+                let d2 = dx * dx + dz * dz;
                 let min_d = n.radius + wiz_r;
                 if d2 < min_d * min_d {
                     let mut d = d2.sqrt();
-                    if d < 1e-4 { dx = 1.0; dz = 0.0; d = 1e-4; }
-                    dx /= d; dz /= d;
+                    if d < 1e-4 {
+                        dx = 1.0;
+                        dz = 0.0;
+                        d = 1e-4;
+                    }
+                    dx /= d;
+                    dz /= d;
                     let overlap = min_d - d;
                     n.pos.x += dx * overlap;
                     n.pos.z += dz * overlap;
@@ -181,14 +219,25 @@ impl ServerState {
             let p0 = pr.pos - pr.vel * dt; // previous position
             let p1 = pr.pos;
             for npc in &mut self.npcs {
-                if !npc.alive { continue; }
+                if !npc.alive {
+                    continue;
+                }
                 if segment_hits_sphere(p0, p1, npc.pos, npc.radius) {
                     let hp_before = npc.hp;
                     let hp_after = (npc.hp - damage).max(0);
                     npc.hp = hp_after;
-                    if hp_after == 0 { npc.alive = false; }
+                    if hp_after == 0 {
+                        npc.alive = false;
+                    }
                     let fatal = !npc.alive;
-                    events.push(HitEvent { npc: npc.id, pos: p1, damage, hp_before, hp_after, fatal });
+                    events.push(HitEvent {
+                        npc: npc.id,
+                        pos: p1,
+                        damage,
+                        hp_before,
+                        hp_after,
+                        fatal,
+                    });
                     // remove projectile
                     projectiles.swap_remove(i);
                     continue 'outer;
@@ -202,14 +251,21 @@ impl ServerState {
 
 fn segment_hits_sphere(p0: Vec3, p1: Vec3, center: Vec3, r: f32) -> bool {
     // Treat collision in XZ plane (ignore Y) like a cylinder to make gameplay forgiving.
-    segment_hits_circle_xz(glam::vec2(p0.x, p0.z), glam::vec2(p1.x, p1.z), glam::vec2(center.x, center.z), r)
+    segment_hits_circle_xz(
+        glam::vec2(p0.x, p0.z),
+        glam::vec2(p1.x, p1.z),
+        glam::vec2(center.x, center.z),
+        r,
+    )
 }
 
 fn segment_hits_circle_xz(p0: glam::Vec2, p1: glam::Vec2, c: glam::Vec2, r: f32) -> bool {
     let d = p1 - p0;
     let m = p0 - c;
     let a = d.dot(d);
-    if a <= 1e-6 { return m.length() <= r; }
+    if a <= 1e-6 {
+        return m.length() <= r;
+    }
     let t = -(m.dot(d)) / a;
     let t = t.clamp(0.0, 1.0);
     let closest = p0 + d * t;
@@ -233,7 +289,12 @@ mod tests {
     fn server_applies_damage_and_kills() {
         let mut s = ServerState::new();
         let id = s.spawn_npc(Vec3::ZERO, 0.95, 10);
-        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(0.25, 0.0, 0.0), vel: Vec3::new(1.0, 0.0, 0.0), t_die: 1.0, owner_wizard: None }];
+        let mut projs = vec![crate::gfx::fx::Projectile {
+            pos: Vec3::new(0.25, 0.0, 0.0),
+            vel: Vec3::new(1.0, 0.0, 0.0),
+            t_die: 1.0,
+            owner_wizard: None,
+        }];
         let ev = s.collide_and_damage(&mut projs, 0.1, 10);
         assert!(projs.is_empty());
         assert_eq!(ev.len(), 1);
@@ -251,7 +312,12 @@ mod tests {
         // Projectile path just outside cube half-extent but within padded circle
         // Simulate a step where p0 -> p1 crosses near the circle's edge
         // Here p1 is current position (after integration in the runtime), dt=0.5s
-        let mut projs = vec![crate::gfx::fx::Projectile{ pos: Vec3::new(-1.0, 0.0, 0.8), vel: Vec3::new(-5.0, 0.0, 0.0), t_die: 1.0, owner_wizard: None }];
+        let mut projs = vec![crate::gfx::fx::Projectile {
+            pos: Vec3::new(-1.0, 0.0, 0.8),
+            vel: Vec3::new(-5.0, 0.0, 0.0),
+            t_die: 1.0,
+            owner_wizard: None,
+        }];
         let ev = s.collide_and_damage(&mut projs, 0.5, 5);
         assert_eq!(ev.len(), 1);
     }
@@ -267,7 +333,7 @@ mod tests {
         s.step_npc_ai(0.1, &wiz);
         let dx = s.npcs[1].pos.x - s.npcs[0].pos.x;
         let dz = s.npcs[1].pos.z - s.npcs[0].pos.z;
-        let d = (dx*dx + dz*dz).sqrt();
+        let d = (dx * dx + dz * dz).sqrt();
         assert!(d >= s.npcs[0].radius + s.npcs[1].radius - 1e-3);
     }
 }

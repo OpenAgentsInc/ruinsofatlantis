@@ -39,7 +39,10 @@ pub struct FollowState {
 
 impl Default for FollowState {
     fn default() -> Self {
-        Self { current_pos: glam::Vec3::ZERO, current_look: glam::Vec3::ZERO }
+        Self {
+            current_pos: glam::Vec3::ZERO,
+            current_look: glam::Vec3::ZERO,
+        }
     }
 }
 
@@ -110,7 +113,8 @@ mod tests {
 
     #[test]
     fn orbit_offset_yaw_rotates_horizontally() {
-        let (off, _) = compute_local_orbit_offsets(10.0, std::f32::consts::FRAC_PI_2, 0.0, 0.0, 0.0);
+        let (off, _) =
+            compute_local_orbit_offsets(10.0, std::f32::consts::FRAC_PI_2, 0.0, 0.0, 0.0);
         // Positive yaw rotates the camera to the character's left (negative X)
         assert!((off.x + 10.0).abs() < 1e-3);
         assert!(off.z.abs() < 1e-3);
@@ -118,7 +122,8 @@ mod tests {
 
     #[test]
     fn orbit_offset_pitch_adds_height() {
-        let (off, _) = compute_local_orbit_offsets(10.0, 0.0, std::f32::consts::FRAC_PI_4, 0.0, 0.0);
+        let (off, _) =
+            compute_local_orbit_offsets(10.0, 0.0, std::f32::consts::FRAC_PI_4, 0.0, 0.0);
         assert!(off.y > 0.0);
     }
 
@@ -129,11 +134,28 @@ mod tests {
         let aspect = 1.0;
         // Initialize at an initial ideal pose
         let (off0, look0) = compute_local_orbit_offsets(8.0, 0.0, 0.0, 2.0, 1.6);
-        let _ = third_person_follow(&mut st, target, glam::Quat::IDENTITY, off0, look0, aspect, 0.016);
+        let _ = third_person_follow(
+            &mut st,
+            target,
+            glam::Quat::IDENTITY,
+            off0,
+            look0,
+            aspect,
+            0.016,
+        );
         let prev = st.current_pos;
         // Now jump the ideal direction by 90 deg; small dt should not snap
-        let (off1, look1) = compute_local_orbit_offsets(8.0, std::f32::consts::FRAC_PI_2, 0.0, 2.0, 1.6);
-        let _ = third_person_follow(&mut st, target, glam::Quat::IDENTITY, off1, look1, aspect, 0.016);
+        let (off1, look1) =
+            compute_local_orbit_offsets(8.0, std::f32::consts::FRAC_PI_2, 0.0, 2.0, 1.6);
+        let _ = third_person_follow(
+            &mut st,
+            target,
+            glam::Quat::IDENTITY,
+            off1,
+            look1,
+            aspect,
+            0.016,
+        );
         let newp = st.current_pos;
         // It should move, but not equal the new ideal immediately
         assert_ne!(prev, newp);

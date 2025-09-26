@@ -9,7 +9,7 @@
 //! - Add zone JSON parsing in `data/weather/` and blend overrides in `update()`.
 //! - Add shadow map setup in a dedicated `shadows.rs` (Phase 2).
 
-use glam::{vec3, Vec3};
+use glam::{Vec3, vec3};
 use hw_skymodel::rgb::{Channel, SkyParams, SkyState};
 
 /// Packed sky uniform for `sky.wgsl`.
@@ -27,19 +27,24 @@ pub struct SkyUniform {
 /// Simple weather parameters for clear sky.
 #[derive(Clone, Copy, Debug)]
 pub struct Weather {
-    pub turbidity: f32,       // 1..10
+    pub turbidity: f32, // 1..10
     pub ground_albedo: [f32; 3],
 }
 
 impl Default for Weather {
-    fn default() -> Self { Self { turbidity: 3.0, ground_albedo: [0.1, 0.1, 0.1] } }
+    fn default() -> Self {
+        Self {
+            turbidity: 3.0,
+            ground_albedo: [0.1, 0.1, 0.1],
+        }
+    }
 }
 
 /// Runtime sky state used by the renderer.
 #[derive(Clone, Debug)]
 pub struct SkyStateCPU {
-    pub day_frac: f32,    // [0..1]
-    pub time_scale: f32,  // x realtime
+    pub day_frac: f32,   // [0..1]
+    pub time_scale: f32, // x realtime
     pub paused: bool,
     pub weather: Weather,
     // Derived per update
@@ -57,7 +62,11 @@ impl SkyStateCPU {
             weather: Weather::default(),
             sun_dir: vec3(0.0, 1.0, 0.0),
             sh9_rgb: [[0.0; 3]; 9],
-            sky_uniform: SkyUniform { params_packed: [[0.0; 4]; 9], radiances: [1.0, 1.0, 1.0, 0.0], sun_dir_time: [0.0; 4] },
+            sky_uniform: SkyUniform {
+                params_packed: [[0.0; 4]; 9],
+                radiances: [1.0, 1.0, 1.0, 0.0],
+                sun_dir_time: [0.0; 4],
+            },
         };
         s.recompute();
         s
@@ -78,16 +87,30 @@ impl SkyStateCPU {
         self.recompute();
     }
 
-    pub fn toggle_pause(&mut self) { self.paused = !self.paused; }
+    pub fn toggle_pause(&mut self) {
+        self.paused = !self.paused;
+    }
 
-    pub fn speed_mul(&mut self, k: f32) { self.time_scale = (self.time_scale * k).clamp(0.01, 1000.0); }
+    pub fn speed_mul(&mut self, k: f32) {
+        self.time_scale = (self.time_scale * k).clamp(0.01, 1000.0);
+    }
 
     /// Recompute sun direction, HW sky params, and SH ambient from current state.
     pub fn recompute(&mut self) {
         self.sun_dir = sun_dir_from_day_frac(self.day_frac);
-        let elev = self.sun_dir.y.max(0.0).asin().clamp(0.0, std::f32::consts::FRAC_PI_2);
+        let elev = self
+            .sun_dir
+            .y
+            .max(0.0)
+            .asin()
+            .clamp(0.0, std::f32::consts::FRAC_PI_2);
         // HW state for current weather and elevation
-        let sky = SkyState::new(&SkyParams { elevation: elev, turbidity: self.weather.turbidity, albedo: self.weather.ground_albedo }).expect("valid HW params");
+        let sky = SkyState::new(&SkyParams {
+            elevation: elev,
+            turbidity: self.weather.turbidity,
+            albedo: self.weather.ground_albedo,
+        })
+        .expect("valid HW params");
         let (params, radiances) = sky.raw();
         self.sky_uniform = pack_hw_uniform(params, radiances, self.sun_dir, self.day_frac);
         // Project to SH (irradiance) for ambient
@@ -108,7 +131,12 @@ pub fn sun_dir_from_day_frac(day_frac: f32) -> Vec3 {
 }
 
 /// Pack 27 params (9 per RGB) + 3 radiances into 9 vec4 + 1 vec4 layout.
-fn pack_hw_uniform(params: [f32; 27], radiances: [f32; 3], sun_dir: Vec3, day_frac: f32) -> SkyUniform {
+fn pack_hw_uniform(
+    params: [f32; 27],
+    radiances: [f32; 3],
+    sun_dir: Vec3,
+    day_frac: f32,
+) -> SkyUniform {
     let mut out = [[0.0f32; 4]; 9];
     for i in 0..9 {
         // R channel
@@ -129,8 +157,17 @@ fn pack_hw_uniform(params: [f32; 27], radiances: [f32; 3], sun_dir: Vec3, day_fr
 /// Returns 9 coefficients, each is [R,G,B].
 pub fn project_irradiance_sh9(sun_dir: Vec3, weather: &Weather) -> [[f32; 3]; 9] {
     // Build HW state once for this frame (elevation from sun_dir)
-    let elev = sun_dir.y.max(0.0).asin().clamp(0.0, std::f32::consts::FRAC_PI_2);
-    let sky = SkyState::new(&SkyParams { elevation: elev, turbidity: weather.turbidity, albedo: weather.ground_albedo }).expect("valid HW params");
+    let elev = sun_dir
+        .y
+        .max(0.0)
+        .asin()
+        .clamp(0.0, std::f32::consts::FRAC_PI_2);
+    let sky = SkyState::new(&SkyParams {
+        elevation: elev,
+        turbidity: weather.turbidity,
+        albedo: weather.ground_albedo,
+    })
+    .expect("valid HW params");
     // Integration over the upper hemisphere (y>=0)
     let n_theta = 16usize;
     let n_phi = 32usize;
@@ -155,42 +192,56 @@ pub fn project_irradiance_sh9(sun_dir: Vec3, weather: &Weather) -> [[f32; 3]; 9]
             let y = sh_basis(dir);
             let w = sin_t * dtheta * dphi; // solid angle element
             total_weight += w;
-            for i in 0..9 { c_r[i] += r * y[i] * w; c_g[i] += g * y[i] * w; c_b[i] += b * y[i] * w; }
+            for i in 0..9 {
+                c_r[i] += r * y[i] * w;
+                c_g[i] += g * y[i] * w;
+                c_b[i] += b * y[i] * w;
+            }
         }
     }
     if total_weight > 0.0 {
-        for i in 0..9 { c_r[i] /= 4.0 * std::f32::consts::PI; c_g[i] /= 4.0 * std::f32::consts::PI; c_b[i] /= 4.0 * std::f32::consts::PI; }
+        for i in 0..9 {
+            c_r[i] /= 4.0 * std::f32::consts::PI;
+            c_g[i] /= 4.0 * std::f32::consts::PI;
+            c_b[i] /= 4.0 * std::f32::consts::PI;
+        }
     }
     // Convolve with Lambert kernel: factors per band l=0,1,2.
-    let k_l0 = std::f32::consts::PI;           // π
+    let k_l0 = std::f32::consts::PI; // π
     let k_l1 = 2.0 * std::f32::consts::PI / 3.0; // 2π/3
-    let k_l2 = std::f32::consts::PI / 4.0;     // π/4
+    let k_l2 = std::f32::consts::PI / 4.0; // π/4
     for i in 0..9 {
         let f = match i {
-            0 => k_l0,                 // l=0
-            1..=3 => k_l1,             // l=1 (3 coeffs)
-            _ => k_l2,                 // l=2 (5 coeffs)
+            0 => k_l0,     // l=0
+            1..=3 => k_l1, // l=1 (3 coeffs)
+            _ => k_l2,     // l=2 (5 coeffs)
         };
-        c_r[i] *= f; c_g[i] *= f; c_b[i] *= f;
+        c_r[i] *= f;
+        c_g[i] *= f;
+        c_b[i] *= f;
     }
     let mut out = [[0.0f32; 3]; 9];
-    for i in 0..9 { out[i] = [c_r[i], c_g[i], c_b[i]]; }
+    for i in 0..9 {
+        out[i] = [c_r[i], c_g[i], c_b[i]];
+    }
     out
 }
 
 /// Real SH basis (l<=2) evaluated for direction d (x,y,z).
 fn sh_basis(d: Vec3) -> [f32; 9] {
-    let x = d.x; let y = d.y; let z = d.z;
+    let x = d.x;
+    let y = d.y;
+    let z = d.z;
     [
-        0.282095,                              // L00
-        0.488603 * y,                          // L1-1
-        0.488603 * z,                          // L10
-        0.488603 * x,                          // L11
-        1.092548 * x * y,                      // L2-2
-        1.092548 * y * z,                      // L2-1
-        0.315392 * (3.0 * z * z - 1.0),        // L20
-        1.092548 * x * z,                      // L21
-        0.546274 * (x * x - y * y),            // L22
+        0.282095,                       // L00
+        0.488603 * y,                   // L1-1
+        0.488603 * z,                   // L10
+        0.488603 * x,                   // L11
+        1.092548 * x * y,               // L2-2
+        1.092548 * y * z,               // L2-1
+        0.315392 * (3.0 * z * z - 1.0), // L20
+        1.092548 * x * z,               // L21
+        0.546274 * (x * x - y * y),     // L22
     ]
 }
 
