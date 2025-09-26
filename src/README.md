@@ -83,7 +83,7 @@ Gameplay wiring (prototype)
 - Lints: `cargo clippy --all-targets -- -D warnings`
 - Auto-reload: `cargo install cargo-watch` then:
   - `cargo watch -x run` (rebuild and rerun on change), or
-  - `cargo dev` / `cargo dev-test` via Cargo aliases in `Cargo.toml`.
+  - `cargo dev` / `cargo dev-test` via Cargo aliases in `.cargo/config.toml`.
 
 - sim/
   - mod.rs — Sim engine index and exports.

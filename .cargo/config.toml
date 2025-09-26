@@ -1,0 +1,4 @@
+[alias]
+dev = "watch -x run"
+dev-test = "watch -x test"
+
