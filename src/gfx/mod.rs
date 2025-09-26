@@ -758,7 +758,8 @@ impl Renderer {
                         let dy = position.y - ly;
                         let sens = 0.005;
                         self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx as f32 * sens);
-                        self.cam_orbit_pitch = (self.cam_orbit_pitch - dy as f32 * sens).clamp(-0.6, 1.2);
+                        // Invert pitch control (mouse up pitches camera down, and vice versa)
+                        self.cam_orbit_pitch = (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
                     }
                     self.last_cursor_pos = Some((position.x, position.y));
                 }
