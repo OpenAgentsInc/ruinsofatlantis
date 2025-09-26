@@ -838,6 +838,7 @@ async fn run(cli: Cli) -> Result<()> {
                 && let ModelGpu::Skinned { anims, active_index, time, anim, base, .. } = gpu
                 && !lib_anims.is_empty()
             {
+                let mut replace_new: Option<ModelGpu> = None;
                 let base_y = m + s + 8.0;
                 let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
                 let model_lines = (anims.len() as f32 + 1.0).max(0.0);
@@ -848,14 +849,33 @@ async fn run(cli: Cli) -> Result<()> {
                     let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
                     if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
                         let ext = a.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-                        if ext == "gltf" || ext == "glb" { let _ = merge_gltf_animations(base, &a.path); }
-                        else if ext == "fbx" && merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
-                        // refresh AnimData and UI list
-                        let mut new_names: Vec<String> = base.animations.keys().cloned().collect();
-                        new_names.sort();
-                        *anim = Box::new(AnimData::from_skinned(base, &new_names));
-                        *anims = new_names;
-                        *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
+                        if ext == "gltf" || ext == "glb" {
+                            // Replace current model with the selected library model (more intuitive)
+                            if let Ok(new_gpu) = load_model(&a.path, &device, &queue, &mat_bgl, &skin_bgl) { replace_new = Some(new_gpu); }
+                        } else if ext == "fbx" {
+                            // Merge FBX as animations into current model
+                            if merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
+                            // refresh AnimData and UI list
+                            let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
+                            *anim = Box::new(AnimData::from_skinned(base, &new_names));
+                            *anims = new_names;
+                            *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
+                        }
+                        break;
+                    }
+                }
+                if let Some(new_gpu) = replace_new {
+                    model_gpu = Some(new_gpu);
+                    match model_gpu.as_ref().unwrap() {
+                        ModelGpu::Skinned { center: c, diag: d, anims: new_anims, .. } => {
+                            center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
+                            let title = format!("Model Viewer — (library) | anims: {}", if new_anims.is_empty() { "(none)".to_string() } else { new_anims.join(", ") });
+                            window.set_title(&title);
+                        }
+                        ModelGpu::Basic { center: c, diag: d, .. } => {
+                            center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
+                            window.set_title("Model Viewer — (library) | anims: (none)");
+                        }
                     }
                 }
             }
