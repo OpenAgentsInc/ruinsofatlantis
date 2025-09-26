@@ -140,12 +140,10 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         (joints_nodes, inverse_bind)
     } else { (vec![0usize], vec![Mat4::IDENTITY]) };
 
-    // Animations (subset)
+    // Animations (all clips)
     let mut animations: HashMap<String, AnimClip> = HashMap::new();
-    let wanted = ["PortalOpen", "Still", "Waiting"];
     for anim in doc.animations() {
         let name = anim.name().unwrap_or("").to_string();
-        if !wanted.contains(&name.as_str()) { continue; }
         let mut t_tracks: HashMap<usize, TrackVec3> = HashMap::new();
         let mut r_tracks: HashMap<usize, TrackQuat> = HashMap::new();
         let mut s_tracks: HashMap<usize, TrackVec3> = HashMap::new();
@@ -246,7 +244,13 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
         let mut r_tracks = HashMap::new();
         let mut s_tracks = HashMap::new();
         let map_idx = |idx: &usize| -> Option<usize> {
-            other.node_names.get(*idx).and_then(|n| base.node_names.iter().position(|m| m == n))
+            other
+                .node_names
+                .get(*idx)
+                .and_then(|n| {
+                    let nn = normalize_bone_name(n);
+                    base.node_names.iter().position(|m| normalize_bone_name(m) == nn)
+                })
         };
         for (i, tr) in &clip.t_tracks { if let Some(di) = map_idx(i) { t_tracks.insert(di, tr.clone()); } }
         for (i, rr) in &clip.r_tracks { if let Some(di) = map_idx(i) { r_tracks.insert(di, rr.clone()); } }
@@ -255,6 +259,24 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
         merged += 1;
     }
     Ok(merged)
+}
+
+fn normalize_bone_name(s: &str) -> String {
+    let mut out = s.to_lowercase();
+    for pref in ["mixamorig:", "armature|", "armature/", "armature:", "skeleton|", "skeleton/"] {
+        if out.starts_with(pref) { out = out.trim_start_matches(pref).to_string(); }
+        out = out.replace(pref, "");
+    }
+    out = out.replace([' ', '_', '-'], "");
+    out
+}
+
+/// Merge animation clips from an FBX file into an existing skinned mesh by node-name mapping.
+///
+/// See also: `crate::fbx::merge_fbx_animations`. This entry point is stable and available
+/// in all builds; without the `fbx` feature it returns an error explaining how to enable it.
+pub fn merge_fbx_animations(base: &mut SkinnedMeshCPU, fbx_path: &Path) -> Result<usize> {
+    crate::fbx::merge_fbx_animations(base, fbx_path)
 }
 
 fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
@@ -297,4 +319,3 @@ mod tests {
         assert!(!skinned.animations.is_empty(), "animations should not be empty");
     }
 }
-
