@@ -35,4 +35,4 @@ serde_yaml = "0.9.34"
 wgpu = "26.0.1"
 which = "8.0.0"
 winit = "0.30.12"
-ra-assets = { path = "shared/assets" }
+ra-assets = { version = "0.1.0", path = "shared/assets" }

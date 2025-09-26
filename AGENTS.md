@@ -67,6 +67,8 @@ NOTE FOR AGENTS
   - Remove deps: `cargo rm <crate>`
 - Upgrade: `cargo upgrade` (review diffs before committing)
 
+NOTE: Strict policy — agents must not hand‑edit Cargo.toml. If a dependency change is required, use `cargo add`/`cargo rm`/`cargo upgrade`. If a file was modified manually earlier, reapply the change with Cargo tooling in the same PR.
+
 ## Build Hygiene
 - Always leave the repo in a compiling state before stopping work.
 - Run `cargo check` (and for changed binaries, `cargo build`) to confirm there are no compile errors.

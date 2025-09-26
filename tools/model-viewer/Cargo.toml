@@ -13,5 +13,5 @@ log = "0.4"
 pollster = "0.4"
 wgpu = "26.0.1"
 winit = "0.30.12"
-ra-assets = { path = "../../shared/assets" }
+ra-assets = { version = "0.1.0", path = "../../shared/assets" }
 

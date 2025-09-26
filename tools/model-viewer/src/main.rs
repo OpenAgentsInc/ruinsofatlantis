@@ -10,11 +10,11 @@ use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceTargetUnsafe};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
 
 #[derive(Parser, Debug)]
-#[command(name = "model-viewer")] 
-#[command(about = "Minimal wgpu model viewer (GLTF/GLB, baseColor, skin bind pose)")] 
+#[command(name = "model-viewer")]
+#[command(about = "Minimal wgpu model viewer (GLTF/GLB, baseColor, skin bind pose)")]
 struct Cli {
-    /// Path to a .gltf or .glb file
-    path: PathBuf,
+    /// Optional path to a .gltf or .glb file; otherwise use drag-and-drop.
+    path: Option<PathBuf>,
 
     /// Start in wireframe if supported
     #[arg(long)]
@@ -131,35 +131,6 @@ async fn run(cli: Cli) -> Result<()> {
     };
     surface.configure(&device, &config);
 
-    // Load model (prefer decompressed glTF if present)
-    let model_path = ra_assets::util::prepare_gltf_path(&cli.path)?;
-    let skinned: SkinnedMeshCPU = load_gltf_skinned(&model_path)?;
-    info!(
-        "loaded: verts={}, indices={}, joints={}, anims={}",
-        skinned.vertices.len(),
-        skinned.indices.len(),
-        skinned.joints_nodes.len(),
-        skinned.animations.len()
-    );
-
-    // Build vertex/index buffers
-    let vtx: Vec<VSkinned> = skinned
-        .vertices
-        .iter()
-        .map(|v| VSkinned { pos: v.pos, nrm: v.nrm, uv: v.uv, joints: v.joints, weights: v.weights })
-        .collect();
-    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("vb"),
-        contents: bytemuck::cast_slice(&vtx),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("ib"),
-        contents: bytemuck::cast_slice(&skinned.indices),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-    let index_count = skinned.indices.len() as u32;
-
     // Globals
     let globals = Globals { view_proj: Mat4::IDENTITY.to_cols_array_2d() };
     let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -182,13 +153,6 @@ async fn run(cli: Cli) -> Result<()> {
         entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
     });
 
-    // Skin palette for bind pose (no anim in v1)
-    let palette = compute_bind_pose_palette(&skinned);
-    let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("skin-palette"),
-        contents: bytemuck::cast_slice(&palette),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-    });
     let skin_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("skin-bgl"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -198,62 +162,7 @@ async fn run(cli: Cli) -> Result<()> {
             count: None,
         }],
     });
-    let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("skin-bg"),
-        layout: &skin_bgl,
-        entries: &[wgpu::BindGroupEntry { binding: 0, resource: skin_buf.as_entire_binding() }],
-    });
-
-    // Material (base color)
-    let (tex_view, sampler) = if let Some(tex) = &skinned.base_color_texture {
-        let size = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
-        let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("albedo"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            &tex.pixels,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) },
-            size,
-        );
-        let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-        let samp = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("samp"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-        (view, samp)
-    } else {
-        // 1x1 white fallback
-        let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("white"),
-            size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            &[255, 255, 255, 255],
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
-            wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
-        );
-        let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-        let samp = device.create_sampler(&wgpu::SamplerDescriptor::default());
-        (view, samp)
-    };
+    // Material (base color) - created on demand per loaded model
     let mat_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("mat-bgl"),
         entries: &[
@@ -261,14 +170,17 @@ async fn run(cli: Cli) -> Result<()> {
             wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } }, count: None },
         ],
     });
-    let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("mat-bg"),
-        layout: &mat_bgl,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) },
-        ],
-    });
+    // Model GPU state (populated on load)
+    struct ModelGpu {
+        vb: wgpu::Buffer,
+        ib: wgpu::Buffer,
+        index_count: u32,
+        mat_bg: wgpu::BindGroup,
+        skin_bg: wgpu::BindGroup,
+        center: Vec3,
+        diag: f32,
+    }
+    let mut model_gpu: Option<ModelGpu> = None;
 
     // Pipeline
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -295,11 +207,140 @@ async fn run(cli: Cli) -> Result<()> {
 
     let mut depth_view = create_depth(&device, width, height, depth_format);
 
-    // Fit camera to model bounds
-    let (min_b, max_b) = compute_bounds(&skinned);
-    let center = 0.5 * (min_b + max_b);
-    let diag = (max_b - min_b).length().max(1.0);
+    // Camera state
+    let mut center = Vec3::ZERO;
+    let mut diag = 1.0f32;
     let mut orbit_t = 0.0f32;
+
+    // Helper to upload a model: called on CLI path (if provided) and Drag&Drop
+    let load_model = |
+        path: &PathBuf,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        mat_bgl: &wgpu::BindGroupLayout,
+        skin_bgl: &wgpu::BindGroupLayout,
+    | -> Result<ModelGpu> {
+        let prepared = ra_assets::util::prepare_gltf_path(path)?;
+        let skinned: SkinnedMeshCPU = load_gltf_skinned(&prepared)?;
+        info!(
+            "loaded: {} (verts={}, indices={}, joints={}, anims={})",
+            prepared.display(),
+            skinned.vertices.len(),
+            skinned.indices.len(),
+            skinned.joints_nodes.len(),
+            skinned.animations.len()
+        );
+
+        // Build vertex/index buffers
+        let vtx: Vec<VSkinned> = skinned
+            .vertices
+            .iter()
+            .map(|v| VSkinned { pos: v.pos, nrm: v.nrm, uv: v.uv, joints: v.joints, weights: v.weights })
+            .collect();
+        let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("vb"),
+            contents: bytemuck::cast_slice(&vtx),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ib"),
+            contents: bytemuck::cast_slice(&skinned.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let index_count = skinned.indices.len() as u32;
+
+        // Skin palette for bind pose
+        let palette = compute_bind_pose_palette(&skinned);
+        let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("skin-palette"),
+            contents: bytemuck::cast_slice(&palette),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+        let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("skin-bg"),
+            layout: skin_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: skin_buf.as_entire_binding() }],
+        });
+
+        // Material (base color)
+        let (tex_view, sampler) = if let Some(tex) = &skinned.base_color_texture {
+            let size = wgpu::Extent3d { width: tex.width, height: tex.height, depth_or_array_layers: 1 };
+            let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("albedo"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                &tex.pixels,
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex.width), rows_per_image: Some(tex.height) },
+                size,
+            );
+            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+            let samp = device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("samp"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            });
+            (view, samp)
+        } else {
+            // 1x1 white fallback
+            let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("white"),
+                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo { texture: &tex_obj, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                &[255, 255, 255, 255],
+                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+                wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            );
+            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+            let samp = device.create_sampler(&wgpu::SamplerDescriptor::default());
+            (view, samp)
+        };
+        let mat_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("mat-bg"),
+            layout: mat_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) },
+            ],
+        });
+
+        // Update camera fit
+        let (min_b, max_b) = compute_bounds(&skinned);
+        let center = 0.5 * (min_b + max_b);
+        let diag = (max_b - min_b).length().max(1.0);
+
+        Ok(ModelGpu { vb, ib, index_count, mat_bg, skin_bg, center, diag })
+    };
+
+    // Load from CLI if provided
+    if let Some(p) = cli.path.as_ref() {
+        if let Ok(gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
+            center = gpu.center;
+            diag = gpu.diag;
+            model_gpu = Some(gpu);
+        } else {
+            log::error!("failed to load {}", p.display());
+        }
+    } else {
+        info!("Drag-and-drop a .gltf or .glb into this window");
+    }
 
     Ok(event_loop.run(move |event, elwt| match event {
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => elwt.exit(),
@@ -330,16 +371,27 @@ async fn run(cli: Cli) -> Result<()> {
                     occlusion_query_set: None,
                     timestamp_writes: None,
                 });
-                rpass.set_pipeline(&pipeline);
-                rpass.set_bind_group(0, &globals_bg, &[]);
-                rpass.set_bind_group(1, &mat_bg, &[]);
-                rpass.set_bind_group(2, &skin_bg, &[]);
-                rpass.set_vertex_buffer(0, vb.slice(..));
-                rpass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.draw_indexed(0..index_count, 0, 0..1);
+                if let Some(ref gpu) = model_gpu {
+                    rpass.set_pipeline(&pipeline);
+                    rpass.set_bind_group(0, &globals_bg, &[]);
+                    rpass.set_bind_group(1, &gpu.mat_bg, &[]);
+                    rpass.set_bind_group(2, &gpu.skin_bg, &[]);
+                    rpass.set_vertex_buffer(0, gpu.vb.slice(..));
+                    rpass.set_index_buffer(gpu.ib.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.draw_indexed(0..gpu.index_count, 0, 0..1);
+                }
             }
             queue.submit(Some(enc.finish()));
             frame.present();
+        }
+        Event::WindowEvent { event: WindowEvent::DroppedFile(path), .. } => {
+            if let Ok(gpu) = load_model(&path, &device, &queue, &mat_bgl, &skin_bgl) {
+                center = gpu.center;
+                diag = gpu.diag;
+                model_gpu = Some(gpu);
+            } else {
+                log::error!("failed to load {}", path.display());
+            }
         }
         _ => {}
     })?)
