@@ -21,8 +21,6 @@ fn vs_main(input: VSIn) -> VSOut {
 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
-  // Simple normal-based shading to visualize surface
-  let n = normalize(in.nrm) * 0.5 + vec3<f32>(0.5, 0.5, 0.5);
-  return vec4<f32>(n, 1.0);
+  // Simple constant albedo for unskinned models (ruins is solid grey)
+  return vec4<f32>(0.72, 0.72, 0.72, 1.0);
 }
-

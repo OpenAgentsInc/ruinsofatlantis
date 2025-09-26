@@ -350,6 +350,10 @@ async fn run(cli: Cli) -> Result<()> {
             depth_view = create_depth(&device, width, height, depth_format);
         }
         Event::AboutToWait => {
+            // Always animate; request a redraw every frame
+            window.request_redraw();
+        }
+        Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
             // Simple auto-orbit camera
             orbit_t += 0.6 / 60.0;
             let eye = center + Vec3::new(orbit_t.cos() * diag * 0.8, diag * 0.4, orbit_t.sin() * diag * 0.8);
