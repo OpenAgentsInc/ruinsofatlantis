@@ -76,6 +76,29 @@ pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
     Ok(CpuMesh { vertices, indices })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_gltf_mesh_wizard() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let path = root.join("assets/models/wizard.gltf");
+        let mesh = load_gltf_mesh(&path).expect("load wizard.gltf");
+        assert!(!mesh.vertices.is_empty(), "wizard vertices should not be empty");
+        assert!(!mesh.indices.is_empty(), "wizard indices should not be empty");
+    }
+
+    #[test]
+    fn load_gltf_mesh_ruins_draco() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let path = root.join("assets/models/ruins.gltf");
+        let mesh = load_gltf_mesh(&path).expect("load ruins.gltf (Draco)");
+        assert!(!mesh.vertices.is_empty(), "ruins vertices should not be empty");
+        assert!(!mesh.indices.is_empty(), "ruins indices should not be empty");
+    }
+}
+
 fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
     let text = std::fs::read_to_string(path).with_context(|| format!("read glTF json: {}", path.display()))?;
     let v: serde_json::Value = serde_json::from_str(&text).context("parse glTF JSON")?;
@@ -314,4 +337,3 @@ fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
     }
     Ok(CpuMesh { vertices, indices })
 }
-

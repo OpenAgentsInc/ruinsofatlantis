@@ -3,7 +3,6 @@
 use anyhow::{bail, Context, Result};
 use glam::{Mat4, Quat, Vec3};
 use gltf::mesh::util::ReadIndices;
-use gltf::{buffer::Data};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -353,3 +352,18 @@ fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_gltf_skinned_wizard() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let path = root.join("assets/models/wizard.gltf");
+        let skinned = load_gltf_skinned(&path).expect("load skinned wizard");
+        assert!(!skinned.vertices.is_empty(), "vertices should not be empty");
+        assert!(!skinned.indices.is_empty(), "indices should not be empty");
+        assert!(!skinned.joints_nodes.is_empty(), "joints_nodes should not be empty");
+        assert!(!skinned.animations.is_empty(), "animations should not be empty");
+    }
+}

@@ -183,3 +183,32 @@ Addendum (2025-09-26): Edition Clarification and Helper Removal
 
 - AGENTS.md now explicitly states we target Rust 2024 edition.
 - Removed the unused runtime helper `try_gltf_transform_decompress` from `src/assets/mod.rs` and eliminated any call sites. Runtime no longer attempts decompression; use the `gltf_decompress` tool or a pre‑decompressed asset alongside the original.
+
+Addendum (2025-09-26): Assets Module Refactor
+
+- What changed
+  - Broke up the monolithic `src/assets/mod.rs` into focused submodules:
+    - `src/assets/types.rs` — CPU types (CpuMesh, SkinnedMeshCPU, AnimClip, Tracks, TextureCPU).
+    - `src/assets/gltf.rs` — unskinned GLTF mesh loading and JSON+Draco fallback path.
+    - `src/assets/skinning.rs` — skinned mesh + animation clip loading.
+    - `src/assets/draco.rs` — internal Draco decode helpers used by the loaders.
+    - `src/assets/util.rs` — `prepare_gltf_path()` and related helpers.
+  - `src/assets/mod.rs` now re-exports the public API so existing imports like `use crate::assets::{load_gltf_mesh, load_gltf_skinned, AnimClip, SkinnedMeshCPU};` keep working.
+- Scope and intent
+  - This is a structural change only; behavior is preserved except for the prior policy fix (no runtime decompression).
+  - The split improves readability, isolates Draco-specific code, and makes future testing/ownership clearer.
+- Follow-ups (recommended)
+  - Add unit tests around `gltf::load_gltf_mesh` (Draco JSON fallback) and `skinning::load_gltf_skinned` (clip extraction, inverse bind handling).
+  - Consider lifting `CpuMesh` off `gfx::Vertex` to a pure CPU vertex type with an adapter into `gfx` to reduce coupling.
+
+Addendum (2025-09-26): Unit Tests Added (Assets)
+
+- Added unit tests co-located with the loaders:
+  - `src/assets/gltf.rs`:
+    - `load_gltf_mesh_wizard` — loads `assets/models/wizard.gltf`; asserts non-empty vertices/indices.
+    - `load_gltf_mesh_ruins_draco` — loads `assets/models/ruins.gltf` (Draco); asserts non-empty vertices/indices.
+  - `src/assets/skinning.rs`:
+    - `load_gltf_skinned_wizard` — loads `assets/models/wizard.gltf`; asserts skinned vertices/indices/joints and non-empty animations.
+  - `src/assets/util.rs`:
+    - `returns_importable_path` — `prepare_gltf_path` returns a path importable by `gltf::import` (prefers original if valid; otherwise a sibling `*.decompressed.gltf`).
+- Rationale: Establish minimal invariants for loaders while keeping runtime side effects out of tests. These tests exercise both the standard and Draco paths deterministically using checked-in assets.

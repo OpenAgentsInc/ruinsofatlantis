@@ -44,6 +44,7 @@ fn asset_path(rel: &str) -> std::path::PathBuf {
 #[derive(Clone, Copy, Debug)]
 struct Projectile { pos: glam::Vec3, vel: glam::Vec3, t_die: f32 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 struct Particle { pos: glam::Vec3, vel: glam::Vec3, age: f32, life: f32, size: f32, color: [f32;3] }
 
@@ -98,7 +99,7 @@ pub struct Renderer {
     fx_instances: wgpu::Buffer,
     _fx_capacity: u32,
     fx_count: u32,
-    fx_model_bg: wgpu::BindGroup,
+    _fx_model_bg: wgpu::BindGroup,
     quad_vb: wgpu::Buffer,
 
     // Wizard skinning palettes
@@ -129,7 +130,6 @@ pub struct Renderer {
     skinned_cpu: SkinnedMeshCPU,
 
     // Animation-driven VFX
-    portalopen_strikes: Vec<f32>,
     last_center_phase: f32,
     hand_right_node: Option<usize>,
     root_node: Option<usize>,
@@ -140,6 +140,8 @@ pub struct Renderer {
 
     // Data-driven spec
     fire_bolt: Option<SpellSpec>,
+    // Per-cycle trigger
+    center_fired_this_cycle: bool,
 
     // Camera focus (we orbit around a close wizard)
     cam_target: glam::Vec3,
@@ -419,7 +421,7 @@ impl Renderer {
         let fx_capacity = 2048u32; // particles + projectiles
         let fx_instances = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("fx-instances"),
-            size: (fx_capacity as usize * std::mem::size_of::<Instance>()) as u64,
+            size: (fx_capacity as usize * std::mem::size_of::<ParticleInstance>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -450,7 +452,7 @@ impl Renderer {
         // Precompute strike times (or leave empty to use periodic fallback)
         let hand_right_node = skinned_cpu.hand_right_node;
         let root_node = skinned_cpu.root_node;
-        let portalopen_strikes = compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
+        let _strikes_tmp = compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
         // Camera target: first wizard encountered above (close-up orbit)
 
         // Allocate storage for skinning palettes: one palette per wizard
@@ -632,7 +634,7 @@ impl Renderer {
             fx_instances,
             _fx_capacity: fx_capacity,
             fx_count,
-            fx_model_bg,
+            _fx_model_bg: fx_model_bg,
             quad_vb,
             palettes_buf,
             palettes_bg,
@@ -650,7 +652,6 @@ impl Renderer {
             wizard_anim_index,
             wizard_time_offset,
             skinned_cpu,
-            portalopen_strikes,
             last_center_phase: 0.0,
             hand_right_node,
             root_node,
@@ -658,6 +659,7 @@ impl Renderer {
             particles: Vec::new(),
             cam_target,
             fire_bolt,
+            center_fired_this_cycle: false,
         })
     }
 
@@ -790,9 +792,17 @@ impl Renderer {
         let joints = self.joints_per_wizard as usize;
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
         for i in 0..(self.wizard_count as usize) {
-            let t = time_global + self.wizard_time_offset[i];
             let clip = self.select_clip(self.wizard_anim_index[i]);
-            let palette = sample_palette(&self.skinned_cpu, clip, t);
+            let palette = if i == 0 {
+                // Fixed 5s cycle with a gap: play clip at native speed, hold last frame until 5s boundary
+                let cycle = 5.0f32;
+                let phase = (time_global % cycle).max(0.0);
+                let clip_time = phase.min(clip.duration);
+                sample_palette(&self.skinned_cpu, clip, clip_time)
+            } else {
+                let t = time_global + self.wizard_time_offset[i];
+                sample_palette(&self.skinned_cpu, clip, t)
+            };
             mats.extend(palette);
         }
         // Upload as raw f32x16
@@ -828,24 +838,29 @@ impl Renderer {
 
     // Update and render-side state for projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
-        // 1) Spawn on staff strike for center wizard (index 0), or periodically if no events.
+        // 1) Spawn once per animation cycle when phase crosses event time for center wizard.
         if self.wizard_count > 0 {
             let idx = 0usize;
-            let clip = self.select_clip(self.wizard_anim_index[idx]);
-            let phase = if clip.duration > 0.0 { (t + self.wizard_time_offset[idx]) % clip.duration } else { 0.0 };
-            let should_spawn = if !self.portalopen_strikes.is_empty() {
-                crossed_event(self.last_center_phase, phase, clip.duration, &self.portalopen_strikes)
-            } else {
-                // periodic fallback every ~0.9s
-                ((self.last_center_phase / 0.9).floor() - (phase / 0.9).floor()).abs() >= 1.0
-            };
-            if should_spawn {
-                if let Some(origin) = self.right_hand_world(clip, phase) {
-                    let dir = self.root_flat_forward(clip, phase).unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
+            // Fixed 5s cycle: fire at offset 2.5s
+            let cycle = 5.0f32;
+            let bolt_offset = 2.0f32; // fire at 2s into the 5s cycle
+            let phase = (t % cycle).max(0.0);
+            // Reset per-cycle when loop wraps
+            let mut fired = self.center_fired_this_cycle;
+            if phase < self.last_center_phase { fired = false; }
+            let crossed = (self.last_center_phase <= bolt_offset && phase >= bolt_offset) || (self.last_center_phase > phase && (self.last_center_phase <= bolt_offset || phase >= bolt_offset));
+            if crossed && !fired {
+                let clip = self.select_clip(self.wizard_anim_index[idx]);
+                let clip_time = if clip.duration > 0.0 { phase * (clip.duration / cycle) } else { 0.0 };
+                if let Some(origin) = self.right_hand_world(clip, clip_time) {
+                    let dir = self.root_flat_forward(clip, clip_time).unwrap_or(glam::Vec3::new(0.0, 0.0, 1.0));
+                    log::info!("FX: spawn firebolt t={:.3} phase={:.3} origin=({:.2},{:.2},{:.2}) dir=({:.2},{:.2},{:.2})", t, phase, origin.x, origin.y, origin.z, dir.x, dir.y, dir.z);
                     self.spawn_firebolt(origin + dir * 0.3, dir, t);
+                    fired = true;
                 }
             }
             self.last_center_phase = phase;
+            self.center_fired_this_cycle = fired;
         }
 
         // 2) Integrate projectiles
@@ -866,22 +881,13 @@ impl Renderer {
             } else { i += 1; }
         }
 
-        // 3) Particle integration with gravity/damping; add trails
-        for p in &mut self.particles { p.age += dt; p.vel.y -= 3.0 * dt; p.pos += p.vel * dt; p.vel *= 0.90; }
-        self.particles.retain(|p| p.age < p.life);
-        for p in &self.projectiles {
-            // single tiny ember per frame for a thin trail
-            self.particles.push(Particle { pos: p.pos, vel: glam::vec3(rand_unit()*0.1, rand_unit()*0.05, rand_unit()*0.1), age: 0.0, life: 0.08, size: 0.008, color: [1.0, 0.55, 0.12] });
-        }
-        self.particles.extend(burst);
+        // 3) (disabled trail for now to show a single bolt clearly)
+        self.particles.clear();
+        // keep burst off as well
 
-        // 4) Upload FX instances (as instanced cubes)
-        let mut inst: Vec<Instance> = Vec::with_capacity(self.projectiles.len() + self.particles.len());
-        for pr in &self.projectiles { inst.push(instance_from(pr.pos, 0.02, [1.0, 0.75, 0.25])); }
-        for pa in &self.particles {
-            let k = (1.0 - (pa.age/pa.life)).clamp(0.0, 1.0);
-            inst.push(instance_from(pa.pos, pa.size * (0.5 + 0.5*k), pa.color));
-        }
+        // 4) Upload FX instances (billboard particles)
+        let mut inst: Vec<ParticleInstance> = Vec::with_capacity(self.projectiles.len());
+        for pr in &self.projectiles { inst.push(ParticleInstance { pos: [pr.pos.x, pr.pos.y, pr.pos.z], size: 0.14, color: [1.0, 0.35, 0.08], _pad: 0.0 }); }
         self.fx_count = inst.len() as u32;
         if self.fx_count > 0 {
             self.queue.write_buffer(&self.fx_instances, 0, bytemuck::cast_slice(&inst));
@@ -990,11 +996,6 @@ fn global_of_node(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32, node_idx: usiz
     if let Some(sr) = clip.s_tracks.get(&node_idx) { ls[node_idx] = sample_vec3(sr, time, ls[node_idx]); }
     let mut cache = std::collections::HashMap::new();
     Some(compute_global(node_idx, &mesh.parent, &lt, &lr, &ls, &mut cache))
-}
-
-fn crossed_event(prev: f32, curr: f32, dur: f32, events: &Vec<f32>) -> bool {
-    if events.is_empty() || dur <= 0.0 { return false; }
-    if prev <= curr { events.iter().any(|&e| e >= prev && e < curr) } else { events.iter().any(|&e| e >= prev || e < curr) }
 }
 
 fn compute_portalopen_strikes(mesh: &SkinnedMeshCPU, hand_right_node: Option<usize>, _root_node: Option<usize>) -> Vec<f32> {
