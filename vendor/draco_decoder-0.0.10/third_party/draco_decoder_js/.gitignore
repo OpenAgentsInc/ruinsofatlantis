@@ -1,0 +1,4 @@
+node_modules/
+dist/
+npminstall-debug.log
+*.DS_Store

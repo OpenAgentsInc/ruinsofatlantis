@@ -60,6 +60,8 @@ This document summarizes the `src/` folder structure and what each module does.
   - mod.rs — Renderer entry (init/resize/render) and high‑level wiring.
   - camera.rs — Camera type and view/projection math.
   - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
+  - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
+  - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
   - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.
   - ui.rs — Overlays: nameplates (text atlas) and health bars (screen‑space quads with green→yellow→red gradient).
   - pipeline.rs — Adds `create_bar_pipeline` for solid‑color screen quads.
@@ -73,9 +75,10 @@ Gameplay wiring (prototype)
 - Fire Bolt: on hit, applies damage to NPCs (logs hits/deaths). Impact spawns a small particle burst.
 - Health bars: shown for the player, all wizards, and all NPC boxes. Bars render above the head/center in screen space.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).
+    - `Globals` now includes: `sun_dir_time` (xyz + day_frac), `sh_coeffs[9]` (RGB irradiance SH‑L2 as vec4 RGB+pad), and `fog_params` (rgb + density).
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
   - pipeline.rs — Shader/bind group layouts and pipelines (base/instanced/particles/wizard).
-  - shader.wgsl — Main WGSL shaders (plane/instanced/skinned/particles).
+  - shader.wgsl — Main WGSL shaders (plane/instanced/skinned/particles). Uses directional sun + SH ambient.
   - shader_wizard_viewer.wgsl — WGSL for standalone wizard viewer bin.
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
   - anim.rs — CPU animation sampling (palettes, per‑node global transforms, clip timing cues).

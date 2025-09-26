@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Draco Decode Test</title>
+</head>
+
+<body>
+    <h1>Draco Decode Test</h1>
+    <input type="file" id="fileInput" />
+    <pre id="output"></pre>
+
+    <script type="module">
+        import { decodeDracoMeshInWorker } from './dist/index.es.js';
+
+        const fileInput = document.getElementById('fileInput');
+        const output = document.getElementById('output');
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const arrayBuffer = await file.arrayBuffer();
+            try {
+                output.textContent = 'Decoding...\n';
+                const startTime = performance.now();
+                const result = await decodeDracoMeshInWorker(new Uint8Array(arrayBuffer), 444206);
+                const endTime = performance.now();
+                output.textContent += `Decoding took ${(endTime - startTime).toFixed(2)} ms`;
+                const blob = new Blob([result], { type: 'application/octet-stream' });
+
+                // 创建下载链接
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'extracted_model_data.bin'; // 下载文件名
+                document.body.appendChild(a);
+                a.click();
+
+                // 释放 URL 对象
+                URL.revokeObjectURL(url);
+                a.remove();
+            } catch (e) {
+                output.textContent = 'Error: ' + e.message;
+            }
+        });
+    </script>
+</body>
+
+</html>

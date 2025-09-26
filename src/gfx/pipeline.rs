@@ -232,6 +232,65 @@ pub fn create_pipelines(
     (pipeline, inst_pipeline, wire_pipeline)
 }
 
+// Sky background pipeline (fullscreen triangle)
+pub fn create_sky_bgl(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("sky-bgl"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    })
+}
+
+pub fn create_sky_pipeline(
+    device: &wgpu::Device,
+    globals_bgl: &BindGroupLayout,
+    sky_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("sky-shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("sky.wgsl"))),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("sky-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl, sky_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("sky-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module: &shader,
+            entry_point: Some("vs_sky"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: &shader,
+            entry_point: Some("fs_sky"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 pub fn create_wizard_pipelines(
     device: &wgpu::Device,
     shader: &ShaderModule,
