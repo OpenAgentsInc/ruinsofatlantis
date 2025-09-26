@@ -260,7 +260,14 @@ async fn run(cli: Cli) -> Result<()> {
     // Camera state
     let mut center = Vec3::ZERO;
     let mut diag = 1.0f32;
-    let mut orbit_t = 0.0f32;
+    // Orbit state
+    let mut autorotate = true;
+    let mut yaw: f32 = 0.0;   // radians
+    let mut pitch: f32 = 0.35; // radians, clamped
+    let mut radius: f32 = 3.0;
+    let mut rmb_down = false;
+    let mut last_cursor: Option<(f32, f32)> = None;
+    let mut mouse_pos_px: (f32, f32) = (0.0, 0.0);
 
     // Helper to upload a model: called on CLI path (if provided) and Drag&Drop
     let load_model = |
@@ -333,12 +340,12 @@ async fn run(cli: Cli) -> Result<()> {
         if let Ok(gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
             match &gpu {
                 ModelGpu::Skinned { center: c, diag: d, anims, .. } => {
-                    center = *c; diag = *d;
+                    center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
                     let title = format!("Model Viewer — {} | anims: {}", p.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
                     window.set_title(&title);
                 }
                 ModelGpu::Basic { center: c, diag: d, .. } => {
-                    center = *c; diag = *d;
+                    center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
                     let title = format!("Model Viewer — {} | anims: (none)", p.display());
                     window.set_title(&title);
                 }
@@ -365,9 +372,11 @@ async fn run(cli: Cli) -> Result<()> {
             window.request_redraw();
         }
         Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
-            // Simple auto-orbit camera
-            orbit_t += 0.6 / 60.0;
-            let eye = center + Vec3::new(orbit_t.cos() * diag * 0.8, diag * 0.4, orbit_t.sin() * diag * 0.8);
+            // Orbit camera (mouse + optional autorotate)
+            if autorotate { yaw += 0.6 / 60.0; }
+            let cp = pitch.clamp(-1.2, 1.2);
+            let r = radius.max(0.05);
+            let eye = center + Vec3::new(r * cp.cos() * yaw.cos(), r * cp.sin(), r * cp.cos() * yaw.sin());
             let view = Mat4::look_at_rh(eye, center, Vec3::Y);
             let proj = Mat4::perspective_rh_gl(60f32.to_radians(), width as f32 / height as f32, 0.05, 100.0 * diag);
             let vp = (proj * view).to_cols_array_2d();
@@ -405,6 +414,75 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
             }
+            // Second pass: simple UI checkbox for autorotate in top-left
+            {
+                let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("ui-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view_tex,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                // Build a tiny checkbox from 2 triangles (outline + fill when on)
+                let s: f32 = 20.0; // px
+                let m: f32 = 16.0; // margin px
+                let x0 = -1.0 + m * 2.0 / (width as f32);
+                let y0 = 1.0 - m * 2.0 / (height as f32);
+                let x1 = -1.0 + (m + s) * 2.0 / (width as f32);
+                let y1 = 1.0 - (m + s) * 2.0 / (height as f32);
+                #[repr(C)]
+                #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+                struct UiVertex { pos: [f32; 2], color: [f32; 4] }
+                let mut verts: Vec<UiVertex> = vec![
+                    UiVertex { pos: [x0, y0], color: [0.15, 0.15, 0.18, 1.0] },
+                    UiVertex { pos: [x1, y0], color: [0.15, 0.15, 0.18, 1.0] },
+                    UiVertex { pos: [x1, y1], color: [0.15, 0.15, 0.18, 1.0] },
+                    UiVertex { pos: [x0, y0], color: [0.15, 0.15, 0.18, 1.0] },
+                    UiVertex { pos: [x1, y1], color: [0.15, 0.15, 0.18, 1.0] },
+                    UiVertex { pos: [x0, y1], color: [0.15, 0.15, 0.18, 1.0] },
+                ];
+                if autorotate {
+                    let pad = 4.0;
+                    let ix0 = -1.0 + (m + pad) * 2.0 / (width as f32);
+                    let iy0 = 1.0 - (m + pad) * 2.0 / (height as f32);
+                    let ix1 = -1.0 + (m + s - pad) * 2.0 / (width as f32);
+                    let iy1 = 1.0 - (m + s - pad) * 2.0 / (height as f32);
+                    let c = [0.2, 0.85, 0.3, 1.0];
+                    verts.extend_from_slice(&[
+                        UiVertex { pos: [ix0, iy0], color: c }, UiVertex { pos: [ix1, iy0], color: c }, UiVertex { pos: [ix1, iy1], color: c },
+                        UiVertex { pos: [ix0, iy0], color: c }, UiVertex { pos: [ix1, iy1], color: c }, UiVertex { pos: [ix0, iy1], color: c },
+                    ]);
+                }
+                // Minimal UI pipeline inline (position+color in NDC)
+                let ui_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("ui-shader"),
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("struct VSIn{ @location(0) pos: vec2<f32>, @location(1) color: vec4<f32>, }; struct VSOut{ @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32>, }; @vertex fn vs_main(v:VSIn)->VSOut{ var o:VSOut; o.pos=vec4<f32>(v.pos,0.0,1.0); o.color=v.color; return o; } @fragment fn fs_main(i:VSOut)->@location(0) vec4<f32>{ return i.color; }")),
+                });
+                let ui_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("ui-pl"), bind_group_layouts: &[], push_constant_ranges: &[] });
+                let ui_pipe = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("ui-pipe"), layout: Some(&ui_pl),
+                    vertex: wgpu::VertexState { module: &ui_shader, entry_point: Some("vs_main"), buffers: &[wgpu::VertexBufferLayout{ array_stride: (6*4) as u64, step_mode: wgpu::VertexStepMode::Vertex, attributes: &[
+                        wgpu::VertexAttribute{ shader_location:0, offset:0, format: wgpu::VertexFormat::Float32x2 },
+                        wgpu::VertexAttribute{ shader_location:1, offset:8, format: wgpu::VertexFormat::Float32x4 },
+                    ]}], compilation_options: Default::default() },
+                    fragment: Some(wgpu::FragmentState { module: &ui_shader, entry_point: Some("fs_main"), targets: &[Some(wgpu::ColorTargetState{ format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })], compilation_options: Default::default() }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                });
+                let ui_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor{ label: Some("ui-vb"), contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
+                rpass.set_pipeline(&ui_pipe);
+                rpass.set_vertex_buffer(0, ui_vb.slice(..));
+                rpass.draw(0..(verts.len() as u32), 0..1);
+            }
+
             queue.submit(Some(enc.finish()));
             frame.present();
         }
@@ -412,12 +490,12 @@ async fn run(cli: Cli) -> Result<()> {
             if let Ok(gpu) = load_model(&path, &device, &queue, &mat_bgl, &skin_bgl) {
                 match &gpu {
                     ModelGpu::Skinned { center: c, diag: d, anims, .. } => {
-                        center = *c; diag = *d;
+                        center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
                         let title = format!("Model Viewer — {} | anims: {}", path.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
                         window.set_title(&title);
                     }
                     ModelGpu::Basic { center: c, diag: d, .. } => {
-                        center = *c; diag = *d;
+                        center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
                         let title = format!("Model Viewer — {} | anims: (none)", path.display());
                         window.set_title(&title);
                     }
@@ -426,6 +504,33 @@ async fn run(cli: Cli) -> Result<()> {
             } else {
                 log::error!("failed to load {}", path.display());
             }
+        }
+        Event::WindowEvent { event: WindowEvent::MouseInput{ state, button: MouseButton::Right, .. }, .. } => {
+            rmb_down = state == ElementState::Pressed;
+            if !rmb_down { last_cursor = None; }
+        }
+        Event::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } => {
+            mouse_pos_px = (position.x as f32, position.y as f32);
+            if rmb_down {
+                if let Some((lx, ly)) = last_cursor {
+                    let dx = (position.x as f32 - lx) / (width as f32);
+                    let dy = (position.y as f32 - ly) / (height as f32);
+                    yaw -= dx * std::f32::consts::TAU; // 1 full turn across window width
+                    pitch -= dy * std::f32::consts::PI; // half-turn across height
+                    pitch = pitch.clamp(-1.2, 1.2);
+                }
+                last_cursor = Some((position.x as f32, position.y as f32));
+            }
+        }
+        Event::WindowEvent { event: WindowEvent::MouseWheel { delta, .. }, .. } => {
+            let scroll = match delta { MouseScrollDelta::LineDelta(_, y) => y * 50.0, MouseScrollDelta::PixelDelta(p) => p.y as f32 };
+            radius *= (1.0 - scroll * 0.001).max(0.1);
+        }
+        Event::WindowEvent { event: WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. }, .. } => {
+            // Toggle autorotate if clicking checkbox area
+            let s: f32 = 20.0; let m: f32 = 16.0;
+            let (mx, my) = mouse_pos_px;
+            if mx >= m && mx <= m + s && my >= m && my <= m + s { autorotate = !autorotate; }
         }
         _ => {}
     })?)
