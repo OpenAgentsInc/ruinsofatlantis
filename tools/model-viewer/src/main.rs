@@ -716,7 +716,8 @@ async fn run(cli: Cli) -> Result<()> {
                     let dx = (position.x as f32 - lx) / (width as f32);
                     let dy = (position.y as f32 - ly) / (height as f32);
                     yaw -= dx * std::f32::consts::TAU; // 1 full turn across window width
-                    pitch -= dy * std::f32::consts::PI; // half-turn across height
+                    // Flip vertical: moving mouse up should tilt camera up (decrease pitch)
+                    pitch += dy * std::f32::consts::PI; // half-turn across height
                     pitch = pitch.clamp(-1.2, 1.2);
                 }
                 last_cursor = Some((position.x as f32, position.y as f32));
