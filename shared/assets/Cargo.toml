@@ -17,3 +17,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 draco_decoder = "0.0.10"
 pollster = "0.4"
+fbxcel = { version = "0.9.0", optional = true }
+fbxcel-dom = { version = "0.0.10", optional = true }
+
+[features]
+fbxcel = ["dep:fbxcel"]
+fbxcel-dom = ["dep:fbxcel-dom"]

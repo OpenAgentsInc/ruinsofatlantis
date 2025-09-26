@@ -103,21 +103,44 @@ fn scan_anim_library() -> Vec<LibAnim> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let repo_root = cwd; // assume running from repo root
     let mut candidates: Vec<std::path::PathBuf> = vec![repo_root.join("assets/anims")];
+    let qmmorpg = std::path::PathBuf::from("/Users/christopherdavid/code/Quick_3D_MMORPG");
+    if qmmorpg.exists() { candidates.push(qmmorpg); }
     if let Some(v) = std::env::var_os("FBX_LIB_DIR") && !v.is_empty() { candidates.push(std::path::PathBuf::from(v)); }
-    for dir in candidates.into_iter().filter(|p| p.exists()) {
-        for ent in std::fs::read_dir(dir).unwrap_or_else(|_| std::fs::read_dir(".").unwrap()).flatten() {
-            let p = ent.path();
-            if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
-                let ext_l = ext.to_ascii_lowercase();
-                if ext_l == "fbx" || ext_l == "gltf" || ext_l == "glb" {
-                    let name = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
-                    out.push(LibAnim { name, path: p });
-                }
+    for dir in candidates.into_iter().filter(|p| p.exists()) { collect_anim_files(&dir, 0, 4, &mut out); }
+    out.sort_by(|a,b| a.name.cmp(&b.name));
+    out
+}
+
+fn collect_anim_files(dir: &std::path::Path, depth: usize, max_depth: usize, out: &mut Vec<LibAnim>) {
+    if depth > max_depth { return; }
+    let rd = match std::fs::read_dir(dir) { Ok(d) => d, Err(_) => return };
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if p.is_dir() { collect_anim_files(&p, depth + 1, max_depth, out); continue; }
+        if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+            let ext_l = ext.to_ascii_lowercase();
+            if ext_l == "fbx" || ext_l == "gltf" || ext_l == "glb" {
+                let name = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                out.push(LibAnim { name, path: p });
             }
         }
     }
-    out.sort_by(|a,b| a.name.cmp(&b.name));
-    out
+}
+
+fn try_convert_fbx_to_gltf(src: &std::path::Path) -> Option<std::path::PathBuf> {
+    let out_dir = std::path::Path::new("assets/anims/converted");
+    let _ = std::fs::create_dir_all(out_dir);
+    let stem = src.file_stem()?.to_str()?;
+    let out_path = out_dir.join(format!("{}.glb", stem));
+    if which::which("fbx2gltf").is_ok() {
+        let status = std::process::Command::new("fbx2gltf").arg("-b").arg("-o").arg(out_dir).arg(src).status().ok()?;
+        if status.success() && out_path.exists() { return Some(out_path); }
+    }
+    if which::which("assimp").is_ok() {
+        let status = std::process::Command::new("assimp").arg("export").arg(src).arg(&out_path).status().ok()?;
+        if status.success() && out_path.exists() { return Some(out_path); }
+    }
+    None
 }
 
 // Animation CPU sampling helpers
@@ -828,7 +851,13 @@ async fn run(cli: Cli) -> Result<()> {
                             vertices: Vec::new(), indices: Vec::new(), joints_nodes: anim.joints_nodes.clone(), inverse_bind: anim.inverse_bind.clone(), parent: anim.parent.clone(), base_t: anim.base_t.clone(), base_r: anim.base_r.clone(), base_s: anim.base_s.clone(), animations: std::collections::HashMap::new(), base_color_texture: None, node_names: Vec::new(), hand_right_node: None, root_node: None,
                         };
                         let ext = a.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-                        if ext == "gltf" || ext == "glb" { let _ = merge_gltf_animations(&mut tmp, &a.path); } else { let _ = merge_fbx_animations(&mut tmp, &a.path); }
+                        if ext == "gltf" || ext == "glb" {
+                            let _ = merge_gltf_animations(&mut tmp, &a.path);
+                        } else if ext == "fbx" {
+                            // Try native FBX; if feature not enabled, attempt local conversion to GLB and merge
+                            if merge_fbx_animations(&mut tmp, &a.path).is_err()
+                                && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(&mut tmp, &conv); }
+                        }
                         // Append any animations that appeared in tmp into our UI/model data
                         for (k, v) in tmp.animations.into_iter() { anim.clips.push(v); anims.push(k); }
                         *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
