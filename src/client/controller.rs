@@ -25,8 +25,11 @@ impl PlayerController {
         let speed = if input.run { 9.0 } else { 5.0 };
         let yaw_rate = 1.8; // rad/s
 
-        // To ensure S goes straight back, do not adjust yaw while S is held.
-        if !input.backward {
+        // Yaw updates:
+        // - If only S is held (no A/D), keep yaw fixed (straight back).
+        // - Otherwise, apply A/D turning (including while backing up).
+        let only_backward = input.backward && !input.left && !input.right && !input.forward;
+        if !only_backward {
             if input.left {
                 self.yaw = wrap_angle(self.yaw + yaw_rate * dt);
             }
@@ -102,5 +105,19 @@ mod tests {
         let fwd = Vec3::new(yaw0.sin(), 0.0, yaw0.cos()).normalize_or_zero();
         let disp = pc.pos;
         assert!(disp.dot(-fwd) > 0.0);
+    }
+
+    #[test]
+    fn backward_with_turn_changes_yaw() {
+        let mut pc = PlayerController::new(Vec3::ZERO);
+        pc.yaw = 0.7;
+        let input = InputState { backward: true, left: true, ..Default::default() };
+        let cam_fwd = Vec3::new(0.0, 0.0, 1.0);
+        let yaw0 = pc.yaw;
+        pc.update(&input, 0.2, cam_fwd);
+        assert!(pc.yaw != yaw0);
+        // Still moves approximately backward relative to updated facing
+        let fwd1 = Vec3::new(pc.yaw.sin(), 0.0, pc.yaw.cos()).normalize_or_zero();
+        assert!(pc.pos.dot(-fwd1) > 0.0);
     }
 }
