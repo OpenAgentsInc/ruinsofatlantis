@@ -43,6 +43,9 @@ IMPORTANT: Keep `src/README.md` current
 - Format/lint: `cargo fmt` and `cargo clippy -- -D warnings`
 - Optional dev loop: `cargo install cargo-watch` then `cargo watch -x run`
 
+NOTE FOR AGENTS
+- Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`). The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
+
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
