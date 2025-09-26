@@ -132,7 +132,7 @@ async fn run(cli: Cli) -> Result<()> {
     surface.configure(&device, &config);
 
     // Load model (prefer decompressed glTF if present)
-    let model_path = ra_assets::util::prepare_gltf_path(&cli.path);
+    let model_path = ra_assets::util::prepare_gltf_path(&cli.path)?;
     let skinned: SkinnedMeshCPU = load_gltf_skinned(&model_path)?;
     info!(
         "loaded: verts={}, indices={}, joints={}, anims={}",

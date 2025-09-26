@@ -1,15 +1,18 @@
-//! ra-assets: Shared asset-loading library crate (v1 wrapper).
+//! ra-assets: Shared asset-loading library crate.
 //!
-//! For v1, this crate wraps the existing ruinsofatlantis `assets` module so
-//! tools (like the standalone model viewer) can load models without depending
-//! on the whole engine. Longer-term we can migrate/own the ingest architecture
-//! here behind format-agnostic APIs.
+//! This crate owns the CPU-side asset ingest (GLTF/GLB v1) and exposes
+//! simple types suitable for GPU upload. It is renderer-agnostic.
 
+pub mod draco;
+pub mod gltf;
+pub mod skinning;
+pub mod types;
 pub mod util;
 
-// Re-export useful CPU-side types and loader entry points for v1.
-pub use ruinsofatlantis::assets::load_gltf_skinned;
-pub use ruinsofatlantis::assets::types::{
-    AnimClip, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, VertexSkinCPU,
+// Top-level re-exports for common entry points and types
+pub use gltf::load_gltf_mesh;
+pub use skinning::{load_gltf_skinned, merge_gltf_animations};
+pub use types::{
+    AnimClip, CpuMesh, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, Vertex,
+    VertexSkinCPU,
 };
-

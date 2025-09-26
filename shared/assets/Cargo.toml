@@ -9,9 +9,11 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0"
-glam = "0.30"
+base64 = "0.22"
 bytemuck = { version = "1.13", features = ["derive"] }
-
-# Reuse the existing engine's asset loaders for v1
-ruinsofatlantis = { path = "../.." }
-
+glam = "0.30"
+gltf = { version = "1.4.1", features = ["import", "extensions"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+draco_decoder = "0.0.10"
+pollster = "0.4"

@@ -1,11 +1,17 @@
 //! Asset type definitions used across loaders.
 //!
-//! These are CPU-side representations. Some reference client GPU vertex types
-//! for convenience (e.g., `CpuMesh` uses `crate::gfx::Vertex`).
+//! These are CPU-side representations independent of any renderer.
 
-use crate::gfx::Vertex;
 use glam::{Mat4, Quat, Vec3};
 use std::collections::HashMap;
+
+/// Minimal vertex with position and normal.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    pub pos: [f32; 3],
+    pub nrm: [f32; 3],
+}
 
 /// CPU-side mesh ready to be uploaded to GPU.
 pub struct CpuMesh {
@@ -65,3 +71,4 @@ pub struct SkinnedMeshCPU {
     pub hand_right_node: Option<usize>,
     pub root_node: Option<usize>,
 }
+
