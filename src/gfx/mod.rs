@@ -15,7 +15,7 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
-pub mod renderer { pub mod passes; }
+pub mod renderer { pub mod passes; pub mod resize; }
 mod gbuffer;
 mod hiz;
 mod mesh;
@@ -1422,7 +1422,9 @@ impl Renderer {
     }
 
     /// Resize the swapchain while preserving aspect and device limits.
+    #[allow(unreachable_code)]
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        return renderer::resize::resize_impl(self, new_size);
         if new_size.width == 0 || new_size.height == 0 {
             return;
         }
@@ -1574,6 +1576,7 @@ impl Renderer {
 
     /// Render one frame.
     pub fn render(&mut self) -> Result<(), SurfaceError> {
+        
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -2852,9 +2855,13 @@ impl Renderer {
             }
         }
 
-        // 2) Integrate projectiles
+        // 2) Integrate projectiles and keep them slightly above ground
+        // so they don't clip into small terrain undulations.
+        let ground_clearance = 0.15f32; // meters above terrain
         for p in &mut self.projectiles {
             p.pos += p.vel * dt;
+            // Clamp to be a bit above the terrain height at current XZ.
+            p.pos = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
@@ -2937,7 +2944,8 @@ impl Renderer {
         while i < self.projectiles.len() {
             let pcur = self.projectiles[i].pos;
             let (h, _n) = terrain::height_at(&self.terrain_cpu, pcur.x, pcur.z);
-            let kill = t >= self.projectiles[i].t_die || pcur.y <= h + 0.02;
+            // Only time-out; allow clearance clamp to keep bolts skimming above ground.
+            let kill = t >= self.projectiles[i].t_die;
             if kill {
                 let mut hit = self.projectiles[i].pos;
                 // Snap impact to terrain height
@@ -3086,6 +3094,8 @@ impl Renderer {
         {
             speed = p.speed_mps;
         }
+        // Ensure initial spawn sits a bit above the terrain.
+        let origin = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15);
         self.projectiles.push(Projectile {
             pos: origin,
             vel: dir * speed,
