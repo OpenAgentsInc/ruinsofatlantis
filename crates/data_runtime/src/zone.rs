@@ -69,7 +69,7 @@ pub struct ZoneManifest {
 
 /// Load a Zone manifest from `data/zones/<slug>/manifest.json`.
 pub fn load_zone_manifest(slug: &str) -> Result<ZoneManifest> {
-    use crate::core::data::loader::read_json;
+    use crate::loader::read_json;
     let rel = format!("zones/{}/manifest.json", slug);
     let txt = read_json(&rel).with_context(|| format!("read zone manifest: {}", rel))?;
     let z: ZoneManifest = serde_json::from_str(&txt).context("parse zone manifest json")?;
