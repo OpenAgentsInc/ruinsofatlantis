@@ -1356,6 +1356,7 @@ impl Hud {
         surface_h: u32,
         pc_hp: i32,
         pc_hp_max: i32,
+        cast_frac: f32,
         gcd_frac: f32,
     ) {
         self.bars_verts.clear();
@@ -1496,6 +1497,56 @@ impl Hud {
                 );
             }
             x += slot_px + gap;
+        }
+
+        // Cast bar (center-bottom above hotbar), shown during an active cast
+        if cast_frac > 0.0 {
+            let bar_w = 300.0f32;
+            let bar_h = 10.0f32;
+            let cx = (surface_w as f32) * 0.5;
+            let x0 = cx - bar_w * 0.5;
+            let x1 = cx + bar_w * 0.5;
+            let y0 = (yb - 18.0).max(0.0);
+            let y1 = y0 + bar_h;
+            // background
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0 - 2.0,
+                y0 - 2.0,
+                x1 + 2.0,
+                y1 + 2.0,
+                [0.05, 0.05, 0.05, 0.95],
+            );
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0,
+                y0,
+                x1,
+                y1,
+                [0.10, 0.10, 0.10, 0.85],
+            );
+            // fill
+            let fx1 = x0 + bar_w * cast_frac.clamp(0.0, 1.0);
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0,
+                y0,
+                fx1,
+                y1,
+                [0.85, 0.75, 0.25, 1.0],
+            );
+            // label
+            self.push_text_line(
+                surface_w,
+                surface_h,
+                x0 + 6.0,
+                y0 - 4.0,
+                "Casting",
+                [1.0, 1.0, 1.0, 0.9],
+            );
         }
 
         self.bars_vcount = self.bars_verts.len() as u32;

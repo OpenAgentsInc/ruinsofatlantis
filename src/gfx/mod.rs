@@ -1580,6 +1580,19 @@ impl Renderer {
                 .get(self.pc_index)
                 .copied()
                 .unwrap_or(self.wizard_hp_max);
+            // Casting progress (0..1) while PortalOpen is active for the PC
+            let cast_frac = if let Some(start) = self.pc_anim_start {
+                if self.wizard_anim_index[self.pc_index] == 0 {
+                    let clip = self.select_clip(0);
+                    let dur = clip.duration.max(0.0001);
+                    ((t - start) / dur).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
+            // Cooldown fraction (GCD) after cast completes
             let gcd_frac = if self.gcd_until > t {
                 ((self.gcd_until - t) / self.gcd_duration).clamp(0.0, 1.0)
             } else {
@@ -1590,6 +1603,7 @@ impl Renderer {
                 self.size.height,
                 pc_hp,
                 self.wizard_hp_max,
+                cast_frac,
                 gcd_frac,
             );
             self.hud.queue(&self.device, &self.queue);
@@ -2240,8 +2254,6 @@ impl Renderer {
                 self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
                 self.wizard_last_phase[self.pc_index] = 0.0;
                 self.pc_anim_start = Some(t);
-                // Trigger a simple GCD for HUD feedback (visual only)
-                self.gcd_until = t + self.gcd_duration;
             }
         }
         if let Some(start) = self.pc_anim_start {
@@ -2251,6 +2263,8 @@ impl Renderer {
                     // Return to Still
                     self.wizard_anim_index[self.pc_index] = 1;
                     self.pc_anim_start = None;
+                    // Start GCD visual now that casting completed
+                    self.gcd_until = t + self.gcd_duration;
                 }
             } else {
                 self.pc_anim_start = None;
