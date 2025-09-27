@@ -1,4 +1,4 @@
-Title: Lightning M2 — Indirect Capture Atlas (Tile‑based surface captures)
+Title: Lighting M2 — Indirect Capture Atlas (Tile‑based surface captures)
 
 Goal
 - Provide robust lighting data for rays that leave the screen by capturing per‑mesh surface attributes from representative viewpoints into a runtime atlas. Integrate with time‑of‑day so captures refresh progressively as sun/sky changes. Start with attribute capture (not radiance); consider radiance later when stable.
@@ -73,8 +73,8 @@ Tests
  - Sampling: verify tile depth tests accept expected hits within thickness bias; reject outside bounds; fallback proceeds to BVH.
 
 Out of scope
-- Triangle BVH/SDF tracing (Lightning M3).
-- Multi‑bounce GI and denoisers (Lightning M4).
+- Triangle BVH/SDF tracing (Lighting M3).
+- Multi‑bounce GI and denoisers (Lighting M4).
 
 Housekeeping
 - Keep docblocks at top of new modules per repo guidelines.

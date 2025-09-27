@@ -1,4 +1,4 @@
-Title: Lightning M3 — Software Ray Tracing (BVH baseline, optional mesh SDFs) + Hit Evaluation Modes
+Title: Lighting M3 — Software Ray Tracing (BVH baseline, optional mesh SDFs) + Hit Evaluation Modes
 
 Goal
 - Handle off‑screen ray hits robustly using a two‑level triangle BVH (TLAS/BLAS) as baseline, with an optional signed‑distance field (SDF) path for detail rays. Support two hit evaluation modes: fast (sample from capture atlas) and quality (evaluate BRDF at the true hit), selectable per material and overridable per view.
@@ -24,7 +24,7 @@ Planned files and module map (aligned with src/README.md)
   - `src/gfx/mod.rs` — Extend `LightingConfig` with toggles for BVH on/off, SDF on/off, and per‑view defaults for hit mode.
 
 Connections to existing hierarchy (read src/README.md)
-- Integrate with `src/gfx/gi/capture/sampling.rs` (Lightning M2) for fast hit fetch from the capture atlas.
+- Integrate with `src/gfx/gi/capture/sampling.rs` (Lighting M2) for fast hit fetch from the capture atlas.
 - Keep renderer wiring in `src/gfx/mod.rs` and pipeline creation in `src/gfx/pipeline.rs`.
 - Update `src/README.md` under `gfx/` to document `rt/` modules and reflection/gi RT paths.
 
@@ -75,7 +75,7 @@ Tests
 - Cornell‑box‑like integration test validates barycentrics and normal orientation (handedness consistency).
 
 Out of scope
-- Multi‑bounce GI and denoisers (Lightning M4).
+- Multi‑bounce GI and denoisers (Lighting M4).
 
 Housekeeping
 - If a helper crate is introduced (e.g., `bitvec` for SDF occupancy), add via `cargo add` and document.

@@ -1,4 +1,4 @@
-Title: Lightning M1 — Foundations: G‑Buffer, Z‑MAX Hi‑Z, Temporal, SSR/SSGI
+Title: Lighting M1 — Foundations: G‑Buffer, Z‑MAX Hi‑Z, Temporal, SSR/SSGI
 
 Goal
 - Establish the core rendering infrastructure for stable environment lighting: G‑Buffer pass, depth pyramid, temporal reprojection/history, and baseline screen‑space reflections (SSR) and screen‑space diffuse GI (SSGI). Wire all of this to our existing sun/sky/time‑of‑day system.
@@ -91,14 +91,14 @@ Tests
 - Motion vectors: animated transform (translate+rotate) yields expected pixel offsets under known jitter.
 
 Out of scope
-- Off‑screen ray hits (defer to Lightning M2/M3).
-- Multi‑bounce GI and denoisers (Lightning M4).
+- Off‑screen ray hits (defer to Lighting M2/M3).
+- Multi‑bounce GI and denoisers (Lighting M4).
 
 Housekeeping
 - Follow dependency policy: if any new crate is needed, add via `cargo add`, not manual edits.
 - Keep the repo compiling; run `cargo fmt` and `cargo clippy -- -D warnings`.
 
-Cross‑cutting engineering (applies to all Lightning milestones)
+Cross‑cutting engineering (applies to all Lighting milestones)
 - Frame graph: model passes (G‑Buffer, Hi‑Z, SSR, SSGI, Capture, RT, Denoisers) as nodes with explicit read/write resources to manage lifetimes and aliasing.
 - Bind group conventions (document in `common.wgsl` and `pipeline.rs`):
   - 0 = Globals (camera, jitter, exposure, TOD, frame index)

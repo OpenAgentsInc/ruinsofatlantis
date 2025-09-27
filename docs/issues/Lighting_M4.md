@@ -1,4 +1,4 @@
-Title: Lightning M4 — Multi‑bounce Indirect, Denoisers, and Debug Tooling
+Title: Lighting M4 — Multi‑bounce Indirect, Denoisers, and Debug Tooling
 
 Goal
 - Improve GI quality and stability via multi‑bounce propagation and denoisers tailored to diffuse GI and specular reflections. Ship overlays for capture tiles/atlas and ray debugging to make tuning feasible. Add variance tracking and bounded‑albedo safety to avoid energy blowups.
@@ -18,7 +18,7 @@ Planned files and module map (aligned with src/README.md)
 
 - Debug tooling
   - `src/gfx/debug/rays.rs` — First‑hit buffers, miss reason visualization (off‑screen, thin geo, budget cap).
-  - Reuse/extend: `src/gfx/debug/capture_viz.rs`, `src/gfx/debug/atlas_inspector.rs` (from Lightning M2).
+  - Reuse/extend: `src/gfx/debug/capture_viz.rs`, `src/gfx/debug/atlas_inspector.rs` (from Lighting M2).
 
 - Integration
   - `src/gfx/pipeline.rs` — Pipelines/bind groups for denoisers and propagation.
