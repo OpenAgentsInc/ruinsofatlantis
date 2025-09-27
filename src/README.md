@@ -42,6 +42,7 @@ This document summarizes the `src/` folder structure and what each module does.
     - spell.rs — SRD‑aligned SpellSpec used by tools and the sim.
     - scenario.rs — Scenario schema for the sim harness.
     - loader.rs — Data file readers for JSON under `data/`.
+    - zone.rs — Zone manifest schema + loader (Phase 1). Wizard scene loads `Wizard Woods` from `data/zones/wizard_woods/manifest.json` to configure terrain and sky.
   - rules/
     - mod.rs — SRD rules index.
     - attack.rs — Advantage enum and attack scaffolding.
@@ -60,7 +61,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - mod.rs — Renderer entry (init/resize/render) and high‑level wiring.
   - camera.rs — Camera type and view/projection math.
   - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
-  - terrain.rs — Seeded heightmap terrain generation and simple woodland scatter (Phase 1).
+  - terrain.rs — Seeded heightmap terrain generation and simple woodland scatter (Phase 1). Parameters (size/extent/seed) come from the active Zone manifest.
   - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
   - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
   - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.

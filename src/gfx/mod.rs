@@ -34,7 +34,11 @@ use crate::assets::skinning::merge_gltf_animations;
 use crate::assets::{
     AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned,
 };
-use crate::core::data::{loader as data_loader, spell::SpellSpec};
+use crate::core::data::{
+    loader as data_loader,
+    spell::SpellSpec,
+    zone::{ZoneManifest, load_zone_manifest},
+};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
@@ -481,7 +485,24 @@ impl Renderer {
         });
 
         // Sky uniforms
-        let sky_state = sky::SkyStateCPU::new();
+        // Load Zone manifest for the wizard demo scene
+        let zone: ZoneManifest =
+            load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
+        log::info!(
+            "Zone '{}' (id={}, plane={:?})",
+            zone.display_name,
+            zone.zone_id,
+            zone.plane
+        );
+        // Sky/time-of-day state with zone weather defaults
+        let mut sky_state = sky::SkyStateCPU::new();
+        if let Some(w) = zone.weather {
+            sky_state.weather = crate::gfx::sky::Weather {
+                turbidity: w.turbidity,
+                ground_albedo: w.ground_albedo,
+            };
+            sky_state.recompute();
+        }
         let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sky-uniform"),
             contents: bytemuck::bytes_of(&sky_state.sky_uniform),
@@ -538,11 +559,11 @@ impl Renderer {
             }],
         });
 
-        // Terrain (replaces single ground plane)
-        let terrain_extent = 150.0;
-        let terrain_size = 129; // 128x128 quads
+        // Terrain (replaces single ground plane) — parameters from Zone
+        let terrain_extent = zone.terrain.extent;
+        let terrain_size = zone.terrain.size as usize; // e.g., 129 → 128x128 quads
         let (terrain_cpu, terrain_bufs) =
-            terrain::create_terrain(&device, terrain_size, terrain_extent, 1337);
+            terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed);
         let terrain_vb = terrain_bufs.vb;
         let terrain_ib = terrain_bufs.ib;
         let terrain_index_count = terrain_bufs.index_count;
