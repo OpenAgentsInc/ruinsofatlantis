@@ -60,6 +60,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - mod.rs — Renderer entry (init/resize/render) and high‑level wiring.
   - camera.rs — Camera type and view/projection math.
   - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
+  - terrain.rs — Seeded heightmap terrain generation and simple woodland scatter (Phase 1).
   - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
   - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
   - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.
@@ -82,7 +83,7 @@ Gameplay wiring (prototype)
   - shader_wizard_viewer.wgsl — WGSL for standalone wizard viewer bin.
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
   - anim.rs — CPU animation sampling (palettes, per‑node global transforms, clip timing cues).
-  - scene.rs — Demo scene assembly (spawn world, build instance buffers, camera target).
+  - scene.rs — Demo scene assembly (spawn world, build instance buffers, camera target). Wizards now spawn over generated terrain.
   - material.rs — Wizard material creation (base color texture + transform uniform).
   - fx.rs — FX resources (instances buffer, model bind group, quad VB) and integration helpers.
   - draw.rs — Renderer draw methods for wizards and particles.

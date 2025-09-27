@@ -574,6 +574,7 @@ Tradeoffs
 - Long‑life maintainability: A small dependency surface that tracks platform APIs directly—less churn than big engines’ editor/tooling layers.
 
 ### Spell Data Pipeline: JSON Authoring, Binary Runtime
+### Spell Data Pipeline: JSON Authoring, Binary Runtime
 
 Short answer: JSON isn’t the fastest, but it is usually the best authoring format to stand up a correct, SRD‑faithful, moddable spell system quickly—then we compile it to a fast binary for runtime.
 
@@ -611,3 +612,210 @@ Concrete recommendation
 - Add `spell_schema.json`, CI validation, and a build step that emits `spellpack.bin`.
 - Support hot‑reload JSON in development, load only binary in release.
 - Bake in content hashes and versioning; fail fast if client/server spellpack hashes mismatch.
+ 
+
+## Environment: Sky & Weather
+
+**Design Intent.** A physically‑plausible, configurable sky that animates day/night, drives sun light and ambient skylight, and supports per‑zone weather variation—consistent with RoA’s “in‑world, no toggles” philosophy.
+
+**Player Experience.**
+
+* Sun and sky progress naturally through the day; dawn/dusk tint the world.
+* Overcast, haze, and fog vary by zone (swampy lowlands vs. coastal cliffs).
+* Lighting changes are readable and influence visibility and mood.
+
+**Scope (Phase 1).**
+
+* Analytic clear‑sky model (Hosek–Wilkie) evaluated per pixel.
+* Sun position from game time (day‑fraction) with optional geographic driver.
+* Directional sunlight + **SH‑L2** ambient skylight for fill.
+* Distance/height‑based fog. Optional simple tonemapper (Reinhard / ACES fit).
+* Per‑zone weather overrides: turbidity, fog density/color, ambient tint, exposure.
+* Tooling hooks in `tools/model-viewer`.
+
+**Data & Authoring.**
+
+* `data/environment/defaults.json` (global), `data/environment/zones.json` (overrides).
+* Runtime controls: pause/scrub time, rate scale.
+* Debug: show azimuth/elevation; sliders for turbidity/fog/exposure.
+
+**Runtime Behavior.**
+
+* **Renderer order:** sky → shadows → opaque → transparent/FX → UI.
+* **Lighting:** `sun_dir_ws`, `sun_illuminance`, `sh9_ambient` in `Globals` UBO.
+* **Zones:** entering a WeatherZone blends to its profile over 0.5–2.0s.
+
+**Integration Points.**
+
+* Terrain/biomes shading uses directional + SH ambient.
+* Minimap shows weather glyph; HUD clock displays zone time.
+* Sim/Events may trigger storms later (Phase 2).
+
+**Performance Targets.**
+
+* Sky pass ≤0.2 ms; SH projection ≤0.1 ms/frame amortized; single shadow map in Phase 1.
+
+**Future Work.**
+
+* Volumetric clouds and aerial perspective; precipitation; moon/stars; cascaded shadows.
+
+---
+
+## World: Terrain & Biomes
+
+**Design Intent.** Fast, attractive terrain that varies by biome and is **procedurally generated once, then baked** into persistent zone snapshots. Phase 1 focuses on a Woodland baseline (rolling hills, dense grass, scattered trees).
+
+**Player Experience.**
+
+* Natural rolling hills; grass thick near the player; trees spaced believably.
+* Layout is stable across sessions/players (persistent zone), not re‑rolled.
+
+**Scope (Phase 1).**
+
+* Heightfield generation: **OpenSimplex2 fBm + domain warping**.
+* Chunked mesh (e.g., 64×64 verts) with simple distance LOD and skirts.
+* **Triplanar** material with slope/height blending (grass/dirt/rock).
+* Vegetation:
+
+  * **Trees** from GLB prototypes placed via **Poisson‑disk** (baked, instanced).
+  * **Grass** as GPU‑instanced cards with density masks per chunk (baked).
+* Bake tool writes `snapshot.terrain.bin`, `snapshot.instances.bin`, masks, meta.
+
+**Data & Authoring.**
+
+* `data/zones/<zone>/config.json`: size, seeds, noise params, densities.
+* `data/zones/<zone>/prototypes.json`: tree GLBs, radii, LOD hints.
+* Bake outputs under `data/zones/<zone>/snapshot.*`.
+
+**Runtime Behavior.**
+
+* Client streams visible terrain chunks; builds VB/IB once per chunk; instanced draws for vegetation.
+* Height sampling helper `terrain::sample_height(xz)` for gameplay placement.
+
+**Integration Points.**
+
+* Uses Sky & Weather lighting uniforms for consistent shading.
+* Zones System consumes baked assets; AOI decides which chunks to stream.
+* Sim uses deterministic seeds for spawn masks if needed.
+
+**Performance Targets.**
+
+* Terrain + vegetation ≤5 ms on mid‑range GPU at default draw distance.
+* Zero per‑frame allocations in hot path; instance upload ring buffers.
+
+**Future Work.**
+
+* CDLOD/quadtree with geomorphing; occlusion/indirect draws; roads/decals; wind animation; navmesh bake.
+
+---
+
+## World: Zones (Persistence & Streaming)
+
+**Design Intent.** A **Zone** is the atomic world unit: named, persistent, streamable, and authoritative on the server. Content is generated/authored once, **baked to a snapshot**, then served with runtime **delta logs** for persistent changes (destroyed doors, captured flags, placed campfires).
+
+**Player Experience.**
+
+* Zones feel alive and consistent: changes persist across sessions.
+* Travel uses diegetic **connectors** (gates, docks, caves); brief hand‑off between zones.
+
+**Core Concepts.**
+
+* **Manifest** (authoring input): IDs, plane, size, seeds, environment defaults, spawn tables, connectors.
+* **Snapshot** (cooked, immutable): terrain chunks, instances, masks, meta (content hash).
+* **Delta Log** (append‑only): runtime changes applied over the snapshot; compacted into checkpoints.
+* **Zone Graph**: directed connectors between zones with requirements/costs.
+* **AOI Grid**: interest management for streaming chunks/entities to clients.
+
+**Server Responsibilities.**
+
+* Load snapshot + checkpoint + trailing deltas → **ZoneRuntime**.
+* Manage AOI subscriptions, NPC spawners, timers; persist deltas and periodic checkpoints.
+* Validate travel requests; hand off players to target zones/connectors.
+
+**Client Responsibilities.**
+
+* Subscribe to AOI cells around the camera; request and cache chunk blobs.
+* Build/destroy GPU buffers as chunks enter/exit AOI; render terrain/instances.
+* Trigger travel when entering connector volumes; show minimal loading.
+
+**Data & Authoring.**
+
+* `data/zones/<zone>/manifest.json`, `graph.json`.
+* Bake tool `zone_bake` emits `snapshot.v1/*` (terrain/instances/masks/meta).
+* `zone_check` validates IDs/graph, budgets, and content hashes.
+
+**Integration Points.**
+
+* Terrain & Biomes: snapshot payloads; height sampling.
+* Sky & Weather: environment defaults merge with zone weather.
+* Sim/Rules: deltas carry structure/state changes; events inform HUD toasts.
+* PvP/Law (later): ward volumes + policies enforce consequences (no invuln toggles).
+
+**Determinism & Security.**
+
+* Per‑zone seeded RNG streams; content‑addressed snapshots; client only consumes server‑approved blobs.
+
+**Performance Targets.**
+
+* AOI churn ≤2 ms/tick server‑side at target concurrency; steady‑state snapshot streaming ≤1 MB/s per client at default radius.
+
+**Future Work.**
+
+* Seamless cross‑zone streaming; city law/ward logic; instanced expeditions/raids; sharding.
+
+---
+
+## Rules: Spell & Ability System
+
+**Design Intent.** SRD 5.2.1–faithful spellcasting and abilities with a thin, deterministic real‑time MMO layer (cast bars, GCD, cooldowns) that preserves SRD math while fitting RoA’s pacing and telemetry needs.
+
+**Player Experience.**
+
+* Classic feel: cast bars, channels, interrupts; Concentration with visible feedback.
+* Tooltips show save DC, components (V/S/M), duration, damage types, and tags.
+* Auras/buffs/debuffs behave predictably; combat log is clear.
+
+**Rules Fidelity (high level).**
+
+* **Formulas:** Spell Save DC and Spell Attack bonus; Advantage/Disadvantage and conditions per SRD.
+* **Components:** Verbal/Somatic/Material with focus/pouch substitution where allowed.
+* **Casting Time:** Action/Bonus/Reaction, rituals, long casts; “one slot per turn.”
+* **Durations & Concentration:** new concentration breaks old; damage triggers Con save DC 10 or half damage (floor), cap 30.
+* **Targeting & Areas:** cone/cube/cylinder/line/sphere; clear path required.
+* **Damage Resolution:** roll once for AoE saves; apply half on success where specified.
+* **Mitigation Order:** adjusters → resistance → vulnerability; immunity nullifies; **Temporary HP** doesn’t stack and is consumed first.
+* SRD attribution and licensing live in the GDD’s existing SRD sections.
+
+**MMO Layer.**
+
+* **Global Cooldown (GCD)** + per‑ability cooldowns.
+* Cast/channel states; movement/interrupt policies tuned for RoA but never altering SRD math.
+* Threat hooks (damage, healing, taunt) integrate with sim aggro.
+
+**Data & Authoring.**
+
+* **Authoring format:** JSON (or RON) for readability and CI validation; compiled at build time to a compact **binary spellpack** for runtime.
+* Stable IDs; content hashes; server/client spellpack hash check at login.
+* Authoring schema covers: school, level, lists, components, targeting, effects (op‑codes: MakeSpellAttack, PromptSave, DealDamage, GrantTempHP, ApplyCondition, SpawnArea, ModifyRoll), scaling by slot.
+
+**Runtime & Events.**
+
+* **Pipeline:** intent → validation (resources, components, LoS, range) → cast/channel → resolve effect graph → apply outcomes → emit events.
+* **Events:** `CastStarted/Finished/Interrupted`, `SaveRolled`, `DamageDealt/Healed`, `AuraApplied/Removed`, `ConcentrationStarted/Broken`.
+* HUD consumes events for cast bars, GCD, auras, combat log.
+
+**Representative Coverage (MVP).**
+
+* Direct attack (Fire Bolt), AoE save/half (Cone of Cold/Fireball pattern), buff with THP + Concentration (Heroism), curse rider (Hex), hybrid attack+AoE (Ice Knife), non‑damage zone with repeated saves (Zone of Truth).
+
+**Performance & Determinism.**
+
+* No dynamic dispatch in hot path; small enum jump table for effect ops.
+* Precompute SH/mitigation tables, area samplers, string interning → numeric IDs only at runtime.
+* Fixed timestep sim; seeded RNG streams; golden tests per spell.
+
+**Future Work.**
+
+* Class features/metamagic, item‑granted spells, aura stacking policies, network protocol finalization.
+
+---

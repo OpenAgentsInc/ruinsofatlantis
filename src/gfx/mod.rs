@@ -26,6 +26,7 @@ pub mod fx;
 mod material;
 mod scene;
 mod sky;
+mod terrain;
 mod ui;
 mod util;
 
@@ -77,7 +78,7 @@ pub struct Renderer {
     sky_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     sky_bg: wgpu::BindGroup,
-    plane_model_bg: wgpu::BindGroup,
+    terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
 
     // --- Scene Buffers ---
@@ -86,10 +87,10 @@ pub struct Renderer {
     _plane_model_buf: wgpu::Buffer,
     shard_model_buf: wgpu::Buffer,
 
-    // Geometry (ground plane)
-    plane_vb: wgpu::Buffer,
-    plane_ib: wgpu::Buffer,
-    plane_index_count: u32,
+    // Geometry (terrain)
+    terrain_vb: wgpu::Buffer,
+    terrain_ib: wgpu::Buffer,
+    terrain_index_count: u32,
 
     // GLTF geometry (wizard + ruins)
     wizard_vb: wgpu::Buffer,
@@ -113,6 +114,10 @@ pub struct Renderer {
     npc_instances_cpu: Vec<types::Instance>,
     #[allow(dead_code)]
     npc_models: Vec<glam::Mat4>,
+
+    // Vegetation (trees) — instanced cubes for now
+    trees_instances: wgpu::Buffer,
+    trees_count: u32,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -146,6 +151,10 @@ pub struct Renderer {
     zombie_time_offset: Vec<f32>,
     zombie_ids: Vec<crate::server::NpcId>,
     zombie_prev_pos: Vec<glam::Vec3>,
+    // Some skinned assets have a different authoring "forward" axis. We detect the
+    // root-bone yaw at import and keep a correction so top-level yaw aligns with
+    // world +Z forward when turning toward velocity.
+    zombie_forward_offset: f32,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -164,6 +173,9 @@ pub struct Renderer {
 
     // Sky/time-of-day state
     sky: sky::SkyStateCPU,
+
+    // Terrain sampler (CPU)
+    terrain_cpu: terrain::TerrainCPU,
 
     // Time base for animation
     start: Instant,
@@ -488,17 +500,17 @@ impl Renderer {
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
         let plane_model_init = Model {
             model: glam::Mat4::from_translation(glam::vec3(0.0, -0.05, 0.0)).to_cols_array_2d(),
-            color: [0.05, 0.80, 0.30],
+            color: [0.10, 0.55, 0.25],
             emissive: 0.0,
             _pad: [0.0; 4],
         };
         let plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("plane-model"),
+            label: Some("terrain-model"),
             contents: bytemuck::bytes_of(&plane_model_init),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let plane_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("plane-model-bg"),
+            label: Some("terrain-model-bg"),
             layout: &model_bgl,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -526,9 +538,14 @@ impl Renderer {
             }],
         });
 
-        // Ground plane (choose a generous extent for the plaza)
-        let plane_extent = 150.0;
-        let (plane_vb, plane_ib, plane_index_count) = mesh::create_plane(&device, plane_extent);
+        // Terrain (replaces single ground plane)
+        let terrain_extent = 150.0;
+        let terrain_size = 129; // 128x128 quads
+        let (terrain_cpu, terrain_bufs) =
+            terrain::create_terrain(&device, terrain_size, terrain_extent, 1337);
+        let terrain_vb = terrain_bufs.vb;
+        let terrain_ib = terrain_bufs.ib;
+        let terrain_index_count = terrain_bufs.index_count;
 
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
         let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
@@ -566,6 +583,29 @@ impl Renderer {
             }
         }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
+        // Determine a base offset so the lowest vertex sits on ground, with a small embed.
+        let (ruins_base_offset, ruins_radius): (f32, f32) = match &ruins_cpu_res {
+            Ok(cpu) => {
+                let mut min_y = f32::INFINITY;
+                let mut min_x = f32::INFINITY;
+                let mut max_x = f32::NEG_INFINITY;
+                let mut min_z = f32::INFINITY;
+                let mut max_z = f32::NEG_INFINITY;
+                for v in &cpu.vertices {
+                    min_y = min_y.min(v.pos[1]);
+                    min_x = min_x.min(v.pos[0]);
+                    max_x = max_x.max(v.pos[0]);
+                    min_z = min_z.min(v.pos[2]);
+                    max_z = max_z.max(v.pos[2]);
+                }
+                let sx = (max_x - min_x).abs();
+                let sz = (max_z - min_z).abs();
+                let radius = 0.5 * sx.max(sz);
+                // Embed slightly to avoid hovering
+                ((-min_y) - 0.05, radius)
+            }
+            Err(_) => (0.6, 6.0),
+        };
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
@@ -663,7 +703,36 @@ impl Renderer {
         };
 
         // Build scene instance buffers and camera target
-        let scene_build = scene::build_demo_scene(&device, &skinned_cpu, plane_extent);
+        let scene_build = scene::build_demo_scene(
+            &device,
+            &skinned_cpu,
+            terrain_extent,
+            Some(&terrain_cpu),
+            ruins_base_offset,
+            ruins_radius,
+        );
+
+        // Snap initial wizard ring to terrain height
+        let mut wizard_models = scene_build.wizard_models.clone();
+        for m in &mut wizard_models {
+            let c = m.to_cols_array();
+            let x = c[12];
+            let z = c[14];
+            let (h, _n) = terrain::height_at(&terrain_cpu, x, z);
+            let pos = glam::vec3(x, h, z);
+            let (s, r, _t) = glam::Mat4::from_cols_array(&c).to_scale_rotation_translation();
+            *m = glam::Mat4::from_scale_rotation_translation(s, r, pos);
+        }
+        let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+        for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() {
+            let m = wizard_models[i].to_cols_array_2d();
+            inst.model = m;
+        }
+        let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-instances"),
+            contents: bytemuck::cast_slice(&wizard_instances_cpu),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
         // Precompute PC initial position from the soon-to-be-moved vector
         let pc_initial_pos = {
             let m = scene_build.wizard_models[scene_build.pc_index];
@@ -732,16 +801,17 @@ impl Renderer {
         let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
         let mut server = crate::server::ServerState::new();
         // Configure ring distances and counts (keep existing ones, add more)
-        let near_count = 10usize; // existing close ring
+        // Reduce zombies ~25% overall by lowering ring counts
+        let near_count = 8usize; // was 10
         let near_radius = 15.0f32;
-        let mid1_count = 16usize;
+        let mid1_count = 12usize; // was 16
         let mid1_radius = 30.0f32;
-        let mid2_count = 20usize;
+        let mid2_count = 15usize; // was 20
         let mid2_radius = 45.0f32;
-        let mid3_count = 24usize;
+        let mid3_count = 18usize; // was 24
         let mid3_radius = 60.0f32;
-        let far_count = 12usize; // existing far ring
-        let far_radius = plane_extent * 0.7;
+        let far_count = 9usize; // was 12
+        let far_radius = terrain_extent * 0.7;
         // Spawn rings (hp scales mildly with distance)
         server.ring_spawn(near_count, near_radius, 20);
         server.ring_spawn(mid1_count, mid1_radius, 25);
@@ -769,6 +839,15 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Trees: scatter instances on gentle slopes
+        let tree_cpu = terrain::place_trees(&terrain_cpu, 350, 20250926);
+        let trees_count = tree_cpu.len() as u32;
+        let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("trees-instances"),
+            contents: bytemuck::cast_slice(&tree_cpu),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         log::info!(
             "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
             server.npcs.len(),
@@ -783,10 +862,13 @@ impl Renderer {
         let mut zombie_models: Vec<glam::Mat4> = Vec::new();
         let mut zombie_ids: Vec<crate::server::NpcId> = Vec::new();
         for (idx, npc) in server.npcs.iter().enumerate() {
+            // Snap initial zombie spawn to terrain height
+            let (h, _n) = terrain::height_at(&terrain_cpu, npc.pos.x, npc.pos.z);
+            let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
             let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),
                 glam::Quat::IDENTITY,
-                npc.pos,
+                pos,
             );
             zombie_models.push(m);
             zombie_ids.push(npc.id);
@@ -821,6 +903,19 @@ impl Renderer {
             }],
         });
 
+        // Determine asset forward offset from the zombie root node (if present).
+        let zombie_forward_offset = if let Some(root_ix) = zombie_cpu.root_node {
+            let r = zombie_cpu
+                .base_r
+                .get(root_ix)
+                .copied()
+                .unwrap_or(glam::Quat::IDENTITY);
+            let f = r * glam::Vec3::Z; // authoring forward in model space
+            f32::atan2(f.x, f.z)
+        } else {
+            0.0
+        };
+
         Ok(Self {
             surface,
             device,
@@ -837,7 +932,7 @@ impl Renderer {
             sky_pipeline,
             globals_bg,
             sky_bg,
-            plane_model_bg,
+            terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
             globals_buf,
@@ -845,9 +940,9 @@ impl Renderer {
             _plane_model_buf: plane_model_buf,
             shard_model_buf,
 
-            plane_vb,
-            plane_ib,
-            plane_index_count,
+            terrain_vb,
+            terrain_ib,
+            terrain_index_count,
             wizard_vb,
             wizard_ib,
             wizard_index_count,
@@ -857,8 +952,8 @@ impl Renderer {
             ruins_vb,
             ruins_ib,
             ruins_index_count,
-            wizard_instances: scene_build.wizard_instances,
-            wizard_count: scene_build.wizard_count,
+            wizard_instances,
+            wizard_count: wizard_instances_cpu.len() as u32,
             zombie_instances,
             zombie_count: zombie_instances_cpu.len() as u32,
             zombie_instances_cpu,
@@ -872,7 +967,7 @@ impl Renderer {
             palettes_buf,
             palettes_bg,
             joints_per_wizard: scene_build.joints_per_wizard,
-            wizard_models: scene_build.wizard_models,
+            wizard_models,
             zombie_palettes_buf,
             zombie_palettes_bg,
             zombie_joints,
@@ -892,7 +987,8 @@ impl Renderer {
                     )
                 })
                 .collect(),
-            wizard_instances_cpu: scene_build.wizard_instances_cpu,
+            zombie_forward_offset,
+            wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
@@ -905,6 +1001,7 @@ impl Renderer {
             _zombie_sampler,
             wire_enabled: false,
             sky: sky_state,
+            terrain_cpu,
 
             start: Instant::now(),
             last_time: 0.0,
@@ -946,6 +1043,8 @@ impl Renderer {
             npc_count: 0, // cubes hidden; zombies replace them visually
             npc_instances_cpu,
             npc_models,
+            trees_instances,
+            trees_count,
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
@@ -1006,15 +1105,49 @@ impl Renderer {
             self.cam_lift,
             self.cam_look_height,
         );
+        #[allow(unused_assignments)]
+        // Anchor camera to the center of the PC model, not the feet.
+        let pc_anchor = if self.pc_index < self.wizard_models.len() {
+            let m = self.wizard_models[self.pc_index];
+            (m * glam::Vec4::new(0.0, 1.2, 0.0, 1.0)).truncate()
+        } else {
+            self.player.pos + glam::vec3(0.0, 1.2, 0.0)
+        };
+
+        #[allow(unused_assignments)]
         let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
-            self.player.pos,
+            pc_anchor,
             glam::Quat::from_rotation_y(self.player.yaw),
             off_local,
             look_local,
             aspect,
             dt,
         );
+        // Keep camera above terrain: clamp eye/target Y to terrain height + clearance
+        let clearance_eye = 0.2f32;
+        let clearance_look = 0.05f32;
+        let eye = self.cam_follow.current_pos;
+        let (hy, _n) = terrain::height_at(&self.terrain_cpu, eye.x, eye.z);
+        if self.cam_follow.current_pos.y < hy + clearance_eye {
+            self.cam_follow.current_pos.y = hy + clearance_eye;
+        }
+        let look = self.cam_follow.current_look;
+        let (hy2, _n2) = terrain::height_at(&self.terrain_cpu, look.x, look.z);
+        if self.cam_follow.current_look.y < hy2 + clearance_look {
+            self.cam_follow.current_look.y = hy2 + clearance_look;
+        }
+        // Recompute camera/globals without smoothing after clamping
+        let (_cam2, globals2) = camera_sys::third_person_follow(
+            &mut self.cam_follow,
+            pc_anchor,
+            glam::Quat::from_rotation_y(self.player.yaw),
+            off_local,
+            look_local,
+            aspect,
+            0.0,
+        );
+        globals = globals2;
         // Advance sky & lighting
         self.sky.update(dt);
         globals.sun_dir_time = [
@@ -1163,13 +1296,29 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            // Ground plane
+            // Terrain
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.plane_model_bg, &[]);
-            rpass.set_vertex_buffer(0, self.plane_vb.slice(..));
-            rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
+            rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
+            rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
+            rpass.set_index_buffer(self.terrain_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+
+            // Trees (instanced cubes for now)
+            if self.trees_count > 0 {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
+                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.trees_count);
+            }
 
             // Wizards
             self.draw_wizards(&mut rpass);
@@ -1221,14 +1370,47 @@ impl Renderer {
                 / (self.wizard_hp_max as f32);
             bar_entries.push((head.truncate(), frac));
         }
-        // NPC boxes: use server authoritative pos; offset slightly above top
-        for npc in &self.server.npcs {
-            if !npc.alive {
-                continue;
+        // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
+        use std::collections::HashMap;
+        let mut npc_map: HashMap<crate::server::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        for n in &self.server.npcs {
+            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
+        }
+        for (i, id) in self.zombie_ids.iter().enumerate() {
+            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
+                if !alive {
+                    continue;
+                }
+                let m = self
+                    .zombie_models
+                    .get(i)
+                    .copied()
+                    .unwrap_or(glam::Mat4::IDENTITY);
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
+                bar_entries.push((head.truncate(), frac));
             }
-            let pos = npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0);
-            let frac = (npc.hp.max(0) as f32) / (npc.max_hp.max(1) as f32);
-            bar_entries.push((pos, frac));
+        }
+        // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
+        use std::collections::HashMap;
+        let mut npc_map: HashMap<crate::server::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        for n in &self.server.npcs {
+            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
+        }
+        for (i, id) in self.zombie_ids.iter().enumerate() {
+            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
+                if !alive {
+                    continue;
+                }
+                let m = self
+                    .zombie_models
+                    .get(i)
+                    .copied()
+                    .unwrap_or(glam::Mat4::IDENTITY);
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
+                bar_entries.push((head.truncate(), frac));
+            }
         }
         self.bars.queue_entries(
             &self.device,
@@ -1551,11 +1733,41 @@ impl Renderer {
         for (i, id) in self.zombie_ids.clone().iter().enumerate() {
             if let Some(p) = pos_map.get(id) {
                 let m_old = self.zombie_models[i];
-                let yaw = Self::yaw_from_model(&m_old);
+                let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(*p);
+                // If the zombie moved this frame, face the movement direction.
+                // Apply authoring forward-axis correction so models authored with
+                // +X (or -Z) forward still look where they walk.
+                let delta = *p - prev;
+                let yaw = if delta.length_squared() > 1e-5 {
+                    delta.x.atan2(delta.z) - self.zombie_forward_offset
+                } else {
+                    Self::yaw_from_model(&m_old)
+                };
+                // Stick to terrain height
+                let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                let pos = glam::vec3(p.x, h, p.z);
                 let new_m = glam::Mat4::from_scale_rotation_translation(
                     glam::Vec3::splat(1.0),
                     glam::Quat::from_rotation_y(yaw),
-                    *p,
+                    pos,
+                );
+                let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(*p);
+                // If the zombie moved this frame, face the movement direction.
+                // Apply authoring forward-axis correction so models authored with
+                // +X (or -Z) forward still look where they walk.
+                let delta = *p - prev;
+                let yaw = if delta.length_squared() > 1e-5 {
+                    delta.x.atan2(delta.z) - self.zombie_forward_offset
+                } else {
+                    Self::yaw_from_model(&m_old)
+                };
+                // Stick to terrain height
+                let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                let pos = glam::vec3(p.x, h, p.z);
+                let new_m = glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::from_rotation_y(yaw),
+                    pos,
                 );
                 self.zombie_models[i] = new_m;
                 let mut inst = self.zombie_instances_cpu[i];
@@ -1590,7 +1802,25 @@ impl Renderer {
                     {
                         self.input.run = pressed
                     }
-                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
+                    PhysicalKey::Code(KeyCode::Digit1)
+                    | PhysicalKey::Code(KeyCode::Numpad1)
+                    | PhysicalKey::Code(KeyCode::Space)
+                        if self.pc_alive =>
+                    {
+                        if pressed {
+                            self.pc_cast_queued = true;
+                            log::info!("PC cast queued: Fire Bolt");
+                        }
+                    }
+                    // Sky controls (pause/scrub/speed)
+                    PhysicalKey::Code(KeyCode::Space) => {
+                        if pressed {
+                            self.sky.toggle_pause();
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::Digit1)
+                    | PhysicalKey::Code(KeyCode::Numpad1)
+                    | PhysicalKey::Code(KeyCode::Space)
                         if self.pc_alive =>
                     {
                         if pressed {
@@ -1687,11 +1917,14 @@ impl Renderer {
         }
         // Update CPU model matrix and upload only the PC instance
         let rot = glam::Quat::from_rotation_y(self.player.yaw);
-        let m = glam::Mat4::from_scale_rotation_translation(
-            glam::Vec3::splat(1.0),
-            rot,
-            self.player.pos,
-        );
+        // Project player onto terrain height
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
+        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
+        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
+        // Project player onto terrain height
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
+        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
+        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
         self.wizard_models[self.pc_index] = m;
         let mut inst = self.wizard_instances_cpu[self.pc_index];
         inst.model = m.to_cols_array_2d();
@@ -1789,8 +2022,10 @@ impl Renderer {
 
     // Update and render-side state for projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
-        // 1) Spawn firebolts for PortalOpen phase crossing, but only while zombies exist
-        if self.wizard_count > 0 && self.any_zombies_alive() {
+        // 1) Spawn firebolts for PortalOpen phase crossing.
+        // PC is always allowed to cast; NPC wizards only cast while zombies remain.
+        if self.wizard_count > 0 {
+            let zombies_alive = self.any_zombies_alive();
             let cycle = 5.0f32; // synthetic cycle period
             let bolt_offset = 1.5f32; // trigger point in the cycle
             for i in 0..(self.wizard_count as usize) {
@@ -1801,7 +2036,8 @@ impl Renderer {
                 let phase = (t + self.wizard_time_offset[i]) % cycle;
                 let crossed = (prev <= bolt_offset && phase >= bolt_offset)
                     || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
-                if crossed {
+                let allowed = i == self.pc_index || zombies_alive;
+                if allowed && crossed {
                     let clip = self.select_clip(self.wizard_anim_index[i]);
                     let clip_time = if clip.duration > 0.0 {
                         phase.min(clip.duration)
@@ -1817,14 +2053,9 @@ impl Renderer {
                         let origin_w = inst
                             * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
                         // Use instance forward in world-space to ensure truly straight shots.
-                        // Some skeletons may have a slight local yaw bias; instance transform
-                        // encodes our desired world orientation.
                         let dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
                             .truncate()
                             .normalize_or_zero();
-                        // Nudge origin toward the character center so it doesn't look like it
-                        // emerges too far from the right-hand side. Shift slightly against the
-                        // instance right vector.
                         let right_w = (inst * glam::Vec4::new(1.0, 0.0, 0.0, 0.0))
                             .truncate()
                             .normalize_or_zero();
@@ -1889,13 +2120,26 @@ impl Renderer {
                         self.queue.write_buffer(&self.zombie_instances, 0, bytes);
                     }
                 }
-                // Damage floater above NPC head
-                if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
-                    let pos = n.pos + glam::vec3(0.0, n.radius + 0.9, 0.0);
+                // Damage floater above NPC head (terrain/instance-aware)
+                if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                    let m = self
+                        .zombie_models
+                        .get(idx)
+                        .copied()
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                    self.damage.spawn(head.truncate(), h.damage);
+                } else if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
+                    let (hgt, _n) = terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    let pos = glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z);
                     self.damage.spawn(pos, h.damage);
                 } else {
                     self.damage
                         .spawn(h.pos + glam::vec3(0.0, 0.9, 0.0), h.damage);
+                    // Fallback: snap event position to terrain height
+                    let (hgt, _n) = terrain::height_at(&self.terrain_cpu, h.pos.x, h.pos.z);
+                    self.damage
+                        .spawn(glam::vec3(h.pos.x, hgt + 0.9, h.pos.z), h.damage);
                 }
             }
             if hits.is_empty() {
@@ -1910,9 +2154,13 @@ impl Renderer {
         let mut burst: Vec<Particle> = Vec::new();
         let mut i = 0;
         while i < self.projectiles.len() {
-            let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
+            let pcur = self.projectiles[i].pos;
+            let (h, _n) = terrain::height_at(&self.terrain_cpu, pcur.x, pcur.z);
+            let kill = t >= self.projectiles[i].t_die || pcur.y <= h + 0.02;
             if kill {
-                let hit = self.projectiles[i].pos;
+                let mut hit = self.projectiles[i].pos;
+                // Snap impact to terrain height
+                hit.y = h;
                 // much smaller flare + compact burst
                 burst.push(Particle {
                     pos: hit,
@@ -1961,6 +2209,19 @@ impl Renderer {
         if self.fx_count > 0 {
             self.queue
                 .write_buffer(&self.fx_instances, 0, bytemuck::cast_slice(&inst));
+        }
+
+        // 5) If no zombies remain, retire NPC wizards from the casting loop
+        if !self.any_zombies_alive() {
+            for i in 0..(self.wizard_count as usize) {
+                if i == self.pc_index {
+                    continue; // leave PC state alone
+                }
+                // 2 => "Waiting" (see select_clip)
+                if self.wizard_anim_index[i] == 0 {
+                    self.wizard_anim_index[i] = 2;
+                }
+            }
         }
     }
 

@@ -189,5 +189,11 @@ fn sample_quat(tr: &TrackQuat, t: f32, default: glam::Quat) -> glam::Quat {
     let t0 = tr.times[i];
     let t1 = tr.times[i + 1];
     let f = (t - t0) / (t1 - t0);
-    tr.values[i].slerp(tr.values[i + 1], f)
+    let a = tr.values[i];
+    let mut b = tr.values[i + 1];
+    // Shortest-arc interpolation to avoid antipodal flips
+    if a.dot(b) < 0.0 {
+        b = -b;
+    }
+    a.slerp(b, f).normalize()
 }
