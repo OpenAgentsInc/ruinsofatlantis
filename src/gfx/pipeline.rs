@@ -577,9 +577,15 @@ pub fn create_present_pipeline(
     present_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> RenderPipeline {
+    // Compose shared fullscreen VS (with present Y flip) + present FS
+    let src = [
+        include_str!("fullscreen.wgsl"),
+        include_str!("present.wgsl"),
+    ]
+    .join("\n\n");
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("present-shader"),
-        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("present.wgsl"))),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Owned(src)),
     });
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("present-pipeline-layout"),
@@ -591,7 +597,7 @@ pub fn create_present_pipeline(
         layout: Some(&layout),
         vertex: VertexState {
             module: &shader,
-            entry_point: Some("vs_present"),
+            entry_point: Some("vs_fullscreen_present_flip"),
             buffers: &[],
             compilation_options: Default::default(),
         },
@@ -619,9 +625,15 @@ pub fn create_blit_pipeline(
     present_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> RenderPipeline {
+    // Compose shared fullscreen VS (no flip) + blit FS
+    let src = [
+        include_str!("fullscreen.wgsl"),
+        include_str!("blit_noflip.wgsl"),
+    ]
+    .join("\n\n");
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("blit-noflip-shader"),
-        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("blit_noflip.wgsl"))),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Owned(src)),
     });
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("blit-noflip-pipeline-layout"),
@@ -633,7 +645,7 @@ pub fn create_blit_pipeline(
         layout: Some(&layout),
         vertex: VertexState {
             module: &shader,
-            entry_point: Some("vs_blit"),
+            entry_point: Some("vs_fullscreen_noflip"),
             buffers: &[],
             compilation_options: Default::default(),
         },
@@ -689,9 +701,15 @@ pub fn create_post_ao_pipeline(
     post_ao_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> RenderPipeline {
+    // Compose shared fullscreen VS (no flip) + AO FS
+    let src = [
+        include_str!("fullscreen.wgsl"),
+        include_str!("post_ao.wgsl"),
+    ]
+    .join("\n\n");
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("post-ao-shader"),
-        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("post_ao.wgsl"))),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Owned(src)),
     });
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("post-ao-pipeline-layout"),
@@ -703,7 +721,7 @@ pub fn create_post_ao_pipeline(
         layout: Some(&layout),
         vertex: VertexState {
             module: &shader,
-            entry_point: Some("vs_fullscreen"),
+            entry_point: Some("vs_fullscreen_noflip"),
             buffers: &[],
             compilation_options: Default::default(),
         },
@@ -807,9 +825,15 @@ pub fn create_ssgi_pipeline(
     scene_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> RenderPipeline {
+    // Compose shared fullscreen VS (no flip) + SSGI FS
+    let src = [
+        include_str!("fullscreen.wgsl"),
+        include_str!("ssgi_fs.wgsl"),
+    ]
+    .join("\n\n");
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("ssgi-fs-shader"),
-        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("ssgi_fs.wgsl"))),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Owned(src)),
     });
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("ssgi-fs-pipeline-layout"),
@@ -821,7 +845,7 @@ pub fn create_ssgi_pipeline(
         layout: Some(&layout),
         vertex: VertexState {
             module: &shader,
-            entry_point: Some("vs_fullscreen"),
+            entry_point: Some("vs_fullscreen_noflip"),
             buffers: &[],
             compilation_options: Default::default(),
         },
