@@ -69,13 +69,16 @@ mod tests {
 
     #[test]
     fn zmax_4x4_two_planes() {
-        // 4x4: top half depth=1.0, bottom half depth=5.0 → mip1 should be 5.0 everywhere.
+        // 4x4: top half depth=1.0, bottom half depth=5.0 → mip1 rows: [1, 5]
         let w = 4; let h = 4;
         let mut src = vec![1.0_f32; w * h];
         for y in 2..4 { for x in 0..4 { src[y * w + x] = 5.0; }}
         let mip1 = zmax_downsample_2x2(&src, w, h);
         assert_eq!(mip1.len(), (w/2)*(h/2));
-        for v in mip1 { assert!((v - 5.0).abs() < 1e-6); }
+        // y=0 row should be 1.0; y=1 row should be 5.0
+        assert!((mip1[0] - 1.0).abs() < 1e-6);
+        assert!((mip1[1] - 1.0).abs() < 1e-6);
+        assert!((mip1[2] - 5.0).abs() < 1e-6);
+        assert!((mip1[3] - 5.0).abs() < 1e-6);
     }
 }
-

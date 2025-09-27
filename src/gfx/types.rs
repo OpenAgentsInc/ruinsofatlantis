@@ -19,6 +19,8 @@ pub struct Globals {
     pub sh_coeffs: [[f32; 4]; 9],
     // Fog params: color.rgb, density
     pub fog_params: [f32; 4],
+    // Clip params: x=znear, y=zfar
+    pub clip_params: [f32; 4],
 }
 
 #[repr(C)]

@@ -88,7 +88,10 @@ pub struct Renderer {
     wire_pipeline: Option<wgpu::RenderPipeline>,
     particle_pipeline: wgpu::RenderPipeline,
     sky_pipeline: wgpu::RenderPipeline,
+    post_ao_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
+    post_ao_bg: wgpu::BindGroup,
+    post_sampler: wgpu::Sampler,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
@@ -473,6 +476,14 @@ impl Renderer {
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
             pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, config.format);
+        // Post AO pipeline
+        let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
+        let post_ao_pipeline = pipeline::create_post_ao_pipeline(
+            &device,
+            &globals_bgl,
+            &post_ao_bgl,
+            config.format,
+        );
         let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
             &device,
             &shader,
@@ -501,6 +512,7 @@ impl Renderer {
             sun_dir_time: [0.0, 1.0, 0.0, 0.0],
             sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
             fog_params: [0.0, 0.0, 0.0, 0.0],
+            clip_params: [0.1, 1000.0, 0.0, 0.0],
         };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
@@ -547,6 +559,25 @@ impl Renderer {
                 binding: 0,
                 resource: sky_buf.as_entire_binding(),
             }],
+        });
+        // Post AO bind group & sampler
+        let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("post-ao-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("post-ao-bg"),
+            layout: &post_ao_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            ],
         });
 
         // Per-draw Model buffers (plane and shard base)
@@ -1052,7 +1083,10 @@ impl Renderer {
             wire_pipeline,
             particle_pipeline,
             sky_pipeline,
+            post_ao_pipeline,
             globals_bg,
+            post_ao_bg,
+            post_sampler,
             sky_bg,
             terrain_model_bg: plane_model_bg,
             shard_model_bg,
@@ -1589,6 +1623,27 @@ impl Renderer {
                 "Zombie",
             );
             self.nameplates_npc.draw(&mut encoder, &view);
+        }
+
+        // Post-process AO overlay (fullscreen)
+        {
+            use wgpu::*;
+            let mut post = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("post-ao"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            post.set_pipeline(&self.post_ao_pipeline);
+            post.set_bind_group(0, &self.globals_bg, &[]);
+            post.set_bind_group(1, &self.post_ao_bg, &[]);
+            post.draw(0..3, 0..1);
         }
 
         // Submit only if no validation errors occurred
