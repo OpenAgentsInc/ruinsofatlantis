@@ -584,16 +584,27 @@ impl Renderer {
         }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
         // Determine a base offset so the lowest vertex sits on ground, with a small embed.
-        let ruins_base_offset: f32 = match &ruins_cpu_res {
+        let (ruins_base_offset, ruins_radius): (f32, f32) = match &ruins_cpu_res {
             Ok(cpu) => {
-                let min_y = cpu
-                    .vertices
-                    .iter()
-                    .map(|v| v.pos[1])
-                    .fold(f32::INFINITY, f32::min);
-                (-min_y) - 0.05
+                let mut min_y = f32::INFINITY;
+                let mut min_x = f32::INFINITY;
+                let mut max_x = f32::NEG_INFINITY;
+                let mut min_z = f32::INFINITY;
+                let mut max_z = f32::NEG_INFINITY;
+                for v in &cpu.vertices {
+                    min_y = min_y.min(v.pos[1]);
+                    min_x = min_x.min(v.pos[0]);
+                    max_x = max_x.max(v.pos[0]);
+                    min_z = min_z.min(v.pos[2]);
+                    max_z = max_z.max(v.pos[2]);
+                }
+                let sx = (max_x - min_x).abs();
+                let sz = (max_z - min_z).abs();
+                let radius = 0.5 * sx.max(sz);
+                // Embed slightly to avoid hovering
+                ((-min_y) - 0.05, radius)
             }
-            Err(_) => 0.6,
+            Err(_) => (0.6, 6.0),
         };
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
@@ -698,6 +709,7 @@ impl Renderer {
             terrain_extent,
             Some(&terrain_cpu),
             ruins_base_offset,
+            ruins_radius,
         );
 
         // Snap initial wizard ring to terrain height

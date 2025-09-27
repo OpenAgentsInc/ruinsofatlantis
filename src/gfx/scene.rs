@@ -36,6 +36,7 @@ pub fn build_demo_scene(
     plane_extent: f32,
     terrain: Option<&TerrainCPU>,
     ruins_base_offset: f32,
+    ruins_radius: f32,
 ) -> SceneBuild {
     // Build a tiny ECS world and spawn entities
     let mut world = World::new();
@@ -74,7 +75,7 @@ pub fn build_demo_scene(
         let mut p = pos;
         let mut tilt = glam::Quat::IDENTITY;
         if let Some(t) = terrain {
-            let (h, n) = crate::gfx::terrain::height_at(t, p.x, p.z);
+            let (h, n) = height_min_under(t, p.x, p.z, ruins_radius);
             p.y = h + ruins_y;
             tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
         }
@@ -98,7 +99,7 @@ pub fn build_demo_scene(
         let mut pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
         let mut tilt = glam::Quat::IDENTITY;
         if let Some(t) = terrain {
-            let (h, n) = crate::gfx::terrain::height_at(t, pos.x, pos.z);
+            let (h, n) = height_min_under(t, pos.x, pos.z, ruins_radius);
             pos.y = h + ruins_y;
             tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
         }
@@ -235,4 +236,25 @@ fn tilt_toward_normal(n: glam::Vec3, max_angle: f32) -> glam::Quat {
     } else {
         glam::Quat::from_axis_angle(axis.normalize(), angle)
     }
+}
+
+fn height_min_under(t: &TerrainCPU, x: f32, z: f32, radius: f32) -> (f32, glam::Vec3) {
+    // Sample center + four cardinal points at given radius; choose min height.
+    let mut hmin = f32::INFINITY;
+    let mut n_at = glam::Vec3::Y;
+    let samples = [
+        (0.0, 0.0),
+        (radius, 0.0),
+        (-radius, 0.0),
+        (0.0, radius),
+        (0.0, -radius),
+    ];
+    for (dx, dz) in samples {
+        let (h, n) = crate::gfx::terrain::height_at(t, x + dx, z + dz);
+        if h < hmin {
+            hmin = h;
+            n_at = n;
+        }
+    }
+    (hmin, n_at)
 }
