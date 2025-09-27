@@ -547,6 +547,72 @@ pub fn create_bar_pipeline(
     })
 }
 
+// Present (blit/tonemap) pipeline from SceneColor to swapchain
+pub fn create_present_bgl(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("present-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    })
+}
+
+pub fn create_present_pipeline(
+    device: &wgpu::Device,
+    present_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("present-shader"),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("present.wgsl"))),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("present-pipeline-layout"),
+        bind_group_layouts: &[present_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("present-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module: &shader,
+            entry_point: Some("vs_present"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: &shader,
+            entry_point: Some("fs_present"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 // Post-process AO pipeline (fullscreen triangle sampling depth)
 pub fn create_post_ao_bgl(device: &wgpu::Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -601,7 +667,20 @@ pub fn create_post_ao_pipeline(
             entry_point: Some("fs_ao"),
             targets: &[Some(ColorTargetState {
                 format: color_format,
-                blend: Some(wgpu::BlendState::REPLACE),
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        // dst.rgb = dst.rgb * src.rgb  (src = AO term)
+                        src_factor: wgpu::BlendFactor::Zero,
+                        dst_factor: wgpu::BlendFactor::Src,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        // keep alpha unchanged
+                        src_factor: wgpu::BlendFactor::Zero,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: Default::default(),

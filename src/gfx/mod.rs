@@ -77,6 +77,9 @@ pub struct Renderer {
     size: PhysicalSize<u32>,
     max_dim: u32,
     depth: wgpu::TextureView,
+    // Offscreen scene color
+    scene_color: wgpu::Texture,
+    scene_view: wgpu::TextureView,
 
     // Lighting M1: G-Buffer + Hi-Z scaffolding
     gbuffer: Option<gbuffer::GBuffer>,
@@ -89,12 +92,14 @@ pub struct Renderer {
     particle_pipeline: wgpu::RenderPipeline,
     sky_pipeline: wgpu::RenderPipeline,
     post_ao_pipeline: wgpu::RenderPipeline,
+    present_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
     post_sampler: wgpu::Sampler,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
+    present_bg: wgpu::BindGroup,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -461,6 +466,18 @@ impl Renderer {
         };
         surface.configure(&device, &config);
         let depth = util::create_depth_view(&device, config.width, config.height, config.format);
+        // Offscreen SceneColor (HDR)
+        let scene_color = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-color"),
+            size: wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let scene_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
         // Lighting M1: allocate G-Buffer attachments and linear depth (Hi-Z) pyramid
         let gbuffer = gbuffer::GBuffer::create(&device, config.width, config.height);
         let hiz = hiz::HiZPyramid::create(&device, config.width, config.height);
@@ -476,6 +493,9 @@ impl Renderer {
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
             pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, config.format);
+        // Present pipeline (SceneColor -> swapchain)
+        let present_bgl = pipeline::create_present_bgl(&device);
+        let present_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, config.format);
         // Post AO pipeline
         let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
         let post_ao_pipeline = pipeline::create_post_ao_pipeline(
@@ -576,6 +596,14 @@ impl Renderer {
             layout: &post_ao_bgl,
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            ],
+        });
+        let present_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("present-bg"),
+            layout: &present_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
             ],
         });
@@ -1077,6 +1105,8 @@ impl Renderer {
             size: PhysicalSize::new(w, h),
             max_dim,
             depth,
+            scene_color,
+            scene_view,
 
             pipeline,
             inst_pipeline,
@@ -1084,10 +1114,12 @@ impl Renderer {
             particle_pipeline,
             sky_pipeline,
             post_ao_pipeline,
+            present_pipeline,
             globals_bg,
             post_ao_bg,
             post_sampler,
             sky_bg,
+            present_bg,
             terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
@@ -1245,6 +1277,18 @@ impl Renderer {
             self.config.height,
             self.config.format,
         );
+        // Recreate SceneColor
+        self.scene_color = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-color"),
+            size: wgpu::Extent3d { width: self.config.width, height: self.config.height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        self.scene_view = self.scene_color.create_view(&wgpu::TextureViewDescriptor::default());
         // Resize Lighting M1 resources
         self.gbuffer = Some(gbuffer::GBuffer::create(&self.device, self.config.width, self.config.height));
         self.hiz = Some(hiz::HiZPyramid::create(&self.device, self.config.width, self.config.height));
@@ -1412,13 +1456,13 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
-        // Sky-only pass (no depth)
+        // Sky-only pass (no depth) into SceneColor
         {
             use wgpu::*;
             let mut sky = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("sky-pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
+                    view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: Operations {
@@ -1440,13 +1484,13 @@ impl Renderer {
             sky.set_bind_group(1, &self.sky_bg, &[]);
             sky.draw(0..3, 0..1);
         }
-        // Main pass with depth; load color from sky
+        // Main pass with depth into SceneColor; load color from sky pass
         {
             use wgpu::*;
             let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("main-pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
+                    view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: Operations {
@@ -1569,7 +1613,7 @@ impl Renderer {
             view_proj,
             &bar_entries,
         );
-        self.bars.draw(&mut encoder, &view);
+        self.bars.draw(&mut encoder, &self.scene_view);
         // Damage numbers
         self.damage.update(dt);
         self.damage.queue(
@@ -1579,7 +1623,7 @@ impl Renderer {
             self.config.height,
             view_proj,
         );
-        self.damage.draw(&mut encoder, &view);
+        self.damage.draw(&mut encoder, &self.scene_view);
 
         // Draw wizard nameplates first
         // Draw wizard nameplates for alive wizards only (hide dead PC/NPC labels)
@@ -1598,7 +1642,7 @@ impl Renderer {
             view_proj,
             &wiz_alive,
         );
-        self.nameplates.draw(&mut encoder, &view);
+        self.nameplates.draw(&mut encoder, &self.scene_view);
 
         // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
@@ -1622,16 +1666,16 @@ impl Renderer {
                 &npc_positions,
                 "Zombie",
             );
-            self.nameplates_npc.draw(&mut encoder, &view);
+            self.nameplates_npc.draw(&mut encoder, &self.scene_view);
         }
 
-        // Post-process AO overlay (fullscreen)
+        // Post-process AO overlay (fullscreen) multiplying into SceneColor
         {
             use wgpu::*;
             let mut post = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("post-ao"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
+                    view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
@@ -1644,6 +1688,26 @@ impl Renderer {
             post.set_bind_group(0, &self.globals_bg, &[]);
             post.set_bind_group(1, &self.post_ao_bg, &[]);
             post.draw(0..3, 0..1);
+        }
+
+        // Present SceneColor to swapchain
+        {
+            use wgpu::*;
+            let mut present = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("present-pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: Operations { load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            present.set_pipeline(&self.present_pipeline);
+            present.set_bind_group(0, &self.present_bg, &[]);
+            present.draw(0..3, 0..1);
         }
 
         // Submit only if no validation errors occurred

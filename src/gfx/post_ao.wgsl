@@ -37,8 +37,9 @@ fn fs_ao(in: VsOut) -> @location(0) vec4<f32> {
   let zfar = globals.clip.y;
   let depth = textureSample(depth_tex, samp, in.uv);
   let zlin = linearize_depth(depth, znear, zfar);
-  // Sample a small cross pattern
-  let px = vec2<f32>(1.0 / 1920.0, 1.0 / 1080.0); // Approx; replaced by real res in future
+  // Sample a small cross pattern using actual texture size
+  let texSize = vec2<f32>(textureDimensions(depth_tex));
+  let px = 1.0 / texSize;
   var occ = 0.0;
   let taps = array<vec2<f32>, 8>(
     vec2<f32>(1.0, 0.0), vec2<f32>(-1.0, 0.0), vec2<f32>(0.0, 1.0), vec2<f32>(0.0, -1.0),
@@ -57,4 +58,3 @@ fn fs_ao(in: VsOut) -> @location(0) vec4<f32> {
   let ao = 1.0 - strength * occ;
   return vec4<f32>(vec3<f32>(ao), 1.0);
 }
-
