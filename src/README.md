@@ -4,7 +4,7 @@ This document summarizes the `src/` folder structure and what each module does.
 
 Workspace crates (added for modularization)
 - crates/data_runtime — SRD-aligned data schemas + loaders (replaces `src/core/data`; re-exported under `crate::core::data`).
-- crates/render_wgpu — Renderer facade crate (temporarily re-exports `crate::gfx`).
+- crates/render_wgpu — Renderer crate. The full contents of `src/gfx/**` have been migrated here under `crates/render_wgpu/src/gfx/**` to establish a standalone renderer. For now, the root still contains `src/gfx/` used by the app; the next step is to flip the root to re-export from `render_wgpu` and remove the duplicate.
 - crates/sim_core — Rules/combat/sim crate (moved from `src/core/{rules,combat}` and `src/sim`). Re-exported under `crate::core::{rules,combat}` and `crate::sim` for compatibility.
 - crates/platform_winit — Platform loop facade (temporarily re-exports `crate::platform_winit`).
 - crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; F1 toggles perf overlay, H toggles HUD).
