@@ -23,6 +23,16 @@ Overview of phases
 
 —
 
+Short Answer (night + fire‑bolts)
+- With Lighting M1 plus a few small add‑ons (clustered direct lighting, screen‑space contact shadows, night exposure/bloom), we can deliver a convincing night scene where fire‑bolts act as the primary lights for on‑screen content.
+- To have bolts affect off‑screen receivers/reflections, extend M2 with a light‑aware atlas shading add‑on.
+- M3 brings robust shadows/reflections anywhere via BVH hit‑lighting and shadow rays; M4 polishes quality/perf.
+
+What’s feasible when
+- M1 (+ add‑ons): Night scene with bolts as direct lights; good SSR/SSGI pickup for on‑screen; plausible contact shadows; dark ambience.
+- M2 (+ add‑on): Bolts contribute to off‑screen GI/reflections by shading atlas samples at reconstructed points.
+- M3: Full path with shadow rays from dynamic lights at GI/reflection hits; robust when sources/receivers are off‑screen.
+
 Phase 0 — Environment lighting baseline (connect to TOD)
 - Directional sunlight: keep driving direct lighting from `Globals.sun_dir_time`.
 - Sky ambient: continue using SH‑L2 from `sky.rs`, refreshed when TOD or weather changes.
@@ -52,6 +62,31 @@ Phase 1 — Foundations
    - Screen‑space reflections: importance sample reflection direction, march in Hi‑Z, binary search refine, temporal accumulate; fall back to environment map when miss.
    - Screen‑space diffuse GI: cosine‑weighted screen‑space rays with short march budget, temporal accumulate; fall back to sky SH when miss.
    - Add `src/gfx/reflections/ssr.rs` and `src/gfx/gi/ssgi.rs` with matching WGSL entry points.
+
+M1 add‑ons for “night + fire‑bolts as primary lights”
+- Clustered direct lighting (forward+)
+  - Files: `src/gfx/lighting/cluster.rs`, `src/gfx/lighting/lightset.rs`, `src/gfx/shaders/lighting_common.wgsl`.
+  - CPU cull small point lights into tile lists (start 16×16 tiles). Composite in a deferred/light pass that reads the G‑Buffer.
+  - Light struct: `LightGPU { kind, pos_ws, range, dir_ws, cos_inner, cos_outer, color_rgb, intensity_lm }` (start with sphere only).
+  - Config: `tile_size`, `max_lights_per_tile`, `max_total_lights`.
+- Fire‑bolt as a light source
+  - Hook projectiles to spawn/despawn a point light; range 6–12 m; 1200–3000 lm; warm 1800–2200 K; optional flicker.
+- Screen‑space contact shadows (SSCS)
+  - Files: `src/gfx/shadows/sscs.rs`, `src/gfx/shaders/sscs.wgsl`.
+  - March toward the dominant local light in Z‑MAX Hi‑Z with 8–16 steps; thickness bias 2–10 cm.
+  - Config: `enable_contact_shadows`, `sscs_steps`, `sscs_thickness`.
+- Night exposure, ambience, and bloom
+  - Files: `src/gfx/post/exposure.rs`, `src/gfx/post/bloom.rs`.
+  - Allow manual pre‑exposure; clamp sky SH near zero; clamp SSGI sky fallback; add small bloom so bolts read bright.
+- Temporal reactive mask for emissive movers
+  - Extend temporal to reduce history where emissive/bright local lights influence pixels.
+
+M2 add‑on for off‑screen bolt lighting
+- Shade atlas samples with dynamic lights
+  - Extend `gi/capture/sampling.rs` to return reconstructed `p_ws`, `n_ws`, and material; evaluate direct lights at that point for SSR/SSGI miss paths (no shadows yet).
+
+M3 add‑ons for robust shadows/reflections
+- Shadow rays via BVH to most significant dynamic lights at GI/reflection hits; reuse in reflection quality mode.
 
 Phase 2 — Tile‑based indirect capture atlas (our “surface capture” analog)
 Goal: When rays leave the screen, fetch pre‑captured material/lighting from nearby geometry.

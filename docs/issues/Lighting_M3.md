@@ -74,6 +74,17 @@ Tests
 - SDF unit tests under `rt/sdf/*` guarded by feature.
 - Cornell‑box‑like integration test validates barycentrics and normal orientation (handedness consistency).
 
+Add‑ons: Robust shadows/reflections from dynamic lights
+- Shadow rays via BVH
+  - New helper: `src/gfx/rt/shadows.rs` to cast an occlusion ray from `p_ws + n*ε` toward light; return 0/1 shadow factor.
+  - Limit per‑hit cost via reservoir/importance (e.g., choose 2–4 closest/brightest lights).
+- Reflection hit‑lighting hook
+  - In `reflections/rt.rs` quality mode (and for glossy materials), evaluate BRDF at the true hit using dynamic lights + shadow rays; fallback to atlas otherwise.
+
+Add‑on acceptance
+- Dynamic lights cast hard shadows on off‑screen receivers visible to the camera.
+- Glossy reflections of bolts appear on off‑screen surfaces with correct parallax.
+
 Out of scope
 - Multi‑bounce GI and denoisers (Lighting M4).
 
