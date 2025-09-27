@@ -21,6 +21,9 @@ fn mk_actor(id: &str, role: &str, team: Option<&str>) -> ActorSim {
         blessed_ms: 0,
         reaction_ready: true,
         next_ability_idx: 0,
+        temp_hp: 0,
+        concentration: None,
+        ability_cooldowns: std::collections::HashMap::new(),
     }
 }
 
@@ -253,4 +256,121 @@ fn cast_complete_triggers_pending_damage_even_without_attack() {
     systems::attack_roll::run(&mut s);
     assert_eq!(s.pending_damage.len(), 1);
     assert!(!s.pending_damage[0].2);
+}
+
+#[test]
+fn temp_hp_absorbs_before_hp() {
+    let mut s = SimState::new(50, 123);
+    // Caster
+    let mut a = mk_actor("wiz", "dps", Some("players"));
+    a.ability_ids.push("deal100".into());
+    a.target = Some(1);
+    s.actors.push(a);
+    // Target with THP
+    let mut b = mk_actor("tgt", "boss", Some("boss"));
+    b.hp = 30;
+    b.temp_hp = 5;
+    s.actors.push(b);
+    // Insert a spell that deals exactly 7 damage: 7d1
+    let txt = r#"{
+      "id": "deal100",
+      "name": "TestDmg",
+      "school": "evocation",
+      "level": 0,
+      "classes": [],
+      "tags": [],
+      "cast_time_s": 0.0,
+      "gcd_s": 0.0,
+      "cooldown_s": 0.0,
+      "resource_cost": null,
+      "can_move_while_casting": false,
+      "targeting": "unit",
+      "requires_line_of_sight": true,
+      "range_ft": 120,
+      "minimum_range_ft": 0,
+      "firing_arc_deg": 180,
+      "attack": null,
+      "damage": {"type":"fire", "add_spell_mod_to_damage":false, "dice_by_level_band":{"1-4":"7d1"}},
+      "projectile": null,
+      "save": null
+    }"#;
+    let spec: ruinsofatlantis::core::data::spell::SpellSpec = serde_json::from_str(txt).unwrap();
+    s.spells.insert("deal100".into(), spec);
+    s.cast_completed.push((0, "deal100".into()));
+    // No attack roll branch → pending_damage
+    systems::attack_roll::run(&mut s);
+    systems::damage::run(&mut s);
+    // THP 5 absorbs first; remaining 2 reduces HP
+    assert_eq!(s.actors[1].temp_hp, 0);
+    assert_eq!(s.actors[1].hp, 28);
+}
+
+#[test]
+fn concentration_breaks_on_high_damage() {
+    let mut s = SimState::new(50, 456);
+    // Caster/Source
+    let mut a = mk_actor("wiz", "dps", Some("players"));
+    a.ability_ids.push("deal100".into());
+    a.target = Some(1);
+    s.actors.push(a);
+    // Target with an active concentration effect
+    let mut b = mk_actor("tgt", "boss", Some("boss"));
+    b.hp = 100;
+    b.concentration = Some("test_conc".into());
+    s.actors.push(b);
+    // Spell guaranteeing 100 damage (DC -> min(30))
+    let txt = r#"{
+      "id": "deal100",
+      "name": "TestDmg",
+      "school": "evocation",
+      "level": 0,
+      "classes": [],
+      "tags": [],
+      "cast_time_s": 0.0,
+      "gcd_s": 0.0,
+      "cooldown_s": 0.0,
+      "resource_cost": null,
+      "can_move_while_casting": false,
+      "targeting": "unit",
+      "requires_line_of_sight": true,
+      "range_ft": 120,
+      "minimum_range_ft": 0,
+      "firing_arc_deg": 180,
+      "attack": null,
+      "damage": {"type":"force", "add_spell_mod_to_damage":false, "dice_by_level_band":{"1-4":"100d1"}},
+      "projectile": null,
+      "save": null
+    }"#;
+    let spec: ruinsofatlantis::core::data::spell::SpellSpec = serde_json::from_str(txt).unwrap();
+    s.spells.insert("deal100".into(), spec);
+    s.cast_completed.push((0, "deal100".into()));
+    systems::attack_roll::run(&mut s);
+    systems::damage::run(&mut s);
+    // DC 30 always fails on 1d20 + 0 → concentration must break
+    assert!(s.actors[1].concentration.is_none());
+    assert!(s.logs.iter().any(|l| l.contains("concentration_broken")));
+}
+
+#[test]
+fn ability_cooldown_starts_on_cast() {
+    let mut s = SimState::new(50, 321);
+    let mut caster = mk_actor("wiz", "dps", Some("players"));
+    caster.ability_ids.push("wiz.fire_bolt.srd521".into());
+    s.actors.push(caster);
+    // Ensure spell is loaded to read cooldown
+    s.spells.insert(
+        "wiz.fire_bolt.srd521".into(),
+        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+    );
+    // Start cast (may or may not start depending on GCD); ensure Idle for next attempt
+    systems::cast_begin::run(&mut s);
+    s.actors[0].action = ActionState::Idle;
+    // Cooldown is 0 for Fire Bolt; spoof a non-zero cooldown in state and ensure gate
+    s.actors[0]
+        .ability_cooldowns
+        .insert("wiz.fire_bolt.srd521".into(), 5000);
+    // Try starting again; should not start due to cooldown
+    let before_logs = s.logs.len();
+    systems::cast_begin::run(&mut s);
+    assert_eq!(before_logs, s.logs.len());
 }

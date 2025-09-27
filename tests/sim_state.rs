@@ -51,6 +51,9 @@ fn target_ac_and_allies() {
         blessed_ms: 0,
         reaction_ready: true,
         next_ability_idx: 0,
+        temp_hp: 0,
+        concentration: None,
+        ability_cooldowns: std::collections::HashMap::new(),
     });
     s.actors.push(ruinsofatlantis::sim::state::ActorSim {
         id: "b".into(),
@@ -70,6 +73,9 @@ fn target_ac_and_allies() {
         blessed_ms: 0,
         reaction_ready: true,
         next_ability_idx: 0,
+        temp_hp: 0,
+        concentration: None,
+        ability_cooldowns: std::collections::HashMap::new(),
     });
     assert_eq!(s.target_ac(0), Some(15));
     assert!(!s.are_allies(0, 1));

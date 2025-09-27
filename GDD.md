@@ -573,31 +573,46 @@ Tradeoffs
 - Streaming‑first: Custom asset packs, chunked world streaming, GPU culling/indirect draws—no engine assumptions to fight.
 - Long‑life maintainability: A small dependency surface that tracks platform APIs directly—less churn than big engines’ editor/tooling layers.
 
-## Contents
+### Spell Data Pipeline: JSON Authoring, Binary Runtime
+### Spell Data Pipeline: JSON Authoring, Binary Runtime
 
-* [Philosophy](#philosophy)
-* [Game Mechanics](#game-mechanics)
-* [SRD Usage and Attribution](#srd-usage-and-attribution)
-* [SRD Scope & Implementation](#srd-scope--implementation)
-* [Classes](#classes)
-* [Races](#races)
-* [Class Lore](#class-lore-oceanic-context)
-* [Combat](#combat)
-* [Player vs. Player (PvP)](#player-vs-player-pvp)
-* [Combat Simulator & Harness](#combat-simulator--harness)
-* [Zones & Cosmology](#zones--cosmology)
-* [Progression Matrix (Zones × Classes, Land Drama)](#progression-matrix-zones--classes-land-drama)
-* [Faction Framework](#faction-framework)
-* [Technical Overview](#technical-overview)
+Short answer: JSON isn’t the fastest, but it is usually the best authoring format to stand up a correct, SRD‑faithful, moddable spell system quickly—then we compile it to a fast binary for runtime.
 
-**New: Systems Specifications (Persistent Docs)**
+Why JSON (authoring)
+- Frictionless editing & review: easy to read, diff, and review in PRs; great fit for designers, engineers, and external contributors. Plays well with codegen, CI linters, and schemas.
+- Strong validation: lock data down with a JSON Schema (types, ranges, enums) and CI validation; guarantees SRD mechanics are representable (save DC formulas, V/S/M components, durations, AoE shapes, Concentration, half‑on‑success, etc.).
+- Tooling ecosystem: abundant tools for migration scripts, formatters, and quick transforms (e.g., jq); simple import/export to spreadsheets.
+- Hot‑reload during development: fast iteration while tuning balance or fixing issues found by the combat sim.
+- Clear provenance: mapping SRD 5.2.1 mechanics into data (not code) simplifies audits/attribution.
 
-* [Environment: Sky & Weather](#environment-sky--weather)
-* [World: Terrain & Biomes](#world-terrain--biomes)
-* [World: Zones (Persistence & Streaming)](#world-zones-persistence--streaming)
-* [Rules: Spell & Ability System](#rules-spell--ability-system)
+But JSON parsing isn’t the fastest… right—so we don’t ship JSON on the hot path.
 
----
+Pipeline
+1. Author in JSON (human‑friendly).
+2. Validate in CI with JSON Schema + unit tests (mitigation order, THP rules, Concentration DC, AoE shapes).
+3. Compile at build time into a compact binary pack (e.g., `*.spellpack`): stable numeric IDs, deduped strings, precomputed lookups, and pre‑flattened effect graphs.
+4. Load binary at runtime (zero‑copy/`bytemuck` PODs or a tight deserializer). JSON is used only for dev/hot‑reload and tooling.
+
+Alternatives & trade‑offs
+- Rust enums/const tables only: fastest load and strong type safety, but slow iteration and noisy diffs; good for “frozen” core content later.
+- RON/TOML/YAML: nicer comments than JSON, but weaker editor/CI ecosystem and typically slower/looser parsers; if comments are required, RON/YAML is acceptable for authoring, still compile to binary for runtime.
+- SQLite pack: useful for patching/queries, but overkill early; a binary blob is simpler and faster to start.
+
+Performance notes (what we’ll do)
+- Precompute AoE samplers, save DC resolvers, mitigation‑order tables, condition IDs, and damage‑type masks.
+- Intern strings and use numeric IDs at runtime.
+- Avoid dynamic dispatch in the hot path: small enum opcodes dispatched via a jump table.
+- Keep cold data compressed: ship one spellpack per version; memory‑map and build in‑memory indices on first use.
+
+Safety & SRD fidelity
+- A data‑driven spell system makes it straightforward to verify SRD mechanics (save DCs, components, Concentration, resistance/vulnerability order, THP non‑stacking, roll‑once AoE damage) and to document any MMO‑layer deviations; this is easier to audit than logic scattered across code.
+
+Concrete recommendation
+- Use JSON for authoring (or RON if comments are required).
+- Add `spell_schema.json`, CI validation, and a build step that emits `spellpack.bin`.
+- Support hot‑reload JSON in development, load only binary in release.
+- Bake in content hashes and versioning; fail fast if client/server spellpack hashes mismatch.
+ 
 
 ## Environment: Sky & Weather
 

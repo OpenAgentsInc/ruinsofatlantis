@@ -26,6 +26,53 @@ pub fn run(state: &mut SimState) {
                 "bless_applied by={} dur_ms=10000",
                 state.actors[actor_idx].id
             ));
+            // Bless is a Concentration spell: starting it ends any existing concentration
+            let prev = state.actors[actor_idx]
+                .concentration
+                .replace(ability_id.clone());
+            if let Some(old) = prev {
+                state.log(format!(
+                    "concentration_ended actor={} prev={} (new=bless)",
+                    state.actors[actor_idx].id, old
+                ));
+            }
+            state.log(format!(
+                "concentration_started actor={} ability={}",
+                state.actors[actor_idx].id, ability_id
+            ));
+        }
+
+        // Identify Heroism (grant THP; also Concentration)
+        let is_heroism = ability_id.contains("heroism")
+            || state
+                .spells
+                .get(&ability_id)
+                .map(|s| s.name.eq_ignore_ascii_case("heroism"))
+                .unwrap_or(false);
+        if is_heroism {
+            // Concentration handling
+            let prev = state.actors[actor_idx]
+                .concentration
+                .replace(ability_id.clone());
+            if let Some(old) = prev {
+                state.log(format!(
+                    "concentration_ended actor={} prev={} (new=heroism)",
+                    state.actors[actor_idx].id, old
+                ));
+            }
+            state.log(format!(
+                "concentration_started actor={} ability={}",
+                state.actors[actor_idx].id, ability_id
+            ));
+            // Grant temporary hit points (prototype amount = 3)
+            let current = state.actors[actor_idx].temp_hp;
+            let grant = 3;
+            let new_thp = current.max(grant);
+            state.actors[actor_idx].temp_hp = new_thp;
+            state.log(format!(
+                "temp_hp_granted actor={} amount={} -> thp={}",
+                state.actors[actor_idx].id, grant, new_thp
+            ));
         }
     }
 }

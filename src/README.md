@@ -102,6 +102,9 @@ Gameplay wiring (prototype)
   - mod.rs — Sim engine index and exports.
   - components/ — Sim ECS component types (controller, statuses, projectiles, threat, etc.).
   - systems/ — Sim systems (AI, cast begin/progress, saves, damage, buffs, projectiles, input).
+    - cast_begin.rs — Validates GCD and per-ability cooldowns; starts casts and kicks off cooldowns.
+    - damage.rs — Applies damage with Temporary Hit Points (THP) absorption and triggers Concentration checks (DC = max(10, floor(damage/2)), cap 30).
+    - buffs.rs — Handles Bless/Heroism prototypes; starts/ends Concentration and grants THP (non-stacking: keeps higher value).
   - state.rs — SimState (RNG, actors, spell cache, pending effects, logs, environment flags).
   - runner.rs — Scenario runner and loop (ticks systems, checks win/loss).
   - rng.rs — RNG setup; deterministic streams.
