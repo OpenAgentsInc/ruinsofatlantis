@@ -50,6 +50,7 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         entries: &[
             wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&r.scene_view) },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&r._post_sampler) },
+            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&r.depth) },
         ],
     });
     r.post_ao_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -98,4 +99,3 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         ],
     });
 }
-
