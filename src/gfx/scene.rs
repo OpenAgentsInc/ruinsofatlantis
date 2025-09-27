@@ -35,6 +35,7 @@ pub fn build_demo_scene(
     skinned_cpu: &SkinnedMeshCPU,
     plane_extent: f32,
     terrain: Option<&TerrainCPU>,
+    ruins_base_offset: f32,
 ) -> SceneBuild {
     // Build a tiny ECS world and spawn entities
     let mut world = World::new();
@@ -63,7 +64,7 @@ pub fn build_demo_scene(
     let place_range = plane_extent * 0.9;
     // A few backdrop ruins placed far away for depth
     // The ruins model origin is roughly centered; raise Y so it rests on ground.
-    let ruins_y = 0.6f32;
+    let ruins_y = ruins_base_offset; // base offset aligns model min Y to ground with small embed
     let ruins_positions = [
         glam::vec3(-place_range * 0.9, ruins_y, -place_range * 0.7),
         glam::vec3(place_range * 0.85, ruins_y, -place_range * 0.2),

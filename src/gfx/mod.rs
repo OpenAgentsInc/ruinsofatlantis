@@ -583,6 +583,18 @@ impl Renderer {
             }
         }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
+        // Determine a base offset so the lowest vertex sits on ground, with a small embed.
+        let ruins_base_offset: f32 = match &ruins_cpu_res {
+            Ok(cpu) => {
+                let min_y = cpu
+                    .vertices
+                    .iter()
+                    .map(|v| v.pos[1])
+                    .fold(f32::INFINITY, f32::min);
+                (-min_y) - 0.05
+            }
+            Err(_) => 0.6,
+        };
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
@@ -680,8 +692,13 @@ impl Renderer {
         };
 
         // Build scene instance buffers and camera target
-        let scene_build =
-            scene::build_demo_scene(&device, &skinned_cpu, terrain_extent, Some(&terrain_cpu));
+        let scene_build = scene::build_demo_scene(
+            &device,
+            &skinned_cpu,
+            terrain_extent,
+            Some(&terrain_cpu),
+            ruins_base_offset,
+        );
 
         // Snap initial wizard ring to terrain height
         let mut wizard_models = scene_build.wizard_models.clone();
@@ -1076,6 +1093,7 @@ impl Renderer {
             self.cam_lift,
             self.cam_look_height,
         );
+        #[allow(unused_assignments)]
         let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
             self.player.pos,
@@ -1085,6 +1103,30 @@ impl Renderer {
             aspect,
             dt,
         );
+        // Keep camera above terrain: clamp eye/target Y to terrain height + clearance
+        let clearance_eye = 0.2f32;
+        let clearance_look = 0.05f32;
+        let eye = self.cam_follow.current_pos;
+        let (hy, _n) = terrain::height_at(&self.terrain_cpu, eye.x, eye.z);
+        if self.cam_follow.current_pos.y < hy + clearance_eye {
+            self.cam_follow.current_pos.y = hy + clearance_eye;
+        }
+        let look = self.cam_follow.current_look;
+        let (hy2, _n2) = terrain::height_at(&self.terrain_cpu, look.x, look.z);
+        if self.cam_follow.current_look.y < hy2 + clearance_look {
+            self.cam_follow.current_look.y = hy2 + clearance_look;
+        }
+        // Recompute camera/globals without smoothing after clamping
+        let (_cam2, globals2) = camera_sys::third_person_follow(
+            &mut self.cam_follow,
+            self.player.pos,
+            glam::Quat::from_rotation_y(self.player.yaw),
+            off_local,
+            look_local,
+            aspect,
+            0.0,
+        );
+        globals = globals2;
         // Advance sky & lighting
         self.sky.update(dt);
         globals.sun_dir_time = [
