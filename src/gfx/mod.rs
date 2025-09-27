@@ -26,15 +26,20 @@ pub mod fx;
 mod material;
 mod scene;
 mod sky;
-mod terrain;
+pub mod terrain;
 mod ui;
 mod util;
 
 use crate::assets::skinning::merge_gltf_animations;
 use crate::assets::{
     AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned,
+    load_obj_mesh,
 };
-use crate::core::data::{loader as data_loader, spell::SpellSpec};
+use crate::core::data::{
+    loader as data_loader,
+    spell::SpellSpec,
+    zone::{ZoneManifest, load_zone_manifest},
+};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
@@ -118,6 +123,9 @@ pub struct Renderer {
     // Vegetation (trees) — instanced cubes for now
     trees_instances: wgpu::Buffer,
     trees_count: u32,
+    trees_vb: wgpu::Buffer,
+    trees_ib: wgpu::Buffer,
+    trees_index_count: u32,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -151,10 +159,8 @@ pub struct Renderer {
     zombie_time_offset: Vec<f32>,
     zombie_ids: Vec<crate::server::NpcId>,
     zombie_prev_pos: Vec<glam::Vec3>,
-    // Some skinned assets have a different authoring "forward" axis. We detect the
-    // root-bone yaw at import and keep a correction so top-level yaw aligns with
-    // world +Z forward when turning toward velocity.
-    zombie_forward_offset: f32,
+    // Per-instance forward-axis offsets (authoring → world). Calibrated on movement.
+    zombie_forward_offsets: Vec<f32>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -235,6 +241,17 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    #[inline]
+    fn wrap_angle(a: f32) -> f32 {
+        let mut x = a;
+        while x > std::f32::consts::PI {
+            x -= 2.0 * std::f32::consts::PI;
+        }
+        while x < -std::f32::consts::PI {
+            x += 2.0 * std::f32::consts::PI;
+        }
+        x
+    }
     fn any_zombies_alive(&self) -> bool {
         self.server.npcs.iter().any(|n| n.alive)
     }
@@ -481,7 +498,24 @@ impl Renderer {
         });
 
         // Sky uniforms
-        let sky_state = sky::SkyStateCPU::new();
+        // Load Zone manifest for the wizard demo scene
+        let zone: ZoneManifest =
+            load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
+        log::info!(
+            "Zone '{}' (id={}, plane={:?})",
+            zone.display_name,
+            zone.zone_id,
+            zone.plane
+        );
+        // Sky/time-of-day state with zone weather defaults
+        let mut sky_state = sky::SkyStateCPU::new();
+        if let Some(w) = zone.weather {
+            sky_state.weather = crate::gfx::sky::Weather {
+                turbidity: w.turbidity,
+                ground_albedo: w.ground_albedo,
+            };
+            sky_state.recompute();
+        }
         let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sky-uniform"),
             contents: bytemuck::bytes_of(&sky_state.sky_uniform),
@@ -538,11 +572,16 @@ impl Renderer {
             }],
         });
 
-        // Terrain (replaces single ground plane)
-        let terrain_extent = 150.0;
-        let terrain_size = 129; // 128x128 quads
+        // Terrain (replaces single ground plane) — prefer baked snapshot, else generate from Zone
+        let terrain_extent = zone.terrain.extent;
+        let terrain_size = zone.terrain.size as usize; // e.g., 129 → 128x128 quads
         let (terrain_cpu, terrain_bufs) =
-            terrain::create_terrain(&device, terrain_size, terrain_extent, 1337);
+            if let Some(cpu) = terrain::load_terrain_snapshot("wizard_woods") {
+                let bufs = terrain::upload_from_cpu(&device, &cpu);
+                (cpu, bufs)
+            } else {
+                terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed)
+            };
         let terrain_vb = terrain_bufs.vb;
         let terrain_ib = terrain_bufs.ib;
         let terrain_index_count = terrain_bufs.index_count;
@@ -839,14 +878,65 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Trees: scatter instances on gentle slopes
-        let tree_cpu = terrain::place_trees(&terrain_cpu, 350, 20250926);
-        let trees_count = tree_cpu.len() as u32;
+        // Trees: prefer baked instances if available, else scatter using manifest vegetation params
+        let trees_models_opt = terrain::load_trees_snapshot("wizard_woods");
+        let trees_instances_cpu: Vec<types::Instance> = if let Some(models) = &trees_models_opt {
+            terrain::instances_from_models(models)
+        } else {
+            let (tree_count, tree_seed) = zone
+                .vegetation
+                .as_ref()
+                .map(|v| (v.tree_count as usize, v.tree_seed))
+                .unwrap_or((350usize, 20250926u32));
+            terrain::place_trees(&terrain_cpu, tree_count, tree_seed)
+        };
+        let trees_count = trees_instances_cpu.len() as u32;
         let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("trees-instances"),
-            contents: bytemuck::cast_slice(&tree_cpu),
+            contents: bytemuck::cast_slice(&trees_instances_cpu),
             usage: wgpu::BufferUsages::VERTEX,
         });
+        // Load a static tree mesh (OBJ) and upload
+        let tree_mesh_path = asset_path("assets/models/trees/OBJ/Tree_3.obj");
+        let tree_mesh_cpu = if tree_mesh_path.exists() {
+            // If OBJ not vendored yet, fall back to cube
+            load_obj_mesh(&tree_mesh_path).context("load OBJ tree mesh")?
+        } else {
+            log::warn!("tree OBJ not found; falling back to cube mesh for trees");
+            // Build a CpuMesh from the cube VB/IB? Simpler: reuse cube buffers
+            // We'll just keep using cube buffers when OBJ is missing.
+            // Placeholder buffers (will be overwritten by npc_vb/ib below if missing)
+            crate::assets::CpuMesh {
+                vertices: vec![],
+                indices: vec![],
+            }
+        };
+        let (trees_vb, trees_ib, trees_index_count) = if !tree_mesh_cpu.vertices.is_empty() {
+            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-vb"),
+                contents: bytemuck::cast_slice(&tree_mesh_cpu.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-ib"),
+                contents: bytemuck::cast_slice(&tree_mesh_cpu.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+            (vb, ib, tree_mesh_cpu.indices.len() as u32)
+        } else {
+            // Fallback: reuse the cube geometry
+            (npc_vb.clone(), npc_ib.clone(), npc_index_count)
+        };
+        // If meta exists, verify fingerprints
+        if let Some(models) = &trees_models_opt
+            && let Some(ok) =
+                terrain::verify_snapshot_fingerprints("wizard_woods", &terrain_cpu, Some(models))
+        {
+            log::info!(
+                "zone snapshot meta verification: {}",
+                if ok { "ok" } else { "MISMATCH" }
+            );
+        }
 
         log::info!(
             "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
@@ -911,7 +1001,8 @@ impl Renderer {
                 .copied()
                 .unwrap_or(glam::Quat::IDENTITY);
             let f = r * glam::Vec3::Z; // authoring forward in model space
-            f32::atan2(f.x, f.z)
+            // Flip by 180° to align attack/walk with target direction in our scene.
+            f32::atan2(f.x, f.z) + std::f32::consts::PI
         } else {
             0.0
         };
@@ -987,7 +1078,7 @@ impl Renderer {
                     )
                 })
                 .collect(),
-            zombie_forward_offset,
+            zombie_forward_offsets: vec![zombie_forward_offset; zombie_count as usize],
             wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
@@ -1045,6 +1136,9 @@ impl Renderer {
             npc_models,
             trees_instances,
             trees_count,
+            trees_vb,
+            trees_ib,
+            trees_index_count,
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
@@ -1304,7 +1398,7 @@ impl Renderer {
             rpass.set_index_buffer(self.terrain_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
 
-            // Trees (instanced cubes for now)
+            // Trees (instanced static mesh)
             if self.trees_count > 0 {
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
@@ -1314,10 +1408,10 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-                rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
+                rpass.set_vertex_buffer(0, self.trees_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
-                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
-                rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.trees_count);
+                rpass.set_index_buffer(self.trees_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
             }
 
             // Wizards
@@ -1637,16 +1731,45 @@ impl Renderer {
         }
         // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
-        let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
+        // Build quick lookup for attack state and radius using server NPCs
+        use std::collections::HashMap;
+        let mut attack_map: HashMap<crate::server::NpcId, bool> = HashMap::new();
+        let mut radius_map: HashMap<crate::server::NpcId, f32> = HashMap::new();
+        for n in &self.server.npcs {
+            attack_map.insert(n.id, n.attack_anim > 0.0);
+            radius_map.insert(n.id, n.radius);
+        }
+        // Wizard positions
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
+        // Helper: fuzzy find clip by case-insensitive substring(s)
+        let find_clip = |subs: &[&str], anims: &std::collections::HashMap<String, AnimClip>| -> Option<String> {
+            let subsl: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
+            for name in anims.keys() {
+                let low = name.to_lowercase();
+                if subsl.iter().any(|s| low.contains(s)) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
         for i in 0..(self.zombie_count as usize) {
             let c = self.zombie_models[i].to_cols_array();
             let pos = glam::vec3(c[12], c[13], c[14]);
             let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(pos);
             let moving = (pos - prev).length_squared() > 1e-4;
             self.zombie_prev_pos[i] = pos;
-            let has_walk = self.zombie_cpu.animations.contains_key("Walk");
-            let has_run = self.zombie_cpu.animations.contains_key("Run");
-            let has_idle = self.zombie_cpu.animations.contains_key("Idle");
+            let has_walk = self.zombie_cpu.animations.contains_key("Walk")
+                || find_clip(&["walk"], &self.zombie_cpu.animations).is_some();
+            let has_run = self.zombie_cpu.animations.contains_key("Run")
+                || find_clip(&["run"], &self.zombie_cpu.animations).is_some();
+            let has_idle = self.zombie_cpu.animations.contains_key("Idle")
+                || find_clip(&["idle", "stand"], &self.zombie_cpu.animations).is_some();
+            let has_attack = self.zombie_cpu.animations.contains_key("Attack")
+                || find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations).is_some();
             let has_proc = self.zombie_cpu.animations.contains_key("ProcIdle");
             let has_static = self.zombie_cpu.animations.contains_key("__static");
             let any_owned: String = self
@@ -1656,7 +1779,46 @@ impl Renderer {
                 .next()
                 .cloned()
                 .unwrap_or("__static".to_string());
-            let clip_name = if moving {
+            // Prioritize attack animation when the server reports it or if in melee contact
+            let zid = *self.zombie_ids.get(i).unwrap_or(&crate::server::NpcId(0));
+            let mut is_attacking = attack_map.get(&zid).copied().unwrap_or(false);
+            // In-contact heuristic: nearest wizard within (z_radius + wizard_r + pad)
+            let z_radius = radius_map.get(&zid).copied().unwrap_or(0.95);
+            let wizard_r = 0.7f32;
+            // Use a slightly larger pad than the server to keep the attack anim
+            // engaged while in close proximity.
+            let pad = 0.20f32;
+            let mut best_d2 = f32::INFINITY;
+            for w in &wiz_pos {
+                let dx = w.x - pos.x;
+                let dz = w.z - pos.z;
+                let d2 = dx * dx + dz * dz;
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                }
+            }
+            let contact = z_radius + wizard_r + pad;
+            if best_d2 <= contact * contact {
+                is_attacking = true;
+            }
+            let clip_name = if is_attacking && has_attack {
+                if self.zombie_cpu.animations.contains_key("Attack") {
+                    "Attack"
+                } else if let Some(_n) = find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations) {
+                    // Use first fuzzy match
+                    // Note: we allocate here, handled below when fetching the clip
+                    // by looking it up by this dynamic name
+                    // We'll handle lookup via proc_name_str/lookup below
+                    // Return a sentinel that will be replaced
+                    // Store in a temporary variable instead
+                    // We'll set proc_name_str to Some(n) and use it
+                    // Use placeholder here; actual value comes from proc_name_str
+                    "__attack_dynamic__"
+                } else {
+                    // Fallback to moving/idle below
+                    "__noattack__"
+                }
+            } else if moving {
                 if has_walk {
                     "Walk"
                 } else if has_run {
@@ -1681,24 +1843,32 @@ impl Renderer {
             };
 
             let need_proc = clip_name == "__static" && !has_idle && !has_proc;
-            let proc_name_str = if need_proc {
+            // Optionally override with fuzzy-attack match name
+            let mut proc_name_str = if need_proc {
                 Some(self.ensure_proc_idle_clip())
             } else {
                 None
             };
+            if clip_name == "__attack_dynamic__"
+                && let Some(n) = find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations)
+            {
+                proc_name_str = Some(n);
+            }
             let t = time_global + self.zombie_time_offset.get(i).copied().unwrap_or(0.0);
             let lookup = proc_name_str.as_deref().unwrap_or(clip_name);
-            let clip = self.zombie_cpu.animations.get(lookup).unwrap();
-            let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
-            for m in palette {
-                mats_all.push(m.to_cols_array());
+            if let Some(clip) = self.zombie_cpu.animations.get(lookup) {
+                let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
+                // Upload this instance's palette directly at its offset
+                let mut raw: Vec<[f32; 16]> = Vec::with_capacity(joints);
+                for m in palette {
+                    raw.push(m.to_cols_array());
+                }
+                let byte_off = (i * joints * 64) as u64;
+                self.queue
+                    .write_buffer(&self.zombie_palettes_buf, byte_off, bytemuck::cast_slice(&raw));
             }
         }
-        self.queue.write_buffer(
-            &self.zombie_palettes_buf,
-            0,
-            bytemuck::cast_slice(&mats_all),
-        );
+        // No single bulk upload; we wrote per-instance segments above.
     }
 
     fn update_zombies_from_server(&mut self) {
@@ -1708,20 +1878,89 @@ impl Renderer {
         for n in &self.server.npcs {
             pos_map.insert(n.id, n.pos);
         }
+        // Collect wizard positions to orient zombies toward nearest when stationary/attacking
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
         let mut any = false;
         for (i, id) in self.zombie_ids.clone().iter().enumerate() {
             if let Some(p) = pos_map.get(id) {
                 let m_old = self.zombie_models[i];
                 let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(*p);
-                // If the zombie moved this frame, face the movement direction.
+                // If the zombie moved this frame, face the movement direction and calibrate per-instance offset.
                 // Apply authoring forward-axis correction so models authored with
                 // +X (or -Z) forward still look where they walk.
                 let delta = *p - prev;
-                let yaw = if delta.length_squared() > 1e-5 {
-                    delta.x.atan2(delta.z) - self.zombie_forward_offset
+                let mut yaw = if delta.length_squared() > 1e-5 {
+                    let desired = delta.x.atan2(delta.z);
+                    let current = Self::yaw_from_model(&m_old);
+                    let error = Self::wrap_angle(current - desired);
+                    if let Some(off) = self.zombie_forward_offsets.get_mut(i) {
+                        // Smoothly track observed error so facing matches velocity.
+                        let k = 0.3f32;
+                        *off = Self::wrap_angle(*off * (1.0 - k) + error * k);
+                        desired - *off
+                    } else {
+                        desired
+                    }
                 } else {
-                    Self::yaw_from_model(&m_old)
+                    // Stationary: orient toward nearest wizard so attack swings face the target
+                    let mut best_d2 = f32::INFINITY;
+                    let mut face_to: Option<glam::Vec3> = None;
+                    for w in &wiz_pos {
+                        let dx = w.x - p.x;
+                        let dz = w.z - p.z;
+                        let d2 = dx * dx + dz * dz;
+                        if d2 < best_d2 {
+                            best_d2 = d2;
+                            face_to = Some(*w);
+                        }
+                    }
+                    if let Some(tgt) = face_to {
+                        let desired = (tgt.x - p.x).atan2(tgt.z - p.z);
+                        if let Some(off) = self.zombie_forward_offsets.get(i) {
+                            desired - *off
+                        } else {
+                            desired
+                        }
+                    } else {
+                        Self::yaw_from_model(&m_old)
+                    }
                 };
+                // If in melee contact, hard-face the nearest wizard regardless of small movements
+                let mut best_d2 = f32::INFINITY;
+                let mut face_to: Option<glam::Vec3> = None;
+                for w in &wiz_pos {
+                    let dx = w.x - p.x;
+                    let dz = w.z - p.z;
+                    let d2 = dx * dx + dz * dz;
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        face_to = Some(*w);
+                    }
+                }
+                if let Some(tgt) = face_to {
+                    // Obtain this zombie's radius from server
+                    let z_radius = self
+                        .server
+                        .npcs
+                        .iter()
+                        .find(|n| n.id == *id)
+                        .map(|n| n.radius)
+                        .unwrap_or(0.95);
+                    let wizard_r = 0.7f32;
+                    let pad = 0.20f32;
+                    let contact = z_radius + wizard_r + pad;
+                    if best_d2 <= contact * contact {
+                        if let Some(off) = self.zombie_forward_offsets.get(i) {
+                            yaw = (tgt.x - p.x).atan2(tgt.z - p.z) - *off;
+                        } else {
+                            yaw = (tgt.x - p.x).atan2(tgt.z - p.z);
+                        }
+                    }
+                }
                 // Stick to terrain height
                 let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
                 let pos = glam::vec3(p.x, h, p.z);

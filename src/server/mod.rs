@@ -19,6 +19,8 @@ pub struct Npc {
     pub max_hp: i32,
     pub alive: bool,
     pub attack_cooldown: f32,
+    /// Time remaining (seconds) to consider this NPC in "attack" state for animation.
+    pub attack_anim: f32,
 }
 
 impl Npc {
@@ -31,6 +33,7 @@ impl Npc {
             max_hp: hp,
             alive: true,
             attack_cooldown: 0.0,
+            attack_anim: 0.0,
         }
     }
 }
@@ -76,8 +79,11 @@ impl ServerState {
         // Melee is considered in contact when circles touch plus a small pad.
         // We use the same wizard radius as collision resolution for consistency.
         let wizard_r = 0.7f32;
-        let melee_pad = 0.15f32;
+        // Slightly generous melee pad to ensure hits register even when crowding
+        // around a wizard pushes NPCs outward.
+        let melee_pad = 0.35f32;
         let attack_cd = 1.5f32;
+        let attack_anim_time = 0.8f32;
         let damage = 5i32;
         let mut hits = Vec::new();
         // Keep each NPC's chosen target index for hit evaluation after resolving collisions.
@@ -86,8 +92,9 @@ impl ServerState {
             if !n.alive {
                 continue;
             }
-            // reduce cooldown
+            // reduce timers
             n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
+            n.attack_anim = (n.attack_anim - dt).max(0.0);
             // nearest wizard in XZ
             let mut best_i = 0usize;
             let mut best_d2 = f32::INFINITY;
@@ -104,9 +111,14 @@ impl ServerState {
             let target = wizards[best_i];
             let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
             let dist = to.length();
-            if dist > 1e-3 {
-                let step = (speed * dt).min(dist);
-                n.pos += to.normalize() * step;
+            // Stop advancing once within melee contact range to avoid jitter against collision
+            // resolution pushing the NPC back and forth every frame.
+            let contact = n.radius + wizard_r + melee_pad;
+            if dist > contact + 0.02 {
+                let step = (speed * dt).min(dist - contact);
+                if step > 1e-4 {
+                    n.pos += to.normalize() * step;
+                }
             }
         }
         // Resolve simple collisions so NPCs don't overlap each other or wizards
@@ -121,9 +133,11 @@ impl ServerState {
                 let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
                 let dist = to.length();
                 let contact = n.radius + wizard_r + melee_pad;
-                if dist <= contact && n.attack_cooldown <= 0.0 {
+                // Allow a small tolerance to avoid oscillation missing hits.
+                if dist <= contact + 0.05 && n.attack_cooldown <= 0.0 {
                     hits.push((best_i, damage));
                     n.attack_cooldown = attack_cd;
+                    n.attack_anim = attack_anim_time;
                 }
             }
         }
