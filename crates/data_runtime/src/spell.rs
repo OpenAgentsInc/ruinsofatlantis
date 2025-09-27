@@ -1,6 +1,6 @@
 //! Spell schema (SRD-derived). Keep minimal; loaders will fill from JSON.
 
-use super::ids::Id;
+use crate::ids::Id;
 use serde::Deserialize;
 
 #[derive(Debug, Clone)]

@@ -68,8 +68,8 @@ pub fn run(state: &mut SimState) {
         ));
         if !ok
             && let Some(of) = on_fail
-            && let Some(name) = of.apply_condition
-            && let Some(cond) = parse_condition(&name)
+            && let Some(name) = of.apply_condition.as_deref()
+            && let Some(cond) = parse_condition(name)
         {
             let dur = of.duration_ms.unwrap_or(6000);
             state.pending_status.push((tgt_idx, cond, dur));

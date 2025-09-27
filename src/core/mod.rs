@@ -4,5 +4,5 @@
 //! and the combat model (FSM/state). The sim engine consumes these types.
 
 pub mod combat;
-pub mod data;
+pub use data_runtime as data;
 pub mod rules;

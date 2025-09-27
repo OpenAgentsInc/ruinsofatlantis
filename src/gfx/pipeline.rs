@@ -756,7 +756,9 @@ pub fn create_post_ao_pipeline(
                         operation: wgpu::BlendOperation::Add,
                     },
                 }),
-                write_mask: wgpu::ColorWrites::RED | wgpu::ColorWrites::GREEN | wgpu::ColorWrites::BLUE,
+                write_mask: wgpu::ColorWrites::RED
+                    | wgpu::ColorWrites::GREEN
+                    | wgpu::ColorWrites::BLUE,
             })],
             compilation_options: Default::default(),
         }),
@@ -898,7 +900,12 @@ pub fn create_ssr_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("ssr-fs-pipeline"),
         layout: Some(&layout),
-        vertex: VertexState { module: &shader, entry_point: Some("vs_fullscreen_noflip"), buffers: &[], compilation_options: Default::default() },
+        vertex: VertexState {
+            module: &shader,
+            entry_point: Some("vs_fullscreen_noflip"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
         fragment: Some(FragmentState {
             module: &shader,
             entry_point: Some("fs_ssr"),

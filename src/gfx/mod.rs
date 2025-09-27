@@ -15,7 +15,10 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
-pub mod renderer { pub mod passes; pub mod resize; }
+pub mod renderer {
+    pub mod passes;
+    pub mod resize;
+}
 mod gbuffer;
 mod hiz;
 mod mesh;
@@ -731,16 +734,28 @@ impl Renderer {
             label: Some("ssr-depth-bg"),
             layout: &ssr_depth_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&point_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&hiz.linear_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&point_sampler),
+                },
             ],
         });
         let ssr_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssr-scene-bg"),
             layout: &ssr_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
             ],
         });
         let present_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1564,8 +1579,14 @@ impl Renderer {
                 label: Some("ssr-depth-bg"),
                 layout: &self.ssr_depth_bgl,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.point_sampler) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&hiz.linear_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.point_sampler),
+                    },
                 ],
             });
         }
@@ -1573,8 +1594,14 @@ impl Renderer {
             label: Some("ssr-scene-bg"),
             layout: &self.ssr_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_read_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
             ],
         });
         // Resize Lighting M1 resources
@@ -1592,7 +1619,6 @@ impl Renderer {
 
     /// Render one frame.
     pub fn render(&mut self) -> Result<(), SurfaceError> {
-        
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -2025,7 +2051,10 @@ impl Renderer {
                     view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
@@ -2922,7 +2951,8 @@ impl Renderer {
         for p in &mut self.projectiles {
             p.pos += p.vel * dt;
             // Clamp to be a bit above the terrain height at current XZ.
-            p.pos = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
+            p.pos =
+                crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {

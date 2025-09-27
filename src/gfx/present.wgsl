@@ -45,9 +45,13 @@ fn tonemap_aces_approx(x: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
-  var col = textureSample(scene_tex, samp, in.uv).rgb;
+  // Clamp UV to avoid sampling exactly at 0/1 edges (prevents mirrored/clamped artifacts)
+  let sz = vec2<f32>(textureDimensions(scene_tex));
+  let eps = vec2<f32>(0.5) / sz;
+  let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
+  var col = textureSample(scene_tex, samp, uv).rgb;
   // Fog (exponential) based on linearized depth
-  let depth = textureSample(depth_tex, samp, in.uv);
+  let depth = textureSample(depth_tex, samp, uv);
   let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
   let density = globals.fog.a;
   if (density > 0.0) {

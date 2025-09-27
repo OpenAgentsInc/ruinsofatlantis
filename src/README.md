@@ -2,6 +2,13 @@
 
 This document summarizes the `src/` folder structure and what each module does.
 
+Workspace crates (added for modularization)
+- crates/data_runtime — SRD-aligned data schemas + loaders (replaces `src/core/data`; re-exported under `crate::core::data`).
+- crates/render_wgpu — Renderer facade crate (temporarily re-exports `crate::gfx`).
+- crates/sim_core — Rules/combat/sim facade (temporarily re-exports `crate::core::{rules,combat}` and `crate::sim`).
+- crates/platform_winit — Platform loop facade (temporarily re-exports `crate::platform_winit`).
+- crates/ux_hud — HUD logic crate (stub; future home for HUD state).
+
 - Workspace crates (new)
 - shared/assets — Library crate re-exporting our asset loaders for tools.
 - tools/model-viewer — Standalone wgpu viewer that loads GLTF/GLB via shared/assets.
@@ -33,16 +40,7 @@ This document summarizes the `src/` folder structure and what each module does.
 
 - core/
   - mod.rs — Core facade for data, rules, and combat.
-  - data/
-    - mod.rs — Data module index.
-    - ids.rs — Strongly typed IDs for data records.
-    - ability.rs — Ability schema (prototype).
-    - class.rs — Class schema used by sim defaults.
-    - monster.rs — Monster schema used by sim defaults.
-    - spell.rs — SRD‑aligned SpellSpec used by tools and the sim.
-    - scenario.rs — Scenario schema for the sim harness.
-    - loader.rs — Data file readers for JSON under `data/`.
-    - zone.rs — Zone manifest schema + loader (Phase 1). Wizard scene loads `Wizard Woods` from `data/zones/wizard_woods/manifest.json` to configure terrain and sky.
+  - data/ — Moved to `crates/data_runtime`; re-exported as `crate::core::data` for compatibility.
   - rules/
     - mod.rs — SRD rules index.
     - attack.rs — Advantage enum and attack scaffolding.

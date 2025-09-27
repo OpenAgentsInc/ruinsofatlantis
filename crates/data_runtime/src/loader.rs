@@ -1,16 +1,18 @@
 //! Data loaders. For now, stubs that resolve paths under `data/`.
 //! Implement JSON parsing later to avoid adding new deps mid-prototype.
 
-use super::class::ClassSpec;
-use super::monster::MonsterSpec;
-use super::spell::SpellSpec;
+use crate::class::ClassSpec;
+use crate::monster::MonsterSpec;
+use crate::spell::SpellSpec;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 fn data_root() -> PathBuf {
-    // Assume running from project root during development
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data")
+    // Prefer top-level workspace `data/` so tests and tools can run from any crate.
+    let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ws = here.join("../../data");
+    if ws.is_dir() { ws } else { here.join("data") }
 }
 
 /// Read a raw JSON file under `data/` and return its string.

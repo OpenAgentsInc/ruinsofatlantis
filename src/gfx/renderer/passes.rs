@@ -50,14 +50,19 @@ impl Renderer {
     }
 
     pub(crate) fn pass_ssr(&self, encoder: &mut wgpu::CommandEncoder) {
-        if !self.enable_ssr { return; }
+        if !self.enable_ssr {
+            return;
+        }
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssr-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &self.scene_view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -70,14 +75,19 @@ impl Renderer {
     }
 
     pub(crate) fn pass_ssgi(&self, encoder: &mut wgpu::CommandEncoder) {
-        if !self.enable_ssgi { return; }
+        if !self.enable_ssgi {
+            return;
+        }
         let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssgi-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &self.scene_view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -91,14 +101,19 @@ impl Renderer {
     }
 
     pub(crate) fn pass_ao(&self, encoder: &mut wgpu::CommandEncoder) {
-        if !self.enable_post_ao { return; }
+        if !self.enable_post_ao {
+            return;
+        }
         let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("post-ao-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &self.scene_view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
@@ -110,14 +125,26 @@ impl Renderer {
         post.draw(0..3, 0..1);
     }
 
-    pub(crate) fn pass_present(&self, encoder: &mut wgpu::CommandEncoder, swap_view: &wgpu::TextureView) {
+    pub(crate) fn pass_present(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        swap_view: &wgpu::TextureView,
+    ) {
         let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("present-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: swap_view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
