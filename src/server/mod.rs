@@ -19,6 +19,8 @@ pub struct Npc {
     pub max_hp: i32,
     pub alive: bool,
     pub attack_cooldown: f32,
+    /// Time remaining (seconds) to consider this NPC in "attack" state for animation.
+    pub attack_anim: f32,
 }
 
 impl Npc {
@@ -31,6 +33,7 @@ impl Npc {
             max_hp: hp,
             alive: true,
             attack_cooldown: 0.0,
+            attack_anim: 0.0,
         }
     }
 }
@@ -78,6 +81,7 @@ impl ServerState {
         let wizard_r = 0.7f32;
         let melee_pad = 0.15f32;
         let attack_cd = 1.5f32;
+        let attack_anim_time = 0.8f32;
         let damage = 5i32;
         let mut hits = Vec::new();
         // Keep each NPC's chosen target index for hit evaluation after resolving collisions.
@@ -86,8 +90,9 @@ impl ServerState {
             if !n.alive {
                 continue;
             }
-            // reduce cooldown
+            // reduce timers
             n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
+            n.attack_anim = (n.attack_anim - dt).max(0.0);
             // nearest wizard in XZ
             let mut best_i = 0usize;
             let mut best_d2 = f32::INFINITY;
@@ -129,6 +134,7 @@ impl ServerState {
                 if dist <= contact && n.attack_cooldown <= 0.0 {
                     hits.push((best_i, damage));
                     n.attack_cooldown = attack_cd;
+                    n.attack_anim = attack_anim_time;
                 }
             }
         }

@@ -1722,6 +1722,12 @@ impl Renderer {
         // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
         let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
+        // Build quick lookup for attack state using server NPCs
+        use std::collections::HashMap;
+        let mut attack_map: HashMap<crate::server::NpcId, bool> = HashMap::new();
+        for n in &self.server.npcs {
+            attack_map.insert(n.id, n.attack_anim > 0.0);
+        }
         for i in 0..(self.zombie_count as usize) {
             let c = self.zombie_models[i].to_cols_array();
             let pos = glam::vec3(c[12], c[13], c[14]);
@@ -1731,6 +1737,7 @@ impl Renderer {
             let has_walk = self.zombie_cpu.animations.contains_key("Walk");
             let has_run = self.zombie_cpu.animations.contains_key("Run");
             let has_idle = self.zombie_cpu.animations.contains_key("Idle");
+            let has_attack = self.zombie_cpu.animations.contains_key("Attack");
             let has_proc = self.zombie_cpu.animations.contains_key("ProcIdle");
             let has_static = self.zombie_cpu.animations.contains_key("__static");
             let any_owned: String = self
@@ -1740,7 +1747,14 @@ impl Renderer {
                 .next()
                 .cloned()
                 .unwrap_or("__static".to_string());
-            let clip_name = if moving {
+            // Prioritize attack animation when the server reports it
+            let is_attacking = attack_map
+                .get(self.zombie_ids.get(i).unwrap_or(&crate::server::NpcId(0)))
+                .copied()
+                .unwrap_or(false);
+            let clip_name = if is_attacking && has_attack {
+                "Attack"
+            } else if moving {
                 if has_walk {
                     "Walk"
                 } else if has_run {
