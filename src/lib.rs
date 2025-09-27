@@ -6,4 +6,4 @@ pub mod ecs;
 pub mod gfx;
 pub mod platform_winit;
 pub mod server;
-pub mod sim;
+pub use sim_core as sim;

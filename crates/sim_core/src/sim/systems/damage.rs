@@ -61,7 +61,7 @@ pub fn run(state: &mut SimState) {
                 if dc > 30 {
                     dc = 30;
                 }
-                let (roll, _nat20) = state.roll_d20(crate::core::rules::attack::Advantage::Normal);
+                let (roll, _nat20) = state.roll_d20(crate::rules::attack::Advantage::Normal);
                 // Simple Con save modifier: 0 for now; Bless adds 1d4 via existing logic if we reused it, but keep simple here.
                 let total_save = roll; // + con_mod (0)
                 let ok = total_save >= dc;

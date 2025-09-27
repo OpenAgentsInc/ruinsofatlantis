@@ -2,7 +2,7 @@
 //! Usage: cargo run --bin sim_harness -- --scenario data/scenarios/example.yaml
 
 use ruinsofatlantis::core::data::{loader, scenario};
-use ruinsofatlantis::sim::runner;
+use sim_core::sim::runner;
 use std::env;
 use std::path::Path;
 

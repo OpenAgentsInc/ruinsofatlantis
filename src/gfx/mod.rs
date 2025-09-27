@@ -263,6 +263,7 @@ pub struct Renderer {
     bars: ui::HealthBars,
     damage: ui::DamageFloaters,
     hud: ui::Hud,
+    hud_model: ux_hud::HudModel,
 
     // --- Player/Camera ---
     pc_index: usize,
@@ -287,10 +288,8 @@ pub struct Renderer {
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
 
-    // UI toggles and capture helpers
-    hud_enabled: bool,
+    // UI capture helpers
     screenshot_start: Option<f32>,
-    perf_enabled: bool,
 
     // Server state (NPCs/health)
     server: crate::server::ServerState,
@@ -1397,6 +1396,7 @@ impl Renderer {
             bars,
             damage,
             hud,
+            hud_model: Default::default(),
 
             // Player/camera
             pc_index: scene_build.pc_index,
@@ -1419,9 +1419,8 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
-            hud_enabled: true,
             screenshot_start: None,
-            perf_enabled: false,
+
             npc_vb,
             npc_ib,
             npc_index_count,
@@ -2169,7 +2168,7 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            if self.hud_enabled {
+            if self.hud_model.hud_enabled() {
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2179,7 +2178,7 @@ impl Renderer {
                     gcd_frac,
                 );
                 // Append perf overlay (ms and FPS)
-                if self.perf_enabled {
+                if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
                     let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
                     let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
@@ -2693,17 +2692,28 @@ impl Renderer {
                     }
                     PhysicalKey::Code(KeyCode::F1) => {
                         if pressed {
-                            self.perf_enabled = !self.perf_enabled;
+                            self.hud_model.toggle_perf();
                             log::info!(
                                 "Perf overlay {}",
-                                if self.perf_enabled { "on" } else { "off" }
+                                if self.hud_model.perf_enabled() {
+                                    "on"
+                                } else {
+                                    "off"
+                                }
                             );
                         }
                     }
                     PhysicalKey::Code(KeyCode::KeyH) => {
                         if pressed {
-                            self.hud_enabled = !self.hud_enabled;
-                            log::info!("HUD {}", if self.hud_enabled { "shown" } else { "hidden" });
+                            self.hud_model.toggle_hud();
+                            log::info!(
+                                "HUD {}",
+                                if self.hud_model.hud_enabled() {
+                                    "shown"
+                                } else {
+                                    "hidden"
+                                }
+                            );
                         }
                     }
                     PhysicalKey::Code(KeyCode::F5) => {

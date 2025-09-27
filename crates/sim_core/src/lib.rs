@@ -1,7 +1,12 @@
-//! sim_core: rules + combat + sim facade.
+//! sim_core: rules + combat + deterministic sim runtime.
 //!
-//! Temporary re-exports of the root crate's core rules/combat and sim APIs
-//! so other crates can begin to depend on these paths.
+//! Extracted from the root crate so clients can depend on a headless simulation
+//! and SRD rules without pulling in renderer/platform crates.
 
-pub use ruinsofatlantis::core::{combat, rules};
-pub use ruinsofatlantis::sim;
+pub mod combat;
+pub mod rules;
+pub mod sim;
+
+// Back-compat re-exports so existing imports `ruinsofatlantis::sim::state` work.
+pub use crate::sim::state;
+pub use crate::sim::systems;

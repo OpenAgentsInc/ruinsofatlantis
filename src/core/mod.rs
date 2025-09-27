@@ -3,6 +3,6 @@
 //! This module tree hosts stable data schemas/loaders, SRD rules helpers,
 //! and the combat model (FSM/state). The sim engine consumes these types.
 
-pub mod combat;
 pub use data_runtime as data;
-pub mod rules;
+pub use sim_core::combat;
+pub use sim_core::rules;

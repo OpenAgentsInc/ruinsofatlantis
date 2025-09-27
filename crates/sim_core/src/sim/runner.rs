@@ -1,6 +1,6 @@
-use crate::core::data::scenario::Scenario;
 use crate::sim::state::{ActorSim, SimState};
 use crate::sim::systems;
+use data_runtime::scenario::Scenario;
 
 pub fn run_scenario(scn: &Scenario, result_only: bool) {
     let seed = scn.seed.unwrap_or(42);

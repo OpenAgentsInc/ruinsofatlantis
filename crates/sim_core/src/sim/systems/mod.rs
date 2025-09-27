@@ -1,5 +1,3 @@
-//! System stubs; implement incrementally.
-
 pub mod ai;
 pub mod attack_roll;
 pub mod buffs;

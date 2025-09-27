@@ -4,5 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ruinsofatlantis = { path = "../.." }
-
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.9"
+rand_chacha = "0.9"
+log = "0.4"
+data_runtime = { path = "../data_runtime" }
+anyhow = "1.0.100"

@@ -4390,6 +4390,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sim_core",
+ "ux_hud",
  "wgpu 26.0.1",
  "which",
  "winit",
@@ -4584,7 +4586,13 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 name = "sim_core"
 version = "0.1.0"
 dependencies = [
- "ruinsofatlantis",
+ "anyhow",
+ "data_runtime",
+ "log",
+ "rand 0.9.2",
+ "rand_chacha 0.9.0",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
