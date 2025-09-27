@@ -15,6 +15,9 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
+mod gbuffer;
+mod hiz;
+mod temporal;
 mod mesh;
 mod pipeline;
 mod types;
@@ -74,6 +77,10 @@ pub struct Renderer {
     size: PhysicalSize<u32>,
     max_dim: u32,
     depth: wgpu::TextureView,
+
+    // Lighting M1: G-Buffer + Hi-Z scaffolding
+    gbuffer: Option<gbuffer::GBuffer>,
+    hiz: Option<hiz::HiZPyramid>,
 
     // --- Pipelines & BGLs ---
     pipeline: wgpu::RenderPipeline,
@@ -451,6 +458,9 @@ impl Renderer {
         };
         surface.configure(&device, &config);
         let depth = util::create_depth_view(&device, config.width, config.height, config.format);
+        // Lighting M1: allocate G-Buffer attachments and linear depth (Hi-Z) pyramid
+        let gbuffer = gbuffer::GBuffer::create(&device, config.width, config.height);
+        let hiz = hiz::HiZPyramid::create(&device, config.width, config.height);
 
         // --- Pipelines + BGLs ---
         let shader = pipeline::create_shader(&device);
@@ -1169,6 +1179,9 @@ impl Renderer {
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
             pc_alive: true,
+            // Lighting M1 scaffolding
+            gbuffer: Some(gbuffer),
+            hiz: Some(hiz),
         })
     }
 
@@ -1198,6 +1211,9 @@ impl Renderer {
             self.config.height,
             self.config.format,
         );
+        // Resize Lighting M1 resources
+        self.gbuffer = Some(gbuffer::GBuffer::create(&self.device, self.config.width, self.config.height));
+        self.hiz = Some(hiz::HiZPyramid::create(&self.device, self.config.width, self.config.height));
     }
 
     /// Render one frame.
