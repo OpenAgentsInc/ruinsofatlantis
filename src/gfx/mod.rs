@@ -117,6 +117,7 @@ pub struct Renderer {
     ssr_depth_bg: wgpu::BindGroup,
     ssr_scene_bg: wgpu::BindGroup,
     _post_sampler: wgpu::Sampler,
+    point_sampler: wgpu::Sampler,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
@@ -658,6 +659,7 @@ impl Renderer {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
+        // Linear (filtering) sampler for color/depth that allow filtering
         let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("post-ao-bg"),
             layout: &post_ao_bgl,
@@ -671,6 +673,17 @@ impl Renderer {
                     resource: wgpu::BindingResource::Sampler(&post_sampler),
                 },
             ],
+        });
+        // Point (non-filtering) sampler for R32F linear depth sampling
+        let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("point-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
         });
         let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssgi-globals-bg"),
@@ -714,7 +727,7 @@ impl Renderer {
             layout: &ssr_depth_bgl,
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&point_sampler) },
             ],
         });
         let ssr_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1268,6 +1281,7 @@ impl Renderer {
             ssr_depth_bg,
             ssr_scene_bg,
             _post_sampler: post_sampler,
+            point_sampler,
             sky_bg,
             present_bg,
             // frame overlay removed
@@ -1533,7 +1547,7 @@ impl Renderer {
                 layout: &self.ssr_depth_bgl,
                 entries: &[
                     wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.point_sampler) },
                 ],
             });
         }

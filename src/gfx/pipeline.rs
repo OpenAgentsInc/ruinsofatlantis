@@ -829,14 +829,16 @@ pub fn create_ssr_bgl(device: &wgpu::Device) -> (BindGroupLayout, BindGroupLayou
                 ty: wgpu::BindingType::Texture {
                     multisampled: false,
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    // Linear depth is R32Float: non-filterable
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                // Must bind a non-filtering sampler for R32Float
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
         ],
