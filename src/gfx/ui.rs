@@ -1407,13 +1407,14 @@ impl Hud {
             };
             self.push_rect(surface_w, surface_h, x0, y0, fx1, y1, col);
         }
-        // HP text
+        // HP text (inside bar, top-left)
         let label = format!("HP {} / {}", pc_hp.max(0), pc_hp_max.max(1));
+        // place near left edge inside the bar
         self.push_text_line(
             surface_w,
             surface_h,
-            x0,
-            y0 - 6.0,
+            x0 + 6.0,
+            y0 + bar_h - 3.0,
             &label,
             [1.0, 1.0, 1.0, 0.95],
         );
