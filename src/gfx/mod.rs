@@ -26,6 +26,7 @@ pub mod fx;
 mod material;
 mod scene;
 mod sky;
+mod terrain;
 mod ui;
 mod util;
 
@@ -77,7 +78,7 @@ pub struct Renderer {
     sky_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     sky_bg: wgpu::BindGroup,
-    plane_model_bg: wgpu::BindGroup,
+    terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
 
     // --- Scene Buffers ---
@@ -86,10 +87,10 @@ pub struct Renderer {
     _plane_model_buf: wgpu::Buffer,
     shard_model_buf: wgpu::Buffer,
 
-    // Geometry (ground plane)
-    plane_vb: wgpu::Buffer,
-    plane_ib: wgpu::Buffer,
-    plane_index_count: u32,
+    // Geometry (terrain)
+    terrain_vb: wgpu::Buffer,
+    terrain_ib: wgpu::Buffer,
+    terrain_index_count: u32,
 
     // GLTF geometry (wizard + ruins)
     wizard_vb: wgpu::Buffer,
@@ -113,6 +114,10 @@ pub struct Renderer {
     npc_instances_cpu: Vec<types::Instance>,
     #[allow(dead_code)]
     npc_models: Vec<glam::Mat4>,
+
+    // Vegetation (trees) — instanced cubes for now
+    trees_instances: wgpu::Buffer,
+    trees_count: u32,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -492,17 +497,17 @@ impl Renderer {
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
         let plane_model_init = Model {
             model: glam::Mat4::from_translation(glam::vec3(0.0, -0.05, 0.0)).to_cols_array_2d(),
-            color: [0.05, 0.80, 0.30],
+            color: [0.10, 0.55, 0.25],
             emissive: 0.0,
             _pad: [0.0; 4],
         };
         let plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("plane-model"),
+            label: Some("terrain-model"),
             contents: bytemuck::bytes_of(&plane_model_init),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let plane_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("plane-model-bg"),
+            label: Some("terrain-model-bg"),
             layout: &model_bgl,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -530,9 +535,14 @@ impl Renderer {
             }],
         });
 
-        // Ground plane (choose a generous extent for the plaza)
-        let plane_extent = 150.0;
-        let (plane_vb, plane_ib, plane_index_count) = mesh::create_plane(&device, plane_extent);
+        // Terrain (replaces single ground plane)
+        let terrain_extent = 150.0;
+        let terrain_size = 129; // 128x128 quads
+        let (terrain_cpu, terrain_bufs) =
+            terrain::create_terrain(&device, terrain_size, terrain_extent, 1337);
+        let terrain_vb = terrain_bufs.vb;
+        let terrain_ib = terrain_bufs.ib;
+        let terrain_index_count = terrain_bufs.index_count;
 
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
         let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
@@ -667,7 +677,7 @@ impl Renderer {
         };
 
         // Build scene instance buffers and camera target
-        let scene_build = scene::build_demo_scene(&device, &skinned_cpu, plane_extent);
+        let scene_build = scene::build_demo_scene(&device, &skinned_cpu, terrain_extent);
         // Precompute PC initial position from the soon-to-be-moved vector
         let pc_initial_pos = {
             let m = scene_build.wizard_models[scene_build.pc_index];
@@ -746,7 +756,7 @@ impl Renderer {
         let mid3_count = 18usize; // was 24
         let mid3_radius = 60.0f32;
         let far_count = 9usize; // was 12
-        let far_radius = plane_extent * 0.7;
+        let far_radius = terrain_extent * 0.7;
         // Spawn rings (hp scales mildly with distance)
         server.ring_spawn(near_count, near_radius, 20);
         server.ring_spawn(mid1_count, mid1_radius, 25);
@@ -772,6 +782,15 @@ impl Renderer {
             label: Some("npc-instances"),
             contents: bytemuck::cast_slice(&npc_instances_cpu),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Trees: scatter instances on gentle slopes
+        let tree_cpu = terrain::place_trees(&terrain_cpu, 350, 20250926);
+        let trees_count = tree_cpu.len() as u32;
+        let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("trees-instances"),
+            contents: bytemuck::cast_slice(&tree_cpu),
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         log::info!(
@@ -855,7 +874,7 @@ impl Renderer {
             sky_pipeline,
             globals_bg,
             sky_bg,
-            plane_model_bg,
+            terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
             globals_buf,
@@ -863,9 +882,9 @@ impl Renderer {
             _plane_model_buf: plane_model_buf,
             shard_model_buf,
 
-            plane_vb,
-            plane_ib,
-            plane_index_count,
+            terrain_vb,
+            terrain_ib,
+            terrain_index_count,
             wizard_vb,
             wizard_ib,
             wizard_index_count,
@@ -965,6 +984,8 @@ impl Renderer {
             npc_count: 0, // cubes hidden; zombies replace them visually
             npc_instances_cpu,
             npc_models,
+            trees_instances,
+            trees_count,
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
@@ -1182,13 +1203,29 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            // Ground plane
+            // Terrain
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.plane_model_bg, &[]);
-            rpass.set_vertex_buffer(0, self.plane_vb.slice(..));
-            rpass.set_index_buffer(self.plane_ib.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.plane_index_count, 0, 0..1);
+            rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
+            rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
+            rpass.set_index_buffer(self.terrain_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+
+            // Trees (instanced cubes for now)
+            if self.trees_count > 0 {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
+                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.trees_count);
+            }
 
             // Wizards
             self.draw_wizards(&mut rpass);
