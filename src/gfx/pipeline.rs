@@ -693,6 +693,108 @@ pub fn create_post_ao_pipeline(
     })
 }
 
+// SSGI additive overlay (fullscreen), samples depth + scene color
+pub fn create_ssgi_bgl(device: &wgpu::Device) -> (BindGroupLayout, BindGroupLayout, BindGroupLayout) {
+    let globals = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ssgi-globals-bgl"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+    let depth = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ssgi-depth-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Depth,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    let scene = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ssgi-scene-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    (globals, depth, scene)
+}
+
+pub fn create_ssgi_pipeline(
+    device: &wgpu::Device,
+    globals_bgl: &BindGroupLayout,
+    depth_bgl: &BindGroupLayout,
+    scene_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("ssgi-fs-shader"),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("ssgi_fs.wgsl"))),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("ssgi-fs-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl, depth_bgl, scene_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("ssgi-fs-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState { module: &shader, entry_point: Some("vs_fullscreen"), buffers: &[], compilation_options: Default::default() },
+        fragment: Some(FragmentState {
+            module: &shader,
+            entry_point: Some("fs_ssgi"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                // Additive blend: dst = dst + src
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add },
+                    alpha: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add },
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 #[allow(dead_code)]
 pub fn create_wizard_simple_pipeline(
     device: &wgpu::Device,

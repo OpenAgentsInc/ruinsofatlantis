@@ -10,8 +10,9 @@ use wgpu::{Device, Texture, TextureDescriptor, TextureDimension, TextureFormat, 
 pub mod formats {
     use wgpu::TextureFormat;
     pub const ALBEDO: TextureFormat = TextureFormat::Rgba8Unorm; // linear
-    // Oct-encoded normal in snorm keeps [-1,1] compact.
-    pub const NORMAL_OCT: TextureFormat = TextureFormat::Rg16Snorm;
+    // Oct-encoded normal; prefer renderable format for broad support.
+    // Use RG8Unorm and map [-1,1] to [0,1] in shader if needed.
+    pub const NORMAL_OCT: TextureFormat = TextureFormat::Rg8Unorm;
     // Packed roughness/metalness
     pub const ROUGH_METAL: TextureFormat = TextureFormat::Rg8Unorm;
     // Optional HDR emissive target
@@ -61,4 +62,3 @@ impl GBuffer {
 
     pub fn size(&self) -> (u32, u32) { self.size }
 }
-

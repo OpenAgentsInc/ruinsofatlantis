@@ -92,14 +92,22 @@ pub struct Renderer {
     particle_pipeline: wgpu::RenderPipeline,
     sky_pipeline: wgpu::RenderPipeline,
     post_ao_pipeline: wgpu::RenderPipeline,
+    ssgi_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
+    ssgi_globals_bg: wgpu::BindGroup,
+    ssgi_depth_bg: wgpu::BindGroup,
+    ssgi_scene_bg: wgpu::BindGroup,
     post_sampler: wgpu::Sampler,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
     present_bg: wgpu::BindGroup,
+
+    // Lighting toggles
+    enable_post_ao: bool,
+    enable_ssgi: bool,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -504,6 +512,15 @@ impl Renderer {
             &post_ao_bgl,
             config.format,
         );
+        // SSGI pipeline (additive into SceneColor)
+        let (ssgi_globals_bgl, ssgi_depth_bgl, ssgi_scene_bgl) = pipeline::create_ssgi_bgl(&device);
+        let ssgi_pipeline = pipeline::create_ssgi_pipeline(
+            &device,
+            &ssgi_globals_bgl,
+            &ssgi_depth_bgl,
+            &ssgi_scene_bgl,
+            wgpu::TextureFormat::Rgba16Float,
+        );
         let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
             &device,
             &shader,
@@ -596,6 +613,27 @@ impl Renderer {
             layout: &post_ao_bgl,
             entries: &[
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            ],
+        });
+        let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-globals-bg"),
+            layout: &ssgi_globals_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
+        });
+        let ssgi_depth_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-depth-bg"),
+            layout: &ssgi_depth_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            ],
+        });
+        let ssgi_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-scene-bg"),
+            layout: &ssgi_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
             ],
         });
@@ -1114,9 +1152,13 @@ impl Renderer {
             particle_pipeline,
             sky_pipeline,
             post_ao_pipeline,
+            ssgi_pipeline,
             present_pipeline,
             globals_bg,
             post_ao_bg,
+            ssgi_globals_bg,
+            ssgi_depth_bg,
+            ssgi_scene_bg,
             post_sampler,
             sky_bg,
             present_bg,
@@ -1248,6 +1290,8 @@ impl Renderer {
             // Lighting M1 scaffolding
             gbuffer: Some(gbuffer),
             hiz: Some(hiz),
+            enable_post_ao: true,
+            enable_ssgi: true,
         })
     }
 
@@ -1669,11 +1713,11 @@ impl Renderer {
             self.nameplates_npc.draw(&mut encoder, &self.scene_view);
         }
 
-        // Post-process AO overlay (fullscreen) multiplying into SceneColor
-        {
+        // SSGI additive overlay (fullscreen) into SceneColor
+        if self.enable_ssgi {
             use wgpu::*;
-            let mut post = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("post-ao"),
+            let mut gi = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("ssgi-pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &self.scene_view,
                     resolve_target: None,
@@ -1684,10 +1728,33 @@ impl Renderer {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
-            post.set_pipeline(&self.post_ao_pipeline);
-            post.set_bind_group(0, &self.globals_bg, &[]);
-            post.set_bind_group(1, &self.post_ao_bg, &[]);
-            post.draw(0..3, 0..1);
+            gi.set_pipeline(&self.ssgi_pipeline);
+            gi.set_bind_group(0, &self.ssgi_globals_bg, &[]);
+            gi.set_bind_group(1, &self.ssgi_depth_bg, &[]);
+            gi.set_bind_group(2, &self.ssgi_scene_bg, &[]);
+            gi.draw(0..3, 0..1);
+        }
+        // Post-process AO overlay (fullscreen) multiplying into SceneColor
+        if self.enable_post_ao {
+            {
+                use wgpu::*;
+                let mut post = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("post-ao"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: &self.scene_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                post.set_pipeline(&self.post_ao_pipeline);
+                post.set_bind_group(0, &self.globals_bg, &[]);
+                post.set_bind_group(1, &self.post_ao_bg, &[]);
+                post.draw(0..3, 0..1);
+            }
         }
 
         // Present SceneColor to swapchain
