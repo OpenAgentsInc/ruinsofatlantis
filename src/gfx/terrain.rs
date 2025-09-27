@@ -11,8 +11,11 @@
 //! - Add texture splats (albedo/normal) and LOD.
 
 use crate::gfx::types::{Instance, Vertex};
+use anyhow::{Context, Result};
 use glam::{Mat4, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 use wgpu::util::DeviceExt;
 
 /// JSON structure for a baked zone file (minimal for now).
@@ -45,7 +48,18 @@ pub fn create_terrain(
     seed: u32,
 ) -> (TerrainCPU, TerrainBuffers) {
     let cpu = generate_heightmap(size, extent, seed);
-    let (verts, indices) = build_mesh(&cpu);
+    let bufs = upload_from_cpu(device, &cpu);
+    (cpu, bufs)
+}
+
+/// CPU-only terrain generation for tools/baking.
+pub fn generate_cpu(size: usize, extent: f32, seed: u32) -> TerrainCPU {
+    generate_heightmap(size, extent, seed)
+}
+
+/// Create GPU buffers from a CPU terrain snapshot.
+pub fn upload_from_cpu(device: &wgpu::Device, cpu: &TerrainCPU) -> TerrainBuffers {
+    let (verts, indices) = build_mesh(cpu);
     let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("terrain-vb"),
         contents: bytemuck::cast_slice(&verts),
@@ -57,14 +71,11 @@ pub fn create_terrain(
         usage: wgpu::BufferUsages::INDEX,
     });
     let index_count = indices.len() as u32;
-    (
-        cpu,
-        TerrainBuffers {
-            vb,
-            ib,
-            index_count,
-        },
-    )
+    TerrainBuffers {
+        vb,
+        ib,
+        index_count,
+    }
 }
 
 /// Generate tree instance transforms using slope/height criteria (gentle slopes only).
@@ -103,6 +114,102 @@ pub fn place_trees(cpu: &TerrainCPU, count: usize, seed: u32) -> Vec<Instance> {
 /// Public sampler: get terrain height and normal at world XZ.
 pub fn height_at(cpu: &TerrainCPU, x: f32, z: f32) -> (f32, glam::Vec3) {
     sample_height_normal(cpu, glam::Vec2::new(x, z))
+}
+
+// ----------------------
+// Snapshot I/O (prototype, JSON)
+// ----------------------
+
+#[derive(Serialize, Deserialize)]
+struct TerrainSnapshotJson {
+    size: usize,
+    extent: f32,
+    seed: u32,
+    heights: Vec<f32>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TreesSnapshotJson {
+    models: Vec<[[f32; 4]; 4]>,
+}
+
+fn zones_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join("zones")
+}
+
+fn snap_dir(slug: &str) -> PathBuf {
+    zones_dir().join(slug).join("snapshot.v1")
+}
+
+/// Try loading a baked terrain snapshot from JSON; recompute normals on load.
+pub fn load_terrain_snapshot(slug: &str) -> Option<TerrainCPU> {
+    let path = snap_dir(slug).join("terrain.json");
+    let txt = fs::read_to_string(&path).ok()?;
+    let tj: TerrainSnapshotJson = serde_json::from_str(&txt).ok()?;
+    if tj.heights.len() != tj.size * tj.size {
+        log::warn!(
+            "terrain snapshot has mismatched heights ({} != {}x{})",
+            tj.heights.len(),
+            tj.size,
+            tj.size
+        );
+        return None;
+    }
+    let normals = compute_normals(tj.size, tj.extent, &tj.heights);
+    Some(TerrainCPU {
+        size: tj.size,
+        extent: tj.extent,
+        heights: tj.heights,
+        normals,
+    })
+}
+
+pub fn load_trees_snapshot(slug: &str) -> Option<Vec<[[f32; 4]; 4]>> {
+    let path = snap_dir(slug).join("trees.json");
+    let txt = fs::read_to_string(&path).ok()?;
+    let tj: TreesSnapshotJson = serde_json::from_str(&txt).ok()?;
+    Some(tj.models)
+}
+
+pub fn write_terrain_snapshot(slug: &str, cpu: &TerrainCPU, seed: u32) -> Result<()> {
+    let dir = snap_dir(slug);
+    fs::create_dir_all(&dir).with_context(|| format!("mkdir {}", dir.display()))?;
+    let sj = TerrainSnapshotJson {
+        size: cpu.size,
+        extent: cpu.extent,
+        seed,
+        heights: cpu.heights.clone(),
+    };
+    let path = dir.join("terrain.json");
+    let txt = serde_json::to_string_pretty(&sj)?;
+    fs::write(&path, txt).with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+pub fn write_trees_snapshot(slug: &str, models: &[[[f32; 4]; 4]]) -> Result<()> {
+    let dir = snap_dir(slug);
+    fs::create_dir_all(&dir).with_context(|| format!("mkdir {}", dir.display()))?;
+    let sj = TreesSnapshotJson {
+        models: models.to_vec(),
+    };
+    let path = dir.join("trees.json");
+    let txt = serde_json::to_string_pretty(&sj)?;
+    fs::write(&path, txt).with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+/// Convert baked tree transforms to Instances with a consistent green color.
+pub fn instances_from_models(models: &[[[f32; 4]; 4]]) -> Vec<Instance> {
+    models
+        .iter()
+        .map(|m| Instance {
+            model: *m,
+            color: [0.14, 0.45, 0.18],
+            selected: 0.0,
+        })
+        .collect()
 }
 
 fn generate_heightmap(size: usize, extent: f32, seed: u32) -> TerrainCPU {

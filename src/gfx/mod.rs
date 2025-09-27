@@ -26,7 +26,7 @@ pub mod fx;
 mod material;
 mod scene;
 mod sky;
-mod terrain;
+pub mod terrain;
 mod ui;
 mod util;
 
@@ -559,11 +559,16 @@ impl Renderer {
             }],
         });
 
-        // Terrain (replaces single ground plane) — parameters from Zone
+        // Terrain (replaces single ground plane) — prefer baked snapshot, else generate from Zone
         let terrain_extent = zone.terrain.extent;
         let terrain_size = zone.terrain.size as usize; // e.g., 129 → 128x128 quads
         let (terrain_cpu, terrain_bufs) =
-            terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed);
+            if let Some(cpu) = terrain::load_terrain_snapshot("wizard_woods") {
+                let bufs = terrain::upload_from_cpu(&device, &cpu);
+                (cpu, bufs)
+            } else {
+                terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed)
+            };
         let terrain_vb = terrain_bufs.vb;
         let terrain_ib = terrain_bufs.ib;
         let terrain_index_count = terrain_bufs.index_count;
@@ -860,12 +865,17 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Trees: scatter instances on gentle slopes
-        let tree_cpu = terrain::place_trees(&terrain_cpu, 350, 20250926);
-        let trees_count = tree_cpu.len() as u32;
+        // Trees: prefer baked instances if available, else scatter deterministically
+        let trees_instances_cpu: Vec<types::Instance> =
+            if let Some(models) = terrain::load_trees_snapshot("wizard_woods") {
+                terrain::instances_from_models(&models)
+            } else {
+                terrain::place_trees(&terrain_cpu, 350, 20250926)
+            };
+        let trees_count = trees_instances_cpu.len() as u32;
         let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("trees-instances"),
-            contents: bytemuck::cast_slice(&tree_cpu),
+            contents: bytemuck::cast_slice(&trees_instances_cpu),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
