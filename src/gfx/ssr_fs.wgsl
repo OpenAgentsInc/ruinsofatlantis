@@ -6,8 +6,6 @@
 @group(1) @binding(0) var scene_tex: texture_2d<f32>;
 @group(1) @binding(1) var scene_samp: sampler;
 
-struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
-
 @fragment
 fn fs_ssr(in: VSOut) -> @location(0) vec4<f32> {
   let texSize = vec2<f32>(textureDimensions(lin_depth_tex));
@@ -47,4 +45,3 @@ fn fs_ssr(in: VSOut) -> @location(0) vec4<f32> {
 }
 
 fn saturate(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
-

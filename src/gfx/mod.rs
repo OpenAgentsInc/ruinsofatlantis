@@ -15,6 +15,7 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
+pub mod renderer { pub mod passes; }
 mod gbuffer;
 mod hiz;
 mod mesh;
