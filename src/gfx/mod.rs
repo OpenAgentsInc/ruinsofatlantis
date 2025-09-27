@@ -174,6 +174,9 @@ pub struct Renderer {
     // Sky/time-of-day state
     sky: sky::SkyStateCPU,
 
+    // Terrain sampler (CPU)
+    terrain_cpu: terrain::TerrainCPU,
+
     // Time base for animation
     start: Instant,
     last_time: f32,
@@ -580,6 +583,29 @@ impl Renderer {
             }
         }
         let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
+        // Determine a base offset so the lowest vertex sits on ground, with a small embed.
+        let (ruins_base_offset, ruins_radius): (f32, f32) = match &ruins_cpu_res {
+            Ok(cpu) => {
+                let mut min_y = f32::INFINITY;
+                let mut min_x = f32::INFINITY;
+                let mut max_x = f32::NEG_INFINITY;
+                let mut min_z = f32::INFINITY;
+                let mut max_z = f32::NEG_INFINITY;
+                for v in &cpu.vertices {
+                    min_y = min_y.min(v.pos[1]);
+                    min_x = min_x.min(v.pos[0]);
+                    max_x = max_x.max(v.pos[0]);
+                    min_z = min_z.min(v.pos[2]);
+                    max_z = max_z.max(v.pos[2]);
+                }
+                let sx = (max_x - min_x).abs();
+                let sz = (max_z - min_z).abs();
+                let radius = 0.5 * sx.max(sz);
+                // Embed slightly to avoid hovering
+                ((-min_y) - 0.05, radius)
+            }
+            Err(_) => (0.6, 6.0),
+        };
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
@@ -677,7 +703,36 @@ impl Renderer {
         };
 
         // Build scene instance buffers and camera target
-        let scene_build = scene::build_demo_scene(&device, &skinned_cpu, terrain_extent);
+        let scene_build = scene::build_demo_scene(
+            &device,
+            &skinned_cpu,
+            terrain_extent,
+            Some(&terrain_cpu),
+            ruins_base_offset,
+            ruins_radius,
+        );
+
+        // Snap initial wizard ring to terrain height
+        let mut wizard_models = scene_build.wizard_models.clone();
+        for m in &mut wizard_models {
+            let c = m.to_cols_array();
+            let x = c[12];
+            let z = c[14];
+            let (h, _n) = terrain::height_at(&terrain_cpu, x, z);
+            let pos = glam::vec3(x, h, z);
+            let (s, r, _t) = glam::Mat4::from_cols_array(&c).to_scale_rotation_translation();
+            *m = glam::Mat4::from_scale_rotation_translation(s, r, pos);
+        }
+        let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+        for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() {
+            let m = wizard_models[i].to_cols_array_2d();
+            inst.model = m;
+        }
+        let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-instances"),
+            contents: bytemuck::cast_slice(&wizard_instances_cpu),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
         // Precompute PC initial position from the soon-to-be-moved vector
         let pc_initial_pos = {
             let m = scene_build.wizard_models[scene_build.pc_index];
@@ -807,10 +862,13 @@ impl Renderer {
         let mut zombie_models: Vec<glam::Mat4> = Vec::new();
         let mut zombie_ids: Vec<crate::server::NpcId> = Vec::new();
         for (idx, npc) in server.npcs.iter().enumerate() {
+            // Snap initial zombie spawn to terrain height
+            let (h, _n) = terrain::height_at(&terrain_cpu, npc.pos.x, npc.pos.z);
+            let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
             let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),
                 glam::Quat::IDENTITY,
-                npc.pos,
+                pos,
             );
             zombie_models.push(m);
             zombie_ids.push(npc.id);
@@ -894,8 +952,8 @@ impl Renderer {
             ruins_vb,
             ruins_ib,
             ruins_index_count,
-            wizard_instances: scene_build.wizard_instances,
-            wizard_count: scene_build.wizard_count,
+            wizard_instances,
+            wizard_count: wizard_instances_cpu.len() as u32,
             zombie_instances,
             zombie_count: zombie_instances_cpu.len() as u32,
             zombie_instances_cpu,
@@ -909,7 +967,7 @@ impl Renderer {
             palettes_buf,
             palettes_bg,
             joints_per_wizard: scene_build.joints_per_wizard,
-            wizard_models: scene_build.wizard_models,
+            wizard_models,
             zombie_palettes_buf,
             zombie_palettes_bg,
             zombie_joints,
@@ -930,7 +988,7 @@ impl Renderer {
                 })
                 .collect(),
             zombie_forward_offset,
-            wizard_instances_cpu: scene_build.wizard_instances_cpu,
+            wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
@@ -943,6 +1001,7 @@ impl Renderer {
             _zombie_sampler,
             wire_enabled: false,
             sky: sky_state,
+            terrain_cpu,
 
             start: Instant::now(),
             last_time: 0.0,
@@ -1046,15 +1105,49 @@ impl Renderer {
             self.cam_lift,
             self.cam_look_height,
         );
+        #[allow(unused_assignments)]
+        // Anchor camera to the center of the PC model, not the feet.
+        let pc_anchor = if self.pc_index < self.wizard_models.len() {
+            let m = self.wizard_models[self.pc_index];
+            (m * glam::Vec4::new(0.0, 1.2, 0.0, 1.0)).truncate()
+        } else {
+            self.player.pos + glam::vec3(0.0, 1.2, 0.0)
+        };
+
+        #[allow(unused_assignments)]
         let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
-            self.player.pos,
+            pc_anchor,
             glam::Quat::from_rotation_y(self.player.yaw),
             off_local,
             look_local,
             aspect,
             dt,
         );
+        // Keep camera above terrain: clamp eye/target Y to terrain height + clearance
+        let clearance_eye = 0.2f32;
+        let clearance_look = 0.05f32;
+        let eye = self.cam_follow.current_pos;
+        let (hy, _n) = terrain::height_at(&self.terrain_cpu, eye.x, eye.z);
+        if self.cam_follow.current_pos.y < hy + clearance_eye {
+            self.cam_follow.current_pos.y = hy + clearance_eye;
+        }
+        let look = self.cam_follow.current_look;
+        let (hy2, _n2) = terrain::height_at(&self.terrain_cpu, look.x, look.z);
+        if self.cam_follow.current_look.y < hy2 + clearance_look {
+            self.cam_follow.current_look.y = hy2 + clearance_look;
+        }
+        // Recompute camera/globals without smoothing after clamping
+        let (_cam2, globals2) = camera_sys::third_person_follow(
+            &mut self.cam_follow,
+            pc_anchor,
+            glam::Quat::from_rotation_y(self.player.yaw),
+            off_local,
+            look_local,
+            aspect,
+            0.0,
+        );
+        globals = globals2;
         // Advance sky & lighting
         self.sky.update(dt);
         globals.sun_dir_time = [
@@ -1277,14 +1370,26 @@ impl Renderer {
                 / (self.wizard_hp_max as f32);
             bar_entries.push((head.truncate(), frac));
         }
-        // NPC boxes: use server authoritative pos; offset slightly above top
-        for npc in &self.server.npcs {
-            if !npc.alive {
-                continue;
+        // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
+        use std::collections::HashMap;
+        let mut npc_map: HashMap<crate::server::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        for n in &self.server.npcs {
+            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
+        }
+        for (i, id) in self.zombie_ids.iter().enumerate() {
+            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
+                if !alive {
+                    continue;
+                }
+                let m = self
+                    .zombie_models
+                    .get(i)
+                    .copied()
+                    .unwrap_or(glam::Mat4::IDENTITY);
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
+                bar_entries.push((head.truncate(), frac));
             }
-            let pos = npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0);
-            let frac = (npc.hp.max(0) as f32) / (npc.max_hp.max(1) as f32);
-            bar_entries.push((pos, frac));
         }
         self.bars.queue_entries(
             &self.device,
@@ -1617,10 +1722,13 @@ impl Renderer {
                 } else {
                     Self::yaw_from_model(&m_old)
                 };
+                // Stick to terrain height
+                let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                let pos = glam::vec3(p.x, h, p.z);
                 let new_m = glam::Mat4::from_scale_rotation_translation(
                     glam::Vec3::splat(1.0),
                     glam::Quat::from_rotation_y(yaw),
-                    *p,
+                    pos,
                 );
                 self.zombie_models[i] = new_m;
                 let mut inst = self.zombie_instances_cpu[i];
@@ -1754,11 +1862,10 @@ impl Renderer {
         }
         // Update CPU model matrix and upload only the PC instance
         let rot = glam::Quat::from_rotation_y(self.player.yaw);
-        let m = glam::Mat4::from_scale_rotation_translation(
-            glam::Vec3::splat(1.0),
-            rot,
-            self.player.pos,
-        );
+        // Project player onto terrain height
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
+        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
+        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
         self.wizard_models[self.pc_index] = m;
         let mut inst = self.wizard_instances_cpu[self.pc_index];
         inst.model = m.to_cols_array_2d();
@@ -1954,13 +2061,24 @@ impl Renderer {
                         self.queue.write_buffer(&self.zombie_instances, 0, bytes);
                     }
                 }
-                // Damage floater above NPC head
-                if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
-                    let pos = n.pos + glam::vec3(0.0, n.radius + 0.9, 0.0);
+                // Damage floater above NPC head (terrain/instance-aware)
+                if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                    let m = self
+                        .zombie_models
+                        .get(idx)
+                        .copied()
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                    self.damage.spawn(head.truncate(), h.damage);
+                } else if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
+                    let (hgt, _n) = terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    let pos = glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z);
                     self.damage.spawn(pos, h.damage);
                 } else {
+                    // Fallback: snap event position to terrain height
+                    let (hgt, _n) = terrain::height_at(&self.terrain_cpu, h.pos.x, h.pos.z);
                     self.damage
-                        .spawn(h.pos + glam::vec3(0.0, 0.9, 0.0), h.damage);
+                        .spawn(glam::vec3(h.pos.x, hgt + 0.9, h.pos.z), h.damage);
                 }
             }
             if hits.is_empty() {
@@ -1975,9 +2093,13 @@ impl Renderer {
         let mut burst: Vec<Particle> = Vec::new();
         let mut i = 0;
         while i < self.projectiles.len() {
-            let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
+            let pcur = self.projectiles[i].pos;
+            let (h, _n) = terrain::height_at(&self.terrain_cpu, pcur.x, pcur.z);
+            let kill = t >= self.projectiles[i].t_die || pcur.y <= h + 0.02;
             if kill {
-                let hit = self.projectiles[i].pos;
+                let mut hit = self.projectiles[i].pos;
+                // Snap impact to terrain height
+                hit.y = h;
                 // much smaller flare + compact burst
                 burst.push(Particle {
                     pos: hit,

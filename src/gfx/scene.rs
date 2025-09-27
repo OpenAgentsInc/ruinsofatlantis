@@ -9,10 +9,12 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::assets::SkinnedMeshCPU;
 use crate::ecs::{RenderKind, Transform, World};
+use crate::gfx::terrain::TerrainCPU;
 use crate::gfx::types::{Instance, InstanceSkin};
 use wgpu::util::DeviceExt;
 
 pub struct SceneBuild {
+    #[allow(dead_code)]
     pub wizard_instances: wgpu::Buffer,
     pub wizard_count: u32,
     pub ruins_instances: wgpu::Buffer,
@@ -32,6 +34,9 @@ pub fn build_demo_scene(
     device: &wgpu::Device,
     skinned_cpu: &SkinnedMeshCPU,
     plane_extent: f32,
+    terrain: Option<&TerrainCPU>,
+    ruins_base_offset: f32,
+    ruins_radius: f32,
 ) -> SceneBuild {
     // Build a tiny ECS world and spawn entities
     let mut world = World::new();
@@ -40,7 +45,12 @@ pub fn build_demo_scene(
     // Cluster wizards around a central one so the camera can see all of them.
     // Use one central PC and a single outward-facing ring of NPC wizards.
     let ring_count = 19usize; // number of NPC wizards on the outer ring
-    let center = glam::vec3(0.0, 0.0, 0.0);
+    // Center spawn; project onto terrain if available
+    let mut center = glam::vec3(0.0, 0.0, 0.0);
+    if let Some(t) = terrain {
+        let (h, _n) = crate::gfx::terrain::height_at(t, center.x, center.z);
+        center.y = h;
+    }
     // Spawn the central wizard first (becomes camera target)
     world.spawn(
         Transform {
@@ -55,17 +65,25 @@ pub fn build_demo_scene(
     let place_range = plane_extent * 0.9;
     // A few backdrop ruins placed far away for depth
     // The ruins model origin is roughly centered; raise Y so it rests on ground.
-    let ruins_y = 0.6f32;
+    let ruins_y = ruins_base_offset; // base offset aligns model min Y to ground with small embed
     let ruins_positions = [
         glam::vec3(-place_range * 0.9, ruins_y, -place_range * 0.7),
         glam::vec3(place_range * 0.85, ruins_y, -place_range * 0.2),
         glam::vec3(-place_range * 0.2, ruins_y, place_range * 0.95),
     ];
     for pos in ruins_positions {
-        let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        let mut p = pos;
+        let mut tilt = glam::Quat::IDENTITY;
+        if let Some(t) = terrain {
+            let (h, n) = height_min_under(t, p.x, p.z, ruins_radius);
+            p.y = h + ruins_y;
+            tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
+        }
+        let yaw = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        let rotation = tilt * yaw;
         world.spawn(
             Transform {
-                translation: pos,
+                translation: p,
                 rotation,
                 scale: glam::Vec3::splat(1.0),
             },
@@ -78,8 +96,14 @@ pub fn build_demo_scene(
         let base_a = (i as f32) / (far_count as f32) * std::f32::consts::TAU;
         let a = base_a + rng.random::<f32>() * 0.2 - 0.1; // jitter
         let r = place_range * (0.78 + rng.random::<f32>() * 0.15);
-        let pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
-        let rot = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        let mut pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
+        let mut tilt = glam::Quat::IDENTITY;
+        if let Some(t) = terrain {
+            let (h, n) = height_min_under(t, pos.x, pos.z, ruins_radius);
+            pos.y = h + ruins_y;
+            tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
+        }
+        let rot = tilt * glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
         world.spawn(
             Transform {
                 translation: pos,
@@ -94,11 +118,15 @@ pub fn build_demo_scene(
     let outer_ring_radius = 7.5f32; // wider circle for better spacing
     for i in 0..ring_count {
         let theta = (i as f32) / (ring_count as f32) * std::f32::consts::TAU;
-        let translation = glam::vec3(
+        let mut translation = glam::vec3(
             outer_ring_radius * theta.cos(),
             0.0,
             outer_ring_radius * theta.sin(),
         );
+        if let Some(t) = terrain {
+            let (h, _n) = crate::gfx::terrain::height_at(t, translation.x, translation.z);
+            translation.y = h;
+        }
         // Face outward: yaw aligns +Z with (translation - center)
         let dx = translation.x - center.x;
         let dz = translation.z - center.z;
@@ -194,4 +222,39 @@ pub fn build_demo_scene(
         wizard_instances_cpu: wiz_instances,
         pc_index: 0,
     }
+}
+
+fn tilt_toward_normal(n: glam::Vec3, max_angle: f32) -> glam::Quat {
+    let up = glam::Vec3::Y;
+    let nn = n.normalize_or_zero();
+    let dot = up.dot(nn).clamp(-1.0, 1.0);
+    let full = dot.acos();
+    let angle = full.min(max_angle);
+    let axis = up.cross(nn);
+    if axis.length_squared() < 1e-6 || angle < 1e-4 {
+        glam::Quat::IDENTITY
+    } else {
+        glam::Quat::from_axis_angle(axis.normalize(), angle)
+    }
+}
+
+fn height_min_under(t: &TerrainCPU, x: f32, z: f32, radius: f32) -> (f32, glam::Vec3) {
+    // Sample center + four cardinal points at given radius; choose min height.
+    let mut hmin = f32::INFINITY;
+    let mut n_at = glam::Vec3::Y;
+    let samples = [
+        (0.0, 0.0),
+        (radius, 0.0),
+        (-radius, 0.0),
+        (0.0, radius),
+        (0.0, -radius),
+    ];
+    for (dx, dz) in samples {
+        let (h, n) = crate::gfx::terrain::height_at(t, x + dx, z + dz);
+        if h < hmin {
+            hmin = h;
+            n_at = n;
+        }
+    }
+    (hmin, n_at)
 }
