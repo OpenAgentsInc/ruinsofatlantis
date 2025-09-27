@@ -97,6 +97,7 @@ pub struct Renderer {
     post_ao_pipeline: wgpu::RenderPipeline,
     ssgi_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
+    frame_overlay_pipeline: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
@@ -108,10 +109,13 @@ pub struct Renderer {
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
     present_bg: wgpu::BindGroup,
+    frame_overlay_bg: wgpu::BindGroup,
+    frame_overlay_buf: wgpu::Buffer,
 
     // Lighting toggles
     enable_post_ao: bool,
     enable_ssgi: bool,
+    frame_counter: u32,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -521,6 +525,9 @@ impl Renderer {
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, config.format);
         let blit_scene_read_pipeline = pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        // Frame overlay
+        let frame_overlay_bgl = pipeline::create_frame_overlay_bgl(&device);
+        let frame_overlay_pipeline = pipeline::create_frame_overlay_pipeline(&device, &frame_overlay_bgl, offscreen_fmt);
         // Post AO pipeline
         let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
         let post_ao_pipeline = pipeline::create_post_ao_pipeline(
@@ -661,6 +668,22 @@ impl Renderer {
                 wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
             ],
+        });
+        // Frame overlay uniform
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        struct FrameDebug { frame_ix: u32 }
+        unsafe impl bytemuck::Zeroable for FrameDebug {}
+        unsafe impl bytemuck::Pod for FrameDebug {}
+        let frame_overlay_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("frame-overlay-ubo"),
+            contents: bytemuck::bytes_of(&FrameDebug { frame_ix: 0 }),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let frame_overlay_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("frame-overlay-bg"),
+            layout: &frame_overlay_bgl,
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: frame_overlay_buf.as_entire_binding() }],
         });
 
         // Per-draw Model buffers (plane and shard base)
@@ -1173,6 +1196,7 @@ impl Renderer {
             post_ao_pipeline,
             ssgi_pipeline,
             present_pipeline,
+            frame_overlay_pipeline,
             blit_scene_read_pipeline,
             globals_bg,
             post_ao_bg,
@@ -1182,6 +1206,8 @@ impl Renderer {
             _post_sampler: post_sampler,
             sky_bg,
             present_bg,
+            frame_overlay_bg,
+            frame_overlay_buf,
             terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
@@ -1312,6 +1338,7 @@ impl Renderer {
             hiz: Some(hiz),
             enable_post_ao: true,
             enable_ssgi: false,
+            frame_counter: 0,
         })
     }
 
@@ -1784,6 +1811,49 @@ impl Renderer {
             gi.set_bind_group(1, &self.ssgi_depth_bg, &[]);
             gi.set_bind_group(2, &self.ssgi_scene_bg, &[]);
             gi.draw(0..3, 0..1);
+        }
+        // Frame overlay (tiny animated region in top-left) to verify per-frame updates
+        {
+            use wgpu::*;
+            // Increment and upload frame index
+            self.frame_counter = self.frame_counter.wrapping_add(1);
+            #[repr(C)]
+            #[derive(Copy, Clone)]
+            struct FrameDebug { frame_ix: u32 }
+            unsafe impl bytemuck::Zeroable for FrameDebug {}
+            unsafe impl bytemuck::Pod for FrameDebug {}
+            let dbg = FrameDebug { frame_ix: self.frame_counter };
+            self.queue.write_buffer(&self.frame_overlay_buf, 0, bytemuck::bytes_of(&dbg));
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("frame-overlay-pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &self.scene_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.frame_overlay_pipeline);
+            pass.set_bind_group(0, &self.frame_overlay_bg, &[]);
+            pass.draw(0..3, 0..1);
+        }
+        // Frame overlay (tiny animated region in top-left) to verify per-frame updates
+        {
+            use wgpu::*;
+            // Increment and upload frame index
+            static mut FRAME_IX: u32 = 0;
+            unsafe { FRAME_IX = FRAME_IX.wrapping_add(1); }
+            #[repr(C)]
+            #[derive(Copy, Clone)]
+            struct FrameDebug { frame_ix: u32 }
+            unsafe impl bytemuck::Zeroable for FrameDebug {}
+            unsafe impl bytemuck::Pod for FrameDebug {}
+            let dbg = FrameDebug { frame_ix: unsafe { FRAME_IX } };
+            // We need the buffer handle; retrieve from bind group via debug is non-trivial, so instead recreate it once is heavy.
+            // Simpler: draw without updating UBO? Not useful. We'll keep a small staging update path by storing the buffer in a hidden field.
         }
         // Post-process AO overlay (fullscreen) multiplying into SceneColor
         if self.enable_post_ao {
