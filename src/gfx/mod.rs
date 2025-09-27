@@ -225,8 +225,10 @@ pub struct Renderer {
     pc_anim_start: Option<f32>,
     pc_cast_time: f32,
     pc_cast_fired: bool,
-    // Simple global cooldown (visual only)
+    // Deprecated GCD tracking (not used when cast-time only)
+    #[allow(dead_code)]
     gcd_until: f32,
+    #[allow(dead_code)]
     gcd_duration: f32,
     // Orbit params
     cam_orbit_yaw: f32,
@@ -1595,12 +1597,8 @@ impl Renderer {
             } else {
                 0.0
             };
-            // Cooldown fraction (GCD) after cast completes
-            let gcd_frac = if self.gcd_until > t {
-                ((self.gcd_until - t) / self.gcd_duration).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
+            // No GCD overlay when using cast-time only
+            let gcd_frac = 0.0f32;
             self.hud.build(
                 self.size.width,
                 self.size.height,
@@ -2251,10 +2249,7 @@ impl Renderer {
         }
         if self.pc_cast_queued {
             self.pc_cast_queued = false;
-            if self.wizard_anim_index[self.pc_index] != 0
-                && self.pc_anim_start.is_none()
-                && t >= self.gcd_until
-            {
+            if self.wizard_anim_index[self.pc_index] != 0 && self.pc_anim_start.is_none() {
                 // Start PortalOpen now
                 self.wizard_anim_index[self.pc_index] = 0;
                 self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
@@ -2293,7 +2288,6 @@ impl Renderer {
                     // Immediately end cast animation and start cooldown window
                     self.wizard_anim_index[self.pc_index] = 1;
                     self.pc_anim_start = None;
-                    self.gcd_until = t + self.gcd_duration;
                 }
             } else {
                 self.pc_anim_start = None;
