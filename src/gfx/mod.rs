@@ -1143,7 +1143,7 @@ impl Renderer {
             pc_cast_time: 0.7,
             pc_cast_fired: false,
             gcd_until: 0.0,
-            gcd_duration: 1.2,
+            gcd_duration: 1.5,
             cam_orbit_yaw: 0.0,
             cam_orbit_pitch: 0.2,
             cam_distance: 8.5,
@@ -2251,7 +2251,10 @@ impl Renderer {
         }
         if self.pc_cast_queued {
             self.pc_cast_queued = false;
-            if self.wizard_anim_index[self.pc_index] != 0 && self.pc_anim_start.is_none() {
+            if self.wizard_anim_index[self.pc_index] != 0
+                && self.pc_anim_start.is_none()
+                && t >= self.gcd_until
+            {
                 // Start PortalOpen now
                 self.wizard_anim_index[self.pc_index] = 0;
                 self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
