@@ -1428,7 +1428,7 @@ impl Renderer {
             hiz: Some(hiz),
             enable_post_ao: true,
             enable_ssgi: true,
-            enable_ssr: true,
+            enable_ssr: false,
             // frame overlay removed
         })
     }
