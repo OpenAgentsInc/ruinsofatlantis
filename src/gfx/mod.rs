@@ -1140,7 +1140,7 @@ impl Renderer {
             },
             pc_cast_queued: false,
             pc_anim_start: None,
-            pc_cast_time: 0.7,
+            pc_cast_time: 1.5,
             pc_cast_fired: false,
             gcd_until: 0.0,
             gcd_duration: 1.5,
