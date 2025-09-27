@@ -1728,16 +1728,31 @@ impl Renderer {
         for n in &self.server.npcs {
             attack_map.insert(n.id, n.attack_anim > 0.0);
         }
+        // Helper: fuzzy find clip by case-insensitive substring(s)
+        let find_clip = |subs: &[&str], anims: &std::collections::HashMap<String, AnimClip>| -> Option<String> {
+            let subsl: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
+            for name in anims.keys() {
+                let low = name.to_lowercase();
+                if subsl.iter().any(|s| low.contains(s)) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
         for i in 0..(self.zombie_count as usize) {
             let c = self.zombie_models[i].to_cols_array();
             let pos = glam::vec3(c[12], c[13], c[14]);
             let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(pos);
             let moving = (pos - prev).length_squared() > 1e-4;
             self.zombie_prev_pos[i] = pos;
-            let has_walk = self.zombie_cpu.animations.contains_key("Walk");
-            let has_run = self.zombie_cpu.animations.contains_key("Run");
-            let has_idle = self.zombie_cpu.animations.contains_key("Idle");
-            let has_attack = self.zombie_cpu.animations.contains_key("Attack");
+            let has_walk = self.zombie_cpu.animations.contains_key("Walk")
+                || find_clip(&["walk"], &self.zombie_cpu.animations).is_some();
+            let has_run = self.zombie_cpu.animations.contains_key("Run")
+                || find_clip(&["run"], &self.zombie_cpu.animations).is_some();
+            let has_idle = self.zombie_cpu.animations.contains_key("Idle")
+                || find_clip(&["idle", "stand"], &self.zombie_cpu.animations).is_some();
+            let has_attack = self.zombie_cpu.animations.contains_key("Attack")
+                || find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations).is_some();
             let has_proc = self.zombie_cpu.animations.contains_key("ProcIdle");
             let has_static = self.zombie_cpu.animations.contains_key("__static");
             let any_owned: String = self
@@ -1753,7 +1768,22 @@ impl Renderer {
                 .copied()
                 .unwrap_or(false);
             let clip_name = if is_attacking && has_attack {
-                "Attack"
+                if self.zombie_cpu.animations.contains_key("Attack") {
+                    "Attack"
+                } else if let Some(_n) = find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations) {
+                    // Use first fuzzy match
+                    // Note: we allocate here, handled below when fetching the clip
+                    // by looking it up by this dynamic name
+                    // We'll handle lookup via proc_name_str/lookup below
+                    // Return a sentinel that will be replaced
+                    // Store in a temporary variable instead
+                    // We'll set proc_name_str to Some(n) and use it
+                    // Use placeholder here; actual value comes from proc_name_str
+                    "__attack_dynamic__"
+                } else {
+                    // Fallback to moving/idle below
+                    "__noattack__"
+                }
             } else if moving {
                 if has_walk {
                     "Walk"
@@ -1779,11 +1809,17 @@ impl Renderer {
             };
 
             let need_proc = clip_name == "__static" && !has_idle && !has_proc;
-            let proc_name_str = if need_proc {
+            // Optionally override with fuzzy-attack match name
+            let mut proc_name_str = if need_proc {
                 Some(self.ensure_proc_idle_clip())
             } else {
                 None
             };
+            if clip_name == "__attack_dynamic__"
+                && let Some(n) = find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations)
+            {
+                proc_name_str = Some(n);
+            }
             let t = time_global + self.zombie_time_offset.get(i).copied().unwrap_or(0.0);
             let lookup = proc_name_str.as_deref().unwrap_or(clip_name);
             let clip = self.zombie_cpu.animations.get(lookup).unwrap();
