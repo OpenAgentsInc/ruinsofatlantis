@@ -1544,7 +1544,7 @@ impl Hud {
                 surface_h,
                 x0 + 6.0,
                 y0 - 4.0,
-                "Casting",
+                "Casting Fire Bolt",
                 [1.0, 1.0, 1.0, 0.9],
             );
         }

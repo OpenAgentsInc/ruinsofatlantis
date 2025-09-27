@@ -223,6 +223,8 @@ pub struct Renderer {
     cam_follow: camera_sys::FollowState,
     pc_cast_queued: bool,
     pc_anim_start: Option<f32>,
+    pc_cast_time: f32,
+    pc_cast_fired: bool,
     // Simple global cooldown (visual only)
     gcd_until: f32,
     gcd_duration: f32,
@@ -1138,6 +1140,8 @@ impl Renderer {
             },
             pc_cast_queued: false,
             pc_anim_start: None,
+            pc_cast_time: 0.7,
+            pc_cast_fired: false,
             gcd_until: 0.0,
             gcd_duration: 1.2,
             cam_orbit_yaw: 0.0,
@@ -1583,8 +1587,7 @@ impl Renderer {
             // Casting progress (0..1) while PortalOpen is active for the PC
             let cast_frac = if let Some(start) = self.pc_anim_start {
                 if self.wizard_anim_index[self.pc_index] == 0 {
-                    let clip = self.select_clip(0);
-                    let dur = clip.duration.max(0.0001);
+                    let dur = self.pc_cast_time.max(0.0001);
                     ((t - start) / dur).clamp(0.0, 1.0)
                 } else {
                     0.0
@@ -2254,16 +2257,39 @@ impl Renderer {
                 self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
                 self.wizard_last_phase[self.pc_index] = 0.0;
                 self.pc_anim_start = Some(t);
+                self.pc_cast_fired = false;
             }
         }
         if let Some(start) = self.pc_anim_start {
             if self.wizard_anim_index[self.pc_index] == 0 {
                 let clip = self.select_clip(0);
-                if t - start >= clip.duration.max(0.0) {
-                    // Return to Still
+                let elapsed = t - start;
+                // Fire bolt exactly at cast end if not yet fired
+                if !self.pc_cast_fired && elapsed >= self.pc_cast_time {
+                    let phase = self.pc_cast_time;
+                    if let Some(origin_local) = self.right_hand_world(clip, phase) {
+                        let inst = self
+                            .wizard_models
+                            .get(self.pc_index)
+                            .copied()
+                            .unwrap_or(glam::Mat4::IDENTITY);
+                        let origin_w = inst
+                            * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
+                        let dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
+                            .truncate()
+                            .normalize_or_zero();
+                        let right_w = (inst * glam::Vec4::new(1.0, 0.0, 0.0, 0.0))
+                            .truncate()
+                            .normalize_or_zero();
+                        let lateral = 0.20;
+                        let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
+                        log::info!("PC Fire Bolt fired at t={:.2}", t);
+                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index));
+                        self.pc_cast_fired = true;
+                    }
+                    // Immediately end cast animation and start cooldown window
                     self.wizard_anim_index[self.pc_index] = 1;
                     self.pc_anim_start = None;
-                    // Start GCD visual now that casting completed
                     self.gcd_until = t + self.gcd_duration;
                 }
             } else {
@@ -2274,7 +2300,7 @@ impl Renderer {
 
     // Update and render-side state for projectiles/particles
     fn update_fx(&mut self, t: f32, dt: f32) {
-        // 1) Spawn firebolts for PortalOpen phase crossing.
+        // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
         // PC is always allowed to cast; NPC wizards only cast while zombies remain.
         if self.wizard_count > 0 {
             let zombies_alive = self.any_zombies_alive();
@@ -2289,7 +2315,7 @@ impl Renderer {
                 let crossed = (prev <= bolt_offset && phase >= bolt_offset)
                     || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
                 let allowed = i == self.pc_index || zombies_alive;
-                if allowed && crossed {
+                if allowed && crossed && i != self.pc_index {
                     let clip = self.select_clip(self.wizard_anim_index[i]);
                     let clip_time = if clip.duration > 0.0 {
                         phase.min(clip.duration)
@@ -2313,9 +2339,6 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20; // meters to shift toward center
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        if i == self.pc_index {
-                            log::info!("PC Fire Bolt fired at t={:.2}", t);
-                        }
                         self.spawn_firebolt(spawn, dir_w, t, Some(i));
                     }
                 }
