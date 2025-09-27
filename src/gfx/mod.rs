@@ -284,6 +284,10 @@ pub struct Renderer {
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
 
+    // UI toggles and capture helpers
+    hud_enabled: bool,
+    screenshot_start: Option<f32>,
+
     // Server state (NPCs/health)
     server: crate::server::ServerState,
 
@@ -1399,6 +1403,8 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
+            hud_enabled: true,
+            screenshot_start: None,
             npc_vb,
             npc_ib,
             npc_index_count,
@@ -1595,6 +1601,17 @@ impl Renderer {
         let aspect = self.config.width as f32 / self.config.height as f32;
         let dt = (t - self.last_time).max(0.0);
         self.last_time = t;
+
+        // If screenshot mode is active, auto-animate a smooth orbit for 5 seconds
+        if let Some(ts) = self.screenshot_start {
+            let elapsed = (t - ts).max(0.0);
+            if elapsed <= 5.0 {
+                let speed = 0.6; // rad/s
+                self.cam_orbit_yaw = Self::wrap_angle(self.cam_orbit_yaw + dt * speed);
+            } else {
+                self.screenshot_start = None;
+            }
+        }
 
         // Update player transform from input (WASD) then camera follow
         self.update_player_and_camera(dt, aspect);
@@ -2121,16 +2138,18 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            self.hud.build(
-                self.size.width,
-                self.size.height,
-                pc_hp,
-                self.wizard_hp_max,
-                cast_frac,
-                gcd_frac,
-            );
-            self.hud.queue(&self.device, &self.queue);
-            self.hud.draw(&mut encoder, &view);
+            if self.hud_enabled {
+                self.hud.build(
+                    self.size.width,
+                    self.size.height,
+                    pc_hp,
+                    self.wizard_hp_max,
+                    cast_frac,
+                    gcd_frac,
+                );
+                self.hud.queue(&self.device, &self.queue);
+                self.hud.draw(&mut encoder, &view);
+            }
             self.queue.submit(Some(encoder.finish()));
             frame.present();
         }
@@ -2631,6 +2650,19 @@ impl Renderer {
                         if pressed {
                             self.sky.speed_mul(2.0);
                             log::info!("time_scale: {:.2}", self.sky.time_scale);
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyH) => {
+                        if pressed {
+                            self.hud_enabled = !self.hud_enabled;
+                            log::info!("HUD {}", if self.hud_enabled { "shown" } else { "hidden" });
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::F5) => {
+                        if pressed {
+                            // Start a 5-second smooth orbit capture
+                            self.screenshot_start = Some(self.last_time);
+                            log::info!("Screenshot mode: 5s orbit starting");
                         }
                     }
                     _ => {}

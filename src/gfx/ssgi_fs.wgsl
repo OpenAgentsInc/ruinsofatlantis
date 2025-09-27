@@ -49,6 +49,8 @@ fn fs_ssgi(in: VsOut) -> @location(0) vec4<f32> {
   var wsum = 0.0;
   for (var i = 0u; i < 8u; i++) {
     let uv = in.uv + taps[i] * px * 2.0;
+    // Avoid sampling outside valid range to prevent mirrored/clamped artifacts
+    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) { continue; }
     let di = textureSample(depth_tex, samp, uv);
     if (di >= 1.0) { continue; }
     let zi = linearize_depth(di, znear, zfar);
@@ -64,4 +66,3 @@ fn fs_ssgi(in: VsOut) -> @location(0) vec4<f32> {
   let gain = 0.08;
   return vec4<f32>(acc * gain, 1.0);
 }
-

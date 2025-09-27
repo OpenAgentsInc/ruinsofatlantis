@@ -47,6 +47,8 @@ fn fs_ao(in: VsOut) -> @location(0) vec4<f32> {
   );
   for (var i = 0u; i < 8u; i++) {
     let uv = in.uv + taps[i] * px * 2.0;
+    // Prevent clamped sampling near edges (causes mirrored outlines)
+    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) { continue; }
     let dn = textureSample(depth_tex, samp, uv);
     let zn = linearize_depth(dn, znear, zfar);
     // If neighbor is closer (smaller z), it occludes this pixel
