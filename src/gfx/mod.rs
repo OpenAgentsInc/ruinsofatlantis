@@ -1349,14 +1349,26 @@ impl Renderer {
                 / (self.wizard_hp_max as f32);
             bar_entries.push((head.truncate(), frac));
         }
-        // NPC boxes: use server authoritative pos; offset slightly above top
-        for npc in &self.server.npcs {
-            if !npc.alive {
-                continue;
+        // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
+        use std::collections::HashMap;
+        let mut npc_map: HashMap<crate::server::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        for n in &self.server.npcs {
+            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
+        }
+        for (i, id) in self.zombie_ids.iter().enumerate() {
+            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
+                if !alive {
+                    continue;
+                }
+                let m = self
+                    .zombie_models
+                    .get(i)
+                    .copied()
+                    .unwrap_or(glam::Mat4::IDENTITY);
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
+                bar_entries.push((head.truncate(), frac));
             }
-            let pos = npc.pos + glam::vec3(0.0, npc.radius + 0.3, 0.0);
-            let frac = (npc.hp.max(0) as f32) / (npc.max_hp.max(1) as f32);
-            bar_entries.push((pos, frac));
         }
         self.bars.queue_entries(
             &self.device,
