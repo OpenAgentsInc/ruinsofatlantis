@@ -63,6 +63,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
   - gbuffer.rs — G‑Buffer attachments and formats (albedo, normal‑oct, rough/metal, emissive, motion).
   - hiz.rs — Z‑MAX depth pyramid resources over linear R32F depth; CPU reference downsample + tests.
+  - hiz.comp.wgsl — Compute shader for linearizing depth and 2×2 Z‑MAX reduction.
   - temporal/
     - mod.rs — Temporal module index.
     - reprojection.rs — CPU reprojection helpers + tests; prev/curr jitter handling.
@@ -70,6 +71,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - terrain.rs — Seeded heightmap terrain generation and simple woodland scatter (Phase 1). Parameters (size/extent/seed) come from the active Zone manifest.
   - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
   - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
+  - fullscreen.wgsl — Shared fullscreen VS: offscreen no‑flip, present Y‑flip.
   - ssgi.wgsl — Placeholder compute entry for screen‑space diffuse GI (to be implemented).
   - ssr.wgsl — Placeholder compute entry for screen‑space reflections (to be implemented).
   - shaders/common.wgsl — Shared shader constants and binding conventions.

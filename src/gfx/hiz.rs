@@ -4,10 +4,10 @@
 //! mip chain from an R32F linear depth texture. The actual compute dispatch is
 //! wired by the renderer when the pass executes.
 
+use wgpu::util::DeviceExt;
 use wgpu::{
     Device, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
 };
-use wgpu::util::DeviceExt;
 
 /// Hi-Z resources: linear depth copy + mip chain views for Z-MAX reduction.
 #[allow(dead_code)]
@@ -78,34 +78,52 @@ impl HiZPyramid {
     ) {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("hiz-comp"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("hiz.comp.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "hiz.comp.wgsl"
+            ))),
         });
         // Layouts
         let params_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("hiz-params-bgl"),
             entries: &[
-                wgpu::BindGroupLayoutEntry { // depth
+                wgpu::BindGroupLayoutEntry {
+                    // depth
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Depth },
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Depth,
+                    },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry { // sampler
+                wgpu::BindGroupLayoutEntry {
+                    // sampler
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry { // params UBO
+                wgpu::BindGroupLayoutEntry {
+                    // params UBO
                     binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry { // dst mip0 (write)
+                wgpu::BindGroupLayoutEntry {
+                    // dst mip0 (write)
                     binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture { access: wgpu::StorageTextureAccess::WriteOnly, format: wgpu::TextureFormat::R32Float, view_dimension: wgpu::TextureViewDimension::D2 },
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::R32Float,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
                     count: None,
                 },
             ],
@@ -113,16 +131,26 @@ impl HiZPyramid {
         let reduce_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("hiz-reduce-bgl"),
             entries: &[
-                wgpu::BindGroupLayoutEntry { // src mip (sampled)
+                wgpu::BindGroupLayoutEntry {
+                    // src mip (sampled)
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } },
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry { // dst mip (write)
+                wgpu::BindGroupLayoutEntry {
+                    // dst mip (write)
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture { access: wgpu::StorageTextureAccess::WriteOnly, format: wgpu::TextureFormat::R32Float, view_dimension: wgpu::TextureViewDimension::D2 },
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::R32Float,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
                     count: None,
                 },
             ],
@@ -156,8 +184,16 @@ impl HiZPyramid {
         // Params UBO
         #[repr(C)]
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-        struct Params { znear: f32, zfar: f32, _pad: [f32; 2] }
-        let params = Params { znear, zfar, _pad: [0.0; 2] };
+        struct Params {
+            znear: f32,
+            zfar: f32,
+            _pad: [f32; 2],
+        }
+        let params = Params {
+            znear,
+            zfar,
+            _pad: [0.0; 2],
+        };
         let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("hiz-params"),
             contents: bytemuck::bytes_of(&params),
@@ -168,14 +204,29 @@ impl HiZPyramid {
             label: Some("hiz-linearize-bg"),
             layout: &params_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(depth_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) },
-                wgpu::BindGroupEntry { binding: 2, resource: params_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&self.mip_views[0]) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(depth_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: params_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&self.mip_views[0]),
+                },
             ],
         });
         {
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("hiz-linearize-pass"), timestamp_writes: None });
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("hiz-linearize-pass"),
+                timestamp_writes: None,
+            });
             cpass.set_pipeline(&p_linear);
             cpass.set_bind_group(0, &bg0, &[]);
             let gx = self.width.div_ceil(8);
@@ -190,13 +241,22 @@ impl HiZPyramid {
                 label: Some("hiz-reduce-bg"),
                 layout: &reduce_bgl,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(src) },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(dst) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(src),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(dst),
+                    },
                 ],
             });
             let w = (self.width >> mip).max(1);
             let h = (self.height >> mip).max(1);
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: Some("hiz-reduce-pass"), timestamp_writes: None });
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("hiz-reduce-pass"),
+                timestamp_writes: None,
+            });
             cpass.set_pipeline(&p_reduce);
             cpass.set_bind_group(0, &bg, &[]);
             let half_w = w.div_ceil(2);
