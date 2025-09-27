@@ -573,7 +573,7 @@ Tradeoffs
 - Streaming‑first: Custom asset packs, chunked world streaming, GPU culling/indirect draws—no engine assumptions to fight.
 - Long‑life maintainability: A small dependency surface that tracks platform APIs directly—less churn than big engines’ editor/tooling layers.
 
-## Contents (updated)
+## Contents
 
 * [Philosophy](#philosophy)
 * [Game Mechanics](#game-mechanics)
@@ -804,4 +804,3 @@ Tradeoffs
 * Class features/metamagic, item‑granted spells, aura stacking policies, network protocol finalization.
 
 ---
-
