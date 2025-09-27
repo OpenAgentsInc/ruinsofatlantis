@@ -45,6 +45,7 @@ impl HiZPyramid {
 }
 
 /// CPU reference downsample for tests: produces mip1 as max over 2x2 pixels from mip0.
+#[allow(dead_code)]
 pub fn zmax_downsample_2x2(src: &[f32], w: usize, h: usize) -> Vec<f32> {
     let mw = (w / 2).max(1);
     let mh = (h / 2).max(1);
