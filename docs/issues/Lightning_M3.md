@@ -1,15 +1,15 @@
 Title: Lightning M3 — Software Ray Tracing (BVH baseline, optional mesh SDFs) + Hit Evaluation Modes
 
 Goal
-- Handle off‑screen ray hits robustly using a triangle BVH (baseline), with an optional signed‑distance field (SDF) path for detail rays. Support two hit evaluation modes: fast (sample from capture atlas) and quality (evaluate BRDF at the true hit), selectable per material.
+- Handle off‑screen ray hits robustly using a two‑level triangle BVH (TLAS/BLAS) as baseline, with an optional signed‑distance field (SDF) path for detail rays. Support two hit evaluation modes: fast (sample from capture atlas) and quality (evaluate BRDF at the true hit), selectable per material and overridable per view.
 
 Scope
 - Add CPU BVH build + traversal API (GPU traversal optional later), optional SDF tracing behind a Cargo feature, and per‑material reflection toggle. Integrate miss paths from SSR/SSGI to call BVH/SDF tracing.
 
 Planned files and module map (aligned with src/README.md)
 - BVH
-  - `src/gfx/rt/bvh/build.rs` — Build a static BVH over scene triangles/instances.
-  - `src/gfx/rt/bvh/traverse.rs` — Ray traversal API; returns closest hit (triangle id, barycentrics, normal).
+  - `src/gfx/rt/bvh/build.rs` — Build BLAS per mesh and a TLAS over instances; LBVH (Morton) + SAH refit pass.
+  - `src/gfx/rt/bvh/traverse.rs` — Ray traversal API; returns closest hit (triangle id, barycentrics, normal), supports masks and backface/alpha cutout options.
 
 - Optional mesh SDFs (feature: `mesh_sdf`)
   - `src/gfx/rt/sdf/build.rs` — Generate coarse SDF volumes per mesh (voxel or sparse).
@@ -29,21 +29,30 @@ Connections to existing hierarchy (read src/README.md)
 - Update `src/README.md` under `gfx/` to document `rt/` modules and reflection/gi RT paths.
 
 Acceptance criteria
-- Triangle BVH builds on current scene assets; traversal returns correct closest hits on test geometry.
+- Two‑level BVH builds on current scene assets; traversal returns correct closest hits on test geometry.
+- BVH build time for the current scene ≤ 50 ms on target dev hardware; per‑frame TLAS refit exists for moving instances (coarse is OK).
 - SSR/SSGI miss paths fall back to BVH/SDF tracing; visual stability improves for off‑screen content.
-- Per‑material toggle switches reflection evaluation between fast (atlas sample) and quality (BRDF at hit).
-- Feature flag `mesh_sdf` compiles; when enabled, detail rays can use SDF tracing.
+- Per‑material toggle switches reflection evaluation between fast (atlas sample) and quality (BRDF at hit); per‑view override works.
+- Feature flag `mesh_sdf` compiles; when enabled, detail rays can use SDF tracing on meshes flagged `detail_reflection = true`.
 
 Detailed tasks
 - BVH
   - Implement AABB generation from meshes and instance transforms.
-  - Build SAH or median split tree; upload to GPU buffers later (for now, CPU traversal is fine).
-  - Provide `trace_ray(ray) -> Hit { t, tri_id, bary, normal }` API.
+  - Build BLAS with LBVH; run a top‑down SAH refit for quality; build a TLAS over instances.
+  - Choose a node format friendly to future GPU traversal (SoA AABBs + child indices; ~32‑byte nodes).
+  - Provide traversal API:
+    
+    ```rust
+    pub struct Ray { origin: Vec3, dir: Vec3, t_min: f32, t_max: f32, mask: u32 }
+    pub struct Hit { t: f32, tri_id: u32, bary: Vec2, geom_n: Vec3, inst_id: u32, mesh_id: u32 }
+    pub fn trace_any(ray: &Ray) -> Option<Hit>;
+    ```
+  - Support backface culling and alpha cutout in an any‑hit style callback for materials.
   - Tests: AABB intersection, tree invariants, hit ordering on analytic scenes.
 
 - SDF (optional)
   - Implement coarse SDF bake for static meshes; store in compressed 3D textures or CPU arrays.
-  - Sphere tracing with step caps and normal estimation via gradient.
+  - Sphere tracing with step caps and normal estimation via gradient; fallback to BVH when gradient magnitude is poor.
   - Tests: sign consistency on simple shapes; convergence within step budget.
 
 - Reflection/GI integration
@@ -53,7 +62,7 @@ Detailed tasks
 
 - Config and materials
   - Extend `LightingConfig` with RT toggles and budgets (max rays, max steps, sdf detail).
-  - In `material.rs`, add `force_quality_reflections` and expose a default.
+  - In `material.rs`, add `force_quality_reflections` and expose a default; add a view override for cutscenes.
   - Update `src/README.md` accordingly.
 
 Suggested data formats
@@ -63,6 +72,7 @@ Suggested data formats
 Tests
 - BVH unit tests under `rt/bvh/*` for intersection math and traversal determinism.
 - SDF unit tests under `rt/sdf/*` guarded by feature.
+- Cornell‑box‑like integration test validates barycentrics and normal orientation (handedness consistency).
 
 Out of scope
 - Multi‑bounce GI and denoisers (Lightning M4).
@@ -70,4 +80,3 @@ Out of scope
 Housekeeping
 - If a helper crate is introduced (e.g., `bitvec` for SDF occupancy), add via `cargo add` and document.
 - Keep docblocks and rustdoc complete; maintain compiling state with `clippy` clean.
-

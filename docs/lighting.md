@@ -45,7 +45,7 @@ Phase 1 — Foundations
    - Techniques: neighborhood clamping and reactive masks to suppress ghosting on emissive/flicker.
 
 3. Depth pyramid (Hi‑Z)
-   - Add `src/gfx/hiz.rs` + compute shader for mip‑down depth. Used by SSR/SSGI ray marching and denoisers.
+   - Add `src/gfx/hiz.rs` + compute shader to build a Z‑MAX mip chain over a linear view‑space depth copy. In practice: resolve `Depth32Float` into an `R32Float` linearized texture, then downsample with MAX.
    - Build/update once per frame after the G‑Buffer pass.
 
 4. SSR/SSGI baseline
@@ -135,9 +135,9 @@ Proposed module map (under `src/gfx/`)
 - `debug/{capture_viz.rs, atlas_inspector.rs, rays.rs}` — tools/overlays.
 
 Data formats and buffers (initial suggestions)
-- G‑Buffer: RGBA16F base color + emissive, RG16F normal (oct‑encoded), R8 roughness, R8 metalness, R32F depth (read‑only SRV), RG16 motion vectors.
-- Capture atlas: RGBA16F for attributes or pre‑shaded radiance; pick one to start (attributes are more flexible; radiance is faster).
-- History buffers: GI history (accum), reflection history, clamp neighborhood stats.
+- G‑Buffer (all linear): Albedo `RGBA8Unorm`; Normal (oct) `RG16Snorm`; Roughness/Metalness packed `RG8Unorm`; Emissive optional `RGBA16F` (or LDR in albedo alpha); Depth `Depth32Float` with linear `R32Float` copy for Hi‑Z; Motion vectors `RG16F`.
+- Capture atlas: start with attributes split across two targets (A0 `RGBA16F` albedo+emissive; A1 `RG16Snorm` normal oct + `RG8Unorm` rough/metal) plus `R32F` depth.
+- History buffers: GI history (accum), reflection history, clamp neighborhoods and masks (disocclusion/reactive).
 
 Milestones and acceptance checks
 - M1 — Foundations
@@ -179,4 +179,3 @@ Adoption plan
 
 Notes on provenance and licensing
 - This plan draws on public rendering literature and high‑level industry practices. We will not copy engine‑specific code or identifiers; all implementation and naming will remain original to this project.
-
