@@ -13,7 +13,13 @@ pub struct TemporalParams {
 }
 
 impl Default for TemporalParams {
-    fn default() -> Self { Self { alpha: 0.9, clamp_k: 3.0, reactive_boost: 0.0 } }
+    fn default() -> Self {
+        Self {
+            alpha: 0.9,
+            clamp_k: 3.0,
+            reactive_boost: 0.0,
+        }
+    }
 }
 
 /// Compute a simple clamp range given mean and variance; returns (min,max).

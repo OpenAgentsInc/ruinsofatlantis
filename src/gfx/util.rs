@@ -44,7 +44,8 @@ pub fn oct_encode(n: glam::Vec3) -> glam::Vec2 {
     if v.z < 0.0 {
         let x = (1.0 - v.y.abs()) * (if v.x >= 0.0 { 1.0 } else { -1.0 });
         let y = (1.0 - v.x.abs()) * (if v.y >= 0.0 { 1.0 } else { -1.0 });
-        v.x = x; v.y = y;
+        v.x = x;
+        v.y = y;
     }
     glam::Vec2::new(v.x, v.y)
 }
@@ -56,7 +57,8 @@ pub fn oct_decode(e: glam::Vec2) -> glam::Vec3 {
     if v.z < 0.0 {
         let x = (1.0 - v.y.abs()) * (if v.x >= 0.0 { 1.0 } else { -1.0 });
         let y = (1.0 - v.x.abs()) * (if v.y >= 0.0 { 1.0 } else { -1.0 });
-        v.x = x; v.y = y;
+        v.x = x;
+        v.y = y;
     }
     v.normalize()
 }

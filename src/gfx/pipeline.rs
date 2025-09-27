@@ -631,7 +631,12 @@ pub fn create_blit_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("blit-noflip-pipeline"),
         layout: Some(&layout),
-        vertex: VertexState { module: &shader, entry_point: Some("vs_blit"), buffers: &[], compilation_options: Default::default() },
+        vertex: VertexState {
+            module: &shader,
+            entry_point: Some("vs_blit"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
         fragment: Some(FragmentState {
             module: &shader,
             entry_point: Some("fs_blit"),
@@ -651,57 +656,7 @@ pub fn create_blit_pipeline(
 }
 
 // Frame overlay (alpha blended) into SceneColor to visualize frame progression
-pub fn create_frame_overlay_bgl(device: &wgpu::Device) -> BindGroupLayout {
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("frame-overlay-bgl"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    })
-}
-
-pub fn create_frame_overlay_pipeline(
-    device: &wgpu::Device,
-    overlay_bgl: &BindGroupLayout,
-    color_format: wgpu::TextureFormat,
-) -> RenderPipeline {
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("frame-overlay-shader"),
-        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("frame_overlay.wgsl"))),
-    });
-    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: Some("frame-overlay-pipeline-layout"),
-        bind_group_layouts: &[overlay_bgl],
-        push_constant_ranges: &[],
-    });
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("frame-overlay-pipeline"),
-        layout: Some(&layout),
-        vertex: VertexState { module: &shader, entry_point: Some("vs_fullscreen"), buffers: &[], compilation_options: Default::default() },
-        fragment: Some(FragmentState {
-            module: &shader,
-            entry_point: Some("fs_overlay"),
-            targets: &[Some(ColorTargetState {
-                format: color_format,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: Default::default(),
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-        cache: None,
-    })
-}
+// Frame overlay disabled
 
 // Post-process AO pipeline (fullscreen triangle sampling depth)
 pub fn create_post_ao_bgl(device: &wgpu::Device) -> BindGroupLayout {
@@ -784,7 +739,9 @@ pub fn create_post_ao_pipeline(
 }
 
 // SSGI additive overlay (fullscreen), samples depth + scene color
-pub fn create_ssgi_bgl(device: &wgpu::Device) -> (BindGroupLayout, BindGroupLayout, BindGroupLayout) {
+pub fn create_ssgi_bgl(
+    device: &wgpu::Device,
+) -> (BindGroupLayout, BindGroupLayout, BindGroupLayout) {
     let globals = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("ssgi-globals-bgl"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -862,7 +819,12 @@ pub fn create_ssgi_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("ssgi-fs-pipeline"),
         layout: Some(&layout),
-        vertex: VertexState { module: &shader, entry_point: Some("vs_fullscreen"), buffers: &[], compilation_options: Default::default() },
+        vertex: VertexState {
+            module: &shader,
+            entry_point: Some("vs_fullscreen"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
         fragment: Some(FragmentState {
             module: &shader,
             entry_point: Some("fs_ssgi"),
@@ -870,8 +832,16 @@ pub fn create_ssgi_pipeline(
                 format: color_format,
                 // Additive blend: dst = dst + src
                 blend: Some(wgpu::BlendState {
-                    color: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add },
-                    alpha: wgpu::BlendComponent { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One, operation: wgpu::BlendOperation::Add },
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
                 }),
                 write_mask: wgpu::ColorWrites::ALL,
             })],

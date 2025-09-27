@@ -3,6 +3,5 @@
 //! Provides reprojection helpers and history management for temporal accumulation
 //! in GI/reflections and potential future TAA.
 
-pub mod reprojection;
 pub mod history;
-
+pub mod reprojection;

@@ -35,8 +35,10 @@ pub fn reproject_uv(
     let ndc_prev = clip_prev.truncate() / clip_prev.w.max(1e-6);
     // Remove/add jitter: for CPU placeholder, we simply subtract prev jitter and add curr
     let ndc_prev_dejitter = Vec2::new(ndc_prev.x - prev_jitter.x, ndc_prev.y - prev_jitter.y);
-    let uv_prev = Vec2::new((ndc_prev_dejitter.x * 0.5) + 0.5, (1.0 - ndc_prev_dejitter.y) * 0.5);
-    uv_prev
+    Vec2::new(
+        (ndc_prev_dejitter.x * 0.5) + 0.5,
+        (1.0 - ndc_prev_dejitter.y) * 0.5,
+    )
 }
 
 #[cfg(test)]

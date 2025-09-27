@@ -17,9 +17,9 @@
 mod camera;
 mod gbuffer;
 mod hiz;
-mod temporal;
 mod mesh;
 mod pipeline;
+mod temporal;
 mod types;
 pub use types::Vertex;
 mod anim;
@@ -97,11 +97,11 @@ pub struct Renderer {
     post_ao_pipeline: wgpu::RenderPipeline,
     ssgi_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
-    frame_overlay_pipeline: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
     post_ao_bgl: wgpu::BindGroupLayout,
+    #[allow(dead_code)]
     ssgi_globals_bgl: wgpu::BindGroupLayout,
     ssgi_depth_bgl: wgpu::BindGroupLayout,
     ssgi_scene_bgl: wgpu::BindGroupLayout,
@@ -115,12 +115,12 @@ pub struct Renderer {
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
     present_bg: wgpu::BindGroup,
-    frame_overlay_bg: wgpu::BindGroup,
-    frame_overlay_buf: wgpu::Buffer,
+    // frame overlay removed
 
     // Lighting toggles
     enable_post_ao: bool,
     enable_ssgi: bool,
+    #[allow(dead_code)]
     frame_counter: u32,
 
     // --- Scene Buffers ---
@@ -491,18 +491,28 @@ impl Renderer {
         // Offscreen SceneColor (HDR)
         let scene_color = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-color"),
-            size: wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let scene_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
         let scene_read = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-read"),
-            size: wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -529,19 +539,15 @@ impl Renderer {
             pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, offscreen_fmt);
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
-        let present_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, config.format);
-        let blit_scene_read_pipeline = pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
-        // Frame overlay
-        let frame_overlay_bgl = pipeline::create_frame_overlay_bgl(&device);
-        let frame_overlay_pipeline = pipeline::create_frame_overlay_pipeline(&device, &frame_overlay_bgl, offscreen_fmt);
+        let present_pipeline =
+            pipeline::create_present_pipeline(&device, &present_bgl, config.format);
+        let blit_scene_read_pipeline =
+            pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        // (removed) frame overlay
         // Post AO pipeline
         let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
-        let post_ao_pipeline = pipeline::create_post_ao_pipeline(
-            &device,
-            &globals_bgl,
-            &post_ao_bgl,
-            offscreen_fmt,
-        );
+        let post_ao_pipeline =
+            pipeline::create_post_ao_pipeline(&device, &globals_bgl, &post_ao_bgl, offscreen_fmt);
         // SSGI pipeline (additive into SceneColor)
         let (ssgi_globals_bgl, ssgi_depth_bgl, ssgi_scene_bgl) = pipeline::create_ssgi_bgl(&device);
         let ssgi_pipeline = pipeline::create_ssgi_pipeline(
@@ -642,55 +648,67 @@ impl Renderer {
             label: Some("post-ao-bg"),
             layout: &post_ao_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
             ],
         });
         let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssgi-globals-bg"),
             layout: &ssgi_globals_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals_buf.as_entire_binding(),
+            }],
         });
         let ssgi_depth_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssgi-depth-bg"),
             layout: &ssgi_depth_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
             ],
         });
         let ssgi_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssgi-scene-bg"),
             layout: &ssgi_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
             ],
         });
         let present_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("present-bg"),
             layout: &present_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
             ],
         });
-        // Frame overlay uniform
-        #[repr(C)]
-        #[derive(Copy, Clone)]
-        struct FrameDebug { frame_ix: u32 }
-        unsafe impl bytemuck::Zeroable for FrameDebug {}
-        unsafe impl bytemuck::Pod for FrameDebug {}
-        let frame_overlay_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("frame-overlay-ubo"),
-            contents: bytemuck::bytes_of(&FrameDebug { frame_ix: 0 }),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let frame_overlay_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("frame-overlay-bg"),
-            layout: &frame_overlay_bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: frame_overlay_buf.as_entire_binding() }],
-        });
+        // (removed) frame overlay UBO/BG
 
         // Per-draw Model buffers (plane and shard base)
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
@@ -1202,7 +1220,6 @@ impl Renderer {
             post_ao_pipeline,
             ssgi_pipeline,
             present_pipeline,
-            frame_overlay_pipeline,
             blit_scene_read_pipeline,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
@@ -1217,8 +1234,8 @@ impl Renderer {
             _post_sampler: post_sampler,
             sky_bg,
             present_bg,
-            frame_overlay_bg,
-            frame_overlay_buf,
+            // frame overlay removed
+            frame_counter: 0,
             terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
@@ -1349,7 +1366,7 @@ impl Renderer {
             hiz: Some(hiz),
             enable_post_ao: true,
             enable_ssgi: false,
-            frame_counter: 0,
+            // frame overlay removed
         })
     }
 
@@ -1382,18 +1399,30 @@ impl Renderer {
         // Recreate SceneColor
         self.scene_color = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-color"),
-            size: wgpu::Extent3d { width: self.config.width, height: self.config.height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: self.config.width,
+                height: self.config.height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        self.scene_view = self.scene_color.create_view(&wgpu::TextureViewDescriptor::default());
+        self.scene_view = self
+            .scene_color
+            .create_view(&wgpu::TextureViewDescriptor::default());
         self.scene_read = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-read"),
-            size: wgpu::Extent3d { width: self.config.width, height: self.config.height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: self.config.width,
+                height: self.config.height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -1401,43 +1430,77 @@ impl Renderer {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
-        self.scene_read_view = self.scene_read.create_view(&wgpu::TextureViewDescriptor::default());
+        self.scene_read_view = self
+            .scene_read
+            .create_view(&wgpu::TextureViewDescriptor::default());
         // Rebuild bind groups that reference resized textures
         self.present_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("present-bg"),
             layout: &self.present_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.scene_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
             ],
         });
         self.post_ao_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("post-ao-bg"),
             layout: &self.post_ao_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.depth) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
             ],
         });
         self.ssgi_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssgi-depth-bg"),
             layout: &self.ssgi_depth_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.depth) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
             ],
         });
         self.ssgi_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssgi-scene-bg"),
             layout: &self.ssgi_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_read_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
             ],
         });
         // Resize Lighting M1 resources
-        self.gbuffer = Some(gbuffer::GBuffer::create(&self.device, self.config.width, self.config.height));
-        self.hiz = Some(hiz::HiZPyramid::create(&self.device, self.config.width, self.config.height));
+        self.gbuffer = Some(gbuffer::GBuffer::create(
+            &self.device,
+            self.config.width,
+            self.config.height,
+        ));
+        self.hiz = Some(hiz::HiZPyramid::create(
+            &self.device,
+            self.config.width,
+            self.config.height,
+        ));
     }
 
     /// Render one frame.
@@ -1604,21 +1667,20 @@ impl Renderer {
             });
         // Sky-only pass (no depth) into SceneColor
         {
-            use wgpu::*;
-            let mut sky = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color {
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.02,
                             g: 0.02,
                             b: 0.04,
                             a: 1.0,
                         }),
-                        store: StoreOp::Store,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -1632,23 +1694,22 @@ impl Renderer {
         }
         // Main pass with depth into SceneColor; load color from sky pass
         {
-            use wgpu::*;
-            let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations {
-                        load: LoadOp::Load,
-                        store: StoreOp::Store,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
@@ -1661,7 +1722,7 @@ impl Renderer {
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
             rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
-            rpass.set_index_buffer(self.terrain_ib.slice(..), IndexFormat::Uint16);
+            rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
 
             // Trees (instanced static mesh)
@@ -1676,7 +1737,7 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
                 rpass.set_vertex_buffer(0, self.trees_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
-                rpass.set_index_buffer(self.trees_ib.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
             }
 
@@ -1697,7 +1758,7 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
                 rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
-                rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
             }
 
@@ -1713,7 +1774,7 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
                 rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.npc_instances.slice(..));
-                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
             }
 
@@ -1815,16 +1876,23 @@ impl Renderer {
             self.nameplates_npc.draw(&mut encoder, &self.scene_view);
         }
 
-        // Copy SceneColor to a read-only texture for post passes that need to sample it
-        {
-            use wgpu::*;
-            let mut blit = encoder.begin_render_pass(&RenderPassDescriptor {
+        // Copy SceneColor to a read-only texture only if SSGI is enabled
+        if self.enable_ssgi {
+            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-to-read"),
-                color_attachments: &[Some(RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.scene_read_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations { load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
@@ -1837,14 +1905,16 @@ impl Renderer {
 
         // SSGI additive overlay (fullscreen) into SceneColor
         if self.enable_ssgi {
-            use wgpu::*;
-            let mut gi = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ssgi-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
@@ -1856,60 +1926,21 @@ impl Renderer {
             gi.set_bind_group(2, &self.ssgi_scene_bg, &[]);
             gi.draw(0..3, 0..1);
         }
-        // Frame overlay (tiny animated region in top-left) to verify per-frame updates
-        {
-            use wgpu::*;
-            // Increment and upload frame index
-            self.frame_counter = self.frame_counter.wrapping_add(1);
-            #[repr(C)]
-            #[derive(Copy, Clone)]
-            struct FrameDebug { frame_ix: u32 }
-            unsafe impl bytemuck::Zeroable for FrameDebug {}
-            unsafe impl bytemuck::Pod for FrameDebug {}
-            let dbg = FrameDebug { frame_ix: self.frame_counter };
-            self.queue.write_buffer(&self.frame_overlay_buf, 0, bytemuck::bytes_of(&dbg));
-            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("frame-overlay-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &self.scene_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.frame_overlay_pipeline);
-            pass.set_bind_group(0, &self.frame_overlay_bg, &[]);
-            pass.draw(0..3, 0..1);
-        }
-        // Frame overlay (tiny animated region in top-left) to verify per-frame updates
-        {
-            use wgpu::*;
-            // Increment and upload frame index
-            static mut FRAME_IX: u32 = 0;
-            unsafe { FRAME_IX = FRAME_IX.wrapping_add(1); }
-            #[repr(C)]
-            #[derive(Copy, Clone)]
-            struct FrameDebug { frame_ix: u32 }
-            unsafe impl bytemuck::Zeroable for FrameDebug {}
-            unsafe impl bytemuck::Pod for FrameDebug {}
-            let dbg = FrameDebug { frame_ix: unsafe { FRAME_IX } };
-            // We need the buffer handle; retrieve from bind group via debug is non-trivial, so instead recreate it once is heavy.
-            // Simpler: draw without updating UBO? Not useful. We'll keep a small staging update path by storing the buffer in a hidden field.
-        }
+        // (removed) frame overlay
+        // (frame overlay removed)
         // Post-process AO overlay (fullscreen) multiplying into SceneColor
         if self.enable_post_ao {
             {
-                use wgpu::*;
-                let mut post = encoder.begin_render_pass(&RenderPassDescriptor {
+                let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("post-ao"),
-                    color_attachments: &[Some(RenderPassColorAttachment {
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &self.scene_view,
                         resolve_target: None,
                         depth_slice: None,
-                        ops: Operations { load: LoadOp::Load, store: StoreOp::Store },
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
                     })],
                     depth_stencil_attachment: None,
                     occlusion_query_set: None,
@@ -1924,14 +1955,21 @@ impl Renderer {
 
         // Present SceneColor to swapchain
         {
-            use wgpu::*;
-            let mut present = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("present-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations { load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,

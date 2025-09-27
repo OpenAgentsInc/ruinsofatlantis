@@ -4,7 +4,10 @@
 //! helpers to create/resize the attachments. The actual draw integration will
 //! be wired in the renderer once materials/pipelines opt-in.
 
-use wgpu::{Device, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor};
+use wgpu::{
+    Device, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureView, TextureViewDescriptor,
+};
 
 /// Formats for the initial G-Buffer (all linear).
 pub mod formats {
@@ -39,10 +42,20 @@ pub struct GBuffer {
 
 impl GBuffer {
     pub fn create(device: &Device, width: u32, height: u32) -> Self {
-        fn make(device: &Device, w: u32, h: u32, fmt: TextureFormat, label: &str) -> (Texture, TextureView) {
+        fn make(
+            device: &Device,
+            w: u32,
+            h: u32,
+            fmt: TextureFormat,
+            label: &str,
+        ) -> (Texture, TextureView) {
             let tex = device.create_texture(&TextureDescriptor {
                 label: Some(label),
-                size: wgpu::Extent3d { width: w.max(1), height: h.max(1), depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: w.max(1),
+                    height: h.max(1),
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
@@ -54,13 +67,40 @@ impl GBuffer {
             (tex, view)
         }
         let (albedo, albedo_view) = make(device, width, height, formats::ALBEDO, "gbuf-albedo");
-        let (normal_oct, normal_view) = make(device, width, height, formats::NORMAL_OCT, "gbuf-normal");
-        let (rough_metal, rough_metal_view) = make(device, width, height, formats::ROUGH_METAL, "gbuf-rough-metal");
-        let (emissive, emissive_view) = make(device, width, height, formats::EMISSIVE_HDR, "gbuf-emissive");
+        let (normal_oct, normal_view) =
+            make(device, width, height, formats::NORMAL_OCT, "gbuf-normal");
+        let (rough_metal, rough_metal_view) = make(
+            device,
+            width,
+            height,
+            formats::ROUGH_METAL,
+            "gbuf-rough-metal",
+        );
+        let (emissive, emissive_view) = make(
+            device,
+            width,
+            height,
+            formats::EMISSIVE_HDR,
+            "gbuf-emissive",
+        );
         let (motion, motion_view) = make(device, width, height, formats::MOTION, "gbuf-motion");
-        Self { size: (width, height), albedo, albedo_view, normal_oct, normal_view, rough_metal, rough_metal_view, emissive, emissive_view, motion, motion_view }
+        Self {
+            size: (width, height),
+            albedo,
+            albedo_view,
+            normal_oct,
+            normal_view,
+            rough_metal,
+            rough_metal_view,
+            emissive,
+            emissive_view,
+            motion,
+            motion_view,
+        }
     }
 
     #[allow(dead_code)]
-    pub fn size(&self) -> (u32, u32) { self.size }
+    pub fn size(&self) -> (u32, u32) {
+        self.size
+    }
 }
