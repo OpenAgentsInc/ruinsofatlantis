@@ -573,10 +573,6 @@ Tradeoffs
 - Streaming‑first: Custom asset packs, chunked world streaming, GPU culling/indirect draws—no engine assumptions to fight.
 - Long‑life maintainability: A small dependency surface that tracks platform APIs directly—less churn than big engines’ editor/tooling layers.
 
-Below is a clean **GDD edit** that adds four persistent “Systems Specifications” sections—**Sky & Weather**, **Terrain & Biomes**, **Zones**, and **Spell & Ability**—modeled on the GitHub specs you approved. It also updates the **Contents** so these are first‑class, living parts of the document.
-
----
-
 ## Contents (updated)
 
 * [Philosophy](#philosophy)
@@ -809,8 +805,3 @@ Below is a clean **GDD edit** that adds four persistent “Systems Specification
 
 ---
 
-### Notes on Placement
-
-These four sections live as a new top‑level block **“Systems Specifications (Persistent Docs)”** placed **after** “Technical Overview” in the GDD. Cross‑references in the text (Combat, Simulator, Zones & Cosmology) have been kept consistent with the existing document.
-
-If you want, I can also generate **stub markdown files** under `docs/` (`docs/sky_weather.md`, `docs/terrain_biomes.md`, `docs/zones_system.md`, `docs/spell_ability_system.md`) that mirror these sections and link back to the GDD.
