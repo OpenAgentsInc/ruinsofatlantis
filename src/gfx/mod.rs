@@ -159,10 +159,8 @@ pub struct Renderer {
     zombie_time_offset: Vec<f32>,
     zombie_ids: Vec<crate::server::NpcId>,
     zombie_prev_pos: Vec<glam::Vec3>,
-    // Some skinned assets have a different authoring "forward" axis. We detect the
-    // root-bone yaw at import and keep a correction so top-level yaw aligns with
-    // world +Z forward when turning toward velocity.
-    zombie_forward_offset: f32,
+    // Per-instance forward-axis offsets (authoring → world). Calibrated on movement.
+    zombie_forward_offsets: Vec<f32>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -243,6 +241,17 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    #[inline]
+    fn wrap_angle(a: f32) -> f32 {
+        let mut x = a;
+        while x > std::f32::consts::PI {
+            x -= 2.0 * std::f32::consts::PI;
+        }
+        while x < -std::f32::consts::PI {
+            x += 2.0 * std::f32::consts::PI;
+        }
+        x
+    }
     fn any_zombies_alive(&self) -> bool {
         self.server.npcs.iter().any(|n| n.alive)
     }
@@ -992,7 +1001,8 @@ impl Renderer {
                 .copied()
                 .unwrap_or(glam::Quat::IDENTITY);
             let f = r * glam::Vec3::Z; // authoring forward in model space
-            f32::atan2(f.x, f.z)
+            // Flip by 180° to align attack/walk with target direction in our scene.
+            f32::atan2(f.x, f.z) + std::f32::consts::PI
         } else {
             0.0
         };
@@ -1068,7 +1078,7 @@ impl Renderer {
                     )
                 })
                 .collect(),
-            zombie_forward_offset,
+            zombie_forward_offsets: vec![zombie_forward_offset; zombie_count as usize],
             wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
@@ -1879,12 +1889,22 @@ impl Renderer {
             if let Some(p) = pos_map.get(id) {
                 let m_old = self.zombie_models[i];
                 let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(*p);
-                // If the zombie moved this frame, face the movement direction.
+                // If the zombie moved this frame, face the movement direction and calibrate per-instance offset.
                 // Apply authoring forward-axis correction so models authored with
                 // +X (or -Z) forward still look where they walk.
                 let delta = *p - prev;
-                let yaw = if delta.length_squared() > 1e-5 {
-                    delta.x.atan2(delta.z) - self.zombie_forward_offset
+                let mut yaw = if delta.length_squared() > 1e-5 {
+                    let desired = delta.x.atan2(delta.z);
+                    let current = Self::yaw_from_model(&m_old);
+                    let error = Self::wrap_angle(current - desired);
+                    if let Some(off) = self.zombie_forward_offsets.get_mut(i) {
+                        // Smoothly track observed error so facing matches velocity.
+                        let k = 0.3f32;
+                        *off = Self::wrap_angle(*off * (1.0 - k) + error * k);
+                        desired - *off
+                    } else {
+                        desired
+                    }
                 } else {
                     // Stationary: orient toward nearest wizard so attack swings face the target
                     let mut best_d2 = f32::INFINITY;
@@ -1899,11 +1919,48 @@ impl Renderer {
                         }
                     }
                     if let Some(tgt) = face_to {
-                        (tgt.x - p.x).atan2(tgt.z - p.z) - self.zombie_forward_offset
+                        let desired = (tgt.x - p.x).atan2(tgt.z - p.z);
+                        if let Some(off) = self.zombie_forward_offsets.get(i) {
+                            desired - *off
+                        } else {
+                            desired
+                        }
                     } else {
                         Self::yaw_from_model(&m_old)
                     }
                 };
+                // If in melee contact, hard-face the nearest wizard regardless of small movements
+                let mut best_d2 = f32::INFINITY;
+                let mut face_to: Option<glam::Vec3> = None;
+                for w in &wiz_pos {
+                    let dx = w.x - p.x;
+                    let dz = w.z - p.z;
+                    let d2 = dx * dx + dz * dz;
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        face_to = Some(*w);
+                    }
+                }
+                if let Some(tgt) = face_to {
+                    // Obtain this zombie's radius from server
+                    let z_radius = self
+                        .server
+                        .npcs
+                        .iter()
+                        .find(|n| n.id == *id)
+                        .map(|n| n.radius)
+                        .unwrap_or(0.95);
+                    let wizard_r = 0.7f32;
+                    let pad = 0.20f32;
+                    let contact = z_radius + wizard_r + pad;
+                    if best_d2 <= contact * contact {
+                        if let Some(off) = self.zombie_forward_offsets.get(i) {
+                            yaw = (tgt.x - p.x).atan2(tgt.z - p.z) - *off;
+                        } else {
+                            yaw = (tgt.x - p.x).atan2(tgt.z - p.z);
+                        }
+                    }
+                }
                 // Stick to terrain height
                 let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
                 let pos = glam::vec3(p.x, h, p.z);

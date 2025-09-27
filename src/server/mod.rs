@@ -79,7 +79,9 @@ impl ServerState {
         // Melee is considered in contact when circles touch plus a small pad.
         // We use the same wizard radius as collision resolution for consistency.
         let wizard_r = 0.7f32;
-        let melee_pad = 0.15f32;
+        // Slightly generous melee pad to ensure hits register even when crowding
+        // around a wizard pushes NPCs outward.
+        let melee_pad = 0.35f32;
         let attack_cd = 1.5f32;
         let attack_anim_time = 0.8f32;
         let damage = 5i32;
@@ -131,7 +133,8 @@ impl ServerState {
                 let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
                 let dist = to.length();
                 let contact = n.radius + wizard_r + melee_pad;
-                if dist <= contact && n.attack_cooldown <= 0.0 {
+                // Allow a small tolerance to avoid oscillation missing hits.
+                if dist <= contact + 0.05 && n.attack_cooldown <= 0.0 {
                     hits.push((best_i, damage));
                     n.attack_cooldown = attack_cd;
                     n.attack_anim = attack_anim_time;
