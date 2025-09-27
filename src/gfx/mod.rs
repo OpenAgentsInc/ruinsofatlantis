@@ -1722,11 +1722,19 @@ impl Renderer {
         // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
         let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
-        // Build quick lookup for attack state using server NPCs
+        // Build quick lookup for attack state and radius using server NPCs
         use std::collections::HashMap;
         let mut attack_map: HashMap<crate::server::NpcId, bool> = HashMap::new();
+        let mut radius_map: HashMap<crate::server::NpcId, f32> = HashMap::new();
         for n in &self.server.npcs {
             attack_map.insert(n.id, n.attack_anim > 0.0);
+            radius_map.insert(n.id, n.radius);
+        }
+        // Wizard positions
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
         }
         // Helper: fuzzy find clip by case-insensitive substring(s)
         let find_clip = |subs: &[&str], anims: &std::collections::HashMap<String, AnimClip>| -> Option<String> {
@@ -1762,11 +1770,26 @@ impl Renderer {
                 .next()
                 .cloned()
                 .unwrap_or("__static".to_string());
-            // Prioritize attack animation when the server reports it
-            let is_attacking = attack_map
-                .get(self.zombie_ids.get(i).unwrap_or(&crate::server::NpcId(0)))
-                .copied()
-                .unwrap_or(false);
+            // Prioritize attack animation when the server reports it or if in melee contact
+            let zid = *self.zombie_ids.get(i).unwrap_or(&crate::server::NpcId(0));
+            let mut is_attacking = attack_map.get(&zid).copied().unwrap_or(false);
+            // In-contact heuristic: nearest wizard within (z_radius + wizard_r + pad)
+            let z_radius = radius_map.get(&zid).copied().unwrap_or(0.95);
+            let wizard_r = 0.7f32;
+            let pad = 0.10f32;
+            let mut best_d2 = f32::INFINITY;
+            for w in &wiz_pos {
+                let dx = w.x - pos.x;
+                let dz = w.z - pos.z;
+                let d2 = dx * dx + dz * dz;
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                }
+            }
+            let contact = z_radius + wizard_r + pad;
+            if best_d2 <= contact * contact {
+                is_attacking = true;
+            }
             let clip_name = if is_attacking && has_attack {
                 if self.zombie_cpu.animations.contains_key("Attack") {
                     "Attack"
