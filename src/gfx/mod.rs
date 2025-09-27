@@ -99,6 +99,12 @@ pub struct Renderer {
     present_pipeline: wgpu::RenderPipeline,
     frame_overlay_pipeline: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
+    // Stored bind group layouts needed to rebuild views on resize
+    present_bgl: wgpu::BindGroupLayout,
+    post_ao_bgl: wgpu::BindGroupLayout,
+    ssgi_globals_bgl: wgpu::BindGroupLayout,
+    ssgi_depth_bgl: wgpu::BindGroupLayout,
+    ssgi_scene_bgl: wgpu::BindGroupLayout,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
     ssgi_globals_bg: wgpu::BindGroup,
@@ -1198,6 +1204,11 @@ impl Renderer {
             present_pipeline,
             frame_overlay_pipeline,
             blit_scene_read_pipeline,
+            present_bgl: present_bgl.clone(),
+            post_ao_bgl: post_ao_bgl.clone(),
+            ssgi_globals_bgl: ssgi_globals_bgl.clone(),
+            ssgi_depth_bgl: ssgi_depth_bgl.clone(),
+            ssgi_scene_bgl: ssgi_scene_bgl.clone(),
             globals_bg,
             post_ao_bg,
             ssgi_globals_bg,
@@ -1391,6 +1402,39 @@ impl Renderer {
             view_formats: &[],
         });
         self.scene_read_view = self.scene_read.create_view(&wgpu::TextureViewDescriptor::default());
+        // Rebuild bind groups that reference resized textures
+        self.present_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("present-bg"),
+            layout: &self.present_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+            ],
+        });
+        self.post_ao_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("post-ao-bg"),
+            layout: &self.post_ao_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.depth) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+            ],
+        });
+        self.ssgi_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-depth-bg"),
+            layout: &self.ssgi_depth_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.depth) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+            ],
+        });
+        self.ssgi_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-scene-bg"),
+            layout: &self.ssgi_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_read_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+            ],
+        });
         // Resize Lighting M1 resources
         self.gbuffer = Some(gbuffer::GBuffer::create(&self.device, self.config.width, self.config.height));
         self.hiz = Some(hiz::HiZPyramid::create(&self.device, self.config.width, self.config.height));
