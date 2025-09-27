@@ -1775,7 +1775,9 @@ impl Renderer {
             // In-contact heuristic: nearest wizard within (z_radius + wizard_r + pad)
             let z_radius = radius_map.get(&zid).copied().unwrap_or(0.95);
             let wizard_r = 0.7f32;
-            let pad = 0.10f32;
+            // Use a slightly larger pad than the server to keep the attack anim
+            // engaged while in close proximity.
+            let pad = 0.20f32;
             let mut best_d2 = f32::INFINITY;
             for w in &wiz_pos {
                 let dx = w.x - pos.x;
@@ -1866,6 +1868,12 @@ impl Renderer {
         for n in &self.server.npcs {
             pos_map.insert(n.id, n.pos);
         }
+        // Collect wizard positions to orient zombies toward nearest when stationary/attacking
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
         let mut any = false;
         for (i, id) in self.zombie_ids.clone().iter().enumerate() {
             if let Some(p) = pos_map.get(id) {
@@ -1878,7 +1886,23 @@ impl Renderer {
                 let yaw = if delta.length_squared() > 1e-5 {
                     delta.x.atan2(delta.z) - self.zombie_forward_offset
                 } else {
-                    Self::yaw_from_model(&m_old)
+                    // Stationary: orient toward nearest wizard so attack swings face the target
+                    let mut best_d2 = f32::INFINITY;
+                    let mut face_to: Option<glam::Vec3> = None;
+                    for w in &wiz_pos {
+                        let dx = w.x - p.x;
+                        let dz = w.z - p.z;
+                        let d2 = dx * dx + dz * dz;
+                        if d2 < best_d2 {
+                            best_d2 = d2;
+                            face_to = Some(*w);
+                        }
+                    }
+                    if let Some(tgt) = face_to {
+                        (tgt.x - p.x).atan2(tgt.z - p.z) - self.zombie_forward_offset
+                    } else {
+                        Self::yaw_from_model(&m_old)
+                    }
                 };
                 // Stick to terrain height
                 let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
