@@ -214,6 +214,7 @@ pub struct Renderer {
     nameplates_npc: ui::Nameplates,
     bars: ui::HealthBars,
     damage: ui::DamageFloaters,
+    hud: ui::Hud,
 
     // --- Player/Camera ---
     pc_index: usize,
@@ -222,6 +223,9 @@ pub struct Renderer {
     cam_follow: camera_sys::FollowState,
     pc_cast_queued: bool,
     pc_anim_start: Option<f32>,
+    // Simple global cooldown (visual only)
+    gcd_until: f32,
+    gcd_duration: f32,
     // Orbit params
     cam_orbit_yaw: f32,
     cam_orbit_pitch: f32,
@@ -470,7 +474,8 @@ impl Renderer {
         // UI: nameplates + health bars
         let nameplates = ui::Nameplates::new(&device, config.format)?;
         let nameplates_npc = ui::Nameplates::new(&device, config.format)?;
-        let bars = ui::HealthBars::new(&device, config.format)?;
+        let mut bars = ui::HealthBars::new(&device, config.format)?;
+        let hud = ui::Hud::new(&device, config.format)?;
         let damage = ui::DamageFloaters::new(&device, config.format)?;
 
         // --- Buffers & bind groups ---
@@ -947,6 +952,18 @@ impl Renderer {
             mid3_count,
             far_count
         );
+        // Upload UI atlases
+        nameplates.upload_atlas(&queue);
+        nameplates_npc.upload_atlas(&queue);
+        bars.queue_entries(
+            &device,
+            &queue,
+            config.width,
+            config.height,
+            glam::Mat4::IDENTITY,
+            &[],
+        );
+        hud.upload_atlas(&queue);
         // Build zombie instances from server NPCs
         let mut zombie_instances_cpu: Vec<InstanceSkin> = Vec::new();
         let mut zombie_models: Vec<glam::Mat4> = Vec::new();
@@ -1109,6 +1126,7 @@ impl Renderer {
             nameplates_npc,
             bars,
             damage,
+            hud,
 
             // Player/camera
             pc_index: scene_build.pc_index,
@@ -1120,6 +1138,8 @@ impl Renderer {
             },
             pc_cast_queued: false,
             pc_anim_start: None,
+            gcd_until: 0.0,
+            gcd_duration: 1.2,
             cam_orbit_yaw: 0.0,
             cam_orbit_pitch: 0.2,
             cam_distance: 8.5,
@@ -1554,6 +1574,26 @@ impl Renderer {
             // Skip submit on validation error to keep running without panicking
             log::error!("wgpu validation error (skipping frame): {:?}", e);
         } else {
+            // HUD: build, upload, and draw overlay before submit
+            let pc_hp = self
+                .wizard_hp
+                .get(self.pc_index)
+                .copied()
+                .unwrap_or(self.wizard_hp_max);
+            let gcd_frac = if self.gcd_until > t {
+                ((self.gcd_until - t) / self.gcd_duration).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            self.hud.build(
+                self.size.width,
+                self.size.height,
+                pc_hp,
+                self.wizard_hp_max,
+                gcd_frac,
+            );
+            self.hud.queue(&self.device, &self.queue);
+            self.hud.draw(&mut encoder, &view);
             self.queue.submit(Some(encoder.finish()));
             frame.present();
         }
@@ -2200,6 +2240,8 @@ impl Renderer {
                 self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
                 self.wizard_last_phase[self.pc_index] = 0.0;
                 self.pc_anim_start = Some(t);
+                // Trigger a simple GCD for HUD feedback (visual only)
+                self.gcd_until = t + self.gcd_duration;
             }
         }
         if let Some(start) = self.pc_anim_start {

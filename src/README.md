@@ -65,7 +65,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
   - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
   - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.
-  - ui.rs — Overlays: nameplates (text atlas) and health bars (screen‑space quads with green→yellow→red gradient).
+  - ui.rs — Overlays: nameplates (text atlas), health bars (screen‑space quads with green→yellow→red gradient), and a minimal HUD (player HP + bottom hotbar with GCD overlay) for the wizard scene.
   - pipeline.rs — Adds `create_bar_pipeline` for solid‑color screen quads.
   - shader.wgsl — Adds `vs_bar`/`fs_bar` for health bar rendering.
 
@@ -88,7 +88,7 @@ Gameplay wiring (prototype)
   - material.rs — Wizard material creation (base color texture + transform uniform).
   - fx.rs — FX resources (instances buffer, model bind group, quad VB) and integration helpers.
   - draw.rs — Renderer draw methods for wizards and particles.
-  - ui.rs — On-screen UI overlays (nameplates/text) rendered in screen space.
+  - ui.rs — On-screen UI overlays (nameplates/text/bars) rendered in screen space, plus a minimal HUD.
 
 ## Build & Dev Loop
 - Run: `cargo run`
