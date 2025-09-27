@@ -7,6 +7,7 @@
 use wgpu::{Device, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView};
 
 /// Hi-Z resources: linear depth copy + mip chain views for Z-MAX reduction.
+#[allow(dead_code)]
 pub struct HiZPyramid {
     pub linear_depth: Texture,
     pub linear_view: TextureView,

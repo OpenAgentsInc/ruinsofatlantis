@@ -5,6 +5,7 @@
 
 /// Temporal parameters shared across passes.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct TemporalParams {
     pub alpha: f32,
     pub clamp_k: f32,
@@ -16,6 +17,7 @@ impl Default for TemporalParams {
 }
 
 /// Compute a simple clamp range given mean and variance; returns (min,max).
+#[allow(dead_code)]
 pub fn clamp_range(mean: f32, variance: f32, k: f32) -> (f32, f32) {
     let sigma = variance.max(0.0).sqrt();
     (mean - k * sigma, mean + k * sigma)
@@ -31,4 +33,3 @@ mod tests {
         assert!((hi - 0.9).abs() < 1e-6);
     }
 }
-

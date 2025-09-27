@@ -12,17 +12,18 @@ use glam::{Mat4, Vec2, Vec3, Vec4};
 /// - `depth_vs` is positive distance along -Z in view space
 /// - Matrices are column-major, standard OpenGL-style clip (right-handed), same as glam
 /// - Jitter is in NDC pixels (curr, prev), scaled by 2/resolution in shader usage
+#[allow(dead_code)]
 pub fn reproject_uv(
     curr_uv: Vec2,
     depth_vs: f32,
     curr_view_proj: Mat4,
     prev_view_proj: Mat4,
-    curr_jitter: Vec2,
+    _curr_jitter: Vec2,
     prev_jitter: Vec2,
 ) -> Vec2 {
     // Reconstruct view-space position from UV/depth (assume z = -depth_vs)
     // Convert curr UV to NDC
-    let ndc = Vec3::new(curr_uv.x * 2.0 - 1.0, 1.0 - curr_uv.y * 2.0, -1.0);
+    let _ndc = Vec3::new(curr_uv.x * 2.0 - 1.0, 1.0 - curr_uv.y * 2.0, -1.0);
     // Form a ray in view space along -Z with given depth
     // For CPU-side approximation in tests, assume small FOV; we carry depth directly.
     let pos_vs = Vec3::new(0.0, 0.0, -depth_vs);

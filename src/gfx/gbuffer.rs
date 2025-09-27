@@ -22,6 +22,7 @@ pub mod formats {
 }
 
 /// G-Buffer attachments created per-frame resolution.
+#[allow(dead_code)]
 pub struct GBuffer {
     size: (u32, u32),
     pub albedo: Texture,
@@ -60,5 +61,6 @@ impl GBuffer {
         Self { size: (width, height), albedo, albedo_view, normal_oct, normal_view, rough_metal, rough_metal_view, emissive, emissive_view, motion, motion_view }
     }
 
+    #[allow(dead_code)]
     pub fn size(&self) -> (u32, u32) { self.size }
 }

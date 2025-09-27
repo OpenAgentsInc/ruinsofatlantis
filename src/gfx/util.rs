@@ -38,6 +38,7 @@ pub fn create_depth_view(
 }
 
 /// Octahedral encode a unit normal (x,y,z) into 2D.
+#[allow(dead_code)]
 pub fn oct_encode(n: glam::Vec3) -> glam::Vec2 {
     let mut v = n / (n.x.abs() + n.y.abs() + n.z.abs()).max(1e-8);
     if v.z < 0.0 {
@@ -49,6 +50,7 @@ pub fn oct_encode(n: glam::Vec3) -> glam::Vec2 {
 }
 
 /// Octahedral decode back to a unit normal.
+#[allow(dead_code)]
 pub fn oct_decode(e: glam::Vec2) -> glam::Vec3 {
     let mut v = glam::Vec3::new(e.x, e.y, 1.0 - e.x.abs() - e.y.abs());
     if v.z < 0.0 {
