@@ -71,10 +71,18 @@ pub fn build_demo_scene(
         glam::vec3(-place_range * 0.2, ruins_y, place_range * 0.95),
     ];
     for pos in ruins_positions {
-        let rotation = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        let mut p = pos;
+        let mut tilt = glam::Quat::IDENTITY;
+        if let Some(t) = terrain {
+            let (h, n) = crate::gfx::terrain::height_at(t, p.x, p.z);
+            p.y = h + ruins_y;
+            tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
+        }
+        let yaw = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        let rotation = tilt * yaw;
         world.spawn(
             Transform {
-                translation: pos,
+                translation: p,
                 rotation,
                 scale: glam::Vec3::splat(1.0),
             },
@@ -88,11 +96,13 @@ pub fn build_demo_scene(
         let a = base_a + rng.random::<f32>() * 0.2 - 0.1; // jitter
         let r = place_range * (0.78 + rng.random::<f32>() * 0.15);
         let mut pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
+        let mut tilt = glam::Quat::IDENTITY;
         if let Some(t) = terrain {
-            let (h, _n) = crate::gfx::terrain::height_at(t, pos.x, pos.z);
+            let (h, n) = crate::gfx::terrain::height_at(t, pos.x, pos.z);
             pos.y = h + ruins_y;
+            tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
         }
-        let rot = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+        let rot = tilt * glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
         world.spawn(
             Transform {
                 translation: pos,
@@ -210,5 +220,19 @@ pub fn build_demo_scene(
         wizard_models,
         wizard_instances_cpu: wiz_instances,
         pc_index: 0,
+    }
+}
+
+fn tilt_toward_normal(n: glam::Vec3, max_angle: f32) -> glam::Quat {
+    let up = glam::Vec3::Y;
+    let nn = n.normalize_or_zero();
+    let dot = up.dot(nn).clamp(-1.0, 1.0);
+    let full = dot.acos();
+    let angle = full.min(max_angle);
+    let axis = up.cross(nn);
+    if axis.length_squared() < 1e-6 || angle < 1e-4 {
+        glam::Quat::IDENTITY
+    } else {
+        glam::Quat::from_axis_angle(axis.normalize(), angle)
     }
 }
