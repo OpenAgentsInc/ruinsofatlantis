@@ -680,7 +680,8 @@ impl Renderer {
         };
 
         // Build scene instance buffers and camera target
-        let scene_build = scene::build_demo_scene(&device, &skinned_cpu, terrain_extent);
+        let scene_build =
+            scene::build_demo_scene(&device, &skinned_cpu, terrain_extent, Some(&terrain_cpu));
 
         // Snap initial wizard ring to terrain height
         let mut wizard_models = scene_build.wizard_models.clone();

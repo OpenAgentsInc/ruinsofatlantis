@@ -9,6 +9,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::assets::SkinnedMeshCPU;
 use crate::ecs::{RenderKind, Transform, World};
+use crate::gfx::terrain::TerrainCPU;
 use crate::gfx::types::{Instance, InstanceSkin};
 use wgpu::util::DeviceExt;
 
@@ -33,6 +34,7 @@ pub fn build_demo_scene(
     device: &wgpu::Device,
     skinned_cpu: &SkinnedMeshCPU,
     plane_extent: f32,
+    terrain: Option<&TerrainCPU>,
 ) -> SceneBuild {
     // Build a tiny ECS world and spawn entities
     let mut world = World::new();
@@ -41,7 +43,12 @@ pub fn build_demo_scene(
     // Cluster wizards around a central one so the camera can see all of them.
     // Use one central PC and a single outward-facing ring of NPC wizards.
     let ring_count = 19usize; // number of NPC wizards on the outer ring
-    let center = glam::vec3(0.0, 0.0, 0.0);
+    // Center spawn; project onto terrain if available
+    let mut center = glam::vec3(0.0, 0.0, 0.0);
+    if let Some(t) = terrain {
+        let (h, _n) = crate::gfx::terrain::height_at(t, center.x, center.z);
+        center.y = h;
+    }
     // Spawn the central wizard first (becomes camera target)
     world.spawn(
         Transform {
@@ -79,7 +86,11 @@ pub fn build_demo_scene(
         let base_a = (i as f32) / (far_count as f32) * std::f32::consts::TAU;
         let a = base_a + rng.random::<f32>() * 0.2 - 0.1; // jitter
         let r = place_range * (0.78 + rng.random::<f32>() * 0.15);
-        let pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
+        let mut pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
+        if let Some(t) = terrain {
+            let (h, _n) = crate::gfx::terrain::height_at(t, pos.x, pos.z);
+            pos.y = h + ruins_y;
+        }
         let rot = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
         world.spawn(
             Transform {
@@ -95,11 +106,15 @@ pub fn build_demo_scene(
     let outer_ring_radius = 7.5f32; // wider circle for better spacing
     for i in 0..ring_count {
         let theta = (i as f32) / (ring_count as f32) * std::f32::consts::TAU;
-        let translation = glam::vec3(
+        let mut translation = glam::vec3(
             outer_ring_radius * theta.cos(),
             0.0,
             outer_ring_radius * theta.sin(),
         );
+        if let Some(t) = terrain {
+            let (h, _n) = crate::gfx::terrain::height_at(t, translation.x, translation.z);
+            translation.y = h;
+        }
         // Face outward: yaw aligns +Z with (translation - center)
         let dx = translation.x - center.x;
         let dz = translation.z - center.z;
