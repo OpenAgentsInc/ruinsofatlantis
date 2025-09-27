@@ -9,5 +9,5 @@ serde_json = "1"
 rand = "0.9"
 rand_chacha = "0.9"
 log = "0.4"
-data_runtime = { path = "../data_runtime" }
+data_runtime = { version = "0.1.0", path = "../data_runtime" }
 anyhow = "1.0.100"
