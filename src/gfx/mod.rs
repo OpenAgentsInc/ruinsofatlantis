@@ -33,6 +33,7 @@ mod util;
 use crate::assets::skinning::merge_gltf_animations;
 use crate::assets::{
     AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned,
+    load_obj_mesh,
 };
 use crate::core::data::{
     loader as data_loader,
@@ -122,6 +123,9 @@ pub struct Renderer {
     // Vegetation (trees) — instanced cubes for now
     trees_instances: wgpu::Buffer,
     trees_count: u32,
+    trees_vb: wgpu::Buffer,
+    trees_ib: wgpu::Buffer,
+    trees_index_count: u32,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -883,6 +887,37 @@ impl Renderer {
             contents: bytemuck::cast_slice(&trees_instances_cpu),
             usage: wgpu::BufferUsages::VERTEX,
         });
+        // Load a static tree mesh (OBJ) and upload
+        let tree_mesh_path = asset_path("assets/models/trees/OBJ/Tree_3.obj");
+        let tree_mesh_cpu = if tree_mesh_path.exists() {
+            // If OBJ not vendored yet, fall back to cube
+            load_obj_mesh(&tree_mesh_path).context("load OBJ tree mesh")?
+        } else {
+            log::warn!("tree OBJ not found; falling back to cube mesh for trees");
+            // Build a CpuMesh from the cube VB/IB? Simpler: reuse cube buffers
+            // We'll just keep using cube buffers when OBJ is missing.
+            // Placeholder buffers (will be overwritten by npc_vb/ib below if missing)
+            crate::assets::CpuMesh {
+                vertices: vec![],
+                indices: vec![],
+            }
+        };
+        let (trees_vb, trees_ib, trees_index_count) = if !tree_mesh_cpu.vertices.is_empty() {
+            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-vb"),
+                contents: bytemuck::cast_slice(&tree_mesh_cpu.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-ib"),
+                contents: bytemuck::cast_slice(&tree_mesh_cpu.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+            (vb, ib, tree_mesh_cpu.indices.len() as u32)
+        } else {
+            // Fallback: reuse the cube geometry
+            (npc_vb.clone(), npc_ib.clone(), npc_index_count)
+        };
         // If meta exists, verify fingerprints
         if let Some(models) = &trees_models_opt
             && let Some(ok) =
@@ -1091,6 +1126,9 @@ impl Renderer {
             npc_models,
             trees_instances,
             trees_count,
+            trees_vb,
+            trees_ib,
+            trees_index_count,
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
@@ -1350,7 +1388,7 @@ impl Renderer {
             rpass.set_index_buffer(self.terrain_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
 
-            // Trees (instanced cubes for now)
+            // Trees (instanced static mesh)
             if self.trees_count > 0 {
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
@@ -1360,10 +1398,10 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-                rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
+                rpass.set_vertex_buffer(0, self.trees_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
-                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
-                rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.trees_count);
+                rpass.set_index_buffer(self.trees_ib.slice(..), IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
             }
 
             // Wizards

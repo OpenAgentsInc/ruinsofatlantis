@@ -2,6 +2,7 @@
 //! code can continue using `crate::assets::*` during the workspace split.
 
 pub use ra_assets::gltf::load_gltf_mesh;
+pub use ra_assets::load_obj_static as load_obj_mesh;
 pub use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
 pub use ra_assets::types::{
     AnimClip, CpuMesh, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, Vertex, VertexSkinCPU,
