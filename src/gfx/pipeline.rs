@@ -744,7 +744,7 @@ pub fn create_post_ao_pipeline(
                         operation: wgpu::BlendOperation::Add,
                     },
                 }),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: wgpu::ColorWrites::RED | wgpu::ColorWrites::GREEN | wgpu::ColorWrites::BLUE,
             })],
             compilation_options: Default::default(),
         }),
