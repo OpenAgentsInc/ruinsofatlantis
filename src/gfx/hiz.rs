@@ -132,13 +132,13 @@ impl HiZPyramid {
             label: Some("hiz-reduce-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
-                    // src mip (sampled)
+                    // src mip (sampled, non-filterable R32F)
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
                         view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     },
                     count: None,
                 },
