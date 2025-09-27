@@ -818,6 +818,91 @@ pub fn create_ssgi_bgl(
     (globals, depth, scene)
 }
 
+// SSR overlays (fullscreen), samples linear depth (R32F, mip chain) + scene color
+pub fn create_ssr_bgl(device: &wgpu::Device) -> (BindGroupLayout, BindGroupLayout) {
+    let depth = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ssr-depth-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    let scene = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ssr-scene-bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    (depth, scene)
+}
+
+pub fn create_ssr_pipeline(
+    device: &wgpu::Device,
+    depth_bgl: &BindGroupLayout,
+    scene_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let src = [include_str!("fullscreen.wgsl"), include_str!("ssr_fs.wgsl")].join("\n\n");
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("ssr-fs-shader"),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Owned(src)),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("ssr-fs-pipeline-layout"),
+        bind_group_layouts: &[depth_bgl, scene_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("ssr-fs-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState { module: &shader, entry_point: Some("vs_fullscreen_noflip"), buffers: &[], compilation_options: Default::default() },
+        fragment: Some(FragmentState {
+            module: &shader,
+            entry_point: Some("fs_ssr"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 pub fn create_ssgi_pipeline(
     device: &wgpu::Device,
     globals_bgl: &BindGroupLayout,

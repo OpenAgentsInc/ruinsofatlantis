@@ -96,6 +96,7 @@ pub struct Renderer {
     sky_pipeline: wgpu::RenderPipeline,
     post_ao_pipeline: wgpu::RenderPipeline,
     ssgi_pipeline: wgpu::RenderPipeline,
+    ssr_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     // Stored bind group layouts needed to rebuild views on resize
@@ -105,11 +106,15 @@ pub struct Renderer {
     ssgi_globals_bgl: wgpu::BindGroupLayout,
     ssgi_depth_bgl: wgpu::BindGroupLayout,
     ssgi_scene_bgl: wgpu::BindGroupLayout,
+    ssr_depth_bgl: wgpu::BindGroupLayout,
+    ssr_scene_bgl: wgpu::BindGroupLayout,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
     ssgi_globals_bg: wgpu::BindGroup,
     ssgi_depth_bg: wgpu::BindGroup,
     ssgi_scene_bg: wgpu::BindGroup,
+    ssr_depth_bg: wgpu::BindGroup,
+    ssr_scene_bg: wgpu::BindGroup,
     _post_sampler: wgpu::Sampler,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
@@ -120,6 +125,7 @@ pub struct Renderer {
     // Lighting toggles
     enable_post_ao: bool,
     enable_ssgi: bool,
+    enable_ssr: bool,
     #[allow(dead_code)]
     frame_counter: u32,
 
@@ -550,11 +556,18 @@ impl Renderer {
             pipeline::create_post_ao_pipeline(&device, &globals_bgl, &post_ao_bgl, offscreen_fmt);
         // SSGI pipeline (additive into SceneColor)
         let (ssgi_globals_bgl, ssgi_depth_bgl, ssgi_scene_bgl) = pipeline::create_ssgi_bgl(&device);
+        let (ssr_depth_bgl, ssr_scene_bgl) = pipeline::create_ssr_bgl(&device);
         let ssgi_pipeline = pipeline::create_ssgi_pipeline(
             &device,
             &ssgi_globals_bgl,
             &ssgi_depth_bgl,
             &ssgi_scene_bgl,
+            wgpu::TextureFormat::Rgba16Float,
+        );
+        let ssr_pipeline = pipeline::create_ssr_pipeline(
+            &device,
+            &ssr_depth_bgl,
+            &ssr_scene_bgl,
             wgpu::TextureFormat::Rgba16Float,
         );
         let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
@@ -692,6 +705,23 @@ impl Renderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&post_sampler),
                 },
+            ],
+        });
+        // SSR bind groups reference linear depth (Hi-Z mip chain view) and SceneRead
+        let ssr_depth_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssr-depth-bg"),
+            layout: &ssr_depth_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            ],
+        });
+        let ssr_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssr-scene-bg"),
+            layout: &ssr_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
             ],
         });
         let present_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1219,6 +1249,7 @@ impl Renderer {
             sky_pipeline,
             post_ao_pipeline,
             ssgi_pipeline,
+            ssr_pipeline,
             present_pipeline,
             blit_scene_read_pipeline,
             present_bgl: present_bgl.clone(),
@@ -1226,11 +1257,15 @@ impl Renderer {
             ssgi_globals_bgl: ssgi_globals_bgl.clone(),
             ssgi_depth_bgl: ssgi_depth_bgl.clone(),
             ssgi_scene_bgl: ssgi_scene_bgl.clone(),
+            ssr_depth_bgl: ssr_depth_bgl.clone(),
+            ssr_scene_bgl: ssr_scene_bgl.clone(),
             globals_bg,
             post_ao_bg,
             ssgi_globals_bg,
             ssgi_depth_bg,
             ssgi_scene_bg,
+            ssr_depth_bg,
+            ssr_scene_bg,
             _post_sampler: post_sampler,
             sky_bg,
             present_bg,
@@ -1366,6 +1401,7 @@ impl Renderer {
             hiz: Some(hiz),
             enable_post_ao: true,
             enable_ssgi: true,
+            enable_ssr: true,
             // frame overlay removed
         })
     }
@@ -1488,6 +1524,24 @@ impl Renderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self._post_sampler),
                 },
+            ],
+        });
+        if let Some(hiz) = &self.hiz {
+            self.ssr_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("ssr-depth-bg"),
+                layout: &self.ssr_depth_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                ],
+            });
+        }
+        self.ssr_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssr-scene-bg"),
+            layout: &self.ssr_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_read_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
             ],
         });
         // Resize Lighting M1 resources
@@ -1890,8 +1944,8 @@ impl Renderer {
             );
         }
 
-        // Copy SceneColor to a read-only texture only if SSGI is enabled
-        if self.enable_ssgi {
+        // Copy SceneColor to a read-only texture when SSR or SSGI need it
+        if self.enable_ssgi || self.enable_ssr {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-to-read"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1915,6 +1969,27 @@ impl Renderer {
             blit.set_pipeline(&self.blit_scene_read_pipeline);
             blit.set_bind_group(0, &self.present_bg, &[]);
             blit.draw(0..3, 0..1);
+        }
+
+        // SSR overlay into SceneColor (alpha blend)
+        if self.enable_ssr {
+            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ssr-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            rp.set_pipeline(&self.ssr_pipeline);
+            // linear depth (Hi-Z mip chain) + scene read
+            rp.set_bind_group(0, &self.ssr_depth_bg, &[]);
+            rp.set_bind_group(1, &self.ssr_scene_bg, &[]);
+            rp.draw(0..3, 0..1);
         }
 
         // SSGI additive overlay (fullscreen) into SceneColor
