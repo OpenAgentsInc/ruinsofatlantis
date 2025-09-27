@@ -72,6 +72,15 @@ Tests
 - Runtime: deterministic budgeted recapture order with fixed camera path; assert steady residency counts.
  - Sampling: verify tile depth tests accept expected hits within thickness bias; reject outside bounds; fallback proceeds to BVH.
 
+Add‑on: Make dynamic lights affect off‑screen GI/reflections
+- Shade atlas samples with dynamic lights (no shadows yet)
+  - Extend `gi/capture/sampling.rs` to return reconstructed `p_ws`, `n_ws`, and material (`albedo`, `roughness`, `metalness`, `emissive`).
+  - Add `gi/gi_sample_shade.rs` to evaluate BRDF at the sample with the clustered light list; use in SSR/SSGI miss paths after atlas fetch.
+  - Keep cost low: no recapture required; skip shadowing or use a tiny AO factor.
+
+Add‑on acceptance
+- A bolt that is off‑screen still lights visible receivers (via SSR/SSGI miss paths) with plausible intensity and color.
+
 Out of scope
 - Triangle BVH/SDF tracing (Lighting M3).
 - Multi‑bounce GI and denoisers (Lighting M4).

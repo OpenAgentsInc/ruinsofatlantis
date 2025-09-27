@@ -23,6 +23,7 @@ pub fn orbit_and_globals(
         sun_dir_time: [0.0, 1.0, 0.0, 0.0],
         sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
         fog_params: [0.0, 0.0, 0.0, 0.0],
+        clip_params: [cam.znear, cam.zfar, 0.0, 0.0],
     };
     (cam, globals)
 }
@@ -86,6 +87,7 @@ pub fn third_person_follow(
         sun_dir_time: [0.0, 1.0, 0.0, 0.0],
         sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
         fog_params: [0.0, 0.0, 0.0, 0.0],
+        clip_params: [cam.znear, cam.zfar, 0.0, 0.0],
     };
     (cam, globals)
 }

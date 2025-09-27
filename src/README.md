@@ -61,9 +61,20 @@ This document summarizes the `src/` folder structure and what each module does.
   - mod.rs — Renderer entry (init/resize/render) and high‑level wiring.
   - camera.rs — Camera type and view/projection math.
   - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
+  - gbuffer.rs — G‑Buffer attachments and formats (albedo, normal‑oct, rough/metal, emissive, motion).
+  - hiz.rs — Z‑MAX depth pyramid resources over linear R32F depth; CPU reference downsample + tests.
+  - hiz.comp.wgsl — Compute shader for linearizing depth and 2×2 Z‑MAX reduction.
+  - temporal/
+    - mod.rs — Temporal module index.
+    - reprojection.rs — CPU reprojection helpers + tests; prev/curr jitter handling.
+    - history.rs — Temporal params and clamp helpers + tests.
   - terrain.rs — Seeded heightmap terrain generation and simple woodland scatter (Phase 1). Parameters (size/extent/seed) come from the active Zone manifest.
   - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
   - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
+  - fullscreen.wgsl — Shared fullscreen VS: offscreen no‑flip, present Y‑flip.
+  - ssgi.wgsl — Placeholder compute entry for screen‑space diffuse GI (to be implemented).
+  - ssr.wgsl — Placeholder compute entry for screen‑space reflections (to be implemented).
+  - shaders/common.wgsl — Shared shader constants and binding conventions.
   - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.
   - ui.rs — Overlays: nameplates (text atlas), health bars (screen‑space quads with green→yellow→red gradient), and a minimal HUD (player HP + bottom hotbar with GCD overlay) for the wizard scene.
   - pipeline.rs — Adds `create_bar_pipeline` for solid‑color screen quads.
@@ -83,6 +94,7 @@ Gameplay wiring (prototype)
   - shader.wgsl — Main WGSL shaders (plane/instanced/skinned/particles). Uses directional sun + SH ambient.
   - shader_wizard_viewer.wgsl — WGSL for standalone wizard viewer bin.
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
+    - Adds `oct_encode`/`oct_decode` with unit tests for normal packing.
   - anim.rs — CPU animation sampling (palettes, per‑node global transforms, clip timing cues).
   - scene.rs — Demo scene assembly (spawn world, build instance buffers, camera target). Wizards now spawn over generated terrain.
   - material.rs — Wizard material creation (base color texture + transform uniform).

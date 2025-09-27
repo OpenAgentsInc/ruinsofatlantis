@@ -90,6 +90,28 @@ Tests
 - `gbuffer.wgsl` helpers: oct encode/decode round‑trip L2 error < 1e‑3.
 - Motion vectors: animated transform (translate+rotate) yields expected pixel offsets under known jitter.
 
+Add‑ons: Night + fire‑bolts as primary lights
+- Clustered direct lighting (Forward+)
+  - Files: `src/gfx/lighting/cluster.rs`, `src/gfx/lighting/lightset.rs`, `src/gfx/shaders/lighting_common.wgsl`.
+  - Cull small point lights into per‑tile lists (16×16 starter). Composite in a deferred/light pass that reads the G‑Buffer.
+  - Light struct (start Sphere only): `kind, pos_ws, range, dir_ws, cos_inner, cos_outer, color_rgb, intensity_lm`.
+  - Config: `tile_size`, `max_lights_per_tile`, `max_total_lights`.
+- Fire‑bolt lights
+  - Hook projectiles to spawn/despawn a `Sphere` light; range 6–12 m; 1200–3000 lm; color ~2000 K; optional 20–40 Hz flicker.
+- Screen‑space contact shadows (SSCS)
+  - Files: `src/gfx/shadows/sscs.rs`, `src/gfx/shaders/sscs.wgsl`.
+  - March toward dominant light in Z‑MAX Hi‑Z 8–16 steps; thickness 0.02–0.10 m.
+  - Config: `enable_contact_shadows`, `sscs_steps`, `sscs_thickness`.
+- Night exposure/bloom
+  - Files: `src/gfx/post/exposure.rs`, `src/gfx/post/bloom.rs`.
+  - Add manual pre‑exposure at night and a small bloom so bolts read bright; clamp sky SH and sky‑fallback in SSGI.
+- Temporal reactive mask for emissive movers
+  - Reduce history alpha for pixels influenced by bright local lights to avoid smearing.
+
+Add‑on acceptance (night scene)
+- With the wizard and terrain, 2–6 active fire‑bolt lights visibly illuminate nearby surfaces with plausible contact shadows (within ~0.5 m of occluders).
+- Scene remains dark away from bolts (sky fallback clamped); bolts “pop” with mild bloom; reactive mask prevents visible streaking during motion.
+
 Out of scope
 - Off‑screen ray hits (defer to Lighting M2/M3).
 - Multi‑bounce GI and denoisers (Lighting M4).

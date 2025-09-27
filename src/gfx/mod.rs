@@ -15,8 +15,12 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
+pub mod renderer { pub mod passes; pub mod resize; }
+mod gbuffer;
+mod hiz;
 mod mesh;
 mod pipeline;
+mod temporal;
 mod types;
 pub use types::Vertex;
 mod anim;
@@ -74,6 +78,16 @@ pub struct Renderer {
     size: PhysicalSize<u32>,
     max_dim: u32,
     depth: wgpu::TextureView,
+    // Offscreen scene color
+    scene_color: wgpu::Texture,
+    scene_view: wgpu::TextureView,
+    // Read-only copy of scene for post passes that sample while writing to SceneColor
+    scene_read: wgpu::Texture,
+    scene_read_view: wgpu::TextureView,
+
+    // Lighting M1: G-Buffer + Hi-Z scaffolding
+    gbuffer: Option<gbuffer::GBuffer>,
+    hiz: Option<hiz::HiZPyramid>,
 
     // --- Pipelines & BGLs ---
     pipeline: wgpu::RenderPipeline,
@@ -81,10 +95,41 @@ pub struct Renderer {
     wire_pipeline: Option<wgpu::RenderPipeline>,
     particle_pipeline: wgpu::RenderPipeline,
     sky_pipeline: wgpu::RenderPipeline,
+    post_ao_pipeline: wgpu::RenderPipeline,
+    ssgi_pipeline: wgpu::RenderPipeline,
+    ssr_pipeline: wgpu::RenderPipeline,
+    present_pipeline: wgpu::RenderPipeline,
+    blit_scene_read_pipeline: wgpu::RenderPipeline,
+    // Stored bind group layouts needed to rebuild views on resize
+    present_bgl: wgpu::BindGroupLayout,
+    post_ao_bgl: wgpu::BindGroupLayout,
+    #[allow(dead_code)]
+    ssgi_globals_bgl: wgpu::BindGroupLayout,
+    ssgi_depth_bgl: wgpu::BindGroupLayout,
+    ssgi_scene_bgl: wgpu::BindGroupLayout,
+    ssr_depth_bgl: wgpu::BindGroupLayout,
+    ssr_scene_bgl: wgpu::BindGroupLayout,
     globals_bg: wgpu::BindGroup,
+    post_ao_bg: wgpu::BindGroup,
+    ssgi_globals_bg: wgpu::BindGroup,
+    ssgi_depth_bg: wgpu::BindGroup,
+    ssgi_scene_bg: wgpu::BindGroup,
+    ssr_depth_bg: wgpu::BindGroup,
+    ssr_scene_bg: wgpu::BindGroup,
+    _post_sampler: wgpu::Sampler,
+    point_sampler: wgpu::Sampler,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
+    present_bg: wgpu::BindGroup,
+    // frame overlay removed
+
+    // Lighting toggles
+    enable_post_ao: bool,
+    enable_ssgi: bool,
+    enable_ssr: bool,
+    #[allow(dead_code)]
+    frame_counter: u32,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -238,6 +283,11 @@ pub struct Renderer {
     cam_look_height: f32,
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
+
+    // UI toggles and capture helpers
+    hud_enabled: bool,
+    screenshot_start: Option<f32>,
+    perf_enabled: bool,
 
     // Server state (NPCs/health)
     server: crate::server::ServerState,
@@ -451,18 +501,82 @@ impl Renderer {
         };
         surface.configure(&device, &config);
         let depth = util::create_depth_view(&device, config.width, config.height, config.format);
+        // Offscreen SceneColor (HDR)
+        let scene_color = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-color"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let scene_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
+        let scene_read = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-read"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let scene_read_view = scene_read.create_view(&wgpu::TextureViewDescriptor::default());
+        // Lighting M1: allocate G-Buffer attachments and linear depth (Hi-Z) pyramid
+        let gbuffer = gbuffer::GBuffer::create(&device, config.width, config.height);
+        let hiz = hiz::HiZPyramid::create(&device, config.width, config.height);
 
         // --- Pipelines + BGLs ---
         let shader = pipeline::create_shader(&device);
         let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let material_bgl = pipeline::create_material_bgl(&device);
+        let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
         let (pipeline, inst_pipeline, wire_pipeline) =
-            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
+            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, offscreen_fmt);
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
-            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, config.format);
+            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, offscreen_fmt);
+        // Present pipeline (SceneColor -> swapchain)
+        let present_bgl = pipeline::create_present_bgl(&device);
+        let present_pipeline =
+            pipeline::create_present_pipeline(&device, &globals_bgl, &present_bgl, config.format);
+        let blit_scene_read_pipeline =
+            pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        // (removed) frame overlay
+        // Post AO pipeline
+        let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
+        let post_ao_pipeline =
+            pipeline::create_post_ao_pipeline(&device, &globals_bgl, &post_ao_bgl, offscreen_fmt);
+        // SSGI pipeline (additive into SceneColor)
+        let (ssgi_globals_bgl, ssgi_depth_bgl, ssgi_scene_bgl) = pipeline::create_ssgi_bgl(&device);
+        let (ssr_depth_bgl, ssr_scene_bgl) = pipeline::create_ssr_bgl(&device);
+        let ssgi_pipeline = pipeline::create_ssgi_pipeline(
+            &device,
+            &ssgi_globals_bgl,
+            &ssgi_depth_bgl,
+            &ssgi_scene_bgl,
+            wgpu::TextureFormat::Rgba16Float,
+        );
+        let ssr_pipeline = pipeline::create_ssr_pipeline(
+            &device,
+            &ssr_depth_bgl,
+            &ssr_scene_bgl,
+            wgpu::TextureFormat::Rgba16Float,
+        );
         let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
             &device,
             &shader,
@@ -470,17 +584,17 @@ impl Renderer {
             &model_bgl,
             &palettes_bgl,
             &material_bgl,
-            config.format,
+            offscreen_fmt,
         );
         let particle_pipeline =
-            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, config.format);
+            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, offscreen_fmt);
 
         // UI: nameplates + health bars
-        let nameplates = ui::Nameplates::new(&device, config.format)?;
-        let nameplates_npc = ui::Nameplates::new(&device, config.format)?;
-        let mut bars = ui::HealthBars::new(&device, config.format)?;
+        let nameplates = ui::Nameplates::new(&device, offscreen_fmt)?;
+        let nameplates_npc = ui::Nameplates::new(&device, offscreen_fmt)?;
+        let mut bars = ui::HealthBars::new(&device, offscreen_fmt)?;
         let hud = ui::Hud::new(&device, config.format)?;
-        let damage = ui::DamageFloaters::new(&device, config.format)?;
+        let damage = ui::DamageFloaters::new(&device, offscreen_fmt)?;
 
         // --- Buffers & bind groups ---
         // Globals
@@ -491,6 +605,7 @@ impl Renderer {
             sun_dir_time: [0.0, 1.0, 0.0, 0.0],
             sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
             fog_params: [0.0, 0.0, 0.0, 0.0],
+            clip_params: [0.1, 1000.0, 0.0, 0.0],
         };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
@@ -538,6 +653,115 @@ impl Renderer {
                 resource: sky_buf.as_entire_binding(),
             }],
         });
+        // Post AO bind group & sampler
+        let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("post-ao-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        // Linear (filtering) sampler for color/depth that allow filtering
+        let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("post-ao-bg"),
+            layout: &post_ao_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
+            ],
+        });
+        // Point (non-filtering) sampler for R32F linear depth sampling
+        let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("point-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-globals-bg"),
+            layout: &ssgi_globals_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals_buf.as_entire_binding(),
+            }],
+        });
+        let ssgi_depth_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-depth-bg"),
+            layout: &ssgi_depth_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
+            ],
+        });
+        let ssgi_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-scene-bg"),
+            layout: &ssgi_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
+            ],
+        });
+        // SSR bind groups reference linear depth (Hi-Z mip chain view) and SceneRead
+        let ssr_depth_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssr-depth-bg"),
+            layout: &ssr_depth_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&point_sampler) },
+            ],
+        });
+        let ssr_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssr-scene-bg"),
+            layout: &ssr_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            ],
+        });
+        let present_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("present-bg"),
+            layout: &present_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&depth),
+                },
+            ],
+        });
+        // (removed) frame overlay UBO/BG
 
         // Per-draw Model buffers (plane and shard base)
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
@@ -1036,14 +1260,41 @@ impl Renderer {
             size: PhysicalSize::new(w, h),
             max_dim,
             depth,
+            scene_color,
+            scene_view,
+            scene_read,
+            scene_read_view,
 
             pipeline,
             inst_pipeline,
             wire_pipeline,
             particle_pipeline,
             sky_pipeline,
+            post_ao_pipeline,
+            ssgi_pipeline,
+            ssr_pipeline,
+            present_pipeline,
+            blit_scene_read_pipeline,
+            present_bgl: present_bgl.clone(),
+            post_ao_bgl: post_ao_bgl.clone(),
+            ssgi_globals_bgl: ssgi_globals_bgl.clone(),
+            ssgi_depth_bgl: ssgi_depth_bgl.clone(),
+            ssgi_scene_bgl: ssgi_scene_bgl.clone(),
+            ssr_depth_bgl: ssr_depth_bgl.clone(),
+            ssr_scene_bgl: ssr_scene_bgl.clone(),
             globals_bg,
+            post_ao_bg,
+            ssgi_globals_bg,
+            ssgi_depth_bg,
+            ssgi_scene_bg,
+            ssr_depth_bg,
+            ssr_scene_bg,
+            _post_sampler: post_sampler,
+            point_sampler,
             sky_bg,
+            present_bg,
+            // frame overlay removed
+            frame_counter: 0,
             terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
@@ -1153,6 +1404,9 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
+            hud_enabled: true,
+            screenshot_start: None,
+            perf_enabled: false,
             npc_vb,
             npc_ib,
             npc_index_count,
@@ -1169,11 +1423,20 @@ impl Renderer {
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
             pc_alive: true,
+            // Lighting M1 scaffolding
+            gbuffer: Some(gbuffer),
+            hiz: Some(hiz),
+            enable_post_ao: true,
+            enable_ssgi: true,
+            enable_ssr: false,
+            // frame overlay removed
         })
     }
 
     /// Resize the swapchain while preserving aspect and device limits.
+    #[allow(unreachable_code)]
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        return renderer::resize::resize_impl(self, new_size);
         if new_size.width == 0 || new_size.height == 0 {
             return;
         }
@@ -1198,10 +1461,138 @@ impl Renderer {
             self.config.height,
             self.config.format,
         );
+        // Recreate SceneColor
+        self.scene_color = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-color"),
+            size: wgpu::Extent3d {
+                width: self.config.width,
+                height: self.config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        self.scene_view = self
+            .scene_color
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        self.scene_read = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-read"),
+            size: wgpu::Extent3d {
+                width: self.config.width,
+                height: self.config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        self.scene_read_view = self
+            .scene_read
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        // Rebuild bind groups that reference resized textures
+        self.present_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("present-bg"),
+            layout: &self.present_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.scene_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&self.depth),
+                },
+            ],
+        });
+        self.post_ao_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("post-ao-bg"),
+            layout: &self.post_ao_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
+            ],
+        });
+        self.ssgi_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-depth-bg"),
+            layout: &self.ssgi_depth_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.depth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
+            ],
+        });
+        self.ssgi_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssgi-scene-bg"),
+            layout: &self.ssgi_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
+            ],
+        });
+        if let Some(hiz) = &self.hiz {
+            self.ssr_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("ssr-depth-bg"),
+                layout: &self.ssr_depth_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
+                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.point_sampler) },
+                ],
+            });
+        }
+        self.ssr_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("ssr-scene-bg"),
+            layout: &self.ssr_scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_read_view) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+            ],
+        });
+        // Resize Lighting M1 resources
+        self.gbuffer = Some(gbuffer::GBuffer::create(
+            &self.device,
+            self.config.width,
+            self.config.height,
+        ));
+        self.hiz = Some(hiz::HiZPyramid::create(
+            &self.device,
+            self.config.width,
+            self.config.height,
+        ));
     }
 
     /// Render one frame.
     pub fn render(&mut self) -> Result<(), SurfaceError> {
+        
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -1212,6 +1603,17 @@ impl Renderer {
         let aspect = self.config.width as f32 / self.config.height as f32;
         let dt = (t - self.last_time).max(0.0);
         self.last_time = t;
+
+        // If screenshot mode is active, auto-animate a smooth orbit for 5 seconds
+        if let Some(ts) = self.screenshot_start {
+            let elapsed = (t - ts).max(0.0);
+            if elapsed <= 5.0 {
+                let speed = 0.6; // rad/s
+                self.cam_orbit_yaw = Self::wrap_angle(self.cam_orbit_yaw + dt * speed);
+            } else {
+                self.screenshot_start = None;
+            }
+        }
 
         // Update player transform from input (WASD) then camera follow
         self.update_player_and_camera(dt, aspect);
@@ -1284,7 +1686,8 @@ impl Renderer {
                 0.0,
             ];
         }
-        globals.fog_params = [0.6, 0.7, 0.8, 0.0];
+        // Light bluish fog with gentle density for distance falloff
+        globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
         self.queue
             .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
         // Sky raw params
@@ -1362,23 +1765,22 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
-        // Sky-only pass (no depth)
+        // Sky-only pass (no depth) into SceneColor
         {
-            use wgpu::*;
-            let mut sky = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color {
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.02,
                             g: 0.02,
                             b: 0.04,
                             a: 1.0,
                         }),
-                        store: StoreOp::Store,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -1390,25 +1792,24 @@ impl Renderer {
             sky.set_bind_group(1, &self.sky_bg, &[]);
             sky.draw(0..3, 0..1);
         }
-        // Main pass with depth; load color from sky
+        // Main pass with depth into SceneColor; load color from sky pass
         {
-            use wgpu::*;
-            let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main-pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: Operations {
-                        load: LoadOp::Load,
-                        store: StoreOp::Store,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
@@ -1421,7 +1822,7 @@ impl Renderer {
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
             rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
-            rpass.set_index_buffer(self.terrain_ib.slice(..), IndexFormat::Uint16);
+            rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
 
             // Trees (instanced static mesh)
@@ -1436,7 +1837,7 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
                 rpass.set_vertex_buffer(0, self.trees_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
-                rpass.set_index_buffer(self.trees_ib.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
             }
 
@@ -1457,7 +1858,7 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
                 rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
-                rpass.set_index_buffer(self.ruins_ib.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
             }
 
@@ -1473,7 +1874,7 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
                 rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.npc_instances.slice(..));
-                rpass.set_index_buffer(self.npc_ib.slice(..), IndexFormat::Uint16);
+                rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
             }
 
@@ -1519,7 +1920,7 @@ impl Renderer {
             view_proj,
             &bar_entries,
         );
-        self.bars.draw(&mut encoder, &view);
+        self.bars.draw(&mut encoder, &self.scene_view);
         // Damage numbers
         self.damage.update(dt);
         self.damage.queue(
@@ -1529,7 +1930,7 @@ impl Renderer {
             self.config.height,
             view_proj,
         );
-        self.damage.draw(&mut encoder, &view);
+        self.damage.draw(&mut encoder, &self.scene_view);
 
         // Draw wizard nameplates first
         // Draw wizard nameplates for alive wizards only (hide dead PC/NPC labels)
@@ -1548,7 +1949,7 @@ impl Renderer {
             view_proj,
             &wiz_alive,
         );
-        self.nameplates.draw(&mut encoder, &view);
+        self.nameplates.draw(&mut encoder, &self.scene_view);
 
         // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
@@ -1572,7 +1973,147 @@ impl Renderer {
                 &npc_positions,
                 "Zombie",
             );
-            self.nameplates_npc.draw(&mut encoder, &view);
+            self.nameplates_npc.draw(&mut encoder, &self.scene_view);
+        }
+
+        // Build Hi-Z Z-MAX pyramid from current frame depth
+        if let Some(hiz) = &self.hiz {
+            let znear = 0.1f32; // mirrors Globals.clip.x
+            let zfar = 1000.0f32; // mirrors Globals.clip.y
+            hiz.build_mips(
+                &self.device,
+                &mut encoder,
+                &self.depth,
+                &self._post_sampler,
+                znear,
+                zfar,
+            );
+        }
+
+        // Copy SceneColor to a read-only texture when SSR or SSGI need it
+        if self.enable_ssgi || self.enable_ssr {
+            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("blit-scene-to-read"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_read_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            blit.set_pipeline(&self.blit_scene_read_pipeline);
+            blit.set_bind_group(0, &self.present_bg, &[]);
+            blit.draw(0..3, 0..1);
+        }
+
+        // SSR overlay into SceneColor (alpha blend)
+        if self.enable_ssr {
+            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ssr-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            rp.set_pipeline(&self.ssr_pipeline);
+            // linear depth (Hi-Z mip chain) + scene read
+            rp.set_bind_group(0, &self.ssr_depth_bg, &[]);
+            rp.set_bind_group(1, &self.ssr_scene_bg, &[]);
+            rp.draw(0..3, 0..1);
+        }
+
+        // SSGI additive overlay (fullscreen) into SceneColor
+        if self.enable_ssgi {
+            let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ssgi-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            gi.set_pipeline(&self.ssgi_pipeline);
+            gi.set_bind_group(0, &self.ssgi_globals_bg, &[]);
+            gi.set_bind_group(1, &self.ssgi_depth_bg, &[]);
+            gi.set_bind_group(2, &self.ssgi_scene_bg, &[]);
+            gi.draw(0..3, 0..1);
+        }
+        // (removed) frame overlay
+        // (frame overlay removed)
+        // Post-process AO overlay (fullscreen) multiplying into SceneColor
+        if self.enable_post_ao {
+            {
+                let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("post-ao"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.scene_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                post.set_pipeline(&self.post_ao_pipeline);
+                post.set_bind_group(0, &self.globals_bg, &[]);
+                post.set_bind_group(1, &self.post_ao_bg, &[]);
+                post.draw(0..3, 0..1);
+            }
+        }
+
+        // Present SceneColor to swapchain
+        {
+            let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("present-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            present.set_pipeline(&self.present_pipeline);
+            present.set_bind_group(0, &self.globals_bg, &[]);
+            present.set_bind_group(1, &self.present_bg, &[]);
+            present.draw(0..3, 0..1);
         }
 
         // Submit only if no validation errors occurred
@@ -1599,16 +2140,26 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            self.hud.build(
-                self.size.width,
-                self.size.height,
-                pc_hp,
-                self.wizard_hp_max,
-                cast_frac,
-                gcd_frac,
-            );
-            self.hud.queue(&self.device, &self.queue);
-            self.hud.draw(&mut encoder, &view);
+            if self.hud_enabled {
+                self.hud.build(
+                    self.size.width,
+                    self.size.height,
+                    pc_hp,
+                    self.wizard_hp_max,
+                    cast_frac,
+                    gcd_frac,
+                );
+                // Append perf overlay (ms and FPS)
+                if self.perf_enabled {
+                    let ms = dt * 1000.0;
+                    let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
+                    let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
+                    self.hud
+                        .append_perf_text(self.size.width, self.size.height, &line);
+                }
+                self.hud.queue(&self.device, &self.queue);
+                self.hud.draw(&mut encoder, &view);
+            }
             self.queue.submit(Some(encoder.finish()));
             frame.present();
         }
@@ -2111,6 +2662,28 @@ impl Renderer {
                             log::info!("time_scale: {:.2}", self.sky.time_scale);
                         }
                     }
+                    PhysicalKey::Code(KeyCode::F1) => {
+                        if pressed {
+                            self.perf_enabled = !self.perf_enabled;
+                            log::info!(
+                                "Perf overlay {}",
+                                if self.perf_enabled { "on" } else { "off" }
+                            );
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyH) => {
+                        if pressed {
+                            self.hud_enabled = !self.hud_enabled;
+                            log::info!("HUD {}", if self.hud_enabled { "shown" } else { "hidden" });
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::F5) => {
+                        if pressed {
+                            // Start a 5-second smooth orbit capture
+                            self.screenshot_start = Some(self.last_time);
+                            log::info!("Screenshot mode: 5s orbit starting");
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -2343,9 +2916,13 @@ impl Renderer {
             }
         }
 
-        // 2) Integrate projectiles
+        // 2) Integrate projectiles and keep them slightly above ground
+        // so they don't clip into small terrain undulations.
+        let ground_clearance = 0.15f32; // meters above terrain
         for p in &mut self.projectiles {
             p.pos += p.vel * dt;
+            // Clamp to be a bit above the terrain height at current XZ.
+            p.pos = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
@@ -2428,7 +3005,8 @@ impl Renderer {
         while i < self.projectiles.len() {
             let pcur = self.projectiles[i].pos;
             let (h, _n) = terrain::height_at(&self.terrain_cpu, pcur.x, pcur.z);
-            let kill = t >= self.projectiles[i].t_die || pcur.y <= h + 0.02;
+            // Only time-out; allow clearance clamp to keep bolts skimming above ground.
+            let kill = t >= self.projectiles[i].t_die;
             if kill {
                 let mut hit = self.projectiles[i].pos;
                 // Snap impact to terrain height
@@ -2577,6 +3155,8 @@ impl Renderer {
         {
             speed = p.speed_mps;
         }
+        // Ensure initial spawn sits a bit above the terrain.
+        let origin = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15);
         self.projectiles.push(Projectile {
             pos: origin,
             vel: dir * speed,

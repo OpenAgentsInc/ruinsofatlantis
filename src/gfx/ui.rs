@@ -1587,6 +1587,16 @@ impl Hud {
         }
     }
 
+    /// Append a single-line perf overlay in the top-left corner.
+    pub fn append_perf_text(&mut self, surface_w: u32, surface_h: u32, text: &str) {
+        // Slight shadow for readability
+        let x = 10.0f32;
+        let y = 24.0f32;
+        self.push_text_line(surface_w, surface_h, x + 1.0, y + 1.0, text, [0.0, 0.0, 0.0, 0.5]);
+        self.push_text_line(surface_w, surface_h, x, y, text, [0.95, 0.98, 1.0, 0.95]);
+        self.text_vcount = self.text_verts.len() as u32;
+    }
+
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         // Bars
         if self.bars_vcount > 0 {
