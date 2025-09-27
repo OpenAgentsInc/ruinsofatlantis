@@ -1094,9 +1094,18 @@ impl Renderer {
             self.cam_look_height,
         );
         #[allow(unused_assignments)]
+        // Anchor camera to the center of the PC model, not the feet.
+        let pc_anchor = if self.pc_index < self.wizard_models.len() {
+            let m = self.wizard_models[self.pc_index];
+            (m * glam::Vec4::new(0.0, 1.2, 0.0, 1.0)).truncate()
+        } else {
+            self.player.pos + glam::vec3(0.0, 1.2, 0.0)
+        };
+
+        #[allow(unused_assignments)]
         let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
-            self.player.pos,
+            pc_anchor,
             glam::Quat::from_rotation_y(self.player.yaw),
             off_local,
             look_local,
@@ -1119,7 +1128,7 @@ impl Renderer {
         // Recompute camera/globals without smoothing after clamping
         let (_cam2, globals2) = camera_sys::third_person_follow(
             &mut self.cam_follow,
-            self.player.pos,
+            pc_anchor,
             glam::Quat::from_rotation_y(self.player.yaw),
             off_local,
             look_local,
