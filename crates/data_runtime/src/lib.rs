@@ -1,0 +1,13 @@
+//! data_runtime: data schemas and loaders (SRD-aligned).
+//!
+//! Extracted from the root crate's `core::data` so client/server/sim can
+//! depend on a stable data API.
+
+pub mod ability;
+pub mod class;
+pub mod ids;
+pub mod loader;
+pub mod monster;
+pub mod scenario;
+pub mod spell;
+pub mod zone;

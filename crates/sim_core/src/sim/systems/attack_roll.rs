@@ -1,6 +1,6 @@
 //! Resolve attack rolls for newly completed casts.
 
-use crate::core::rules::attack::Advantage;
+use crate::rules::attack::Advantage;
 use crate::sim::state::SimState;
 
 pub fn run(state: &mut SimState) {

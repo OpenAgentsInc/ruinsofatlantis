@@ -15,7 +15,10 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
-pub mod renderer { pub mod passes; pub mod resize; }
+pub mod renderer {
+    pub mod passes;
+    pub mod resize;
+}
 mod gbuffer;
 mod hiz;
 mod mesh;
@@ -260,6 +263,7 @@ pub struct Renderer {
     bars: ui::HealthBars,
     damage: ui::DamageFloaters,
     hud: ui::Hud,
+    hud_model: ux_hud::HudModel,
 
     // --- Player/Camera ---
     pc_index: usize,
@@ -284,10 +288,8 @@ pub struct Renderer {
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
 
-    // UI toggles and capture helpers
-    hud_enabled: bool,
+    // UI capture helpers
     screenshot_start: Option<f32>,
-    perf_enabled: bool,
 
     // Server state (NPCs/health)
     server: crate::server::ServerState,
@@ -731,16 +733,28 @@ impl Renderer {
             label: Some("ssr-depth-bg"),
             layout: &ssr_depth_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&point_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&hiz.linear_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&point_sampler),
+                },
             ],
         });
         let ssr_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ssr-scene-bg"),
             layout: &ssr_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
             ],
         });
         let present_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1382,6 +1396,7 @@ impl Renderer {
             bars,
             damage,
             hud,
+            hud_model: Default::default(),
 
             // Player/camera
             pc_index: scene_build.pc_index,
@@ -1404,9 +1419,8 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
-            hud_enabled: true,
             screenshot_start: None,
-            perf_enabled: false,
+
             npc_vb,
             npc_ib,
             npc_index_count,
@@ -1564,8 +1578,14 @@ impl Renderer {
                 label: Some("ssr-depth-bg"),
                 layout: &self.ssr_depth_bgl,
                 entries: &[
-                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.point_sampler) },
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&hiz.linear_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.point_sampler),
+                    },
                 ],
             });
         }
@@ -1573,8 +1593,14 @@ impl Renderer {
             label: Some("ssr-scene-bg"),
             layout: &self.ssr_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.scene_read_view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self._post_sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
+                },
             ],
         });
         // Resize Lighting M1 resources
@@ -1592,7 +1618,6 @@ impl Renderer {
 
     /// Render one frame.
     pub fn render(&mut self) -> Result<(), SurfaceError> {
-        
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -2025,7 +2050,10 @@ impl Renderer {
                     view: &self.scene_view,
                     resolve_target: None,
                     depth_slice: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
@@ -2140,7 +2168,7 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            if self.hud_enabled {
+            if self.hud_model.hud_enabled() {
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2150,7 +2178,7 @@ impl Renderer {
                     gcd_frac,
                 );
                 // Append perf overlay (ms and FPS)
-                if self.perf_enabled {
+                if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
                     let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
                     let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
@@ -2664,17 +2692,28 @@ impl Renderer {
                     }
                     PhysicalKey::Code(KeyCode::F1) => {
                         if pressed {
-                            self.perf_enabled = !self.perf_enabled;
+                            self.hud_model.toggle_perf();
                             log::info!(
                                 "Perf overlay {}",
-                                if self.perf_enabled { "on" } else { "off" }
+                                if self.hud_model.perf_enabled() {
+                                    "on"
+                                } else {
+                                    "off"
+                                }
                             );
                         }
                     }
                     PhysicalKey::Code(KeyCode::KeyH) => {
                         if pressed {
-                            self.hud_enabled = !self.hud_enabled;
-                            log::info!("HUD {}", if self.hud_enabled { "shown" } else { "hidden" });
+                            self.hud_model.toggle_hud();
+                            log::info!(
+                                "HUD {}",
+                                if self.hud_model.hud_enabled() {
+                                    "shown"
+                                } else {
+                                    "hidden"
+                                }
+                            );
                         }
                     }
                     PhysicalKey::Code(KeyCode::F5) => {
@@ -2922,7 +2961,8 @@ impl Renderer {
         for p in &mut self.projectiles {
             p.pos += p.vel * dt;
             // Clamp to be a bit above the terrain height at current XZ.
-            p.pos = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
+            p.pos =
+                crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {

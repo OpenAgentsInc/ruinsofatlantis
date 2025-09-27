@@ -2,9 +2,9 @@
 //! For the prototype, attempt to start a cast for actors that are Idle and
 //! have a known ability. Cast times and GCD are pulled from loaded SpellSpecs.
 
-use crate::core::combat::fsm::ActionState;
-use crate::core::data::ids::Id;
+use crate::combat::fsm::ActionState;
 use crate::sim::state::{ActorSim, SimState};
+use data_runtime::ids::Id;
 
 pub fn run(state: &mut SimState) {
     let dt_ms = state.tick_ms;

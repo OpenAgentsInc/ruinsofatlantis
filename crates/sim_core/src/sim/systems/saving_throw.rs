@@ -1,7 +1,7 @@
 //! Resolve saving throws for completed casts that specify a save.
 
-use crate::core::combat::conditions::Condition;
-use crate::core::rules::saves::SaveKind;
+use crate::combat::conditions::Condition;
+use crate::rules::saves::SaveKind;
 use crate::sim::state::SimState;
 
 fn parse_save_kind(s: &str) -> SaveKind {
@@ -51,11 +51,11 @@ pub fn run(state: &mut SimState) {
         let dc = save_dc_opt.unwrap_or(state.actors[actor_idx].spell_save_dc);
         let kind = parse_save_kind(&save_kind_s);
         let mod_bonus = actor_save_mod(state, tgt_idx, kind);
-        let (roll, _nat20) = state.roll_d20(crate::core::rules::attack::Advantage::Normal);
+        let (roll, _nat20) = state.roll_d20(crate::rules::attack::Advantage::Normal);
         let total = roll + mod_bonus;
-        let ok = total >= dc;
         let caster_id = state.actors[actor_idx].id.clone();
         let tgt_id = state.actors[tgt_idx].id.clone();
+        let ok = total >= dc;
         state.log(format!(
             "save_resolved src={} tgt={} ability={} save={} total={} vs DC{} => {}",
             caster_id,
@@ -68,8 +68,8 @@ pub fn run(state: &mut SimState) {
         ));
         if !ok
             && let Some(of) = on_fail
-            && let Some(name) = of.apply_condition
-            && let Some(cond) = parse_condition(&name)
+            && let Some(name) = of.apply_condition.as_deref()
+            && let Some(cond) = parse_condition(name)
         {
             let dur = of.duration_ms.unwrap_or(6000);
             state.pending_status.push((tgt_idx, cond, dur));

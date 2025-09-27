@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use crate::core::combat::fsm::{ActionDone, ActionState, Gcd};
-use crate::core::data::loader::load_spell_spec;
-use crate::core::data::loader::{load_class_spec, load_monster_spec};
-use crate::core::data::spell::SpellSpec;
-use crate::core::rules::attack::Advantage;
+use crate::combat::fsm::{ActionDone, ActionState, Gcd};
+use crate::rules::attack::Advantage;
+use data_runtime::loader::load_spell_spec;
+use data_runtime::loader::{load_class_spec, load_monster_spec};
+use data_runtime::spell::SpellSpec;
 
 #[derive(Debug, Clone)]
 pub struct ActorSim {
@@ -24,7 +24,7 @@ pub struct ActorSim {
     pub target: Option<usize>,
     pub spell_attack_bonus: i32,
     pub spell_save_dc: i32,
-    pub statuses: Vec<(crate::core::combat::conditions::Condition, u32)>,
+    pub statuses: Vec<(crate::combat::conditions::Condition, u32)>,
     pub blessed_ms: u32,
     pub reaction_ready: bool,
     pub next_ability_idx: usize,
@@ -43,7 +43,7 @@ pub struct SimState {
     pub spells: HashMap<String, SpellSpec>,
     pub cast_completed: Vec<(usize, String)>,
     pub pending_damage: Vec<(usize, String, bool)>,
-    pub pending_status: Vec<(usize, crate::core::combat::conditions::Condition, u32)>,
+    pub pending_status: Vec<(usize, crate::combat::conditions::Condition, u32)>,
     pub logs: Vec<String>,
     pub underwater: bool,
 }
@@ -189,8 +189,8 @@ impl SimState {
 
 // Built-in fallback specs
 impl SimState {
-    pub fn builtin_basic_attack_spec() -> crate::core::data::spell::SpellSpec {
-        use crate::core::data::spell::{AttackSpec, DamageSpec, SpellSpec};
+    pub fn builtin_basic_attack_spec() -> data_runtime::spell::SpellSpec {
+        use data_runtime::spell::{AttackSpec, DamageSpec, SpellSpec};
         use std::collections::HashMap;
         let mut dice = HashMap::new();
         dice.insert("1-4".to_string(), "1d6".to_string());
@@ -233,8 +233,8 @@ impl SimState {
         }
     }
 
-    pub fn builtin_boss_tentacle_spec() -> crate::core::data::spell::SpellSpec {
-        use crate::core::data::spell::{AttackSpec, DamageSpec, SpellSpec};
+    pub fn builtin_boss_tentacle_spec() -> data_runtime::spell::SpellSpec {
+        use data_runtime::spell::{AttackSpec, DamageSpec, SpellSpec};
         use std::collections::HashMap;
         let mut dice = HashMap::new();
         dice.insert("1-4".to_string(), "3d10".to_string());

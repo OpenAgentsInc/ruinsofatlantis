@@ -1,7 +1,7 @@
 //! Ability/action finite state machine scaffolding.
 //! Tracks casts, channels, recovery, GCD, and reaction windows.
 
-use crate::core::data::ids::Id;
+use data_runtime::ids::Id;
 
 /// Simple action FSM handling cast/channel/recovery and a separate GCD budget.
 

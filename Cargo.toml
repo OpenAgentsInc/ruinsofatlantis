@@ -8,7 +8,12 @@ default-run = "ruinsofatlantis"
 members = [
     ".",                # root crate
     "shared/assets",    # shared library for model/assets
-    "tools/model-viewer" # standalone model viewer
+    "tools/model-viewer", # standalone model viewer
+    "crates/data_runtime", # data schemas + loaders
+    "crates/render_wgpu",  # renderer crate (re-export for now)
+    "crates/sim_core",     # sim rules/combat facade (re-export for now)
+    "crates/platform_winit", # winit platform facade (re-export for now)
+    "crates/ux_hud"        # HUD logic (stub)
 ]
 resolver = "2"
 
@@ -41,6 +46,9 @@ which = "8.0.0"
 winit = "0.30.12"
 ra-assets = { version = "0.1.0", path = "shared/assets" }
 hw-skymodel = "0.1.1"
+data_runtime = { version = "0.1.0", path = "crates/data_runtime" }
+sim_core = { version = "0.1.0", path = "crates/sim_core" }
+ux_hud = { version = "0.1.0", path = "crates/ux_hud" }
 
 [patch.crates-io]
 # Use a patched local copy of draco_decoder to avoid passing

@@ -2,6 +2,13 @@
 
 This document summarizes the `src/` folder structure and what each module does.
 
+Workspace crates (added for modularization)
+- crates/data_runtime — SRD-aligned data schemas + loaders (replaces `src/core/data`; re-exported under `crate::core::data`).
+- crates/render_wgpu — Renderer facade crate (temporarily re-exports `crate::gfx`).
+- crates/sim_core — Rules/combat/sim crate (moved from `src/core/{rules,combat}` and `src/sim`). Re-exported under `crate::core::{rules,combat}` and `crate::sim` for compatibility.
+- crates/platform_winit — Platform loop facade (temporarily re-exports `crate::platform_winit`).
+- crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; F1 toggles perf overlay, H toggles HUD).
+
 - Workspace crates (new)
 - shared/assets — Library crate re-exporting our asset loaders for tools.
 - tools/model-viewer — Standalone wgpu viewer that loads GLTF/GLB via shared/assets.
@@ -32,27 +39,7 @@ This document summarizes the `src/` folder structure and what each module does.
   - wizard_viewer.wgsl — WGSL shader for the standalone wizard viewer.
 
 - core/
-  - mod.rs — Core facade for data, rules, and combat.
-  - data/
-    - mod.rs — Data module index.
-    - ids.rs — Strongly typed IDs for data records.
-    - ability.rs — Ability schema (prototype).
-    - class.rs — Class schema used by sim defaults.
-    - monster.rs — Monster schema used by sim defaults.
-    - spell.rs — SRD‑aligned SpellSpec used by tools and the sim.
-    - scenario.rs — Scenario schema for the sim harness.
-    - loader.rs — Data file readers for JSON under `data/`.
-    - zone.rs — Zone manifest schema + loader (Phase 1). Wizard scene loads `Wizard Woods` from `data/zones/wizard_woods/manifest.json` to configure terrain and sky.
-  - rules/
-    - mod.rs — SRD rules index.
-    - attack.rs — Advantage enum and attack scaffolding.
-    - dice.rs — Dice helpers (policy/crit hooks).
-    - saves.rs — Saving throw kinds and helpers.
-  - combat/
-    - mod.rs — Combat model index.
-    - fsm.rs — Action FSM (cast/channel/recovery) and GCD.
-    - damage.rs — Damage plumbing (prototype).
-    - conditions.rs — Basic conditions.
+  - mod.rs — Core facade; re-exports `data_runtime` as `crate::core::data` and `sim_core::{rules,combat}` for compatibility.
 
 - ecs/
   - mod.rs — Minimal ECS scaffolding (entities, transforms, render kinds).
@@ -110,16 +97,10 @@ Gameplay wiring (prototype)
   - `cargo watch -x run` (rebuild and rerun on change), or
   - `cargo dev` / `cargo dev-test` via Cargo aliases in `.cargo/config.toml`.
 
-- sim/
-  - mod.rs — Sim engine index and exports.
-  - components/ — Sim ECS component types (controller, statuses, projectiles, threat, etc.).
-  - systems/ — Sim systems (AI, cast begin/progress, saves, damage, buffs, projectiles, input).
-    - cast_begin.rs — Validates GCD and per-ability cooldowns; starts casts and kicks off cooldowns.
-    - damage.rs — Applies damage with Temporary Hit Points (THP) absorption and triggers Concentration checks (DC = max(10, floor(damage/2)), cap 30).
-    - buffs.rs — Handles Bless/Heroism prototypes; starts/ends Concentration and grants THP (non-stacking: keeps higher value).
-  - state.rs — SimState (RNG, actors, spell cache, pending effects, logs, environment flags).
-  - runner.rs — Scenario runner and loop (ticks systems, checks win/loss).
-  - rng.rs — RNG setup; deterministic streams.
-  - scheduler.rs — Tick scheduling helpers.
-  - events.rs — Event definitions used across systems.
-  - types.rs — Small shared sim types.
+- sim_core/
+  - rules/ — SRD rules helpers (`attack`, `dice`, `saves`).
+  - combat/ — Combat model (`fsm`, `damage`, `conditions`).
+  - sim/ — Headless sim engine (components, systems, state, runner, rng, scheduler, events, types).
+    - systems/cast_begin.rs — Validates GCD/cooldowns; starts casts and kicks off cooldowns.
+    - systems/damage.rs — Applies damage with THP absorption; triggers Concentration checks (DC = max(10, floor(dmg/2))).
+    - systems/buffs.rs — Bless/Heroism; Concentration start/end; THP grant.
