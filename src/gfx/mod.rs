@@ -80,6 +80,9 @@ pub struct Renderer {
     // Offscreen scene color
     scene_color: wgpu::Texture,
     scene_view: wgpu::TextureView,
+    // Read-only copy of scene for post passes that sample while writing to SceneColor
+    scene_read: wgpu::Texture,
+    scene_read_view: wgpu::TextureView,
 
     // Lighting M1: G-Buffer + Hi-Z scaffolding
     gbuffer: Option<gbuffer::GBuffer>,
@@ -94,6 +97,7 @@ pub struct Renderer {
     post_ao_pipeline: wgpu::RenderPipeline,
     ssgi_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
+    blit_scene_read_pipeline: wgpu::RenderPipeline,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
     ssgi_globals_bg: wgpu::BindGroup,
@@ -482,10 +486,21 @@ impl Renderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let scene_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
+        let scene_read = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-read"),
+            size: wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let scene_read_view = scene_read.create_view(&wgpu::TextureViewDescriptor::default());
         // Lighting M1: allocate G-Buffer attachments and linear depth (Hi-Z) pyramid
         let gbuffer = gbuffer::GBuffer::create(&device, config.width, config.height);
         let hiz = hiz::HiZPyramid::create(&device, config.width, config.height);
@@ -504,6 +519,7 @@ impl Renderer {
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, config.format);
+        let blit_scene_read_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
         // Post AO pipeline
         let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
         let post_ao_pipeline = pipeline::create_post_ao_pipeline(
@@ -633,7 +649,7 @@ impl Renderer {
             label: Some("ssgi-scene-bg"),
             layout: &ssgi_scene_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_view) },
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
             ],
         });
@@ -1145,6 +1161,8 @@ impl Renderer {
             depth,
             scene_color,
             scene_view,
+            scene_read,
+            scene_read_view,
 
             pipeline,
             inst_pipeline,
@@ -1154,6 +1172,7 @@ impl Renderer {
             post_ao_pipeline,
             ssgi_pipeline,
             present_pipeline,
+            blit_scene_read_pipeline,
             globals_bg,
             post_ao_bg,
             ssgi_globals_bg,
@@ -1329,10 +1348,21 @@ impl Renderer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         self.scene_view = self.scene_color.create_view(&wgpu::TextureViewDescriptor::default());
+        self.scene_read = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scene-read"),
+            size: wgpu::Extent3d { width: self.config.width, height: self.config.height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.scene_read_view = self.scene_read.create_view(&wgpu::TextureViewDescriptor::default());
         // Resize Lighting M1 resources
         self.gbuffer = Some(gbuffer::GBuffer::create(&self.device, self.config.width, self.config.height));
         self.hiz = Some(hiz::HiZPyramid::create(&self.device, self.config.width, self.config.height));
@@ -1711,6 +1741,26 @@ impl Renderer {
                 "Zombie",
             );
             self.nameplates_npc.draw(&mut encoder, &self.scene_view);
+        }
+
+        // Copy SceneColor to a read-only texture for post passes that need to sample it
+        {
+            use wgpu::*;
+            let mut blit = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("blit-scene-to-read"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &self.scene_read_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: Operations { load: LoadOp::Clear(Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            blit.set_pipeline(&self.blit_scene_read_pipeline);
+            blit.set_bind_group(0, &self.present_bg, &[]);
+            blit.draw(0..3, 0..1);
         }
 
         // SSGI additive overlay (fullscreen) into SceneColor
