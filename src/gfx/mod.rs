@@ -2061,13 +2061,24 @@ impl Renderer {
                         self.queue.write_buffer(&self.zombie_instances, 0, bytes);
                     }
                 }
-                // Damage floater above NPC head
-                if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
-                    let pos = n.pos + glam::vec3(0.0, n.radius + 0.9, 0.0);
+                // Damage floater above NPC head (terrain/instance-aware)
+                if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                    let m = self
+                        .zombie_models
+                        .get(idx)
+                        .copied()
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                    self.damage.spawn(head.truncate(), h.damage);
+                } else if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
+                    let (hgt, _n) = terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    let pos = glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z);
                     self.damage.spawn(pos, h.damage);
                 } else {
+                    // Fallback: snap event position to terrain height
+                    let (hgt, _n) = terrain::height_at(&self.terrain_cpu, h.pos.x, h.pos.z);
                     self.damage
-                        .spawn(h.pos + glam::vec3(0.0, 0.9, 0.0), h.damage);
+                        .spawn(glam::vec3(h.pos.x, hgt + 0.9, h.pos.z), h.damage);
                 }
             }
             if hits.is_empty() {
