@@ -1416,7 +1416,7 @@ impl Hud {
             x0 + 6.0,
             y0 + bar_h - 3.0,
             &label,
-            [1.0, 1.0, 1.0, 0.95],
+            [0.0, 0.0, 0.0, 0.95],
         );
 
         // Hotbar (bottom-center): 6 slots
