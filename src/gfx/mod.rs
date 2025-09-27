@@ -2147,6 +2147,11 @@ impl Renderer {
                     cast_frac,
                     gcd_frac,
                 );
+                // Append perf overlay (ms and FPS)
+                let ms = dt * 1000.0;
+                let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
+                let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
+                self.hud.append_perf_text(self.size.width, self.size.height, &line);
                 self.hud.queue(&self.device, &self.queue);
                 self.hud.draw(&mut encoder, &view);
             }
