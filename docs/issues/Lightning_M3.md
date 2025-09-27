@@ -1,0 +1,73 @@
+Title: Lightning M3 — Software Ray Tracing (BVH baseline, optional mesh SDFs) + Hit Evaluation Modes
+
+Goal
+- Handle off‑screen ray hits robustly using a triangle BVH (baseline), with an optional signed‑distance field (SDF) path for detail rays. Support two hit evaluation modes: fast (sample from capture atlas) and quality (evaluate BRDF at the true hit), selectable per material.
+
+Scope
+- Add CPU BVH build + traversal API (GPU traversal optional later), optional SDF tracing behind a Cargo feature, and per‑material reflection toggle. Integrate miss paths from SSR/SSGI to call BVH/SDF tracing.
+
+Planned files and module map (aligned with src/README.md)
+- BVH
+  - `src/gfx/rt/bvh/build.rs` — Build a static BVH over scene triangles/instances.
+  - `src/gfx/rt/bvh/traverse.rs` — Ray traversal API; returns closest hit (triangle id, barycentrics, normal).
+
+- Optional mesh SDFs (feature: `mesh_sdf`)
+  - `src/gfx/rt/sdf/build.rs` — Generate coarse SDF volumes per mesh (voxel or sparse).
+  - `src/gfx/rt/sdf/trace.rs` — Sphere tracing; detail rays; fall back to BVH if needed.
+
+- Reflections and GI integration
+  - `src/gfx/reflections/rt.rs` — Reflection rays using BVH/SDF when SSR misses; choose hit mode (fast/quality).
+  - `src/gfx/gi/rt.rs` — Diffuse GI rays using BVH/SDF when SSGI misses; default to fast mode.
+
+- Materials/config
+  - `src/gfx/material.rs` — Add per‑material toggle for reflection hit mode: `force_quality_reflections: bool`.
+  - `src/gfx/mod.rs` — Extend `LightingConfig` with toggles for BVH on/off, SDF on/off, and per‑view defaults for hit mode.
+
+Connections to existing hierarchy (read src/README.md)
+- Integrate with `src/gfx/gi/capture/sampling.rs` (Lightning M2) for fast hit fetch from the capture atlas.
+- Keep renderer wiring in `src/gfx/mod.rs` and pipeline creation in `src/gfx/pipeline.rs`.
+- Update `src/README.md` under `gfx/` to document `rt/` modules and reflection/gi RT paths.
+
+Acceptance criteria
+- Triangle BVH builds on current scene assets; traversal returns correct closest hits on test geometry.
+- SSR/SSGI miss paths fall back to BVH/SDF tracing; visual stability improves for off‑screen content.
+- Per‑material toggle switches reflection evaluation between fast (atlas sample) and quality (BRDF at hit).
+- Feature flag `mesh_sdf` compiles; when enabled, detail rays can use SDF tracing.
+
+Detailed tasks
+- BVH
+  - Implement AABB generation from meshes and instance transforms.
+  - Build SAH or median split tree; upload to GPU buffers later (for now, CPU traversal is fine).
+  - Provide `trace_ray(ray) -> Hit { t, tri_id, bary, normal }` API.
+  - Tests: AABB intersection, tree invariants, hit ordering on analytic scenes.
+
+- SDF (optional)
+  - Implement coarse SDF bake for static meshes; store in compressed 3D textures or CPU arrays.
+  - Sphere tracing with step caps and normal estimation via gradient.
+  - Tests: sign consistency on simple shapes; convergence within step budget.
+
+- Reflection/GI integration
+  - `reflections/rt.rs`: generate rays from G‑Buffer normals and view; handle roughness distribution.
+  - `gi/rt.rs`: cosine‑weighted rays; low spp; temporal accumulate.
+  - Miss path order: try SSR/SSGI -> BVH/SDF -> environment fallback.
+
+- Config and materials
+  - Extend `LightingConfig` with RT toggles and budgets (max rays, max steps, sdf detail).
+  - In `material.rs`, add `force_quality_reflections` and expose a default.
+  - Update `src/README.md` accordingly.
+
+Suggested data formats
+- BVH nodes in SSBO‑friendly structs (even if CPU for now) to ease future GPU traversal.
+- SDFs in R16F volumes per mesh (optional feature).
+
+Tests
+- BVH unit tests under `rt/bvh/*` for intersection math and traversal determinism.
+- SDF unit tests under `rt/sdf/*` guarded by feature.
+
+Out of scope
+- Multi‑bounce GI and denoisers (Lightning M4).
+
+Housekeeping
+- If a helper crate is introduced (e.g., `bitvec` for SDF occupancy), add via `cargo add` and document.
+- Keep docblocks and rustdoc complete; maintain compiling state with `clippy` clean.
+

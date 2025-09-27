@@ -1485,27 +1485,6 @@ impl Renderer {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-        // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
-        use std::collections::HashMap;
-        let mut npc_map: HashMap<crate::server::NpcId, (i32, i32, bool, f32)> = HashMap::new();
-        for n in &self.server.npcs {
-            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
-        }
-        for (i, id) in self.zombie_ids.iter().enumerate() {
-            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
-                if !alive {
-                    continue;
-                }
-                let m = self
-                    .zombie_models
-                    .get(i)
-                    .copied()
-                    .unwrap_or(glam::Mat4::IDENTITY);
-                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
-                bar_entries.push((head.truncate(), frac));
-            }
-        }
         self.bars.queue_entries(
             &self.device,
             &self.queue,
@@ -1767,7 +1746,9 @@ impl Renderer {
             wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
         }
         // Helper: fuzzy find clip by case-insensitive substring(s)
-        let find_clip = |subs: &[&str], anims: &std::collections::HashMap<String, AnimClip>| -> Option<String> {
+        let find_clip = |subs: &[&str],
+                         anims: &std::collections::HashMap<String, AnimClip>|
+         -> Option<String> {
             let subsl: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
             for name in anims.keys() {
                 let low = name.to_lowercase();
@@ -1790,7 +1771,11 @@ impl Renderer {
             let has_idle = self.zombie_cpu.animations.contains_key("Idle")
                 || find_clip(&["idle", "stand"], &self.zombie_cpu.animations).is_some();
             let has_attack = self.zombie_cpu.animations.contains_key("Attack")
-                || find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations).is_some();
+                || find_clip(
+                    &["attack", "punch", "hit", "swipe", "slash", "bite"],
+                    &self.zombie_cpu.animations,
+                )
+                .is_some();
             let has_proc = self.zombie_cpu.animations.contains_key("ProcIdle");
             let has_static = self.zombie_cpu.animations.contains_key("__static");
             let any_owned: String = self
@@ -1825,7 +1810,10 @@ impl Renderer {
             let clip_name = if is_attacking && has_attack {
                 if self.zombie_cpu.animations.contains_key("Attack") {
                     "Attack"
-                } else if let Some(_n) = find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations) {
+                } else if let Some(_n) = find_clip(
+                    &["attack", "punch", "hit", "swipe", "slash", "bite"],
+                    &self.zombie_cpu.animations,
+                ) {
                     // Use first fuzzy match
                     // Note: we allocate here, handled below when fetching the clip
                     // by looking it up by this dynamic name
@@ -1871,7 +1859,10 @@ impl Renderer {
                 None
             };
             if clip_name == "__attack_dynamic__"
-                && let Some(n) = find_clip(&["attack", "punch", "hit", "swipe", "slash", "bite"], &self.zombie_cpu.animations)
+                && let Some(n) = find_clip(
+                    &["attack", "punch", "hit", "swipe", "slash", "bite"],
+                    &self.zombie_cpu.animations,
+                )
             {
                 proc_name_str = Some(n);
             }
@@ -1885,8 +1876,11 @@ impl Renderer {
                     raw.push(m.to_cols_array());
                 }
                 let byte_off = (i * joints * 64) as u64;
-                self.queue
-                    .write_buffer(&self.zombie_palettes_buf, byte_off, bytemuck::cast_slice(&raw));
+                self.queue.write_buffer(
+                    &self.zombie_palettes_buf,
+                    byte_off,
+                    bytemuck::cast_slice(&raw),
+                );
             }
         }
         // No single bulk upload; we wrote per-instance segments above.
@@ -1990,24 +1984,6 @@ impl Renderer {
                     glam::Quat::from_rotation_y(yaw),
                     pos,
                 );
-                let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(*p);
-                // If the zombie moved this frame, face the movement direction.
-                // Apply authoring forward-axis correction so models authored with
-                // +X (or -Z) forward still look where they walk.
-                let delta = *p - prev;
-                let yaw = if delta.length_squared() > 1e-5 {
-                    delta.x.atan2(delta.z) - self.zombie_forward_offset
-                } else {
-                    Self::yaw_from_model(&m_old)
-                };
-                // Stick to terrain height
-                let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
-                let pos = glam::vec3(p.x, h, p.z);
-                let new_m = glam::Mat4::from_scale_rotation_translation(
-                    glam::Vec3::splat(1.0),
-                    glam::Quat::from_rotation_y(yaw),
-                    pos,
-                );
                 self.zombie_models[i] = new_m;
                 let mut inst = self.zombie_instances_cpu[i];
                 inst.model = new_m.to_cols_array_2d();
@@ -2051,28 +2027,13 @@ impl Renderer {
                             log::info!("PC cast queued: Fire Bolt");
                         }
                     }
-                    // Sky controls (pause/scrub/speed)
+                    // Sky controls (pause/scrub/speed) — active when PC is dead
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {
                             self.sky.toggle_pause();
                         }
                     }
-                    PhysicalKey::Code(KeyCode::Digit1)
-                    | PhysicalKey::Code(KeyCode::Numpad1)
-                    | PhysicalKey::Code(KeyCode::Space)
-                        if self.pc_alive =>
-                    {
-                        if pressed {
-                            self.pc_cast_queued = true;
-                            log::info!("PC cast queued: Fire Bolt");
-                        }
-                    }
-                    // Sky controls (pause/scrub/speed)
-                    PhysicalKey::Code(KeyCode::Space) => {
-                        if pressed {
-                            self.sky.toggle_pause();
-                        }
-                    }
+
                     PhysicalKey::Code(KeyCode::BracketLeft) => {
                         if pressed {
                             self.sky.scrub(-0.01);
@@ -2156,10 +2117,6 @@ impl Renderer {
         }
         // Update CPU model matrix and upload only the PC instance
         let rot = glam::Quat::from_rotation_y(self.player.yaw);
-        // Project player onto terrain height
-        let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
-        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
-        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
         // Project player onto terrain height
         let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
         let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
