@@ -100,6 +100,11 @@ pub fn place_trees(cpu: &TerrainCPU, count: usize, seed: u32) -> Vec<Instance> {
     out
 }
 
+/// Public sampler: get terrain height and normal at world XZ.
+pub fn height_at(cpu: &TerrainCPU, x: f32, z: f32) -> (f32, glam::Vec3) {
+    sample_height_normal(cpu, glam::Vec2::new(x, z))
+}
+
 fn generate_heightmap(size: usize, extent: f32, seed: u32) -> TerrainCPU {
     let mut heights = vec![0.0f32; size * size];
     let freq = 1.0 / 50.0; // meters → frequency

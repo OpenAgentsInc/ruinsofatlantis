@@ -13,6 +13,7 @@ use crate::gfx::types::{Instance, InstanceSkin};
 use wgpu::util::DeviceExt;
 
 pub struct SceneBuild {
+    #[allow(dead_code)]
     pub wizard_instances: wgpu::Buffer,
     pub wizard_count: u32,
     pub ruins_instances: wgpu::Buffer,

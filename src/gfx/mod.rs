@@ -174,6 +174,9 @@ pub struct Renderer {
     // Sky/time-of-day state
     sky: sky::SkyStateCPU,
 
+    // Terrain sampler (CPU)
+    terrain_cpu: terrain::TerrainCPU,
+
     // Time base for animation
     start: Instant,
     last_time: f32,
@@ -678,6 +681,28 @@ impl Renderer {
 
         // Build scene instance buffers and camera target
         let scene_build = scene::build_demo_scene(&device, &skinned_cpu, terrain_extent);
+
+        // Snap initial wizard ring to terrain height
+        let mut wizard_models = scene_build.wizard_models.clone();
+        for m in &mut wizard_models {
+            let c = m.to_cols_array();
+            let x = c[12];
+            let z = c[14];
+            let (h, _n) = terrain::height_at(&terrain_cpu, x, z);
+            let pos = glam::vec3(x, h, z);
+            let (s, r, _t) = glam::Mat4::from_cols_array(&c).to_scale_rotation_translation();
+            *m = glam::Mat4::from_scale_rotation_translation(s, r, pos);
+        }
+        let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+        for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() {
+            let m = wizard_models[i].to_cols_array_2d();
+            inst.model = m;
+        }
+        let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-instances"),
+            contents: bytemuck::cast_slice(&wizard_instances_cpu),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
         // Precompute PC initial position from the soon-to-be-moved vector
         let pc_initial_pos = {
             let m = scene_build.wizard_models[scene_build.pc_index];
@@ -807,10 +832,13 @@ impl Renderer {
         let mut zombie_models: Vec<glam::Mat4> = Vec::new();
         let mut zombie_ids: Vec<crate::server::NpcId> = Vec::new();
         for (idx, npc) in server.npcs.iter().enumerate() {
+            // Snap initial zombie spawn to terrain height
+            let (h, _n) = terrain::height_at(&terrain_cpu, npc.pos.x, npc.pos.z);
+            let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
             let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),
                 glam::Quat::IDENTITY,
-                npc.pos,
+                pos,
             );
             zombie_models.push(m);
             zombie_ids.push(npc.id);
@@ -894,8 +922,8 @@ impl Renderer {
             ruins_vb,
             ruins_ib,
             ruins_index_count,
-            wizard_instances: scene_build.wizard_instances,
-            wizard_count: scene_build.wizard_count,
+            wizard_instances,
+            wizard_count: wizard_instances_cpu.len() as u32,
             zombie_instances,
             zombie_count: zombie_instances_cpu.len() as u32,
             zombie_instances_cpu,
@@ -909,7 +937,7 @@ impl Renderer {
             palettes_buf,
             palettes_bg,
             joints_per_wizard: scene_build.joints_per_wizard,
-            wizard_models: scene_build.wizard_models,
+            wizard_models,
             zombie_palettes_buf,
             zombie_palettes_bg,
             zombie_joints,
@@ -930,7 +958,7 @@ impl Renderer {
                 })
                 .collect(),
             zombie_forward_offset,
-            wizard_instances_cpu: scene_build.wizard_instances_cpu,
+            wizard_instances_cpu,
             wizard_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
@@ -943,6 +971,7 @@ impl Renderer {
             _zombie_sampler,
             wire_enabled: false,
             sky: sky_state,
+            terrain_cpu,
 
             start: Instant::now(),
             last_time: 0.0,
@@ -1617,10 +1646,13 @@ impl Renderer {
                 } else {
                     Self::yaw_from_model(&m_old)
                 };
+                // Stick to terrain height
+                let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                let pos = glam::vec3(p.x, h, p.z);
                 let new_m = glam::Mat4::from_scale_rotation_translation(
                     glam::Vec3::splat(1.0),
                     glam::Quat::from_rotation_y(yaw),
-                    *p,
+                    pos,
                 );
                 self.zombie_models[i] = new_m;
                 let mut inst = self.zombie_instances_cpu[i];
@@ -1754,11 +1786,10 @@ impl Renderer {
         }
         // Update CPU model matrix and upload only the PC instance
         let rot = glam::Quat::from_rotation_y(self.player.yaw);
-        let m = glam::Mat4::from_scale_rotation_translation(
-            glam::Vec3::splat(1.0),
-            rot,
-            self.player.pos,
-        );
+        // Project player onto terrain height
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
+        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
+        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
         self.wizard_models[self.pc_index] = m;
         let mut inst = self.wizard_instances_cpu[self.pc_index];
         inst.model = m.to_cols_array_2d();
@@ -1975,9 +2006,13 @@ impl Renderer {
         let mut burst: Vec<Particle> = Vec::new();
         let mut i = 0;
         while i < self.projectiles.len() {
-            let kill = t >= self.projectiles[i].t_die || self.projectiles[i].pos.y <= 0.05;
+            let pcur = self.projectiles[i].pos;
+            let (h, _n) = terrain::height_at(&self.terrain_cpu, pcur.x, pcur.z);
+            let kill = t >= self.projectiles[i].t_die || pcur.y <= h + 0.02;
             if kill {
-                let hit = self.projectiles[i].pos;
+                let mut hit = self.projectiles[i].pos;
+                // Snap impact to terrain height
+                hit.y = h;
                 // much smaller flare + compact burst
                 burst.push(Particle {
                     pos: hit,
