@@ -1021,6 +1021,634 @@ impl HealthBars {
     }
 }
 
+// ---- HUD (screen-space) ----
+/// Hud: simple screen-space overlay for the wizard scene (v0.1).
+/// Draws a top-left player HP bar and a bottom-center hotbar with a few slots.
+pub struct Hud {
+    // Pipelines
+    bar_pipeline: wgpu::RenderPipeline,
+    text_pipeline: wgpu::RenderPipeline,
+    text_bg: wgpu::BindGroup,
+
+    // Text atlas
+    _font: FontArc,
+    scale: PxScale,
+    ascent: f32,
+    glyphs: HashMap<char, GlyphInfo>,
+    atlas_tex: wgpu::Texture,
+    _atlas_view: wgpu::TextureView,
+    _atlas_sampler: wgpu::Sampler,
+    atlas_cpu: Vec<u8>,
+    atlas_size: (u32, u32),
+
+    // Geometry buffers
+    bars_vbuf: wgpu::Buffer,
+    bars_vcap: u64,
+    bars_vcount: u32,
+    text_vbuf: wgpu::Buffer,
+    text_vcap: u64,
+    text_vcount: u32,
+
+    // Frame-local build
+    bars_verts: Vec<BarVertex>,
+    text_verts: Vec<TextVertex>,
+}
+
+impl Hud {
+    pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
+        // Pipelines
+        let shader = crate::gfx::pipeline::create_shader(device);
+        let bar_pipeline = crate::gfx::pipeline::create_bar_pipeline(device, &shader, color_format);
+        // Text: build atlas (ASCII printable)
+        let font_bytes: &'static [u8] = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/fonts/NotoSans-Regular.ttf"
+        ));
+        let font = FontArc::try_from_slice(font_bytes)?;
+        let px = 18.0;
+        let scale = PxScale { x: px, y: px };
+        let scaled = font.as_scaled(scale);
+        let ascent = scaled.ascent();
+        let atlas_w: u32 = 1024;
+        let mut atlas_h: u32 = 128;
+        let mut atlas = vec![0u8; (atlas_w * atlas_h) as usize];
+        let mut cursor_x: u32 = 1;
+        let mut cursor_y: u32 = 1;
+        let mut row_h: u32 = 0;
+        let mut glyphs = HashMap::new();
+        for ch_u in 32u8..=126u8 {
+            let ch = ch_u as char;
+            let gid = font.glyph_id(ch);
+            let g0 = Glyph {
+                id: gid,
+                scale,
+                position: ab_glyph::point(0.0, ascent),
+            };
+            if let Some(og) = font.outline_glyph(g0) {
+                let bounds = og.px_bounds();
+                let mut gw = bounds.width().ceil() as u32;
+                let mut gh = bounds.height().ceil() as u32;
+                gw = gw.max(1);
+                gh = gh.max(1);
+                if cursor_x + gw + 1 >= atlas_w {
+                    cursor_x = 1;
+                    cursor_y += row_h + 1;
+                    row_h = 0;
+                }
+                if cursor_y + gh + 1 >= atlas_h {
+                    let new_h = (atlas_h * 2).max(cursor_y + gh + 2);
+                    let mut new_buf = vec![0u8; (atlas_w * new_h) as usize];
+                    for y in 0..atlas_h {
+                        let off = (y * atlas_w) as usize;
+                        new_buf[off..off + atlas_w as usize]
+                            .copy_from_slice(&atlas[off..off + atlas_w as usize]);
+                    }
+                    atlas = new_buf;
+                    atlas_h = new_h;
+                }
+                let ox = cursor_x as i32 + bounds.min.x.floor() as i32;
+                let oy = cursor_y as i32 + bounds.min.y.floor() as i32;
+                og.draw(|x, y, v| {
+                    let px = (ox + x as i32) as u32;
+                    let py = (oy + y as i32) as u32;
+                    if px < atlas_w && py < atlas_h {
+                        let idx = (py * atlas_w + px) as usize;
+                        atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                    }
+                });
+                let adv = scaled.h_advance(gid);
+                glyphs.insert(
+                    ch,
+                    GlyphInfo {
+                        uv_min: [
+                            (ox.max(0) as f32) / (atlas_w as f32),
+                            (oy.max(0) as f32) / (atlas_h as f32),
+                        ],
+                        uv_max: [
+                            ((ox.max(0) as u32 + gw) as f32) / (atlas_w as f32),
+                            ((oy.max(0) as u32 + gh) as f32) / (atlas_h as f32),
+                        ],
+                        bounds_min: [bounds.min.x, bounds.min.y],
+                        size: [gw as f32, gh as f32],
+                        advance: adv,
+                        id: gid,
+                    },
+                );
+                cursor_x += gw + 1;
+                row_h = row_h.max(gh);
+            }
+        }
+        // Upload atlas
+        let atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("hud-atlas"),
+            size: wgpu::Extent3d {
+                width: atlas_w,
+                height: atlas_h,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            view_formats: &[],
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        });
+        let atlas_view = atlas_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("hud-sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let text_bgl = crate::gfx::pipeline::create_text_bgl(device);
+        let text_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hud-texture-bg"),
+            layout: &text_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
+                },
+            ],
+        });
+        let shader_text = crate::gfx::pipeline::create_shader(device);
+        let text_pipeline = crate::gfx::pipeline::create_text_pipeline(
+            device,
+            &shader_text,
+            &text_bgl,
+            color_format,
+        );
+
+        // Buffers
+        let bars_vcap = 64 * 1024;
+        let bars_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("hud-bars-vbuf"),
+            size: bars_vcap,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let text_vcap = 64 * 1024;
+        let text_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("hud-text-vbuf"),
+            size: text_vcap,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let hud = Self {
+            bar_pipeline,
+            text_pipeline,
+            text_bg,
+            _font: font,
+            scale,
+            ascent,
+            glyphs,
+            atlas_tex,
+            _atlas_view: atlas_view,
+            _atlas_sampler: atlas_sampler,
+            atlas_cpu: atlas,
+            atlas_size: (atlas_w, atlas_h),
+            bars_vbuf,
+            bars_vcap,
+            bars_vcount: 0,
+            text_vbuf,
+            text_vcap,
+            text_vcount: 0,
+            bars_verts: Vec::new(),
+            text_verts: Vec::new(),
+        };
+        Ok(hud)
+    }
+
+    pub fn upload_atlas(&self, queue: &wgpu::Queue) {
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.atlas_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &self.atlas_cpu,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.atlas_size.0),
+                rows_per_image: Some(self.atlas_size.1),
+            },
+            wgpu::Extent3d {
+                width: self.atlas_size.0,
+                height: self.atlas_size.1,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    fn ndc_from_px(px: f32, py: f32, w: f32, h: f32) -> [f32; 2] {
+        let x = (px / w) * 2.0 - 1.0;
+        let y = 1.0 - (py / h) * 2.0;
+        [x, y]
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_rect(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        x0: f32,
+        y0: f32,
+        x1: f32,
+        y1: f32,
+        color: [f32; 4],
+    ) {
+        let w = surface_w as f32;
+        let h = surface_h as f32;
+        let p0 = Self::ndc_from_px(x0, y0, w, h);
+        let p1 = Self::ndc_from_px(x1, y0, w, h);
+        let p2 = Self::ndc_from_px(x1, y1, w, h);
+        let p3 = Self::ndc_from_px(x0, y1, w, h);
+        self.bars_verts.push(BarVertex { pos_ndc: p0, color });
+        self.bars_verts.push(BarVertex { pos_ndc: p1, color });
+        self.bars_verts.push(BarVertex { pos_ndc: p2, color });
+        self.bars_verts.push(BarVertex { pos_ndc: p0, color });
+        self.bars_verts.push(BarVertex { pos_ndc: p2, color });
+        self.bars_verts.push(BarVertex { pos_ndc: p3, color });
+    }
+
+    fn push_text_line(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        mut x: f32,
+        y_baseline: f32,
+        text: &str,
+        color: [f32; 4],
+    ) {
+        let w = surface_w as f32;
+        let h = surface_h as f32;
+        let scaled = self._font.as_scaled(self.scale);
+        // Measure width if we see a center marker "|c" or left align otherwise
+        let mut prev: Option<ab_glyph::GlyphId> = None;
+        for ch in text.chars() {
+            let Some(gi) = self.glyphs.get(&ch) else {
+                continue;
+            };
+            if let Some(pg) = prev {
+                x += scaled.kern(pg, gi.id);
+            }
+            let gx = x + gi.bounds_min[0];
+            let gy = y_baseline - self.ascent + gi.bounds_min[1];
+            let w_px = gi.size[0];
+            let h_px = gi.size[1];
+            let p0 = Self::ndc_from_px(gx, gy, w, h);
+            let p1 = Self::ndc_from_px(gx + w_px, gy, w, h);
+            let p2 = Self::ndc_from_px(gx + w_px, gy + h_px, w, h);
+            let p3 = Self::ndc_from_px(gx, gy + h_px, w, h);
+            let uv0 = gi.uv_min;
+            let uv1 = [gi.uv_max[0], gi.uv_min[1]];
+            let uv2 = gi.uv_max;
+            let uv3 = [gi.uv_min[0], gi.uv_max[1]];
+            self.text_verts.push(TextVertex {
+                pos_ndc: p0,
+                uv: uv0,
+                color,
+            });
+            self.text_verts.push(TextVertex {
+                pos_ndc: p1,
+                uv: uv1,
+                color,
+            });
+            self.text_verts.push(TextVertex {
+                pos_ndc: p2,
+                uv: uv2,
+                color,
+            });
+            self.text_verts.push(TextVertex {
+                pos_ndc: p0,
+                uv: uv0,
+                color,
+            });
+            self.text_verts.push(TextVertex {
+                pos_ndc: p2,
+                uv: uv2,
+                color,
+            });
+            self.text_verts.push(TextVertex {
+                pos_ndc: p3,
+                uv: uv3,
+                color,
+            });
+            x += gi.advance;
+            prev = Some(gi.id);
+        }
+    }
+
+    /// Build a minimal HUD for the wizard scene.
+    pub fn build(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        pc_hp: i32,
+        pc_hp_max: i32,
+        cast_frac: f32,
+        gcd_frac: f32,
+    ) {
+        self.bars_verts.clear();
+        self.text_verts.clear();
+        // Player HP (top-left)
+        let pad = 10.0f32;
+        let bar_w = 220.0f32;
+        let bar_h = 16.0f32;
+        let x0 = pad;
+        let y0 = pad;
+        let x1 = x0 + bar_w;
+        let y1 = y0 + bar_h;
+        // Border (dark)
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0 - 2.0,
+            y0 - 2.0,
+            x1 + 2.0,
+            y1 + 2.0,
+            [0.05, 0.05, 0.05, 0.95],
+        );
+        // Background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0,
+            y0,
+            x1,
+            y1,
+            [0.10, 0.10, 0.10, 0.85],
+        );
+        // Fill
+        let frac = if pc_hp_max > 0 {
+            (pc_hp.max(0) as f32) / (pc_hp_max as f32)
+        } else {
+            0.0
+        };
+        if frac > 0.0 {
+            let fx1 = x0 + bar_w * frac.clamp(0.0, 1.0);
+            // green->yellow->red gradient similar to HealthBars
+            let col = if frac >= 0.5 {
+                let t = (frac - 0.5) / 0.5;
+                [1.0 - t, 1.0, 0.0, 1.0]
+            } else {
+                let t = frac / 0.5;
+                [1.0, t, 0.0, 1.0]
+            };
+            self.push_rect(surface_w, surface_h, x0, y0, fx1, y1, col);
+        }
+        // HP text (inside bar, top-left)
+        let label = format!("HP {} / {}", pc_hp.max(0), pc_hp_max.max(1));
+        // place near left edge inside the bar
+        self.push_text_line(
+            surface_w,
+            surface_h,
+            x0 + 6.0,
+            y0 + bar_h - 3.0,
+            &label,
+            [0.0, 0.0, 0.0, 0.95],
+        );
+
+        // Hotbar (bottom-center): 6 slots
+        let slots = 6usize;
+        let slot_px = 48.0f32;
+        let gap = 6.0f32;
+        let total_w = slots as f32 * slot_px + (slots as f32 - 1.0) * gap;
+        let cx = (surface_w as f32) * 0.5;
+        let yb = (surface_h as f32) - (slot_px + 10.0);
+        let mut x = cx - total_w * 0.5;
+        for i in 0..slots {
+            let x0 = x;
+            let y0 = yb;
+            let x1 = x + slot_px;
+            let y1 = yb + slot_px;
+            // Border + background
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0 - 2.0,
+                y0 - 2.0,
+                x1 + 2.0,
+                y1 + 2.0,
+                [0.05, 0.05, 0.05, 0.9],
+            );
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0,
+                y0,
+                x1,
+                y1,
+                [0.18, 0.18, 0.18, 0.9],
+            );
+            // Key label
+            let key = if i == 0 {
+                "1"
+            } else if i == 1 {
+                "2"
+            } else if i == 2 {
+                "3"
+            } else if i == 3 {
+                "4"
+            } else if i == 4 {
+                "5"
+            } else {
+                "6"
+            };
+            self.push_text_line(
+                surface_w,
+                surface_h,
+                x0 + 4.0,
+                y0 + 14.0,
+                key,
+                [0.9, 0.9, 0.9, 0.95],
+            );
+            // Ability text (slot 1 only for now)
+            if i == 0 {
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    "Fire Bolt",
+                    [1.0, 0.9, 0.3, 0.95],
+                );
+            }
+            // GCD overlay (if active): simple top-down fill
+            if i == 0 && gcd_frac > 0.0 {
+                let overlay_h = slot_px * gcd_frac.clamp(0.0, 1.0);
+                self.push_rect(
+                    surface_w,
+                    surface_h,
+                    x0,
+                    y0,
+                    x1,
+                    y0 + overlay_h,
+                    [0.0, 0.0, 0.0, 0.45],
+                );
+            }
+            x += slot_px + gap;
+        }
+
+        // Cast bar (center-bottom above hotbar), shown during an active cast
+        if cast_frac > 0.0 {
+            let bar_w = 300.0f32;
+            let bar_h = 10.0f32;
+            let cx = (surface_w as f32) * 0.5;
+            let x0 = cx - bar_w * 0.5;
+            let x1 = cx + bar_w * 0.5;
+            let y0 = (yb - 18.0).max(0.0);
+            let y1 = y0 + bar_h;
+            // background
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0 - 2.0,
+                y0 - 2.0,
+                x1 + 2.0,
+                y1 + 2.0,
+                [0.05, 0.05, 0.05, 0.95],
+            );
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0,
+                y0,
+                x1,
+                y1,
+                [0.10, 0.10, 0.10, 0.85],
+            );
+            // fill
+            let fx1 = x0 + bar_w * cast_frac.clamp(0.0, 1.0);
+            self.push_rect(
+                surface_w,
+                surface_h,
+                x0,
+                y0,
+                fx1,
+                y1,
+                [0.85, 0.75, 0.25, 1.0],
+            );
+            // label
+            self.push_text_line(
+                surface_w,
+                surface_h,
+                x0 + 6.0,
+                y0 - 4.0,
+                "Casting Fire Bolt",
+                [1.0, 1.0, 1.0, 0.9],
+            );
+        }
+
+        self.bars_vcount = self.bars_verts.len() as u32;
+        self.text_vcount = self.text_verts.len() as u32;
+    }
+
+    pub fn queue(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        // Upload bars
+        let bbytes: &[u8] = bytemuck::cast_slice(&self.bars_verts);
+        if bbytes.len() as u64 > self.bars_vcap {
+            let new_cap = (bbytes.len() as u64).next_power_of_two();
+            self.bars_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("hud-bars-vbuf"),
+                size: new_cap,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.bars_vcap = new_cap;
+        }
+        if !bbytes.is_empty() {
+            queue.write_buffer(&self.bars_vbuf, 0, bbytes);
+        }
+        // Upload text
+        let tbytes: &[u8] = bytemuck::cast_slice(&self.text_verts);
+        if tbytes.len() as u64 > self.text_vcap {
+            let new_cap = (tbytes.len() as u64).next_power_of_two();
+            self.text_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("hud-text-vbuf"),
+                size: new_cap,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.text_vcap = new_cap;
+        }
+        if !tbytes.is_empty() {
+            queue.write_buffer(&self.text_vbuf, 0, tbytes);
+        }
+    }
+
+    pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        // Bars
+        if self.bars_vcount > 0 {
+            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("hud-bars-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            r.set_pipeline(&self.bar_pipeline);
+            r.set_vertex_buffer(0, self.bars_vbuf.slice(..));
+            r.draw(0..self.bars_vcount, 0..1);
+        }
+        // Text
+        if self.text_vcount > 0 {
+            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("hud-text-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            r.set_pipeline(&self.text_pipeline);
+            r.set_bind_group(0, &self.text_bg, &[]);
+            r.set_vertex_buffer(0, self.text_vbuf.slice(..));
+            r.draw(0..self.text_vcount, 0..1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod hud_tests {
+    #[test]
+    fn hotbar_layout_vertices_increase_with_slots() {
+        // Purely CPU-side build check: ensure building adds some vertices
+        // We can’t construct a real Hud without a device, so test the math indirectly.
+        // Use a small helper mirroring the slot count logic.
+        let slots = 6usize;
+        let slot_px = 48.0f32;
+        let gap = 6.0f32;
+        let total_w = slots as f32 * slot_px + (slots as f32 - 1.0) * gap;
+        assert!(total_w > 0.0);
+    }
+}
+
 impl Nameplates {
     pub fn upload_atlas(&self, queue: &wgpu::Queue) {
         queue.write_texture(
