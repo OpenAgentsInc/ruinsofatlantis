@@ -1876,6 +1876,20 @@ impl Renderer {
             self.nameplates_npc.draw(&mut encoder, &self.scene_view);
         }
 
+        // Build Hi-Z Z-MAX pyramid from current frame depth
+        if let Some(hiz) = &self.hiz {
+            let znear = 0.1f32; // mirrors Globals.clip.x
+            let zfar = 1000.0f32; // mirrors Globals.clip.y
+            hiz.build_mips(
+                &self.device,
+                &mut encoder,
+                &self.depth,
+                &self._post_sampler,
+                znear,
+                zfar,
+            );
+        }
+
         // Copy SceneColor to a read-only texture only if SSGI is enabled
         if self.enable_ssgi {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
