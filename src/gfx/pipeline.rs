@@ -568,12 +568,24 @@ pub fn create_present_bgl(device: &wgpu::Device) -> BindGroupLayout {
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            // Depth texture for fog (sampled as depth)
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Depth,
+                },
+                count: None,
+            },
         ],
     })
 }
 
 pub fn create_present_pipeline(
     device: &wgpu::Device,
+    globals_bgl: &BindGroupLayout,
     present_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> RenderPipeline {
@@ -589,7 +601,7 @@ pub fn create_present_pipeline(
     });
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("present-pipeline-layout"),
-        bind_group_layouts: &[present_bgl],
+        bind_group_layouts: &[globals_bgl, present_bgl],
         push_constant_ranges: &[],
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

@@ -548,7 +548,7 @@ impl Renderer {
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline =
-            pipeline::create_present_pipeline(&device, &present_bgl, config.format);
+            pipeline::create_present_pipeline(&device, &globals_bgl, &present_bgl, config.format);
         let blit_scene_read_pipeline =
             pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
         // (removed) frame overlay
@@ -749,6 +749,10 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&post_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&depth),
                 },
             ],
         });
@@ -1499,6 +1503,10 @@ impl Renderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self._post_sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&self.depth),
+                },
             ],
         });
         self.post_ao_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1659,7 +1667,8 @@ impl Renderer {
                 0.0,
             ];
         }
-        globals.fog_params = [0.6, 0.7, 0.8, 0.0];
+        // Light bluish fog with gentle density for distance falloff
+        globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
         self.queue
             .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
         // Sky raw params
@@ -2083,7 +2092,8 @@ impl Renderer {
                 timestamp_writes: None,
             });
             present.set_pipeline(&self.present_pipeline);
-            present.set_bind_group(0, &self.present_bg, &[]);
+            present.set_bind_group(0, &self.globals_bg, &[]);
+            present.set_bind_group(1, &self.present_bg, &[]);
             present.draw(0..3, 0..1);
         }
 
