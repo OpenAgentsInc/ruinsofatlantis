@@ -1,0 +1,19 @@
+{
+  "schema": "snapshot.v1",
+  "zone_id": 1001,
+  "slug": "wizard_woods",
+  "display_name": "Wizard Woods",
+  "plane": "Material",
+  "terrain": {
+    "size": 129,
+    "extent": 150.0,
+    "seed": 1337,
+    "heights_count": 16641,
+    "heights_fingerprint": 1870632624768390770
+  },
+  "trees": {
+    "count": 350,
+    "fingerprint": 11777574399344449259
+  },
+  "content_fingerprint": 6850363702970006437
+}

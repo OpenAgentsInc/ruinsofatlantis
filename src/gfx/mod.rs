@@ -865,19 +865,34 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Trees: prefer baked instances if available, else scatter deterministically
-        let trees_instances_cpu: Vec<types::Instance> =
-            if let Some(models) = terrain::load_trees_snapshot("wizard_woods") {
-                terrain::instances_from_models(&models)
-            } else {
-                terrain::place_trees(&terrain_cpu, 350, 20250926)
-            };
+        // Trees: prefer baked instances if available, else scatter using manifest vegetation params
+        let trees_models_opt = terrain::load_trees_snapshot("wizard_woods");
+        let trees_instances_cpu: Vec<types::Instance> = if let Some(models) = &trees_models_opt {
+            terrain::instances_from_models(models)
+        } else {
+            let (tree_count, tree_seed) = zone
+                .vegetation
+                .as_ref()
+                .map(|v| (v.tree_count as usize, v.tree_seed))
+                .unwrap_or((350usize, 20250926u32));
+            terrain::place_trees(&terrain_cpu, tree_count, tree_seed)
+        };
         let trees_count = trees_instances_cpu.len() as u32;
         let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("trees-instances"),
             contents: bytemuck::cast_slice(&trees_instances_cpu),
             usage: wgpu::BufferUsages::VERTEX,
         });
+        // If meta exists, verify fingerprints
+        if let Some(models) = &trees_models_opt
+            && let Some(ok) =
+                terrain::verify_snapshot_fingerprints("wizard_woods", &terrain_cpu, Some(models))
+        {
+            log::info!(
+                "zone snapshot meta verification: {}",
+                if ok { "ok" } else { "MISMATCH" }
+            );
+        }
 
         log::info!(
             "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",

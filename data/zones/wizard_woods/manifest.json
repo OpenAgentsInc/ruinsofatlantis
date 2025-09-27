@@ -8,9 +8,12 @@
     "extent": 150.0,
     "seed": 1337
   },
+  "vegetation": {
+    "tree_count": 350,
+    "tree_seed": 20250926
+  },
   "weather": {
     "turbidity": 3.0,
     "ground_albedo": [0.10, 0.10, 0.10]
   }
 }
-

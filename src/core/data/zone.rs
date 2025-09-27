@@ -34,6 +34,15 @@ pub struct TerrainSpec {
     pub seed: u32,
 }
 
+/// Vegetation placement parameters (prototype).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VegetationSpec {
+    /// Number of trees to scatter on gentle slopes near the player area.
+    pub tree_count: u32,
+    /// Seed for deterministic scatter.
+    pub tree_seed: u32,
+}
+
 /// Simple weather defaults affecting the sky model.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct WeatherSpec {
@@ -54,6 +63,8 @@ pub struct ZoneManifest {
     pub terrain: TerrainSpec,
     #[serde(default)]
     pub weather: Option<WeatherSpec>,
+    #[serde(default)]
+    pub vegetation: Option<VegetationSpec>,
 }
 
 /// Load a Zone manifest from `data/zones/<slug>/manifest.json`.

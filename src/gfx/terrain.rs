@@ -14,7 +14,9 @@ use crate::gfx::types::{Instance, Vertex};
 use anyhow::{Context, Result};
 use glam::{Mat4, Vec2, Vec3};
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use wgpu::util::DeviceExt;
 
@@ -210,6 +212,66 @@ pub fn instances_from_models(models: &[[[f32; 4]; 4]]) -> Vec<Instance> {
             selected: 0.0,
         })
         .collect()
+}
+
+// ----------------------
+// Snapshot verification (fingerprints)
+// ----------------------
+
+#[derive(Deserialize)]
+struct MetaTerrainMin {
+    heights_fingerprint: u64,
+}
+
+#[derive(Deserialize)]
+struct MetaTreesMin {
+    fingerprint: u64,
+}
+
+#[derive(Deserialize)]
+struct ZoneMetaMin {
+    terrain: MetaTerrainMin,
+    trees: MetaTreesMin,
+}
+
+fn fingerprint_heights(h: &[f32]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    h.len().hash(&mut hasher);
+    for &v in h {
+        v.to_bits().hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+fn fingerprint_models(mats: &[[[f32; 4]; 4]]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    mats.len().hash(&mut hasher);
+    for m in mats {
+        for row in m {
+            for &v in row {
+                v.to_bits().hash(&mut hasher);
+            }
+        }
+    }
+    hasher.finish()
+}
+
+/// Returns Some(true/false) if meta exists and could be verified; None if meta missing.
+pub fn verify_snapshot_fingerprints(
+    slug: &str,
+    cpu: &TerrainCPU,
+    tree_models: Option<&[[[f32; 4]; 4]]>,
+) -> Option<bool> {
+    let path = snap_dir(slug).join("zone_meta.json");
+    let txt = fs::read_to_string(&path).ok()?;
+    let meta: ZoneMetaMin = serde_json::from_str(&txt).ok()?;
+    let ok_h = meta.terrain.heights_fingerprint == fingerprint_heights(&cpu.heights);
+    let ok_t = if let Some(models) = tree_models {
+        meta.trees.fingerprint == fingerprint_models(models)
+    } else {
+        true
+    };
+    Some(ok_h && ok_t)
 }
 
 fn generate_heightmap(size: usize, extent: f32, seed: u32) -> TerrainCPU {
