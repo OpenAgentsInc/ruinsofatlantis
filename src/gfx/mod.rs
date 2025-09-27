@@ -1721,7 +1721,6 @@ impl Renderer {
         }
         // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
-        let mut mats_all: Vec<[f32; 16]> = Vec::with_capacity(self.zombie_count as usize * joints);
         // Build quick lookup for attack state and radius using server NPCs
         use std::collections::HashMap;
         let mut attack_map: HashMap<crate::server::NpcId, bool> = HashMap::new();
@@ -1845,17 +1844,19 @@ impl Renderer {
             }
             let t = time_global + self.zombie_time_offset.get(i).copied().unwrap_or(0.0);
             let lookup = proc_name_str.as_deref().unwrap_or(clip_name);
-            let clip = self.zombie_cpu.animations.get(lookup).unwrap();
-            let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
-            for m in palette {
-                mats_all.push(m.to_cols_array());
+            if let Some(clip) = self.zombie_cpu.animations.get(lookup) {
+                let palette = anim::sample_palette(&self.zombie_cpu, clip, t);
+                // Upload this instance's palette directly at its offset
+                let mut raw: Vec<[f32; 16]> = Vec::with_capacity(joints);
+                for m in palette {
+                    raw.push(m.to_cols_array());
+                }
+                let byte_off = (i * joints * 64) as u64;
+                self.queue
+                    .write_buffer(&self.zombie_palettes_buf, byte_off, bytemuck::cast_slice(&raw));
             }
         }
-        self.queue.write_buffer(
-            &self.zombie_palettes_buf,
-            0,
-            bytemuck::cast_slice(&mats_all),
-        );
+        // No single bulk upload; we wrote per-instance segments above.
     }
 
     fn update_zombies_from_server(&mut self) {
