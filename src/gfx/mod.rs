@@ -1365,7 +1365,7 @@ impl Renderer {
             gbuffer: Some(gbuffer),
             hiz: Some(hiz),
             enable_post_ao: true,
-            enable_ssgi: false,
+            enable_ssgi: true,
             // frame overlay removed
         })
     }
