@@ -510,12 +510,13 @@ impl Renderer {
         let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let material_bgl = pipeline::create_material_bgl(&device);
+        let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
         let (pipeline, inst_pipeline, wire_pipeline) =
-            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, config.format);
+            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, offscreen_fmt);
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
-            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, config.format);
+            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, offscreen_fmt);
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, config.format);
@@ -526,7 +527,7 @@ impl Renderer {
             &device,
             &globals_bgl,
             &post_ao_bgl,
-            config.format,
+            offscreen_fmt,
         );
         // SSGI pipeline (additive into SceneColor)
         let (ssgi_globals_bgl, ssgi_depth_bgl, ssgi_scene_bgl) = pipeline::create_ssgi_bgl(&device);
@@ -544,17 +545,17 @@ impl Renderer {
             &model_bgl,
             &palettes_bgl,
             &material_bgl,
-            config.format,
+            offscreen_fmt,
         );
         let particle_pipeline =
-            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, config.format);
+            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, offscreen_fmt);
 
         // UI: nameplates + health bars
-        let nameplates = ui::Nameplates::new(&device, config.format)?;
-        let nameplates_npc = ui::Nameplates::new(&device, config.format)?;
-        let mut bars = ui::HealthBars::new(&device, config.format)?;
-        let hud = ui::Hud::new(&device, config.format)?;
-        let damage = ui::DamageFloaters::new(&device, config.format)?;
+        let nameplates = ui::Nameplates::new(&device, offscreen_fmt)?;
+        let nameplates_npc = ui::Nameplates::new(&device, offscreen_fmt)?;
+        let mut bars = ui::HealthBars::new(&device, offscreen_fmt)?;
+        let hud = ui::Hud::new(&device, offscreen_fmt)?;
+        let damage = ui::DamageFloaters::new(&device, offscreen_fmt)?;
 
         // --- Buffers & bind groups ---
         // Globals
