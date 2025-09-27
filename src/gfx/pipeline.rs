@@ -613,6 +613,43 @@ pub fn create_present_pipeline(
     })
 }
 
+// Blit pipeline (no Y flip) used for copying SceneColor -> SceneRead
+pub fn create_blit_pipeline(
+    device: &wgpu::Device,
+    present_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("blit-noflip-shader"),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("blit_noflip.wgsl"))),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("blit-noflip-pipeline-layout"),
+        bind_group_layouts: &[present_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("blit-noflip-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState { module: &shader, entry_point: Some("vs_blit"), buffers: &[], compilation_options: Default::default() },
+        fragment: Some(FragmentState {
+            module: &shader,
+            entry_point: Some("fs_blit"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 // Post-process AO pipeline (fullscreen triangle sampling depth)
 pub fn create_post_ao_bgl(device: &wgpu::Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

@@ -520,7 +520,7 @@ impl Renderer {
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, config.format);
-        let blit_scene_read_pipeline = pipeline::create_present_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        let blit_scene_read_pipeline = pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
         // Post AO pipeline
         let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
         let post_ao_pipeline = pipeline::create_post_ao_pipeline(
@@ -554,7 +554,7 @@ impl Renderer {
         let nameplates = ui::Nameplates::new(&device, offscreen_fmt)?;
         let nameplates_npc = ui::Nameplates::new(&device, offscreen_fmt)?;
         let mut bars = ui::HealthBars::new(&device, offscreen_fmt)?;
-        let hud = ui::Hud::new(&device, offscreen_fmt)?;
+        let hud = ui::Hud::new(&device, config.format)?;
         let damage = ui::DamageFloaters::new(&device, offscreen_fmt)?;
 
         // --- Buffers & bind groups ---
@@ -1311,7 +1311,7 @@ impl Renderer {
             gbuffer: Some(gbuffer),
             hiz: Some(hiz),
             enable_post_ao: true,
-            enable_ssgi: true,
+            enable_ssgi: false,
         })
     }
 
