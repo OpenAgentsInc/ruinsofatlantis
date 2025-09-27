@@ -104,9 +104,14 @@ impl ServerState {
             let target = wizards[best_i];
             let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
             let dist = to.length();
-            if dist > 1e-3 {
-                let step = (speed * dt).min(dist);
-                n.pos += to.normalize() * step;
+            // Stop advancing once within melee contact range to avoid jitter against collision
+            // resolution pushing the NPC back and forth every frame.
+            let contact = n.radius + wizard_r + melee_pad;
+            if dist > contact + 0.02 {
+                let step = (speed * dt).min(dist - contact);
+                if step > 1e-4 {
+                    n.pos += to.normalize() * step;
+                }
             }
         }
         // Resolve simple collisions so NPCs don't overlap each other or wizards
