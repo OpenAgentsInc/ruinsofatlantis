@@ -287,6 +287,7 @@ pub struct Renderer {
     // UI toggles and capture helpers
     hud_enabled: bool,
     screenshot_start: Option<f32>,
+    perf_enabled: bool,
 
     // Server state (NPCs/health)
     server: crate::server::ServerState,
@@ -1405,6 +1406,7 @@ impl Renderer {
             last_cursor_pos: None,
             hud_enabled: true,
             screenshot_start: None,
+            perf_enabled: false,
             npc_vb,
             npc_ib,
             npc_index_count,
@@ -2148,10 +2150,13 @@ impl Renderer {
                     gcd_frac,
                 );
                 // Append perf overlay (ms and FPS)
-                let ms = dt * 1000.0;
-                let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
-                let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
-                self.hud.append_perf_text(self.size.width, self.size.height, &line);
+                if self.perf_enabled {
+                    let ms = dt * 1000.0;
+                    let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
+                    let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
+                    self.hud
+                        .append_perf_text(self.size.width, self.size.height, &line);
+                }
                 self.hud.queue(&self.device, &self.queue);
                 self.hud.draw(&mut encoder, &view);
             }
@@ -2655,6 +2660,15 @@ impl Renderer {
                         if pressed {
                             self.sky.speed_mul(2.0);
                             log::info!("time_scale: {:.2}", self.sky.time_scale);
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::F1) => {
+                        if pressed {
+                            self.perf_enabled = !self.perf_enabled;
+                            log::info!(
+                                "Perf overlay {}",
+                                if self.perf_enabled { "on" } else { "off" }
+                            );
                         }
                     }
                     PhysicalKey::Code(KeyCode::KeyH) => {
