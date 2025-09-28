@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openagents.inc/ruinsofatlantis/zone_manifest.schema.json",
+  "title": "ZoneManifest",
+  "type": "object",
+  "required": ["zone_id", "slug", "display_name", "terrain"],
+  "properties": {
+    "zone_id": { "type": "integer", "minimum": 1 },
+    "slug": { "type": "string", "minLength": 1 },
+    "display_name": { "type": "string", "minLength": 1 },
+    "plane": { "type": ["string", "object"] },
+    "terrain": {
+      "type": "object",
+      "required": ["size", "extent", "seed"],
+      "properties": {
+        "size": { "type": "integer", "minimum": 3 },
+        "extent": { "type": "number", "exclusiveMinimum": 0 },
+        "seed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "vegetation": {
+      "type": "object",
+      "properties": {
+        "tree_count": { "type": "integer", "minimum": 0 },
+        "tree_seed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "weather": {
+      "type": "object",
+      "properties": {
+        "turbidity": { "type": "number", "minimum": 0 },
+        "ground_albedo": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0 },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "start_time_frac": { "type": "number" },
+    "start_paused": { "type": "boolean" },
+    "start_time_scale": { "type": "number", "exclusiveMinimum": 0 }
+  },
+  "additionalProperties": true
+}
+

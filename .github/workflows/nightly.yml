@@ -1,0 +1,21 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust (nightly)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Nightly smoke
+        run: |
+          cargo xtask ci
+          # Optional benches/smoke could go here

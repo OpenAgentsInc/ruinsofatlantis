@@ -1,0 +1,22 @@
+# CODEOWNERS: auto-request reviews for changes by path.
+# Replace placeholder teams with real GitHub teams/usernames as you formalize ownership.
+
+/crates/render_wgpu/**   @gfx-team
+/crates/platform_winit/** @platform-team
+/crates/sim_core/**      @gameplay-team
+/crates/data_runtime/**  @data-team
+/crates/ux_hud/**        @ui-team
+/crates/ecs_core/**      @gameplay-team
+/crates/client_core/**   @client-team
+/crates/server_core/**   @server-team
+/tools/**                @tools-team
+/data/**                 @content-team
+/packs/**                @content-team
+/docs/**                 @design-team
+/GDD.md                  @design-team
+/AGENTS.md               @infra-team
+/xtask/**                @infra-team
+
+# Fallback
+*                        @maintainers
+

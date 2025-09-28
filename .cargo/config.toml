@@ -1,5 +1,3 @@
 [alias]
-# -q: quiet watcher noise; -c: clear screen on each run
-# -w: explicit watch roots to ensure changes get picked up
-dev = "watch -q -c -w src -w assets -w data -x 'run'"
-dev-test = "watch -q -c -w src -x 'test'"
+xtask = "run -p xtask --"
+

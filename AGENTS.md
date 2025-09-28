@@ -61,6 +61,28 @@ IMPORTANT: Keep `src/README.md` current
 - Before gameplay/rules changes, update `GDD.md` in the same PR; explain rationale and SRD impact.
 - SRD usage: maintain exact attribution in `NOTICE`; document any terminology deviations (e.g., using “race”).
 
+## Golden Rules
+- Never run interactive apps in CI or automation. Use `cargo xtask ci`.
+- Never hand‑edit `Cargo.toml`; use `cargo add/rm/upgrade`.
+- Never commit uncompiled packs under `/packs` without running `cargo xtask build-packs`.
+- Never add binary assets outside LFS. Track large binaries via git‑lfs.
+- Always keep the repo compiling with tests green before handoff.
+- Always update GDD and `docs/systems/*.md` when design behavior changes.
+
+## Ownership Map
+- `crates/render_wgpu/**` → Graphics owners
+- `crates/sim_core/**` → Gameplay/systems owners
+- `crates/data_runtime/**` → Data/Schema owners
+- `crates/ux_hud/**` → UI/HUD owners
+- `/data/**` & `/packs/**` → Content pipeline owners
+- `/tools/**` → Tools team
+- `/docs/**` and `GDD.md` → Design owners
+
+## Branch & PR Policy
+- Branch name: `area/short-summary` (e.g., `gfx/fix-bottom-ghost`).
+- PR title: `area: imperative summary`.
+- Must include screenshots for UI, perf note if GPU cost changed ≥0.5 ms, and schema diffs if data changed.
+
 ## Build, Test, and Development Commands
 - Prerequisites: Install Rust via `rustup` (stable toolchain). If the edition is unsupported, run `rustup update`.
 - Run the app (root crate): `cargo run` (default-run is `ruinsofatlantis`)
@@ -69,6 +91,16 @@ IMPORTANT: Keep `src/README.md` current
 - Tests: `cargo test`
 - Format/lint: `cargo fmt` and `cargo clippy -- -D warnings`
 - Optional dev loop: `cargo install cargo-watch` then `cargo watch -x run`
+
+### Golden Commands
+```
+# build + lint + test + schema + pack
+cargo xtask ci
+
+# when editing spells or zones
+cargo xtask build-packs
+cargo xtask bake-zone --slug wizard_woods
+```
 
 NOTE FOR AGENTS
 - Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`). The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
@@ -116,6 +148,60 @@ ALWAYS add tests with new functionality
 - Any new behavior (parsing, math/transform helpers, animation sampling, collision, UI vertex generation, etc.) must ship with unit tests.
 - Prefer small, focused tests co‑located with the code. For renderer‑adjacent CPU work (math, CPU‑built buffers), add CPU‑only tests that don’t require a GPU device.
 - PRs that introduce features without tests should be considered incomplete.
+
+### Testing Matrix
+- Unit tests (per crate): math/helpers, effect opcodes, mitigation order, THP rules, ECS utilities.
+- Golden tests (packs): fixed seeds → golden outputs; compare bytes.
+- Sim harness tests: deterministic 100‑cast scenarios per MVP spell.
+- Headless renderer tests: build vertex buffers and culling lists on CPU; hash them.
+- Perf smoke (nightly): measure frame build time and assert budgets.
+
+### Determinism Rules
+- All RNG is seeded; seeds logged in artifacts.
+- No system may read wall‑clock in hot paths; time is injected.
+- Prefer integer math in sim logic when feasible.
+
+## Renderer Hygiene
+- Run WGSL validation (Naga) as part of `cargo xtask ci`.
+- Common WGSL headers under `gfx/shaders/common/*`.
+- No global Y‑flips; flips are local per sampling path.
+- Post samplers must be `ClampToEdge`.
+- Framegraph: never sample from a texture written this frame unless copied to a read target.
+
+## Performance Budgets
+| Subsystem        | Budget (ms @1080p mid‑GPU) | Notes                 |
+| ---------------- | --------------------------- | --------------------- |
+| UI/HUD           | ≤ 0.5                       | batched ≤ 30 draws    |
+| Sky + fog        | ≤ 0.3                       | HW sky + SH ambient   |
+| Terrain + grass  | ≤ 5.0                       | default radius        |
+| Shadows (single) | ≤ 1.0                       | CSM later             |
+| Particles        | ≤ 1.0                       | CPU→GPU ring          |
+| Sim tick         | ≤ 1.0                       | 20 Hz fixed           |
+
+Rule: If a PR changes GPU cost by ≥0.5 ms, include a perf note + capture.
+
+## Data Authoring
+- Schemas live in `crates/data_runtime/schemas/` (JSON Schema or serde‑validated RON).
+- `cargo xtask schema-check` validates all `/data/**` against models/schemas.
+- Version every format and content‑hash packs.
+- Schema migrations must ship a migrator (`xtask migrate ...`) and a release note.
+
+### Data Change Checklist
+- [ ] Updated `/data/**` and validated (`cargo xtask schema-check`)
+- [ ] Rebuilt packs (`cargo xtask build-packs`) and committed `/packs/**`
+- [ ] Updated docs in `/docs/systems/*.md` or `GDD.md`
+- [ ] Added/updated tests (unit + golden)
+- [ ] Updated `NOTICE` for SRD attribution when needed
+
+### Release Artifacts
+- Tagging a release auto‑attaches:
+  - `packs/spellpack.v1.bin`
+  - `packs/zones/<slug>/snapshot.v1/*`
+  - CHANGELOG excerpt generated from PR titles
+
+## Issue Labels & Boards
+- Labels: `area:*`, `type:*`, `prio:P0..P3`, `perf`, `determinism`, `schema-change`, `docs-needed`.
+- Kanban: Backlog → Ready → In Progress → Review → Done.
 
 ## Commit & Pull Request Guidelines
 - Commit style: `<area>: <imperative summary>` (e.g., `server: add login flow`).
