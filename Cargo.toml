@@ -41,6 +41,9 @@ data_runtime = { version = "0.1.0", path = "crates/data_runtime" }
 sim_core = { version = "0.1.0", path = "crates/sim_core" }
 render_wgpu = { version = "0.1.0", path = "crates/render_wgpu" }
 platform_winit = { version = "0.1.0", path = "crates/platform_winit" }
+ecs_core = { version = "0.1.0", path = "crates/ecs_core" }
+client_core = { version = "0.1.0", path = "crates/client_core" }
+server_core = { version = "0.1.0", path = "crates/server_core" }
 
 [patch.crates-io]
 # Use a patched local copy of draco_decoder to avoid passing

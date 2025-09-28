@@ -53,6 +53,7 @@ use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
 use util::scale_to_max;
 
 use std::time::Instant;
+use crate::server_ext::CollideProjectiles;
 
 use wgpu::{
     SurfaceError, SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt,

@@ -1,9 +1,9 @@
 // Re-export production modules for use by multiple binaries.
 pub mod assets;
-pub mod client;
+pub use client_core as client;
 pub mod core;
-pub mod ecs;
+pub use ecs_core as ecs;
 pub mod gfx;
 pub use platform_winit as platform_winit;
-pub mod server;
+pub use server_core as server;
 pub use sim_core as sim;

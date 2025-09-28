@@ -6,10 +6,14 @@
 
 pub mod assets;
 pub mod core;
-pub mod ecs;
-pub mod client;
-pub mod server;
+// Re-export shared crates under the same module names the renderer expects.
+pub use ecs_core as ecs;
+pub use client_core as client;
+pub use server_core as server;
 
 // Renderer modules live under `gfx/*` to preserve internal paths.
 pub mod gfx;
 pub use gfx::*;
+
+// Renderer-specific extensions over server_core.
+pub mod server_ext;

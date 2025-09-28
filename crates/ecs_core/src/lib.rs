@@ -1,4 +1,4 @@
-//! Minimal ECS scaffolding (copied for renderer isolation).
+//! Minimal ECS scaffolding for scene organization.
 
 use glam::{Mat4, Quat, Vec3};
 
@@ -51,7 +51,5 @@ impl World {
     }
 }
 
-impl Default for World {
-    fn default() -> Self { Self::new() }
-}
+impl Default for World { fn default() -> Self { Self::new() } }
 
