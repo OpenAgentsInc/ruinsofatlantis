@@ -65,6 +65,15 @@ pub struct ZoneManifest {
     pub weather: Option<WeatherSpec>,
     #[serde(default)]
     pub vegetation: Option<VegetationSpec>,
+    /// Optional initial time-of-day fraction [0..1] (0.5=noon, ~0.0 and ~1.0=midnight)
+    #[serde(default)]
+    pub start_time_frac: Option<f32>,
+    /// Optional flag to start the sky paused (so TOD doesn't advance automatically)
+    #[serde(default)]
+    pub start_paused: Option<bool>,
+    /// Optional initial time scale multiplier for TOD progression.
+    #[serde(default)]
+    pub start_time_scale: Option<f32>,
 }
 
 /// Load a Zone manifest from `data/zones/<slug>/manifest.json`.

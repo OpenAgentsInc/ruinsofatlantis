@@ -668,6 +668,23 @@ impl Renderer {
             };
             sky_state.recompute();
         }
+        // Apply optional time-of-day overrides from the Zone
+        if let Some(frac) = zone.start_time_frac {
+            sky_state.day_frac = frac.rem_euclid(1.0);
+            sky_state.recompute();
+        }
+        if let Some(pause) = zone.start_paused {
+            sky_state.paused = pause;
+        }
+        if let Some(scale) = zone.start_time_scale {
+            sky_state.time_scale = scale.clamp(0.01, 1000.0);
+        }
+        log::info!(
+            "Start TOD: day_frac={:.3} paused={} sun_elev={:.3}",
+            sky_state.day_frac,
+            sky_state.paused,
+            sky_state.sun_dir.y
+        );
         let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sky-uniform"),
             contents: bytemuck::bytes_of(&sky_state.sky_uniform),
