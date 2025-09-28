@@ -24,14 +24,25 @@ impl CollideProjectiles for ServerState {
             let p0 = pr.pos - pr.vel * dt; // previous position
             let p1 = pr.pos;
             for npc in &mut self.npcs {
-                if !npc.alive { continue; }
+                if !npc.alive {
+                    continue;
+                }
                 if segment_hits_circle_xz(p0, p1, npc.pos, npc.radius) {
                     let hp_before = npc.hp;
                     let hp_after = (npc.hp - damage).max(0);
                     npc.hp = hp_after;
-                    if hp_after == 0 { npc.alive = false; }
+                    if hp_after == 0 {
+                        npc.alive = false;
+                    }
                     let fatal = !npc.alive;
-                    events.push(HitEvent { npc: npc.id, pos: p1, damage, hp_before, hp_after, fatal });
+                    events.push(HitEvent {
+                        npc: npc.id,
+                        pos: p1,
+                        damage,
+                        hp_before,
+                        hp_after,
+                        fatal,
+                    });
                     projectiles.swap_remove(i);
                     continue 'outer;
                 }
@@ -50,7 +61,9 @@ fn segment_hits_circle_xz(p0: glam::Vec3, p1: glam::Vec3, center: glam::Vec3, r:
     let d = p1 - p0;
     let m = p0 - c;
     let a = d.dot(d);
-    if a <= 1e-6 { return m.length() <= r; }
+    if a <= 1e-6 {
+        return m.length() <= r;
+    }
     let t = (-(m.dot(d)) / a).clamp(0.0, 1.0);
     let closest = p0 + d * t;
     (closest - c).length() <= r

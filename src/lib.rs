@@ -4,6 +4,6 @@ pub use client_core as client;
 pub mod core;
 pub use ecs_core as ecs;
 pub mod gfx;
-pub use platform_winit as platform_winit;
+pub use platform_winit;
 pub use server_core as server;
 pub use sim_core as sim;

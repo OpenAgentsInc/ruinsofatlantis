@@ -80,7 +80,10 @@ impl ApplicationHandler for App {
 }
 
 fn is_headless() -> bool {
-    if std::env::var("RA_HEADLESS").map(|v| v == "1").unwrap_or(false) {
+    if std::env::var("RA_HEADLESS")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         return true;
     }
     if std::env::var("CI")

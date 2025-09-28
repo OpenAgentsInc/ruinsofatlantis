@@ -3,7 +3,7 @@
 //! Creates a bind group for the wizard’s base color texture and a small
 //! material transform uniform (supports KHR_texture_transform if present).
 
-use crate::assets::SkinnedMeshCPU;
+use ra_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
 
 pub struct WizardMaterial {
@@ -180,7 +180,8 @@ pub fn create_wizard_material(
 
 fn read_texture_transform() -> Option<MaterialXform> {
     // Read KHR_texture_transform from wizard.gltf (first primitive's material).
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/wizard.gltf");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/wizard.gltf");
     let txt = std::fs::read_to_string(&path).ok()?;
     let json: serde_json::Value = serde_json::from_str(&txt).ok()?;
     let mat_index = json

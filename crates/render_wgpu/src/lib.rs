@@ -4,12 +4,10 @@
 //! It also provides lightweight shims for `assets`, `core::data`, `ecs`,
 //! `client`, and `server` used by the renderer so it can build independently.
 
-pub mod assets;
-pub mod core;
-// Re-export shared crates under the same module names the renderer expects.
-pub use ecs_core as ecs;
-pub use client_core as client;
-pub use server_core as server;
+// Use shared crates directly under their own names.
+pub use client_core;
+pub use ecs_core;
+pub use server_core;
 
 // Renderer modules live under `gfx/*` to preserve internal paths.
 pub mod gfx;

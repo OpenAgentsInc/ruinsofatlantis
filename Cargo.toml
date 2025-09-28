@@ -10,10 +10,10 @@ members = [
     "shared/assets",    # shared library for model/assets
     "tools/model-viewer", # standalone model viewer
     "crates/data_runtime", # data schemas + loaders
-    "crates/render_wgpu",  # renderer crate (re-export for now)
-    "crates/sim_core",     # sim rules/combat facade (re-export for now)
-    "crates/platform_winit", # winit platform facade (re-export for now)
-    "crates/ux_hud"        # HUD logic (stub)
+    "crates/render_wgpu",    # renderer crate
+    "crates/sim_core",       # sim rules/combat engine
+    "crates/platform_winit", # winit platform loop
+    "crates/ux_hud"          # HUD logic
 ]
 resolver = "2"
 
