@@ -1,17 +1,3 @@
-//! One-time GLTF Draco decompression helper.
-//!
-//! Usage:
-//!   cargo run --bin gltf_decompress -- <input.gltf> <output.gltf>
-//!
-//! This tool tries a few CLI variants via `npx` or globally installed `gltf-transform`:
-//!   - `npx -y @gltf-transform/cli draco -d <in> <out>`
-//!   - `npx -y gltf-transform draco -d <in> <out>`
-//!   - `npx -y @gltf-transform/cli decompress <in> <out>` (older)
-//!   - `gltf-transform draco -d <in> <out>` if globally installed
-//!
-//! It does not run at app startup; use it manually to decode assets
-//! before running the main client.
-
 use std::{env, ffi::OsStr, path::PathBuf, process::Command};
 
 fn main() {

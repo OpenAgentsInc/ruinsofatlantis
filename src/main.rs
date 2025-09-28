@@ -7,6 +7,7 @@ fn main() {
     let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default))
         .format_timestamp_secs()
         .try_init();
+    // Flag parsing handled in renderer (checks --no-vsync / RA_NO_VSYNC)
     if let Err(e) = platform_winit::run() {
         eprintln!("error: {e}");
     }

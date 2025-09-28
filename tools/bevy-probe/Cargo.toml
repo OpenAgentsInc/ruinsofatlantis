@@ -1,0 +1,10 @@
+[package]
+name = "bevy-probe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+bevy = "0.14"
+image = "0.25"
+

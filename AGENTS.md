@@ -20,7 +20,14 @@
 ### What lives in `src/` and why
 - `src/main.rs` — App entry; initializes logging and calls `platform_winit::run()`.
 - `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` for app code.
-- `src/bin/**` — Small one-off tools (e.g., `gltf_decompress`, `image_probe`, `bevy_probe`). Substantial viewers live under `tools/` (see `tools/model-viewer`). The old `wizard_viewer` bin has been removed in favor of the `tools/model-viewer` crate.
+- Bins moved to `tools/` crates to keep the app shell slim. The old `wizard_viewer` and other probes now live under `tools/`.
+
+### Tools (moved out of `src/bin`)
+- `tools/model-viewer` — Standalone wgpu GLTF/GLB viewer (uses `shared/assets`).
+- `tools/zone-bake` — Bakes terrain + trees snapshot for a Zone slug. Usage: `cargo run -p zone-bake -- <slug>`.
+- `tools/gltf-decompress` — One-time Draco decompressor for GLTFs. Usage: `cargo run -p gltf-decompress -- <in> <out>`.
+- `tools/image-probe` — Simple image stats probe. Usage: `cargo run -p image-probe -- <png>`.
+- `tools/bevy-probe` — Bevy-based material/texture extractor for the wizard asset.
 
 Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `ra_assets` directly.
 
@@ -63,11 +70,11 @@ NOTE FOR AGENTS
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
 - Current prototype loads two meshes (`wizard.gltf`, `ruins.gltf`) and draws them via instancing.
 - If a model is Draco-compressed (e.g., `ruins.gltf`), prepare a decompressed copy once:
-  - `cargo run --bin gltf_decompress -- assets/models/ruins.gltf assets/models/ruins.decompressed.gltf`
+  - `cargo run -p gltf-decompress -- assets/models/ruins.gltf assets/models/ruins.decompressed.gltf`
   - The runtime prefers `*.decompressed.gltf` if present.
 - When adding dependencies for loaders or formats, use `cargo add` (never hand‑edit `Cargo.toml`).
 - Draco compression: The runtime does NOT attempt decompression. If a model declares `KHR_draco_mesh_compression`, run our one-time helper:
-  - `cargo run --bin gltf_decompress -- assets/models/foo.gltf assets/models/foo.decompressed.gltf`
+  - `cargo run -p gltf-decompress -- assets/models/foo.gltf assets/models/foo.decompressed.gltf`
   - Or manually: `npx -y @gltf-transform/cli draco -d <in.gltf> <out.gltf>` (older CLIs use `decompress`).
   - Or re-export the asset without Draco. Our runtime does not decode Draco in-process.
 

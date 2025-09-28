@@ -142,9 +142,19 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
-  // Match standalone viewer: raw baseColor (no lighting or flips)
-  let col = textureSample(base_tex, base_sam, in.uv).rgb;
-  return vec4<f32>(col, 1.0);
+  // Base color from material (keep viewer parity)
+  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
+  // Subtle Fresnel-like rim term to hint gloss under sun lighting.
+  // Approximate view direction using camera right/up from Globals.
+  let right = globals.camRightTime.xyz;
+  let up = globals.camUpPad.xyz;
+  // Forward is up x right (note: right x up = -forward)
+  let fwd = normalize(cross(up, right));
+  let ndv = max(dot(in.nrm, -fwd), 0.0);
+  let rim = pow(1.0 - ndv, 3.0);
+  let rim_strength = 0.15; // keep very subtle
+  let color = clamp(albedo + vec3<f32>(rim * rim_strength), vec3<f32>(0.0), vec3<f32>(1.0));
+  return vec4<f32>(color, 1.0);
 }
 
 // Skinned instanced pipeline (wizards)

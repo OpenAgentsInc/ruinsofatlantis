@@ -137,6 +137,8 @@ pub struct Renderer {
     enable_ssr: bool,
     #[allow(dead_code)]
     frame_counter: u32,
+    // Stats
+    draw_calls: u32,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -480,7 +482,20 @@ impl Renderer {
             .present_modes
             .iter()
             .copied()
-            .find(|m| *m == wgpu::PresentMode::Mailbox)
+            .find(|m| {
+                // Optional no-vsync override via env flag.
+                // If RA_NO_VSYNC=1 or --no-vsync present, prefer Immediate; else prefer Mailbox.
+                let no_vsync_env = std::env::var("RA_NO_VSYNC")
+                    .map(|v| v == "1")
+                    .unwrap_or(false);
+                let no_vsync_flag = std::env::args().any(|a| a == "--no-vsync");
+                let no_vsync = no_vsync_env || no_vsync_flag;
+                if no_vsync {
+                    *m == wgpu::PresentMode::Immediate
+                } else {
+                    *m == wgpu::PresentMode::Mailbox
+                }
+            })
             .unwrap_or(wgpu::PresentMode::Fifo);
         let alpha_mode = caps.alpha_modes[0];
         let max_dim = device.limits().max_texture_dimension_2d.clamp(1, 2048);
@@ -1313,6 +1328,7 @@ impl Renderer {
             present_bg,
             // frame overlay removed
             frame_counter: 0,
+            draw_calls: 0,
             terrain_model_bg: plane_model_bg,
             shard_model_bg,
 
@@ -1632,6 +1648,8 @@ impl Renderer {
         let aspect = self.config.width as f32 / self.config.height as f32;
         let dt = (t - self.last_time).max(0.0);
         self.last_time = t;
+        // Reset per-frame stats
+        self.draw_calls = 0;
 
         // If screenshot mode is active, auto-animate a smooth orbit for 5 seconds
         if let Some(ts) = self.screenshot_start {
@@ -1820,6 +1838,7 @@ impl Renderer {
             sky.set_bind_group(0, &self.globals_bg, &[]);
             sky.set_bind_group(1, &self.sky_bg, &[]);
             sky.draw(0..3, 0..1);
+            self.draw_calls += 1;
         }
         // Main pass with depth into SceneColor; load color from sky pass
         {
@@ -1853,6 +1872,7 @@ impl Renderer {
             rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
             rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+            self.draw_calls += 1;
 
             // Trees (instanced static mesh)
             if self.trees_count > 0 {
@@ -1868,12 +1888,15 @@ impl Renderer {
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
                 rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
+                self.draw_calls += 1;
             }
 
             // Wizards
             self.draw_wizards(&mut rpass);
+            self.draw_calls += 1;
             // Zombies
             self.draw_zombies(&mut rpass);
+            self.draw_calls += 1;
 
             // Ruins (instanced) — only draw when we have instances
             if self.ruins_count > 0 {
@@ -1889,6 +1912,7 @@ impl Renderer {
                 rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
                 rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+                self.draw_calls += 1;
             }
 
             // NPCs (instanced cubes)
@@ -1905,10 +1929,14 @@ impl Renderer {
                 rpass.set_vertex_buffer(1, self.npc_instances.slice(..));
                 rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
+                self.draw_calls += 1;
             }
 
             // FX
             self.draw_particles(&mut rpass);
+            if self.fx_count > 0 {
+                self.draw_calls += 1;
+            }
         }
         // Overlay: health bars, floating damage numbers, then nameplates
         let view_proj = glam::Mat4::from_cols_array_2d(&globals.view_proj);
@@ -2044,6 +2072,7 @@ impl Renderer {
             blit.set_pipeline(&self.blit_scene_read_pipeline);
             blit.set_bind_group(0, &self.present_bg, &[]);
             blit.draw(0..3, 0..1);
+            self.draw_calls += 1;
         }
 
         // SSR overlay into SceneColor (alpha blend)
@@ -2068,6 +2097,7 @@ impl Renderer {
             rp.set_bind_group(0, &self.ssr_depth_bg, &[]);
             rp.set_bind_group(1, &self.ssr_scene_bg, &[]);
             rp.draw(0..3, 0..1);
+            self.draw_calls += 1;
         }
 
         // SSGI additive overlay (fullscreen) into SceneColor
@@ -2092,6 +2122,7 @@ impl Renderer {
             gi.set_bind_group(1, &self.ssgi_depth_bg, &[]);
             gi.set_bind_group(2, &self.ssgi_scene_bg, &[]);
             gi.draw(0..3, 0..1);
+            self.draw_calls += 1;
         }
         // (removed) frame overlay
         // (frame overlay removed)
@@ -2117,6 +2148,7 @@ impl Renderer {
                 post.set_bind_group(0, &self.globals_bg, &[]);
                 post.set_bind_group(1, &self.post_ao_bg, &[]);
                 post.draw(0..3, 0..1);
+                self.draw_calls += 1;
             }
         }
 
@@ -2146,6 +2178,7 @@ impl Renderer {
             present.set_bind_group(0, &self.globals_bg, &[]);
             present.set_bind_group(1, &self.present_bg, &[]);
             present.draw(0..3, 0..1);
+            self.draw_calls += 1;
         }
 
         // Submit only if no validation errors occurred
@@ -2185,7 +2218,7 @@ impl Renderer {
                 if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
                     let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
-                    let line = format!("{:.2} ms  {:.0} FPS", ms, fps);
+                    let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, self.draw_calls);
                     self.hud
                         .append_perf_text(self.size.width, self.size.height, &line);
                 }
@@ -2655,9 +2688,7 @@ impl Renderer {
                     {
                         self.input.run = pressed
                     }
-                    PhysicalKey::Code(KeyCode::Digit1)
-                    | PhysicalKey::Code(KeyCode::Numpad1)
-                    | PhysicalKey::Code(KeyCode::Space)
+                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
                         if self.pc_alive =>
                     {
                         if pressed {
@@ -2665,7 +2696,7 @@ impl Renderer {
                             log::info!("PC cast queued: Fire Bolt");
                         }
                     }
-                    // Sky controls (pause/scrub/speed) — active when PC is dead
+                    // Sky controls (pause/scrub/speed)
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {
                             self.sky.toggle_pause();
@@ -3081,23 +3112,78 @@ impl Renderer {
                 i += 1;
             }
         }
+        // Merge any ground-hit bursts into live particles
+        if !burst.is_empty() {
+            self.particles.append(&mut burst);
+        }
 
         // 2.6) Collide with wizards/PC (friendly fire on)
         if !self.projectiles.is_empty() {
             self.collide_with_wizards(dt, 10);
         }
 
-        // 3) Upload FX instances (billboard particles) — show both bolts and impacts
+        // 3) Simulate impact particles (age, simple gravity, fade)
+        let cam = self.cam_follow.current_pos;
+        let max_d2 = 400.0 * 400.0; // cull far particles
+        let mut j = 0usize;
+        while j < self.particles.len() {
+            let p = &mut self.particles[j];
+            p.age += dt;
+            // mild gravity and air drag
+            p.vel.y -= 9.8 * dt * 0.5;
+            p.vel *= 0.98f32.powf(dt.max(0.0) * 60.0);
+            p.pos += p.vel * dt;
+            if p.age >= p.life {
+                self.particles.swap_remove(j);
+                continue;
+            }
+            // Cull by distance
+            if (p.pos - cam).length_squared() > max_d2 {
+                self.particles.swap_remove(j);
+                continue;
+            }
+            j += 1;
+        }
 
-        // 4) Upload FX instances (billboard particles)
-        let mut inst: Vec<ParticleInstance> = Vec::with_capacity(self.projectiles.len());
+        // 4) Upload FX instances (billboard particles) — bolts (with tiny trails) + impact sprites
+        let mut inst: Vec<ParticleInstance> =
+            Vec::with_capacity(self.projectiles.len() * 3 + self.particles.len());
         for pr in &self.projectiles {
+            // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
                 size: 0.14,
                 color: [1.0, 0.35, 0.08],
                 _pad: 0.0,
             });
+            // short trail segments behind
+            let dir = pr.vel.normalize_or_zero();
+            for k in 1..=2 {
+                let t = k as f32 * 0.02;
+                let p = pr.pos - dir * (t * pr.vel.length());
+                let fade = 1.0 - (k as f32) * 0.35;
+                inst.push(ParticleInstance {
+                    pos: [p.x, p.y, p.z],
+                    size: 0.11,
+                    color: [1.0 * fade, 0.35 * fade, 0.08 * fade],
+                    _pad: 0.0,
+                });
+            }
+        }
+        // Impacts (fade by age)
+        for p in &self.particles {
+            let f = 1.0 - (p.age / p.life).clamp(0.0, 1.0);
+            let size = p.size * (1.0 + 0.5 * (1.0 - f));
+            inst.push(ParticleInstance {
+                pos: [p.pos.x, p.pos.y, p.pos.z],
+                size,
+                color: [p.color[0] * f, p.color[1] * f, p.color[2] * f],
+                _pad: 0.0,
+            });
+        }
+        // Cap to buffer capacity
+        if (inst.len() as u32) > self._fx_capacity {
+            inst.truncate(self._fx_capacity as usize);
         }
         self.fx_count = inst.len() as u32;
         if self.fx_count > 0 {
