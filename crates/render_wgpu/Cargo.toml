@@ -4,5 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ab_glyph = "0.2.31"
+anyhow = "1.0.100"
+bytemuck = { version = "1.23.2", features = ["derive"] }
+glam = "0.30.8"
+hw-skymodel = "0.1.1"
+log = "0.4.28"
 ruinsofatlantis = { path = "../.." }
+wgpu = "26.0.1"
+winit = "0.30.12"
 
