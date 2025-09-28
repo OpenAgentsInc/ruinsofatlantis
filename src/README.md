@@ -4,7 +4,7 @@ This document summarizes the `src/` folder structure and what each module does.
 
 Workspace crates (added for modularization)
 - crates/data_runtime — SRD-aligned data schemas + loaders (replaces `src/core/data`; re-exported under `crate::core::data`).
-- crates/render_wgpu — Renderer crate. The full contents of `src/gfx/**` have been migrated here under `crates/render_wgpu/src/gfx/**` to establish a standalone renderer. For now, the root still contains `src/gfx/` used by the app; the next step is to flip the root to re-export from `render_wgpu` and remove the duplicate.
+- crates/render_wgpu — Renderer crate. The full contents of the old `src/gfx/**` now live here under `crates/render_wgpu/src/gfx/**`. The root `src/gfx/mod.rs` is a thin re‑export of `render_wgpu::gfx`.
 - crates/sim_core — Rules/combat/sim crate (moved from `src/core/{rules,combat}` and `src/sim`). Re-exported under `crate::core::{rules,combat}` and `crate::sim` for compatibility.
 - crates/platform_winit — Platform loop facade (temporarily re-exports `crate::platform_winit`).
 - crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; F1 toggles perf overlay, H toggles HUD).
@@ -45,27 +45,7 @@ Workspace crates (added for modularization)
   - mod.rs — Minimal ECS scaffolding (entities, transforms, render kinds).
 
 - gfx/
-  - mod.rs — Renderer entry (init/resize/render) and high‑level wiring.
-  - camera.rs — Camera type and view/projection math.
-  - camera_sys.rs — Orbit and third‑person follow camera helpers + `Globals`.
-  - gbuffer.rs — G‑Buffer attachments and formats (albedo, normal‑oct, rough/metal, emissive, motion).
-  - hiz.rs — Z‑MAX depth pyramid resources over linear R32F depth; CPU reference downsample + tests.
-  - hiz.comp.wgsl — Compute shader for linearizing depth and 2×2 Z‑MAX reduction.
-  - temporal/
-    - mod.rs — Temporal module index.
-    - reprojection.rs — CPU reprojection helpers + tests; prev/curr jitter handling.
-    - history.rs — Temporal params and clamp helpers + tests.
-  - terrain.rs — Seeded heightmap terrain generation and simple woodland scatter (Phase 1). Parameters (size/extent/seed) come from the active Zone manifest.
-  - sky.rs — Hosek–Wilkie sky state on CPU (time‑of‑day, sun dir, SH ambient) and uniform packing.
-  - sky.wgsl — Background sky pass (fullscreen triangle) evaluating HW from CPU‑provided params.
-  - fullscreen.wgsl — Shared fullscreen VS: offscreen no‑flip, present Y‑flip.
-  - ssgi.wgsl — Placeholder compute entry for screen‑space diffuse GI (to be implemented).
-  - ssr.wgsl — Placeholder compute entry for screen‑space reflections (to be implemented).
-  - shaders/common.wgsl — Shared shader constants and binding conventions.
-  - Player casting: press `1` to trigger the PC's `PortalOpen` animation; 1.5s after start spawns a Fire Bolt forward. The renderer queues the cast on key press and advances the PC animation, reverting to `Still` after the clip completes.
-  - ui.rs — Overlays: nameplates (text atlas), health bars (screen‑space quads with green→yellow→red gradient), and a minimal HUD (player HP + bottom hotbar with GCD overlay) for the wizard scene.
-  - pipeline.rs — Adds `create_bar_pipeline` for solid‑color screen quads.
-  - shader.wgsl — Adds `vs_bar`/`fs_bar` for health bar rendering.
+  - mod.rs — Thin re‑export of `render_wgpu::gfx`.
 
 - server/
   - mod.rs — In‑process server scaffold: authoritative NPC state (positions/health) and projectile collision/damage resolution. Designed to move into its own crate/process in a future workspace split.

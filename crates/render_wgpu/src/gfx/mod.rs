@@ -63,7 +63,10 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
+    // Prefer workspace-level assets so this crate works when built inside a workspace.
+    let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ws = here.join("../../").join(rel);
+    if ws.exists() { ws } else { here.join(rel) }
 }
 
 use fx::{Particle, Projectile};

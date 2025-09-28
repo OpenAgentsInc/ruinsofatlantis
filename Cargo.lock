@@ -103,7 +103,7 @@ version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "getrandom 0.3.3",
  "once_cell",
  "version_check",
@@ -142,7 +142,7 @@ checksum = "ed7572b7ba83a31e20d1b48970ee402d2e3e0537dcfe0a3ff4d6eb7508617d43"
 dependencies = [
  "alsa-sys",
  "bitflags 2.9.4",
- "cfg-if 1.0.3",
+ "cfg-if",
  "libc",
 ]
 
@@ -530,7 +530,7 @@ dependencies = [
  "thiserror 1.0.69",
  "uuid",
  "wasm-bindgen",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -1098,7 +1098,7 @@ dependencies = [
  "async-executor",
  "concurrent-queue",
  "futures-lite",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -1244,7 +1244,7 @@ dependencies = [
  "bevy_tasks",
  "bevy_utils",
  "bevy_window",
- "cfg-if 1.0.3",
+ "cfg-if",
  "crossbeam-channel",
  "raw-window-handle",
  "wasm-bindgen",
@@ -1336,7 +1336,7 @@ dependencies = [
  "arrayref",
  "arrayvec",
  "cc",
- "cfg-if 1.0.3",
+ "cfg-if",
  "constant_time_eq",
 ]
 
@@ -1480,12 +1480,6 @@ dependencies = [
  "smallvec",
  "target-lexicon",
 ]
-
-[[package]]
-name = "cfg-if"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
 name = "cfg-if"
@@ -1645,7 +1639,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "wasm-bindgen",
 ]
 
@@ -1784,7 +1778,7 @@ dependencies = [
  "ndk-context",
  "oboe",
  "wasm-bindgen",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
  "web-sys",
  "windows 0.54.0",
 ]
@@ -1795,7 +1789,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
 ]
 
 [[package]]
@@ -1942,16 +1936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dcv-color-primitives"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cbf8fefaeeaf01bff1035f869c4bcfd196dd44b7193375b5084bad0f73985b5"
-dependencies = [
- "paste",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1988,19 +1972,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
-name = "draco"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c50b3d3d2c735e7f6616aaee0e10a3dd45bc71a139a1a03fba49742a46510f41"
-dependencies = [
- "futures",
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures 0.3.27",
- "web-sys",
-]
-
-[[package]]
 name = "draco_decoder"
 version = "0.0.10"
 dependencies = [
@@ -2012,7 +1983,7 @@ dependencies = [
  "js-sys",
  "once_cell",
  "wasm-bindgen",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -2328,12 +2299,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
-name = "futures"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
-
-[[package]]
 name = "futures-core"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2374,7 +2339,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "335ff9f135e4384c8150d6f27c6daed433577f86b4750418338c01a1a2528592"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "js-sys",
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
@@ -2387,7 +2352,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "libc",
  "r-efi",
  "wasi 0.14.7+wasi-0.2.4",
@@ -2649,7 +2614,7 @@ version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "459196ed295495a68f7d7fe1d84f6c4b7ff0e21fe3017b2f283c6fac3ad803c9"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "crunchy",
  "num-traits",
 ]
@@ -2950,7 +2915,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a87aa2bb7d2af34197c04845522473242e1aa17c12f4935d5856491a7fb8c97"
 dependencies = [
  "cesu8",
- "cfg-if 1.0.3",
+ "cfg-if",
  "combine",
  "jni-sys",
  "log",
@@ -3076,7 +3041,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "winapi",
 ]
 
@@ -3086,7 +3051,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "windows-link 0.2.0",
 ]
 
@@ -3202,7 +3167,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "rayon",
 ]
 
@@ -3331,7 +3296,7 @@ dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
  "bitflags 2.9.4",
- "cfg-if 1.0.3",
+ "cfg-if",
  "cfg_aliases 0.2.1",
  "codespan-reporting 0.12.0",
  "half",
@@ -3434,7 +3399,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
 dependencies = [
  "bitflags 2.9.4",
- "cfg-if 1.0.3",
+ "cfg-if",
  "cfg_aliases 0.2.1",
  "libc",
 ]
@@ -3857,7 +3822,7 @@ version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc838d2a56b5b1a6c25f55575dfc605fabb63bb2365f6c2353ef9159aa69e4a5"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "libc",
  "redox_syscall 0.5.17",
  "smallvec",
@@ -3957,7 +3922,7 @@ version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d0e4f59085d47d8241c88ead0f274e8a0cb551f3625263c05eb8dd897c34218"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "concurrent-queue",
  "hermit-abi",
  "pin-project-lite",
@@ -4196,7 +4161,7 @@ dependencies = [
  "av1-grain",
  "bitstream-io",
  "built",
- "cfg-if 1.0.3",
+ "cfg-if",
  "interpolate_name",
  "itertools 0.12.1",
  "libc",
@@ -4320,10 +4285,18 @@ dependencies = [
  "ab_glyph",
  "anyhow",
  "bytemuck",
+ "data_runtime",
  "glam 0.30.8",
+ "gltf",
  "hw-skymodel",
  "log",
- "ruinsofatlantis",
+ "pollster",
+ "ra-assets",
+ "rand 0.9.2",
+ "rand_chacha 0.9.0",
+ "serde",
+ "serde_json",
+ "ux_hud",
  "wgpu 26.0.1",
  "winit",
 ]
@@ -4376,25 +4349,20 @@ dependencies = [
 name = "ruinsofatlantis"
 version = "0.1.0"
 dependencies = [
- "ab_glyph",
  "anyhow",
- "base64 0.22.1",
  "bevy",
  "bytemuck",
  "data_runtime",
- "dcv-color-primitives",
- "draco",
- "draco_decoder",
  "env_logger",
  "glam 0.30.8",
  "gltf",
- "hw-skymodel",
  "image",
  "log",
  "pollster",
  "ra-assets",
  "rand 0.9.2",
  "rand_chacha 0.9.0",
+ "render_wgpu",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -4700,7 +4668,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91e2531d8525b29b514d25e275a43581320d587b86db302b9a7e464bac579648"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "hashbrown 0.11.2",
 ]
 
@@ -4765,7 +4733,7 @@ version = "0.30.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a5b4ddaee55fb2bea2bf0e5000747e5f5c0de765e5a5ff87f4cd106439f4bb3"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "core-foundation-sys",
  "libc",
  "ntapi",
@@ -4860,7 +4828,7 @@ version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
 ]
 
 [[package]]
@@ -4886,7 +4854,7 @@ dependencies = [
  "arrayref",
  "arrayvec",
  "bytemuck",
- "cfg-if 1.0.3",
+ "cfg-if",
  "log",
  "tiny-skia-path",
 ]
@@ -5074,7 +5042,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "static_assertions",
 ]
 
@@ -5229,7 +5197,7 @@ version = "0.2.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1da10c01ae9f1ae40cbfac0bac3b1e724b320abfcf52229f80b547c0d250e2d"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "once_cell",
  "rustversion",
  "wasm-bindgen-macro",
@@ -5252,24 +5220,11 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.3.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83420b37346c311b9ed822af41ec2e82839bfe99867ec6c54e2da43b7538771c"
-dependencies = [
- "cfg-if 0.1.10",
- "futures",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "wasm-bindgen-futures"
 version = "0.4.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e038d41e478cc73bae0ff9b36c60cff1c98b8f38f8d7e8061e79ee63608ac5c"
 dependencies = [
- "cfg-if 1.0.3",
+ "cfg-if",
  "js-sys",
  "once_cell",
  "wasm-bindgen",
@@ -5450,7 +5405,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90e37c7b9921b75dfd26dd973fdcbce36f13dfa6e2dc82aece584e0ed48c355c"
 dependencies = [
  "arrayvec",
- "cfg-if 1.0.3",
+ "cfg-if",
  "cfg_aliases 0.1.1",
  "document-features",
  "js-sys",
@@ -5462,7 +5417,7 @@ dependencies = [
  "smallvec",
  "static_assertions",
  "wasm-bindgen",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core 0.21.1",
  "wgpu-hal 0.21.1",
@@ -5477,7 +5432,7 @@ checksum = "70b6ff82bbf6e9206828e1a3178e851f8c20f1c9028e74dd3a8090741ccd5798"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.4",
- "cfg-if 1.0.3",
+ "cfg-if",
  "cfg_aliases 0.2.1",
  "document-features",
  "hashbrown 0.15.5",
@@ -5491,7 +5446,7 @@ dependencies = [
  "smallvec",
  "static_assertions",
  "wasm-bindgen",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core 26.0.1",
  "wgpu-hal 26.0.4",
@@ -5641,7 +5596,7 @@ dependencies = [
  "bitflags 2.9.4",
  "block",
  "bytemuck",
- "cfg-if 1.0.3",
+ "cfg-if",
  "cfg_aliases 0.2.1",
  "core-graphics-types 0.2.0",
  "glow 0.16.0",
@@ -6167,7 +6122,7 @@ dependencies = [
  "tracing",
  "unicode-segmentation",
  "wasm-bindgen",
- "wasm-bindgen-futures 0.4.54",
+ "wasm-bindgen-futures",
  "wayland-backend",
  "wayland-client",
  "wayland-protocols",
