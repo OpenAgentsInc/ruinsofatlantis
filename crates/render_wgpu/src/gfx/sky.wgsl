@@ -1,6 +1,6 @@
 // Sky background: evaluates Hosek–Wilkie with CPU-provided parameters.
 
-struct Globals { view_proj: mat4x4<f32>, camRightTime: vec4<f32>, camUpPad: vec4<f32>, sunDirTime: vec4<f32>, sh: array<vec4<f32>, 9>, fog: vec4<f32> };
+struct Globals { view_proj: mat4x4<f32>, camRightTime: vec4<f32>, camUpPad: vec4<f32>, sunDirTime: vec4<f32>, sh: array<vec4<f32>, 9>, fog: vec4<f32>, clip: vec4<f32> };
 @group(0) @binding(0) var<uniform> globals: Globals;
 
 // Packed HW params: each vec4 packs {p_i_R, p_i_G, p_i_B, _}
@@ -67,7 +67,10 @@ fn fs_sky(in: VsOut) -> @location(0) vec4<f32> {
   let right = globals.camRightTime.xyz;
   let up = globals.camUpPad.xyz;
   let fwd = normalize(cross(right, up));
-  let dir = normalize(fwd + right * in.ndc.x + up * in.ndc.y);
+  // Use perspective-correct ray based on tan(fovy/2) and aspect
+  let tan_half = globals.camUpPad.w;
+  let aspect = globals.clip.z;
+  let dir = normalize(fwd + right * (in.ndc.x * tan_half * aspect) + up * (in.ndc.y * tan_half));
   let theta = acos(clamp(dir.y, -1.0, 1.0));
   let gamma = acos(clamp(dot(dir, sky.sun_dir_time.xyz), -1.0, 1.0));
   var col = sky_radiance(theta, gamma);

@@ -16,14 +16,15 @@ pub fn orbit_and_globals(
     let forward = (cam_target - cam.eye).normalize_or_zero();
     let right = forward.cross(glam::Vec3::Y).normalize_or_zero();
     let up = right.cross(forward).normalize_or_zero();
+    let tan_half = (cam.fovy * 0.5).tan();
     let globals = Globals {
         view_proj: cam.view_proj().to_cols_array_2d(),
         cam_right_time: [right.x, right.y, right.z, t],
-        cam_up_pad: [up.x, up.y, up.z, 0.0],
+        cam_up_pad: [up.x, up.y, up.z, tan_half],
         sun_dir_time: [0.0, 1.0, 0.0, 0.0],
         sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
         fog_params: [0.0, 0.0, 0.0, 0.0],
-        clip_params: [cam.znear, cam.zfar, 0.0, 0.0],
+        clip_params: [cam.znear, cam.zfar, aspect, 0.0],
     };
     (cam, globals)
 }
@@ -80,14 +81,15 @@ pub fn third_person_follow(
     let forward = (cam.target - cam.eye).normalize_or_zero();
     let right = forward.cross(glam::Vec3::Y).normalize_or_zero();
     let up = right.cross(forward).normalize_or_zero();
+    let tan_half = (cam.fovy * 0.5).tan();
     let globals = Globals {
         view_proj: cam.view_proj().to_cols_array_2d(),
         cam_right_time: [right.x, right.y, right.z, 0.0],
-        cam_up_pad: [up.x, up.y, up.z, 0.0],
+        cam_up_pad: [up.x, up.y, up.z, tan_half],
         sun_dir_time: [0.0, 1.0, 0.0, 0.0],
         sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
         fog_params: [0.0, 0.0, 0.0, 0.0],
-        clip_params: [cam.znear, cam.zfar, 0.0, 0.0],
+        clip_params: [cam.znear, cam.zfar, aspect, 0.0],
     };
     (cam, globals)
 }

@@ -630,11 +630,11 @@ impl Renderer {
         let globals_init = Globals {
             view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
             cam_right_time: [1.0, 0.0, 0.0, 0.0],
-            cam_up_pad: [0.0, 1.0, 0.0, 0.0],
+            cam_up_pad: [0.0, 1.0, 0.0, (60f32.to_radians() * 0.5).tan()],
             sun_dir_time: [0.0, 1.0, 0.0, 0.0],
             sh_coeffs: [[0.0, 0.0, 0.0, 0.0]; 9],
             fog_params: [0.0, 0.0, 0.0, 0.0],
-            clip_params: [0.1, 1000.0, 0.0, 0.0],
+            clip_params: [0.1, 1000.0, 1.0, 0.0],
         };
         let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("globals"),
