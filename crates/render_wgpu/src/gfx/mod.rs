@@ -1780,8 +1780,12 @@ impl Renderer {
                 0.0,
             ];
         }
-        // Light bluish fog with gentle density for distance falloff
-        globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
+        // Fog color/density based on time-of-day: dark navy at night, light blue by day
+        if self.sky.sun_dir.y <= 0.0 {
+            globals.fog_params = [0.03, 0.04, 0.06, 0.0065];
+        } else {
+            globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
+        }
         self.queue
             .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
         // Sky raw params
