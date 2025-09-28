@@ -1503,11 +1503,11 @@ impl Renderer {
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
             pc_alive: true,
-            // Lighting M1 scaffolding
+            // Lighting M1 scaffolding (disabled by default to avoid outline artifacts)
             gbuffer: Some(gbuffer),
             hiz: Some(hiz),
-            enable_post_ao: true,
-            enable_ssgi: true,
+            enable_post_ao: false,
+            enable_ssgi: false,
             enable_ssr: false,
             enable_bloom: true,
             // frame overlay removed
