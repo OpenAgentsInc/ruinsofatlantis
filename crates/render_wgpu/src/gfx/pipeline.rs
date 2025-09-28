@@ -1,5 +1,14 @@
 //! Pipeline creation helpers and shader loading.
 //!
+//! Layout
+//! - Core forward pipelines: non‑instanced (terrain), instanced (static meshes), and
+//!   skinned‑instanced (wizards/zombies).
+//! - Post: sky (background), present (fog + tonemap + grade), blit (SceneColor→SceneRead),
+//!   optional SSGI/SSR/AO overlays, and a simple bloom add pass.
+//!
+//! The post chain is designed to be modular; each pass consumes and produces color on
+//! either the offscreen HDR `SceneColor` or the transient `SceneRead` texture.
+//!
 //! WGSL source lives in `shader.wgsl` next to this file and is embedded at compile time
 //! with `include_str!` for convenience (no runtime file IO).
 

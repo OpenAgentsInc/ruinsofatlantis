@@ -96,6 +96,11 @@ impl SkyStateCPU {
     }
 
     /// Recompute sun direction, HW sky params, and SH ambient from current state.
+    ///
+    /// Night mode
+    /// - We deliberately darken sky radiance and ambient SH when `sun_dir.y <= 0.0`
+    ///   so that midnight scenes are truly dark (good contrast for emissive VFX).
+    /// - A tiny floor avoids fully‑black banding and keeps UI readable.
     pub fn recompute(&mut self) {
         self.sun_dir = sun_dir_from_day_frac(self.day_frac);
         let elev = self

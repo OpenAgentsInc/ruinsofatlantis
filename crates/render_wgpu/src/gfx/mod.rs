@@ -1780,7 +1780,8 @@ impl Renderer {
                 0.0,
             ];
         }
-        // Fog color/density based on time-of-day: dark navy at night, light blue by day
+        // Fog color/density based on time-of-day: dark navy at night, light blue by day.
+        // Night fog helps suppress the horizon band and prevents the sky from reading pink.
         if self.sky.sun_dir.y <= 0.0 {
             globals.fog_params = [0.03, 0.04, 0.06, 0.0065];
         } else {

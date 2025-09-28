@@ -33,6 +33,14 @@ Workspace crates (added for modularization)
 CLI/Env toggles
 - `--no-vsync` (or `RA_NO_VSYNC=1`): prefer Immediate present mode if supported.
 
+## Time‑of‑Day (TOD) authoring
+- The initial TOD is controlled per zone in `data/zones/<slug>/manifest.json`:
+  - `start_time_frac` (fraction `[0..1]`; 0.5 = noon, ~0.0/1.0 = midnight)
+  - `start_paused` (boolean; if true, TOD is paused at startup)
+  - `start_time_scale` (float; TOD rate when not paused)
+- The sky system reads these values at startup and recomputes sun direction, sky parameters
+  and SH ambient. At night we darken sky radiance and ambient to achieve an actually dark look.
+
 - client/
   - mod.rs — Client runtime systems index (input/controllers).
   - input.rs — Input state (WASD + Shift) for the player controller.

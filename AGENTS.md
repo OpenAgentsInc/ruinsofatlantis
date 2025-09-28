@@ -17,6 +17,14 @@
 - `crates/server_core` — In‑process NPC state + simple AI/collision avoidance used by the demo.
 - `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer (import as `ra_assets`).
 
+### Time‑of‑Day & Weather
+- Zone authors can control initial time‑of‑day via `data/zones/<slug>/manifest.json`:
+  - `start_time_frac` (0.5 = noon; ~0.0/1.0 = midnight)
+  - `start_paused` (freeze TOD; Space toggles in the client)
+  - `start_time_scale` (TOD playback rate when not paused)
+- The renderer applies these to `SkyStateCPU` on startup; the sky/ambient is deliberately
+  darkened at night so emissive VFX read strongly.
+
 ### What lives in `src/` and why
 - `src/main.rs` — App entry; initializes logging and calls `platform_winit::run()`.
 - `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` for app code.

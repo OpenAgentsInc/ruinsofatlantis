@@ -53,6 +53,16 @@ pub struct WeatherSpec {
 }
 
 /// Authoring manifest for a Zone (Phase 1 subset).
+///
+/// Time‑of‑day (TOD)
+/// - `start_time_frac` lets designers choose an initial TOD for the scene without code changes.
+///   The value is a fraction in `[0..1]` where `0.5` is noon and `~0.0/1.0` lies at midnight.
+/// - `start_paused` starts the sky paused so the scene doesn’t advance time until the user
+///   toggles it (Space). Useful for fixed‑time lookdev shots (e.g., a night demo).
+/// - `start_time_scale` controls how quickly TOD progresses when not paused.
+///
+/// The renderer (`render_wgpu::gfx`) reads these fields after loading the manifest and
+/// applies them to `SkyStateCPU` before the first frame.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ZoneManifest {
     pub zone_id: u32,
@@ -65,13 +75,13 @@ pub struct ZoneManifest {
     pub weather: Option<WeatherSpec>,
     #[serde(default)]
     pub vegetation: Option<VegetationSpec>,
-    /// Optional initial time-of-day fraction [0..1] (0.5=noon, ~0.0 and ~1.0=midnight)
+    /// Initial time‑of‑day fraction in `[0..1]` (0.5 = noon; ~0.0/1.0 = midnight)
     #[serde(default)]
     pub start_time_frac: Option<f32>,
-    /// Optional flag to start the sky paused (so TOD doesn't advance automatically)
+    /// Start the sky paused (TOD does not advance until unpaused)
     #[serde(default)]
     pub start_paused: Option<bool>,
-    /// Optional initial time scale multiplier for TOD progression.
+    /// Initial time scale multiplier for TOD progression
     #[serde(default)]
     pub start_time_scale: Option<f32>,
 }
