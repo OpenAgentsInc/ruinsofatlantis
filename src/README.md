@@ -72,6 +72,7 @@ Gameplay wiring (prototype)
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
   - pipeline.rs — Shader/bind group layouts and pipelines (base/instanced/particles/wizard).
   - shader.wgsl — Main WGSL shaders (plane/instanced/skinned/particles). Uses directional sun + SH ambient.
+  - present.wgsl — Fullscreen present: applies exponential fog and ACES-approx tonemap.
   - (moved) Standalone viewers live under `tools/` crates. Use `tools/model-viewer` for mesh/material inspection.
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
     - Adds `oct_encode`/`oct_decode` with unit tests for normal packing.
