@@ -138,6 +138,7 @@ pub struct Renderer {
     enable_ssgi: bool,
     enable_ssr: bool,
     enable_bloom: bool,
+    static_index: Option<collision_static::StaticIndex>,
     #[allow(dead_code)]
     frame_counter: u32,
     // Stats
@@ -891,6 +892,70 @@ impl Renderer {
         let terrain_ib = terrain_bufs.ib;
         let terrain_index_count = terrain_bufs.index_count;
 
+        // Attempt to load packed static colliders from packs/zones/<slug>/snapshot.v1
+        let static_index = {
+            let path = crate::gfx::asset_path(&format!(
+                "packs/zones/{}/snapshot.v1/colliders.bin",
+                zone.slug
+            ));
+            let idxp = crate::gfx::asset_path(&format!(
+                "packs/zones/{}/snapshot.v1/colliders_index.bin",
+                zone.slug
+            ));
+            if path.exists() && idxp.exists() {
+                if let (Ok(bytes), Ok(_idx_bytes)) = (std::fs::read(&path), std::fs::read(&idxp)) {
+                    let mut colliders: Vec<collision_static::StaticCollider> = Vec::new();
+                    let mut i = 0usize;
+                    while i + 48 <= bytes.len() {
+                        // proto_id (2), shape (2)
+                        let _proto = u16::from_le_bytes([bytes[i], bytes[i + 1]]);
+                        i += 2;
+                        let shape = u16::from_le_bytes([bytes[i], bytes[i + 1]]);
+                        i += 2;
+                        let f = |j: &mut usize| -> f32 {
+                            let v = f32::from_le_bytes(bytes[*j..*j + 4].try_into().unwrap());
+                            *j += 4;
+                            v
+                        };
+                        let cx = f(&mut i);
+                        let cy = f(&mut i);
+                        let cz = f(&mut i);
+                        let radius = f(&mut i);
+                        let half_h = f(&mut i);
+                        let minx = f(&mut i);
+                        let miny = f(&mut i);
+                        let minz = f(&mut i);
+                        let maxx = f(&mut i);
+                        let maxy = f(&mut i);
+                        let maxz = f(&mut i);
+                        // chunk_id
+                        let _ = u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
+                        i += 4;
+                        let aabb = collision_static::Aabb {
+                            min: glam::vec3(minx, miny, minz),
+                            max: glam::vec3(maxx, maxy, maxz),
+                        };
+                        if shape == 0 {
+                            let cyl = collision_static::CylinderY {
+                                center: glam::vec3(cx, cy, cz),
+                                radius,
+                                half_height: half_h,
+                            };
+                            colliders.push(collision_static::StaticCollider {
+                                aabb,
+                                shape: collision_static::ShapeRef::Cyl(cyl),
+                            });
+                        }
+                    }
+                    Some(collision_static::StaticIndex { colliders })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
         // --- Load GLTF assets into CPU meshes, then upload to GPU buffers ---
         let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
             .context("load skinned wizard.gltf")?;
@@ -1354,6 +1419,7 @@ impl Renderer {
             blit_scene_read_pipeline,
             bloom_pipeline,
             bloom_bg,
+            static_index,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
             ssgi_globals_bgl: ssgi_globals_bgl.clone(),
@@ -2904,7 +2970,40 @@ impl Renderer {
             return;
         }
         let cam_fwd = self.cam_follow.current_look - self.cam_follow.current_pos;
+        let before = self.player.pos;
         self.player.update(&self.input, dt, cam_fwd);
+        if let Some(idx) = &self.static_index {
+            // Resolve against static colliders (capsule approx for wizard)
+            let cap = collision_static::Capsule {
+                p0: glam::vec3(
+                    self.player.pos.x,
+                    self.player.pos.y + 0.4,
+                    self.player.pos.z,
+                ),
+                p1: glam::vec3(
+                    self.player.pos.x,
+                    self.player.pos.y + 1.8,
+                    self.player.pos.z,
+                ),
+                radius: 0.4,
+            };
+            let a = collision_static::Aabb {
+                min: glam::vec3(
+                    cap.p0.x.min(cap.p1.x) - cap.radius,
+                    cap.p0.y.min(cap.p1.y) - cap.radius,
+                    cap.p0.z.min(cap.p1.z) - cap.radius,
+                ),
+                max: glam::vec3(
+                    cap.p0.x.max(cap.p1.x) + cap.radius,
+                    cap.p0.y.max(cap.p1.y) + cap.radius,
+                    cap.p0.z.max(cap.p1.z) + cap.radius,
+                ),
+            };
+            let _ = a; // reserved for future broadphase tuning
+            let resolved =
+                collision_static::resolve_slide(before, self.player.pos, &cap, idx, 0.25, 4);
+            self.player.pos = resolved;
+        }
         self.apply_pc_transform();
     }
 

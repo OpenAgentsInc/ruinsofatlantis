@@ -20,6 +20,7 @@ members = [
     "crates/sim_core",       # sim rules/combat engine
     "crates/platform_winit", # winit platform loop
     "crates/ux_hud"          # HUD logic
+    ,"crates/collision_static"
 ]
 resolver = "2"
 

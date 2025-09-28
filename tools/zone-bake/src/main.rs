@@ -42,6 +42,8 @@ fn main() -> Result<()> {
     // Write snapshots
     terrain::write_terrain_snapshot(&slug, &cpu, z.terrain.seed)?;
     terrain::write_trees_snapshot(&slug, &trees)?;
+    // Write simple colliders for trees: Y cylinders centered at tree position
+    write_colliders_snapshot(&slug, &trees)?;
     // Write meta with simple fingerprints
     write_meta(&slug, &z, &cpu.heights, &trees)?;
     log::info!(
@@ -150,4 +152,109 @@ fn fingerprint_models(mats: &[[[f32; 4]; 4]]) -> u64 {
         }
     }
     hasher.finish()
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ColliderBin {
+    // proto_id (1 for tree placeholder), shape kind 0=CylinderY
+    proto_id: u16,
+    shape: u16,
+    // params: [cx, cy, cz, radius, half_height]
+    cx: f32,
+    cy: f32,
+    cz: f32,
+    radius: f32,
+    half_height: f32,
+    aabb_min: [f32; 3],
+    aabb_max: [f32; 3],
+    chunk_id: u32,
+}
+
+fn write_colliders_snapshot(slug: &str, trees: &[[[f32; 4]; 4]]) -> Result<()> {
+    // Simple uniform grid chunking
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let data_root = {
+        let ws = here.join("../../data");
+        if ws.is_dir() { ws } else { here.join("data") }
+    };
+    let packs_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packs/zones")
+        .join(slug)
+        .join("snapshot.v1");
+    fs::create_dir_all(&packs_root)?;
+    let mut out: Vec<ColliderBin> = Vec::new();
+    let extent = 150.0f32; // default used in manifest
+    let chunk = 30.0f32;
+    for m in trees {
+        let c = m;
+        let tx = c[3][0];
+        let ty = c[3][1];
+        let tz = c[3][2];
+        let radius = 0.5f32;
+        let half_h = 2.5f32;
+        let cx = tx;
+        let cy = ty + half_h;
+        let cz = tz;
+        let min = [cx - radius, cy - half_h, cz - radius];
+        let max = [cx + radius, cy + half_h, cz + radius];
+        let gx = ((cx + extent) / chunk).floor() as i32;
+        let gz = ((cz + extent) / chunk).floor() as i32;
+        let chunk_id = ((gx & 0xFFFF) as u32) << 16 | ((gz & 0xFFFF) as u32);
+        out.push(ColliderBin {
+            proto_id: 1,
+            shape: 0,
+            cx,
+            cy,
+            cz,
+            radius,
+            half_height: half_h,
+            aabb_min: min,
+            aabb_max: max,
+            chunk_id,
+        });
+    }
+    // Write colliders.bin (raw packed)
+    let path = packs_root.join("colliders.bin");
+    let mut bytes: Vec<u8> = Vec::with_capacity(out.len() * std::mem::size_of::<ColliderBin>());
+    for b in &out {
+        let p = unsafe {
+            std::slice::from_raw_parts(
+                (b as *const ColliderBin) as *const u8,
+                std::mem::size_of::<ColliderBin>(),
+            )
+        };
+        bytes.extend_from_slice(p);
+    }
+    fs::write(&path, &bytes)?;
+    // Build a simple index: sorted by chunk_id with begin/end
+    let mut ids: Vec<u32> = out.iter().map(|c| c.chunk_id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    // Create mapping by scanning
+    let mut index: Vec<(u32, u32, u32)> = Vec::new();
+    for id in ids {
+        let mut begin = u32::MAX;
+        let mut end = 0u32;
+        for (i, c) in out.iter().enumerate() {
+            if c.chunk_id == id {
+                if begin == u32::MAX {
+                    begin = i as u32;
+                }
+                end = i as u32 + 1;
+            }
+        }
+        if begin != u32::MAX {
+            index.push((id, begin, end));
+        }
+    }
+    let mut idx_bytes: Vec<u8> = Vec::with_capacity(index.len() * 12 + 4);
+    idx_bytes.extend_from_slice(&(index.len() as u32).to_le_bytes());
+    for (id, b, e) in index {
+        idx_bytes.extend_from_slice(&id.to_le_bytes());
+        idx_bytes.extend_from_slice(&b.to_le_bytes());
+        idx_bytes.extend_from_slice(&e.to_le_bytes());
+    }
+    fs::write(packs_root.join("colliders_index.bin"), &idx_bytes)?;
+    Ok(())
 }

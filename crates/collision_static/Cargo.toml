@@ -1,0 +1,12 @@
+[package]
+name = "collision_static"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = "0.30"
+smallvec = "1"
+
+[dev-dependencies]
+approx = "0.5"
+
