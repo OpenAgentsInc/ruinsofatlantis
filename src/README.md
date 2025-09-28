@@ -22,7 +22,7 @@ Workspace crates (added for modularization)
 - Scroll: zoom in/out
 - WASD: move (A/D turn in place)
 - Shift: run
-- 1 or Space: cast Fire Bolt (PC)
+- 1: cast Fire Bolt (PC)
 - Space: toggle sky pause (also active when PC is dead)
 - [: scrub time backward a bit; ]: forward a bit
 - - / =: halve / double time scale

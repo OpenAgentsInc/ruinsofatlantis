@@ -2688,9 +2688,7 @@ impl Renderer {
                     {
                         self.input.run = pressed
                     }
-                    PhysicalKey::Code(KeyCode::Digit1)
-                    | PhysicalKey::Code(KeyCode::Numpad1)
-                    | PhysicalKey::Code(KeyCode::Space)
+                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
                         if self.pc_alive =>
                     {
                         if pressed {
@@ -2698,7 +2696,7 @@ impl Renderer {
                             log::info!("PC cast queued: Fire Bolt");
                         }
                     }
-                    // Sky controls (pause/scrub/speed) — active when PC is dead
+                    // Sky controls (pause/scrub/speed)
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {
                             self.sky.toggle_pause();
