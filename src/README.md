@@ -17,6 +17,22 @@ Workspace crates (added for modularization)
 - main.rs — Binary entry; sets up logging and runs the winit platform loop.
 - platform_winit.rs — Window/event loop integration using winit 0.30.
 
+## Controls
+- RMB drag: orbit camera around the player
+- Scroll: zoom in/out
+- WASD: move (A/D turn in place)
+- Shift: run
+- 1 or Space: cast Fire Bolt (PC)
+- Space: toggle sky pause (also active when PC is dead)
+- [: scrub time backward a bit; ]: forward a bit
+- - / =: halve / double time scale
+- F1: toggle perf overlay (frametime, FPS, draw calls)
+- H: hide/show HUD
+- F5: 5s automated orbit for screenshots
+
+CLI/Env toggles
+- `--no-vsync` (or `RA_NO_VSYNC=1`): prefer Immediate present mode if supported.
+
 - client/
   - mod.rs — Client runtime systems index (input/controllers).
   - input.rs — Input state (WASD + Shift) for the player controller.
