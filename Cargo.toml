@@ -49,6 +49,7 @@ hw-skymodel = "0.1.1"
 data_runtime = { version = "0.1.0", path = "crates/data_runtime" }
 sim_core = { version = "0.1.0", path = "crates/sim_core" }
 ux_hud = { version = "0.1.0", path = "crates/ux_hud" }
+render_wgpu = { version = "0.1.0", path = "crates/render_wgpu" }
 
 [patch.crates-io]
 # Use a patched local copy of draco_decoder to avoid passing

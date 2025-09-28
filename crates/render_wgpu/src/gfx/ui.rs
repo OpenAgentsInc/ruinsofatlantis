@@ -61,10 +61,10 @@ struct Floater {
 impl DamageFloaters {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
         // Reuse the same font as nameplates
-        let font_bytes: &'static [u8] = include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/assets/fonts/NotoSans-Regular.ttf"
-        ));
+    let font_bytes: &'static [u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/fonts/NotoSans-Regular.ttf"
+    ));
         let font = FontArc::try_from_slice(font_bytes)?;
         let px = 28.0; // slightly larger digits
         let scale = PxScale { x: px, y: px };
@@ -476,10 +476,10 @@ pub struct Nameplates {
 impl Nameplates {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
         // Load a font (embedded from assets/fonts at compile time)
-        let font_bytes: &'static [u8] = include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/assets/fonts/NotoSans-Regular.ttf"
-        ));
+    let font_bytes: &'static [u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/fonts/NotoSans-Regular.ttf"
+    ));
         let font = FontArc::try_from_slice(font_bytes)?;
         let px = 24.0; // logical pixel height (slightly smaller)
         let scale = PxScale { x: px, y: px };
@@ -1062,7 +1062,7 @@ impl Hud {
         // Text: build atlas (ASCII printable)
         let font_bytes: &'static [u8] = include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/assets/fonts/NotoSans-Regular.ttf"
+            "/../../assets/fonts/NotoSans-Regular.ttf"
         ));
         let font = FontArc::try_from_slice(font_bytes)?;
         let px = 18.0;
