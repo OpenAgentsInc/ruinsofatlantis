@@ -1619,6 +1619,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "collision_static"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "glam 0.30.8",
+ "smallvec",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4808,6 +4817,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "client_core",
+ "collision_static",
  "data_runtime",
  "ecs_core",
  "glam 0.30.8",
