@@ -59,6 +59,14 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
     col = mix(col, globals.fog.rgb, clamp(f, 0.0, 1.0));
   }
   // Tonemap in linear
-  let mapped = tonemap_aces_approx(col);
+  var mapped = tonemap_aces_approx(col);
+  // Optional lightweight color grade (teal/orange) — subtle
+  let luma = dot(mapped, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let mids = smoothstep(0.2, 0.7, luma);
+  let shadows = 1.0 - smoothstep(0.05, 0.3, luma);
+  let grade_strength = 0.08;
+  // push mids slightly warmer, shadows slightly teal
+  mapped = mix(mapped, vec3<f32>(mapped.r * 1.04, mapped.g * 1.01, mapped.b * 0.96), mids * grade_strength);
+  mapped = mix(mapped, vec3<f32>(mapped.r * 0.98, mapped.g * 1.02, mapped.b * 1.04), shadows * grade_strength);
   return vec4<f32>(mapped, 1.0);
 }

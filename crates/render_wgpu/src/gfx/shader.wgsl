@@ -94,7 +94,17 @@ struct InstOut {
 @vertex
 fn vs_inst(input: InstIn) -> InstOut {
   let inst = mat4x4<f32>(input.i0, input.i1, input.i2, input.i3);
-  let world_pos = (model_u.model * inst * vec4<f32>(input.pos, 1.0)).xyz;
+  var world_pos = (model_u.model * inst * vec4<f32>(input.pos, 1.0)).xyz;
+  // Optional tree wind sway for instances with sel in (0.1, 0.5)
+  if (input.iselected > 0.1 && input.iselected < 0.5) {
+    // Low-amplitude sway increases with world Y (tops sway more than trunks)
+    let t = globals.camRightTime.w;
+    let f1 = 0.15 * sin(world_pos.x * 0.18 + t * 1.2);
+    let f2 = 0.12 * cos(world_pos.z * 0.22 + t * 0.9);
+    let sway = vec2<f32>(f1, f2) * clamp(world_pos.y * 0.15, 0.0, 1.0);
+    world_pos.x += sway.x;
+    world_pos.z += sway.y;
+  }
   var out: InstOut;
   out.world = world_pos;
   out.nrm = normalize((model_u.model * inst * vec4<f32>(input.nrm, 0.0)).xyz);

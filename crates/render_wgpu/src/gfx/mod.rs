@@ -107,6 +107,8 @@ pub struct Renderer {
     ssr_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
+    bloom_pipeline: wgpu::RenderPipeline,
+    bloom_bg: wgpu::BindGroup,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
     post_ao_bgl: wgpu::BindGroupLayout,
@@ -135,6 +137,7 @@ pub struct Renderer {
     enable_post_ao: bool,
     enable_ssgi: bool,
     enable_ssr: bool,
+    enable_bloom: bool,
     #[allow(dead_code)]
     frame_counter: u32,
     // Stats
@@ -577,6 +580,10 @@ impl Renderer {
             pipeline::create_present_pipeline(&device, &globals_bgl, &present_bgl, config.format);
         let blit_scene_read_pipeline =
             pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        // Bloom
+        let bloom_bgl = pipeline::create_bloom_bgl(&device);
+        let bloom_pipeline =
+            pipeline::create_bloom_pipeline(&device, &bloom_bgl, wgpu::TextureFormat::Rgba16Float);
         // (removed) frame overlay
         // Post AO pipeline
         let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
@@ -791,6 +798,21 @@ impl Renderer {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&depth),
+                },
+            ],
+        });
+        // Bloom bind group reads from SceneRead (copy of SceneColor)
+        let bloom_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bloom-bg"),
+            layout: &bloom_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&scene_read_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&post_sampler),
                 },
             ],
         });
@@ -1146,7 +1168,8 @@ impl Renderer {
 
         // Trees: prefer baked instances if available, else scatter using manifest vegetation params
         let trees_models_opt = terrain::load_trees_snapshot("wizard_woods");
-        let trees_instances_cpu: Vec<types::Instance> = if let Some(models) = &trees_models_opt {
+        let mut trees_instances_cpu: Vec<types::Instance> = if let Some(models) = &trees_models_opt
+        {
             terrain::instances_from_models(models)
         } else {
             let (tree_count, tree_seed) = zone
@@ -1156,6 +1179,10 @@ impl Renderer {
                 .unwrap_or((350usize, 20250926u32));
             terrain::place_trees(&terrain_cpu, tree_count, tree_seed)
         };
+        // Mark trees with a non-highlight selection value to enable wind sway in the shader
+        for inst in &mut trees_instances_cpu {
+            inst.selected = 0.25; // below 0.5 so it won't render as highlighted
+        }
         let trees_count = trees_instances_cpu.len() as u32;
         let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("trees-instances"),
@@ -1308,6 +1335,8 @@ impl Renderer {
             ssr_pipeline,
             present_pipeline,
             blit_scene_read_pipeline,
+            bloom_pipeline,
+            bloom_bg,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
             ssgi_globals_bgl: ssgi_globals_bgl.clone(),
@@ -1463,6 +1492,7 @@ impl Renderer {
             enable_post_ao: true,
             enable_ssgi: true,
             enable_ssr: false,
+            enable_bloom: true,
             // frame overlay removed
         })
     }
@@ -2074,6 +2104,27 @@ impl Renderer {
             blit.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
+        // Ensure SceneRead is available for bloom pass as well
+        if self.enable_bloom {
+            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("blit-scene-to-read(bloom)"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_read_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            blit.set_pipeline(&self.blit_scene_read_pipeline);
+            blit.set_bind_group(0, &self.present_bg, &[]);
+            blit.draw(0..3, 0..1);
+        }
 
         // SSR overlay into SceneColor (alpha blend)
         if self.enable_ssr {
@@ -2150,6 +2201,28 @@ impl Renderer {
                 post.draw(0..3, 0..1);
                 self.draw_calls += 1;
             }
+        }
+
+        // Bloom additive overlay
+        if self.enable_bloom {
+            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("bloom-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.scene_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            rp.set_pipeline(&self.bloom_pipeline);
+            rp.set_bind_group(0, &self.bloom_bg, &[]);
+            rp.draw(0..3, 0..1);
         }
 
         // Present SceneColor to swapchain
