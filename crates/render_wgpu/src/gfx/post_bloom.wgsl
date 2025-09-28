@@ -1,5 +1,7 @@
-// Bloom: sample scene color with a small 9-tap blur around the current pixel,
-// apply a soft threshold, and additively blend into the destination.
+// Bloom: sample scene color with a small 9‑tap blur around the current pixel,
+// apply a soft knee threshold, and additively blend into the destination.
+// The pass reads from SceneRead and writes into SceneColor (via pipeline.rs),
+// adding a subtle highlight around bright emissive content (e.g., fire bolts).
 
 @group(0) @binding(0) var scene_tex: texture_2d<f32>;
 @group(0) @binding(1) var samp: sampler;
@@ -34,4 +36,3 @@ fn fs_bloom(in: VsOut) -> @location(0) vec4<f32> {
   let bloom = blur * t * 0.35; // intensity
   return vec4<f32>(bloom, 0.0);
 }
-

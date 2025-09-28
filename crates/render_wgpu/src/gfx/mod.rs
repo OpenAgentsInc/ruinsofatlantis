@@ -668,6 +668,23 @@ impl Renderer {
             };
             sky_state.recompute();
         }
+        // Apply optional time-of-day overrides from the Zone
+        if let Some(frac) = zone.start_time_frac {
+            sky_state.day_frac = frac.rem_euclid(1.0);
+            sky_state.recompute();
+        }
+        if let Some(pause) = zone.start_paused {
+            sky_state.paused = pause;
+        }
+        if let Some(scale) = zone.start_time_scale {
+            sky_state.time_scale = scale.clamp(0.01, 1000.0);
+        }
+        log::info!(
+            "Start TOD: day_frac={:.3} paused={} sun_elev={:.3}",
+            sky_state.day_frac,
+            sky_state.paused,
+            sky_state.sun_dir.y
+        );
         let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("sky-uniform"),
             contents: bytemuck::bytes_of(&sky_state.sky_uniform),
@@ -1486,11 +1503,11 @@ impl Renderer {
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
             pc_alive: true,
-            // Lighting M1 scaffolding
+            // Lighting M1 scaffolding (disabled by default to avoid outline artifacts)
             gbuffer: Some(gbuffer),
             hiz: Some(hiz),
-            enable_post_ao: true,
-            enable_ssgi: true,
+            enable_post_ao: false,
+            enable_ssgi: false,
             enable_ssr: false,
             enable_bloom: true,
             // frame overlay removed
@@ -1763,8 +1780,13 @@ impl Renderer {
                 0.0,
             ];
         }
-        // Light bluish fog with gentle density for distance falloff
-        globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
+        // Fog color/density based on time-of-day: dark navy at night, light blue by day.
+        // Night fog helps suppress the horizon band and prevents the sky from reading pink.
+        if self.sky.sun_dir.y <= 0.0 {
+            globals.fog_params = [0.03, 0.04, 0.06, 0.0065];
+        } else {
+            globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
+        }
         self.queue
             .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
         // Sky raw params

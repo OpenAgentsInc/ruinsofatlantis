@@ -96,6 +96,11 @@ impl SkyStateCPU {
     }
 
     /// Recompute sun direction, HW sky params, and SH ambient from current state.
+    ///
+    /// Night mode
+    /// - We deliberately darken sky radiance and ambient SH when `sun_dir.y <= 0.0`
+    ///   so that midnight scenes are truly dark (good contrast for emissive VFX).
+    /// - A tiny floor avoids fully‑black banding and keeps UI readable.
     pub fn recompute(&mut self) {
         self.sun_dir = sun_dir_from_day_frac(self.day_frac);
         let elev = self
@@ -111,10 +116,25 @@ impl SkyStateCPU {
             albedo: self.weather.ground_albedo,
         })
         .expect("valid HW params");
-        let (params, radiances) = sky.raw();
+        let (params, mut radiances) = sky.raw();
+        // Night darkening: when the sun is below the horizon, drastically reduce
+        // sky radiance and ambient. Use a smooth ramp near the horizon and keep
+        // a tiny floor to avoid pure black banding.
+        let sun_y = self.sun_dir.y;
+        let ramp = sun_y.max(0.0).powf(3.0); // strong falloff toward night
+        let night_floor = 0.015; // minimal residual radiance
+        radiances[0] = radiances[0] * ramp + night_floor;
+        radiances[1] = radiances[1] * ramp + night_floor;
+        radiances[2] = radiances[2] * ramp + night_floor;
         self.sky_uniform = pack_hw_uniform(params, radiances, self.sun_dir, self.day_frac);
-        // Project to SH (irradiance) for ambient
+        // Project to SH (irradiance) for ambient, then scale similarly
         self.sh9_rgb = project_irradiance_sh9(self.sun_dir, &self.weather);
+        let amb_scale = ramp * 1.0 + (0.04); // small ambient floor at night
+        for i in 0..9 {
+            self.sh9_rgb[i][0] *= amb_scale;
+            self.sh9_rgb[i][1] *= amb_scale;
+            self.sh9_rgb[i][2] *= amb_scale;
+        }
     }
 }
 
