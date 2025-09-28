@@ -7,23 +7,24 @@
 - Tests: unit tests within each crate’s `src/`; integration tests in top‑level `tests/`.
 
 ### Workspace Crates (current)
-- `crates/render_wgpu` — Renderer crate. Hosts the full renderer under `src/gfx/**` (camera, pipelines, shaders, UI, scene build, terrain, sky, etc.). The root `src/gfx/mod.rs` is a thin re‑export of this crate.
+- `crates/render_wgpu` — Renderer crate. Hosts the full renderer under `src/gfx/**` (camera, pipelines, shaders, UI, scene build, terrain, sky, etc.). Root `src/gfx/mod.rs` is a thin re‑export of this crate.
 - `crates/platform_winit` — Platform/window/input loop (winit 0.30) that drives the renderer. Root app calls `platform_winit::run()`.
-- `crates/sim_core` — Rules/combat FSM and headless sim engine (`rules/*`, `combat/*`, `sim/*`). Root re‑exports as `crate::sim` and `crate::core::{rules,combat}`.
-- `crates/data_runtime` — SRD‑aligned data schemas + loaders (replaces `src/core/data`). Root re‑exports as `crate::core::data`.
+- `crates/sim_core` — Rules/combat FSM and headless sim engine (`rules/*`, `combat/*`, `sim/*`).
+- `crates/data_runtime` — SRD‑aligned data schemas + loaders (replaces `src/core/data`).
 - `crates/ux_hud` — HUD logic/toggles (`HudModel`), separated from renderer draw code.
-- `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer.
+- `crates/ecs_core` — Minimal ECS (entities, transforms, render kinds) used by scene assembly.
+- `crates/client_core` — Input state and third‑person controller used by the app/renderer.
+- `crates/server_core` — In‑process NPC state + simple AI/collision avoidance used by the demo.
+- `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer (import as `ra_assets`).
 
 ### What lives in `src/` and why
 - `src/main.rs` — App entry; initializes logging and calls `platform_winit::run()`.
-- `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` so existing `crate::gfx` paths continue to work in the app.
-- `src/core/mod.rs` — Facade re‑exports: `data_runtime` (as `crate::core::data`) and `sim_core::{rules, combat}` for compatibility.
-- `src/server/**` — Prototype in‑process server NPC/state and collision. Stays here until we split a proper server crate/process.
-- `src/client/**` — Gameplay/controller glue for the app. The renderer crate contains minimal shims to avoid cycles; the canonical code stays here and can be moved to a `client/` crate later when stabilized.
-- `src/assets/**` — Facade re‑export over `shared/assets` so app code can use `crate::assets::*`.
-- `src/bin/**` — Standalone tools and viewers (e.g., `wizard_viewer`, `gltf_decompress`, `image_probe`, `bevy_probe`). These can keep direct deps (wgpu, gltf, image) in the root.
+- `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` for app code.
+- `src/bin/**` — Standalone tools and viewers (e.g., `gltf_decompress`, `image_probe`, `bevy_probe`). These can keep direct deps (wgpu, gltf, image) in the root; substantial tools should be placed under `tools/` crates (see `tools/model-viewer`).
 
-Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic, tools libraries) should live in dedicated crates. App glue, small bins, and short‑lived prototypes can remain in `src/` until they harden, at which point prefer moving them under `crates/`.
+Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `ra_assets` directly.
+
+Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic, ECS, client/server glue, tools libraries) should live in dedicated crates. App glue, small bins, and short‑lived prototypes can remain in `src/` until they harden, at which point prefer moving them under `crates/` or `tools/`.
 
 ### Code Organization (renderer)
 - Rendering lives under `crates/render_wgpu/src/gfx/` split by responsibility (camera, types, mesh, pipeline, shaders, ui, terrain, sky, temporal, framegraph helpers). The root `src/gfx/mod.rs` re‑exports this for compatibility.
