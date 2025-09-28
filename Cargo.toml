@@ -9,6 +9,7 @@ members = [
     ".",                # root crate
     "shared/assets",    # shared library for model/assets
     "tools/model-viewer", # standalone model viewer
+    "xtask",             # workspace automation
     "tools/zone-bake",
     "tools/gltf-decompress",
     "tools/image-probe",
