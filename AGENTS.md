@@ -20,7 +20,7 @@
 ### What lives in `src/` and why
 - `src/main.rs` — App entry; initializes logging and calls `platform_winit::run()`.
 - `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` for app code.
-- `src/bin/**` — Standalone tools and viewers (e.g., `gltf_decompress`, `image_probe`, `bevy_probe`). These can keep direct deps (wgpu, gltf, image) in the root; substantial tools should be placed under `tools/` crates (see `tools/model-viewer`).
+- `src/bin/**` — Small one-off tools (e.g., `gltf_decompress`, `image_probe`, `bevy_probe`). Substantial viewers live under `tools/` (see `tools/model-viewer`). The old `wizard_viewer` bin has been removed in favor of the `tools/model-viewer` crate.
 
 Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `ra_assets` directly.
 

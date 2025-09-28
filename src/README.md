@@ -35,8 +35,6 @@ Workspace crates (added for modularization)
   - gltf_decompress.rs — One‑time CLI to decompress Draco GLTFs (offline step).
   - image_probe.rs — Simple image IO experiments.
   - sim_harness.rs — Basic runner for the combat simulator.
-  - wizard_viewer.rs — Standalone viewer rendering the wizard with a simple pipeline.
-  - wizard_viewer.wgsl — WGSL shader for the standalone wizard viewer.
 
 Note: the old `core/` facade has been removed; crates use `data_runtime` and `sim_core` directly.
 
@@ -58,7 +56,7 @@ Gameplay wiring (prototype)
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
   - pipeline.rs — Shader/bind group layouts and pipelines (base/instanced/particles/wizard).
   - shader.wgsl — Main WGSL shaders (plane/instanced/skinned/particles). Uses directional sun + SH ambient.
-  - shader_wizard_viewer.wgsl — WGSL for standalone wizard viewer bin.
+  - (moved) Standalone viewers live under `tools/` crates. Use `tools/model-viewer` for mesh/material inspection.
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
     - Adds `oct_encode`/`oct_decode` with unit tests for normal packing.
   - anim.rs — CPU animation sampling (palettes, per‑node global transforms, clip timing cues).
