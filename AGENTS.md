@@ -2,21 +2,32 @@
 
 ## Project Structure & Module Organization
 - Root: `README.md`, `GDD.md` (design), `LICENSE`, `NOTICE`.
-- Rust crate (current): single binary at root with `Cargo.toml` and `src/main.rs`.
-- Future workspace (planned): crates under `server/`, `client/`, `shared/`, `tools/`.
+- Workspace: multiple crates under `crates/` and `shared/`; root remains the app shell and bins.
 - Assets: `assets/` (art/audio), `data/` (JSON/CSV), `docs/` (design notes, diagrams).
 - Tests: unit tests within each crate’s `src/`; integration tests in top‑level `tests/`.
 
-### Code Organization (client prototype)
-- Rendering lives under `src/gfx/` and is split by responsibility:
-  - `gfx/mod.rs`: `Renderer` entry point (init/resize/render) and high‑level wiring.
-  - `gfx/camera.rs`: camera math and helpers.
-  - `gfx/types.rs`: GPU‑POD buffer types and vertex layouts (`Globals`, `Model`, `Vertex`, `Instance`).
-  - `gfx/mesh.rs`: CPU‑side mesh builders (cube, plane) → vertex/index buffers.
-  - `gfx/pipeline.rs`: shader load, bind group layouts, pipelines (base/instanced/wireframe).
-  - `gfx/shader.wgsl`: WGSL shaders for plane + instanced draws.
-  - `gfx/util.rs`: small helpers (depth view, surface clamp preserving aspect).
-- Going forward, keep modules cohesive, focused, and documented; do not accrete new features into monolith files. Add sub‑modules as systems grow (input, scene graph, streaming, UI, net, ECS, etc.).
+### Workspace Crates (current)
+- `crates/render_wgpu` — Renderer crate. Hosts the full renderer under `src/gfx/**` (camera, pipelines, shaders, UI, scene build, terrain, sky, etc.). The root `src/gfx/mod.rs` is a thin re‑export of this crate.
+- `crates/platform_winit` — Platform/window/input loop (winit 0.30) that drives the renderer. Root app calls `platform_winit::run()`.
+- `crates/sim_core` — Rules/combat FSM and headless sim engine (`rules/*`, `combat/*`, `sim/*`). Root re‑exports as `crate::sim` and `crate::core::{rules,combat}`.
+- `crates/data_runtime` — SRD‑aligned data schemas + loaders (replaces `src/core/data`). Root re‑exports as `crate::core::data`.
+- `crates/ux_hud` — HUD logic/toggles (`HudModel`), separated from renderer draw code.
+- `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer.
+
+### What lives in `src/` and why
+- `src/main.rs` — App entry; initializes logging and calls `platform_winit::run()`.
+- `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` so existing `crate::gfx` paths continue to work in the app.
+- `src/core/mod.rs` — Facade re‑exports: `data_runtime` (as `crate::core::data`) and `sim_core::{rules, combat}` for compatibility.
+- `src/server/**` — Prototype in‑process server NPC/state and collision. Stays here until we split a proper server crate/process.
+- `src/client/**` — Gameplay/controller glue for the app. The renderer crate contains minimal shims to avoid cycles; the canonical code stays here and can be moved to a `client/` crate later when stabilized.
+- `src/assets/**` — Facade re‑export over `shared/assets` so app code can use `crate::assets::*`.
+- `src/bin/**` — Standalone tools and viewers (e.g., `wizard_viewer`, `gltf_decompress`, `image_probe`, `bevy_probe`). These can keep direct deps (wgpu, gltf, image) in the root.
+
+Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic, tools libraries) should live in dedicated crates. App glue, small bins, and short‑lived prototypes can remain in `src/` until they harden, at which point prefer moving them under `crates/`.
+
+### Code Organization (renderer)
+- Rendering lives under `crates/render_wgpu/src/gfx/` split by responsibility (camera, types, mesh, pipeline, shaders, ui, terrain, sky, temporal, framegraph helpers). The root `src/gfx/mod.rs` re‑exports this for compatibility.
+- Keep modules cohesive and well‑documented; prefer adding focused sub‑modules as systems grow (scene graph, streaming, UI, net, ECS, etc.).
 
 ### Documentation & Comments
 - All new modules must start with a brief docblock explaining scope and how to extend it.

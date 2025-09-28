@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ruinsofatlantis = { path = "../.." }
-
+anyhow = "1"
+log = "0.4"
+pollster = "0.4"
+render_wgpu = { path = "../render_wgpu" }
+wgpu = "26"
+winit = "0.30"
