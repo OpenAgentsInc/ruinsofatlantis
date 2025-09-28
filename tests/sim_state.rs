@@ -31,7 +31,7 @@ fn load_defaults_class_and_monster() {
 
 #[test]
 fn target_ac_and_allies() {
-    use ruinsofatlantis::core::combat::fsm::ActionState;
+    use sim_core::combat::fsm::ActionState;
     let mut s = SimState::new(50, 1);
     s.actors.push(ruinsofatlantis::sim::state::ActorSim {
         id: "a".into(),

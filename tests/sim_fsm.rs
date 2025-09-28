@@ -1,5 +1,5 @@
-use ruinsofatlantis::core::combat::fsm::{ActionState, Gcd, ReactionWindow, StartError};
-use ruinsofatlantis::core::data::ids::Id;
+use data_runtime::ids::Id;
+use sim_core::combat::fsm::{ActionState, Gcd, ReactionWindow, StartError};
 
 #[test]
 fn default_state_is_idle() {

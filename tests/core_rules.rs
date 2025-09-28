@@ -1,5 +1,5 @@
-use ruinsofatlantis::core::rules::attack::Advantage;
-use ruinsofatlantis::core::rules::saves::SaveKind;
+use sim_core::rules::attack::Advantage;
+use sim_core::rules::saves::SaveKind;
 
 #[test]
 fn advantage_variants_debug() {

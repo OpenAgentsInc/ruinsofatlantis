@@ -1,7 +1,7 @@
 //! Headless simulation harness CLI.
 //! Usage: cargo run --bin sim_harness -- --scenario data/scenarios/example.yaml
 
-use ruinsofatlantis::core::data::{loader, scenario};
+use data_runtime::{loader, scenario};
 use sim_core::sim::runner;
 use std::env;
 use std::path::Path;

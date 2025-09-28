@@ -6,7 +6,7 @@
 //!   cargo run --bin zone_bake -- wizard_woods
 
 use anyhow::{Context, Result};
-use ruinsofatlantis::core::data::zone::load_zone_manifest;
+use data_runtime::zone::load_zone_manifest;
 use ruinsofatlantis::gfx::terrain;
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
@@ -85,7 +85,7 @@ struct ZoneMeta<'a> {
 
 fn write_meta(
     slug: &str,
-    z: &ruinsofatlantis::core::data::zone::ZoneManifest,
+    z: &data_runtime::zone::ZoneManifest,
     heights: &[f32],
     trees: &[[[f32; 4]; 4]],
 ) -> Result<()> {
@@ -97,10 +97,10 @@ fn write_meta(
         slug: &z.slug,
         display_name: &z.display_name,
         plane: match &z.plane {
-            ruinsofatlantis::core::data::zone::ZonePlane::Material => "Material",
-            ruinsofatlantis::core::data::zone::ZonePlane::Feywild => "Feywild",
-            ruinsofatlantis::core::data::zone::ZonePlane::Shadowfell => "Shadowfell",
-            ruinsofatlantis::core::data::zone::ZonePlane::Other(s) => s.as_str(),
+            data_runtime::zone::ZonePlane::Material => "Material",
+            data_runtime::zone::ZonePlane::Feywild => "Feywild",
+            data_runtime::zone::ZonePlane::Shadowfell => "Shadowfell",
+            data_runtime::zone::ZonePlane::Other(s) => s.as_str(),
         },
         terrain: MetaTerrain {
             size: z.terrain.size as usize,

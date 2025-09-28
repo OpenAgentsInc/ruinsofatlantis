@@ -38,8 +38,7 @@ Workspace crates (added for modularization)
   - wizard_viewer.rs — Standalone viewer rendering the wizard with a simple pipeline.
   - wizard_viewer.wgsl — WGSL shader for the standalone wizard viewer.
 
-- core/
-  - mod.rs — Core facade; exposes `data_runtime` as `crate::core::data` and `sim_core::{rules,combat}` as stable root paths.
+Note: the old `core/` facade has been removed; crates use `data_runtime` and `sim_core` directly.
 
 - ecs/
   - mod.rs — Minimal ECS scaffolding (entities, transforms, render kinds).
