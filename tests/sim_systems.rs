@@ -1,6 +1,6 @@
-use ruinsofatlantis::core::combat::fsm::ActionState;
 use ruinsofatlantis::sim::state::{ActorSim, SimState};
 use ruinsofatlantis::sim::systems;
+use sim_core::combat::fsm::ActionState;
 
 fn mk_actor(id: &str, role: &str, team: Option<&str>) -> ActorSim {
     ActorSim {
@@ -62,7 +62,7 @@ fn attack_roll_hits_without_shield() {
     a.target = Some(1);
     s.spells.insert(
         "wiz.fire_bolt.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
     );
     let b = mk_actor("boss", "boss", Some("boss"));
     s.actors.push(a);
@@ -82,7 +82,7 @@ fn attack_roll_triggers_shield_reaction() {
     a.target = Some(1);
     s.spells.insert(
         "wiz.fire_bolt.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
     );
     let mut b = mk_actor("target", "boss", Some("boss"));
     b.ability_ids.push("wiz.shield.srd521".into());
@@ -105,7 +105,7 @@ fn damage_applies_and_underwater_halves_fire() {
     a.target = Some(1);
     s.spells.insert(
         "wiz.fire_bolt.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
     );
     let mut b = mk_actor("boss", "boss", Some("boss"));
     b.hp = 40;
@@ -124,7 +124,7 @@ fn damage_applies_and_underwater_halves_fire() {
     a_u.target = Some(1);
     s_under.spells.insert(
         "wiz.fire_bolt.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
     );
     let mut b_u = mk_actor("boss", "boss", Some("boss"));
     b_u.hp = 40;
@@ -146,7 +146,7 @@ fn damage_applies_and_underwater_halves_fire() {
     a_d.target = Some(1);
     s_dry.spells.insert(
         "wiz.fire_bolt.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
     );
     let mut b_d = mk_actor("boss", "boss", Some("boss"));
     b_d.hp = 40;
@@ -193,7 +193,7 @@ fn saving_throw_applies_condition_on_fail() {
       "projectile": null,
       "save": { "kind": "dex", "dc": 30, "on_fail": { "apply_condition": "prone", "duration_ms": 6000 } }
     }"#;
-    let spec: ruinsofatlantis::core::data::spell::SpellSpec = serde_json::from_str(txt).unwrap();
+    let spec: data_runtime::spell::SpellSpec = serde_json::from_str(txt).unwrap();
     s.spells.insert("grease".into(), spec);
     s.cast_completed.push((0, "grease".into()));
     systems::saving_throw::run(&mut s);
@@ -217,7 +217,7 @@ fn buffs_bless_sets_blessed_ms_for_allies() {
     s.actors.push(mk_actor("boss", "boss", Some("boss")));
     s.spells.insert(
         "cleric.bless.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/bless.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/bless.json").unwrap(),
     );
     s.cast_completed.push((0, "cleric.bless.srd521".into()));
     systems::buffs::run(&mut s);
@@ -229,10 +229,8 @@ fn buffs_bless_sets_blessed_ms_for_allies() {
 fn conditions_tick_and_expire() {
     let mut s = SimState::new(50, 5);
     let mut a = mk_actor("p", "dps", Some("players"));
-    a.statuses.push((
-        ruinsofatlantis::core::combat::conditions::Condition::Prone,
-        50,
-    ));
+    a.statuses
+        .push((sim_core::combat::conditions::Condition::Prone, 50));
     s.actors.push(a);
     systems::conditions::run(&mut s);
     // After one tick, 50 -> 0 and removed
@@ -250,7 +248,7 @@ fn cast_complete_triggers_pending_damage_even_without_attack() {
     // Insert a buff spell with no attack/damage
     s.spells.insert(
         "cleric.bless.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/bless.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/bless.json").unwrap(),
     );
     s.cast_completed.push((0, "cleric.bless.srd521".into()));
     systems::attack_roll::run(&mut s);
@@ -294,7 +292,7 @@ fn temp_hp_absorbs_before_hp() {
       "projectile": null,
       "save": null
     }"#;
-    let spec: ruinsofatlantis::core::data::spell::SpellSpec = serde_json::from_str(txt).unwrap();
+    let spec: data_runtime::spell::SpellSpec = serde_json::from_str(txt).unwrap();
     s.spells.insert("deal100".into(), spec);
     s.cast_completed.push((0, "deal100".into()));
     // No attack roll branch → pending_damage
@@ -341,7 +339,7 @@ fn concentration_breaks_on_high_damage() {
       "projectile": null,
       "save": null
     }"#;
-    let spec: ruinsofatlantis::core::data::spell::SpellSpec = serde_json::from_str(txt).unwrap();
+    let spec: data_runtime::spell::SpellSpec = serde_json::from_str(txt).unwrap();
     s.spells.insert("deal100".into(), spec);
     s.cast_completed.push((0, "deal100".into()));
     systems::attack_roll::run(&mut s);
@@ -360,7 +358,7 @@ fn ability_cooldown_starts_on_cast() {
     // Ensure spell is loaded to read cooldown
     s.spells.insert(
         "wiz.fire_bolt.srd521".into(),
-        ruinsofatlantis::core::data::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
+        data_runtime::loader::load_spell_spec("spells/fire_bolt.json").unwrap(),
     );
     // Start cast (may or may not start depending on GCD); ensure Idle for next attempt
     systems::cast_begin::run(&mut s);

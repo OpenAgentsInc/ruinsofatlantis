@@ -1,6 +1,6 @@
-use ruinsofatlantis::core::data::loader;
-use ruinsofatlantis::core::data::scenario;
-use ruinsofatlantis::core::data::spell::{Spell, SpellSpec};
+use data_runtime::loader;
+use data_runtime::scenario;
+use data_runtime::spell::{Spell, SpellSpec};
 
 #[test]
 fn read_json_fire_bolt() {
@@ -68,7 +68,7 @@ fn scenario_yaml_example_loads() {
 
 #[test]
 fn spell_is_cantrip_helper() {
-    use ruinsofatlantis::core::data::ids::Id;
+    use data_runtime::ids::Id;
     let s = Spell {
         id: Id("test".into()),
         name: "X".into(),

@@ -2,21 +2,33 @@
 
 ## Project Structure & Module Organization
 - Root: `README.md`, `GDD.md` (design), `LICENSE`, `NOTICE`.
-- Rust crate (current): single binary at root with `Cargo.toml` and `src/main.rs`.
-- Future workspace (planned): crates under `server/`, `client/`, `shared/`, `tools/`.
+- Workspace: multiple crates under `crates/` and `shared/`; root remains the app shell and bins.
 - Assets: `assets/` (art/audio), `data/` (JSON/CSV), `docs/` (design notes, diagrams).
 - Tests: unit tests within each crate’s `src/`; integration tests in top‑level `tests/`.
 
-### Code Organization (client prototype)
-- Rendering lives under `src/gfx/` and is split by responsibility:
-  - `gfx/mod.rs`: `Renderer` entry point (init/resize/render) and high‑level wiring.
-  - `gfx/camera.rs`: camera math and helpers.
-  - `gfx/types.rs`: GPU‑POD buffer types and vertex layouts (`Globals`, `Model`, `Vertex`, `Instance`).
-  - `gfx/mesh.rs`: CPU‑side mesh builders (cube, plane) → vertex/index buffers.
-  - `gfx/pipeline.rs`: shader load, bind group layouts, pipelines (base/instanced/wireframe).
-  - `gfx/shader.wgsl`: WGSL shaders for plane + instanced draws.
-  - `gfx/util.rs`: small helpers (depth view, surface clamp preserving aspect).
-- Going forward, keep modules cohesive, focused, and documented; do not accrete new features into monolith files. Add sub‑modules as systems grow (input, scene graph, streaming, UI, net, ECS, etc.).
+### Workspace Crates (current)
+- `crates/render_wgpu` — Renderer crate. Hosts the full renderer under `src/gfx/**` (camera, pipelines, shaders, UI, scene build, terrain, sky, etc.). Root `src/gfx/mod.rs` is a thin re‑export of this crate.
+- `crates/platform_winit` — Platform/window/input loop (winit 0.30) that drives the renderer. Root app calls `platform_winit::run()`.
+- `crates/sim_core` — Rules/combat FSM and headless sim engine (`rules/*`, `combat/*`, `sim/*`).
+- `crates/data_runtime` — SRD‑aligned data schemas + loaders (replaces `src/core/data`).
+- `crates/ux_hud` — HUD logic/toggles (`HudModel`), separated from renderer draw code.
+- `crates/ecs_core` — Minimal ECS (entities, transforms, render kinds) used by scene assembly.
+- `crates/client_core` — Input state and third‑person controller used by the app/renderer.
+- `crates/server_core` — In‑process NPC state + simple AI/collision avoidance used by the demo.
+- `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer (import as `ra_assets`).
+
+### What lives in `src/` and why
+- `src/main.rs` — App entry; initializes logging and calls `platform_winit::run()`.
+- `src/gfx/mod.rs` — Thin re‑export of `render_wgpu::gfx` for app code.
+- `src/bin/**` — Small one-off tools (e.g., `gltf_decompress`, `image_probe`, `bevy_probe`). Substantial viewers live under `tools/` (see `tools/model-viewer`). The old `wizard_viewer` bin has been removed in favor of the `tools/model-viewer` crate.
+
+Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `ra_assets` directly.
+
+Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic, ECS, client/server glue, tools libraries) should live in dedicated crates. App glue, small bins, and short‑lived prototypes can remain in `src/` until they harden, at which point prefer moving them under `crates/` or `tools/`.
+
+### Code Organization (renderer)
+- Rendering lives under `crates/render_wgpu/src/gfx/` split by responsibility (camera, types, mesh, pipeline, shaders, ui, terrain, sky, temporal, framegraph helpers). The root `src/gfx/mod.rs` re‑exports this for compatibility.
+- Keep modules cohesive and well‑documented; prefer adding focused sub‑modules as systems grow (scene graph, streaming, UI, net, ECS, etc.).
 
 ### Documentation & Comments
 - All new modules must start with a brief docblock explaining scope and how to extend it.

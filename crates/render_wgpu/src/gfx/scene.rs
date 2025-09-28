@@ -7,10 +7,10 @@
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use crate::assets::SkinnedMeshCPU;
-use crate::ecs::{RenderKind, Transform, World};
 use crate::gfx::terrain::TerrainCPU;
 use crate::gfx::types::{Instance, InstanceSkin};
+use ecs_core::{RenderKind, Transform, World};
+use ra_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
 
 pub struct SceneBuild {

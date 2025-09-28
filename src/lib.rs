@@ -1,9 +1,7 @@
-// Re-export production modules for use by multiple binaries.
-pub mod assets;
-pub mod client;
-pub mod core;
-pub mod ecs;
+// Root app shell and re-exports for workspace crates used by bins.
+pub use client_core as client;
+pub use ecs_core as ecs;
 pub mod gfx;
-pub mod platform_winit;
-pub mod server;
+pub use platform_winit;
+pub use server_core as server;
 pub use sim_core as sim;

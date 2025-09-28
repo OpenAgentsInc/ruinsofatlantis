@@ -6,11 +6,11 @@ Workspace crates (added for modularization)
 - crates/data_runtime — SRD-aligned data schemas + loaders (replaces `src/core/data`; re-exported under `crate::core::data`).
 - crates/render_wgpu — Renderer crate. The full contents of the old `src/gfx/**` now live here under `crates/render_wgpu/src/gfx/**`. The root `src/gfx/mod.rs` is a thin re‑export of `render_wgpu::gfx`.
 - crates/sim_core — Rules/combat/sim crate (moved from `src/core/{rules,combat}` and `src/sim`). Re-exported under `crate::core::{rules,combat}` and `crate::sim` for compatibility.
-- crates/platform_winit — Platform loop facade (temporarily re-exports `crate::platform_winit`).
+- crates/platform_winit — Platform loop crate. Root app calls `platform_winit::run()`.
 - crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; F1 toggles perf overlay, H toggles HUD).
 
 - Workspace crates (new)
-- shared/assets — Library crate re-exporting our asset loaders for tools.
+- shared/assets — Library crate with asset loaders for tools and renderer.
 - tools/model-viewer — Standalone wgpu viewer that loads GLTF/GLB via shared/assets.
 
 - lib.rs — Crate root; re‑exports main modules.
@@ -35,11 +35,8 @@ Workspace crates (added for modularization)
   - gltf_decompress.rs — One‑time CLI to decompress Draco GLTFs (offline step).
   - image_probe.rs — Simple image IO experiments.
   - sim_harness.rs — Basic runner for the combat simulator.
-  - wizard_viewer.rs — Standalone viewer rendering the wizard with a simple pipeline.
-  - wizard_viewer.wgsl — WGSL shader for the standalone wizard viewer.
 
-- core/
-  - mod.rs — Core facade; re-exports `data_runtime` as `crate::core::data` and `sim_core::{rules,combat}` for compatibility.
+Note: the old `core/` facade has been removed; crates use `data_runtime` and `sim_core` directly.
 
 - ecs/
   - mod.rs — Minimal ECS scaffolding (entities, transforms, render kinds).
@@ -59,7 +56,7 @@ Gameplay wiring (prototype)
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
   - pipeline.rs — Shader/bind group layouts and pipelines (base/instanced/particles/wizard).
   - shader.wgsl — Main WGSL shaders (plane/instanced/skinned/particles). Uses directional sun + SH ambient.
-  - shader_wizard_viewer.wgsl — WGSL for standalone wizard viewer bin.
+  - (moved) Standalone viewers live under `tools/` crates. Use `tools/model-viewer` for mesh/material inspection.
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
     - Adds `oct_encode`/`oct_decode` with unit tests for normal packing.
   - anim.rs — CPU animation sampling (palettes, per‑node global transforms, clip timing cues).

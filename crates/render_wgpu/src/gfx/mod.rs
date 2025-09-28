@@ -37,21 +37,22 @@ pub mod terrain;
 mod ui;
 mod util;
 
-use crate::assets::skinning::merge_gltf_animations;
-use crate::assets::{
-    AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3, load_gltf_mesh, load_gltf_skinned,
-    load_obj_mesh,
-};
-use crate::core::data::{
+use data_runtime::{
     loader as data_loader,
     spell::SpellSpec,
     zone::{ZoneManifest, load_zone_manifest},
+};
+use ra_assets::skinning::merge_gltf_animations;
+use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
+use ra_assets::{
+    gltf::load_gltf_mesh, load_obj_static as load_obj_mesh, skinning::load_gltf_skinned,
 };
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
 use util::scale_to_max;
 
+use crate::server_ext::CollideProjectiles;
 use std::time::Instant;
 
 use wgpu::{
@@ -208,7 +209,7 @@ pub struct Renderer {
     zombie_models: Vec<glam::Mat4>,
     zombie_cpu: SkinnedMeshCPU,
     zombie_time_offset: Vec<f32>,
-    zombie_ids: Vec<crate::server::NpcId>,
+    zombie_ids: Vec<server_core::NpcId>,
     zombie_prev_pos: Vec<glam::Vec3>,
     // Per-instance forward-axis offsets (authoring → world). Calibrated on movement.
     zombie_forward_offsets: Vec<f32>,
@@ -270,8 +271,8 @@ pub struct Renderer {
 
     // --- Player/Camera ---
     pc_index: usize,
-    player: crate::client::controller::PlayerController,
-    input: crate::client::input::InputState,
+    player: client_core::controller::PlayerController,
+    input: client_core::input::InputState,
     cam_follow: camera_sys::FollowState,
     pc_cast_queued: bool,
     pc_anim_start: Option<f32>,
@@ -295,7 +296,7 @@ pub struct Renderer {
     screenshot_start: Option<f32>,
 
     // Server state (NPCs/health)
-    server: crate::server::ServerState,
+    server: server_core::ServerState,
 
     // Wizard health (including PC at pc_index)
     wizard_hp: Vec<i32>,
@@ -1088,7 +1089,7 @@ impl Renderer {
 
         // NPCs: simple cubes as targets on multiple rings
         let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
-        let mut server = crate::server::ServerState::new();
+        let mut server = server_core::ServerState::new();
         // Configure ring distances and counts (keep existing ones, add more)
         // Reduce zombies ~25% overall by lowering ring counts
         let near_count = 8usize; // was 10
@@ -1156,7 +1157,7 @@ impl Renderer {
             // Build a CpuMesh from the cube VB/IB? Simpler: reuse cube buffers
             // We'll just keep using cube buffers when OBJ is missing.
             // Placeholder buffers (will be overwritten by npc_vb/ib below if missing)
-            crate::assets::CpuMesh {
+            ra_assets::types::CpuMesh {
                 vertices: vec![],
                 indices: vec![],
             }
@@ -1212,7 +1213,7 @@ impl Renderer {
         // Build zombie instances from server NPCs
         let mut zombie_instances_cpu: Vec<InstanceSkin> = Vec::new();
         let mut zombie_models: Vec<glam::Mat4> = Vec::new();
-        let mut zombie_ids: Vec<crate::server::NpcId> = Vec::new();
+        let mut zombie_ids: Vec<server_core::NpcId> = Vec::new();
         for (idx, npc) in server.npcs.iter().enumerate() {
             // Snap initial zombie spawn to terrain height
             let (h, _n) = terrain::height_at(&terrain_cpu, npc.pos.x, npc.pos.z);
@@ -1403,7 +1404,7 @@ impl Renderer {
 
             // Player/camera
             pc_index: scene_build.pc_index,
-            player: crate::client::controller::PlayerController::new(pc_initial_pos),
+            player: client_core::controller::PlayerController::new(pc_initial_pos),
             input: Default::default(),
             cam_follow: camera_sys::FollowState {
                 current_pos: glam::vec3(0.0, 5.0, -10.0),
@@ -1921,7 +1922,7 @@ impl Renderer {
         }
         // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
         use std::collections::HashMap;
-        let mut npc_map: HashMap<crate::server::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        let mut npc_map: HashMap<server_core::NpcId, (i32, i32, bool, f32)> = HashMap::new();
         for n in &self.server.npcs {
             npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
         }
@@ -2370,8 +2371,8 @@ impl Renderer {
         let joints = self.zombie_joints as usize;
         // Build quick lookup for attack state and radius using server NPCs
         use std::collections::HashMap;
-        let mut attack_map: HashMap<crate::server::NpcId, bool> = HashMap::new();
-        let mut radius_map: HashMap<crate::server::NpcId, f32> = HashMap::new();
+        let mut attack_map: HashMap<server_core::NpcId, bool> = HashMap::new();
+        let mut radius_map: HashMap<server_core::NpcId, f32> = HashMap::new();
         for n in &self.server.npcs {
             attack_map.insert(n.id, n.attack_anim > 0.0);
             radius_map.insert(n.id, n.radius);
@@ -2423,7 +2424,7 @@ impl Renderer {
                 .cloned()
                 .unwrap_or("__static".to_string());
             // Prioritize attack animation when the server reports it or if in melee contact
-            let zid = *self.zombie_ids.get(i).unwrap_or(&crate::server::NpcId(0));
+            let zid = *self.zombie_ids.get(i).unwrap_or(&server_core::NpcId(0));
             let mut is_attacking = attack_map.get(&zid).copied().unwrap_or(false);
             // In-contact heuristic: nearest wizard within (z_radius + wizard_r + pad)
             let z_radius = radius_map.get(&zid).copied().unwrap_or(0.95);
@@ -2526,7 +2527,7 @@ impl Renderer {
     fn update_zombies_from_server(&mut self) {
         // Build map from id -> pos
         use std::collections::HashMap;
-        let mut pos_map: HashMap<crate::server::NpcId, glam::Vec3> = HashMap::new();
+        let mut pos_map: HashMap<server_core::NpcId, glam::Vec3> = HashMap::new();
         for n in &self.server.npcs {
             pos_map.insert(n.id, n.pos);
         }

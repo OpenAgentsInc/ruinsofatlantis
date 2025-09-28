@@ -1,4 +1,4 @@
-//! Minimal ECS scaffolding (copied for renderer isolation).
+//! Minimal ECS scaffolding for scene organization.
 
 use glam::{Mat4, Quat, Vec3};
 
@@ -20,7 +20,11 @@ pub struct Transform {
 
 impl Default for Transform {
     fn default() -> Self {
-        Self { translation: Vec3::ZERO, rotation: Quat::IDENTITY, scale: Vec3::ONE }
+        Self {
+            translation: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        }
     }
 }
 
@@ -39,7 +43,12 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        Self { next_id: 1, ids: Vec::new(), transforms: Vec::new(), kinds: Vec::new() }
+        Self {
+            next_id: 1,
+            ids: Vec::new(),
+            transforms: Vec::new(),
+            kinds: Vec::new(),
+        }
     }
     pub fn spawn(&mut self, t: Transform, k: RenderKind) -> Entity {
         let e = Entity(self.next_id);
@@ -52,6 +61,7 @@ impl World {
 }
 
 impl Default for World {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
-

@@ -1551,6 +1551,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 
 [[package]]
+name = "client_core"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.8",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1985,6 +1992,13 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "ecs_core"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.8",
 ]
 
 [[package]]
@@ -3900,7 +3914,12 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 name = "platform_winit"
 version = "0.1.0"
 dependencies = [
- "ruinsofatlantis",
+ "anyhow",
+ "log",
+ "pollster",
+ "render_wgpu",
+ "wgpu 26.0.1",
+ "winit",
 ]
 
 [[package]]
@@ -4285,7 +4304,9 @@ dependencies = [
  "ab_glyph",
  "anyhow",
  "bytemuck",
+ "client_core",
  "data_runtime",
+ "ecs_core",
  "glam 0.30.8",
  "gltf",
  "hw-skymodel",
@@ -4296,6 +4317,7 @@ dependencies = [
  "rand_chacha 0.9.0",
  "serde",
  "serde_json",
+ "server_core",
  "ux_hud",
  "wgpu 26.0.1",
  "winit",
@@ -4352,22 +4374,22 @@ dependencies = [
  "anyhow",
  "bevy",
  "bytemuck",
+ "client_core",
  "data_runtime",
+ "ecs_core",
  "env_logger",
  "glam 0.30.8",
  "gltf",
  "image",
  "log",
+ "platform_winit",
  "pollster",
  "ra-assets",
- "rand 0.9.2",
- "rand_chacha 0.9.0",
  "render_wgpu",
  "serde",
  "serde_json",
- "serde_yaml",
+ "server_core",
  "sim_core",
- "ux_hud",
  "wgpu 26.0.1",
  "which",
  "winit",
@@ -4541,6 +4563,13 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "server_core"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.8",
 ]
 
 [[package]]
