@@ -3114,23 +3114,78 @@ impl Renderer {
                 i += 1;
             }
         }
+        // Merge any ground-hit bursts into live particles
+        if !burst.is_empty() {
+            self.particles.append(&mut burst);
+        }
 
         // 2.6) Collide with wizards/PC (friendly fire on)
         if !self.projectiles.is_empty() {
             self.collide_with_wizards(dt, 10);
         }
 
-        // 3) Upload FX instances (billboard particles) — show both bolts and impacts
+        // 3) Simulate impact particles (age, simple gravity, fade)
+        let cam = self.cam_follow.current_pos;
+        let max_d2 = 400.0 * 400.0; // cull far particles
+        let mut j = 0usize;
+        while j < self.particles.len() {
+            let p = &mut self.particles[j];
+            p.age += dt;
+            // mild gravity and air drag
+            p.vel.y -= 9.8 * dt * 0.5;
+            p.vel *= 0.98f32.powf(dt.max(0.0) * 60.0);
+            p.pos += p.vel * dt;
+            if p.age >= p.life {
+                self.particles.swap_remove(j);
+                continue;
+            }
+            // Cull by distance
+            if (p.pos - cam).length_squared() > max_d2 {
+                self.particles.swap_remove(j);
+                continue;
+            }
+            j += 1;
+        }
 
-        // 4) Upload FX instances (billboard particles)
-        let mut inst: Vec<ParticleInstance> = Vec::with_capacity(self.projectiles.len());
+        // 4) Upload FX instances (billboard particles) — bolts (with tiny trails) + impact sprites
+        let mut inst: Vec<ParticleInstance> =
+            Vec::with_capacity(self.projectiles.len() * 3 + self.particles.len());
         for pr in &self.projectiles {
+            // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
                 size: 0.14,
                 color: [1.0, 0.35, 0.08],
                 _pad: 0.0,
             });
+            // short trail segments behind
+            let dir = pr.vel.normalize_or_zero();
+            for k in 1..=2 {
+                let t = k as f32 * 0.02;
+                let p = pr.pos - dir * (t * pr.vel.length());
+                let fade = 1.0 - (k as f32) * 0.35;
+                inst.push(ParticleInstance {
+                    pos: [p.x, p.y, p.z],
+                    size: 0.11,
+                    color: [1.0 * fade, 0.35 * fade, 0.08 * fade],
+                    _pad: 0.0,
+                });
+            }
+        }
+        // Impacts (fade by age)
+        for p in &self.particles {
+            let f = 1.0 - (p.age / p.life).clamp(0.0, 1.0);
+            let size = p.size * (1.0 + 0.5 * (1.0 - f));
+            inst.push(ParticleInstance {
+                pos: [p.pos.x, p.pos.y, p.pos.z],
+                size,
+                color: [p.color[0] * f, p.color[1] * f, p.color[2] * f],
+                _pad: 0.0,
+            });
+        }
+        // Cap to buffer capacity
+        if (inst.len() as u32) > self._fx_capacity {
+            inst.truncate(self._fx_capacity as usize);
         }
         self.fx_count = inst.len() as u32;
         if self.fx_count > 0 {
