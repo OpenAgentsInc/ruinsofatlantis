@@ -1,0 +1,10 @@
+[package]
+name = "sim-harness"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+data_runtime = { path = "../../crates/data_runtime", version = "0.1.0" }
+sim_core = { path = "../../crates/sim_core", version = "0.1.0" }
+

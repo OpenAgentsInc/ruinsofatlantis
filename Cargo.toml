@@ -9,6 +9,11 @@ members = [
     ".",                # root crate
     "shared/assets",    # shared library for model/assets
     "tools/model-viewer", # standalone model viewer
+    "tools/zone-bake",
+    "tools/gltf-decompress",
+    "tools/image-probe",
+    "tools/bevy-probe",
+    "tools/sim-harness",
     "crates/data_runtime", # data schemas + loaders
     "crates/render_wgpu",    # renderer crate
     "crates/sim_core",       # sim rules/combat engine
@@ -22,30 +27,21 @@ default = ["gfx-sky"]
 gfx-sky = []
 
 [dependencies]
-anyhow = "1.0.100"
-bevy = "0.14"
-bytemuck = { version = "1.23.2", features = ["derive"] }
 env_logger = "0.11.8"
-glam = "0.30.8"
-gltf = { version = "1.4.1", features = ["import", "extensions"] }
-image = "0.25"
 log = "0.4.28"
-pollster = "0.4.0"
-serde = { version = "1.0.226", features = ["derive"] }
-serde_json = "1.0.145"
-wgpu = "26.0.1"
-which = "8.0.0"
-winit = "0.30.12"
-ra-assets = { version = "0.1.0", path = "shared/assets" }
-data_runtime = { version = "0.1.0", path = "crates/data_runtime" }
-sim_core = { version = "0.1.0", path = "crates/sim_core" }
 render_wgpu = { version = "0.1.0", path = "crates/render_wgpu" }
 platform_winit = { version = "0.1.0", path = "crates/platform_winit" }
 ecs_core = { version = "0.1.0", path = "crates/ecs_core" }
 client_core = { version = "0.1.0", path = "crates/client_core" }
 server_core = { version = "0.1.0", path = "crates/server_core" }
+sim_core = { version = "0.1.0", path = "crates/sim_core" }
 
 [patch.crates-io]
 # Use a patched local copy of draco_decoder to avoid passing
 # macOS-only flags on non-macOS targets.
 draco_decoder = { path = "vendor/draco_decoder-0.0.10" }
+
+[dev-dependencies]
+data_runtime = { path = "crates/data_runtime" }
+glam = "0.30.8"
+serde_json = "1.0.145"

@@ -46,11 +46,11 @@ CLI/Env toggles
   - draco.rs — Native Draco decode helpers for mesh/skinned primitives.
   - util.rs — Path preparation per policy (prefer pre‑decompressed assets).
 
-- bin/
-  - bevy_probe.rs — Bevy‑based material/texture probe for the wizard asset.
-  - gltf_decompress.rs — One‑time CLI to decompress Draco GLTFs (offline step).
-  - image_probe.rs — Simple image IO experiments.
-  - sim_harness.rs — Basic runner for the combat simulator.
+- tools/ (workspace crates)
+  - model-viewer — Standalone wgpu viewer for GLTF/GLB.
+  - bevy-probe — Bevy‑based material/texture probe for wizard asset.
+  - gltf-decompress — One‑time CLI to decompress Draco GLTFs (offline step).
+  - image-probe — Simple image IO experiments.
 
 Note: the old `core/` facade has been removed; crates use `data_runtime` and `sim_core` directly.
 

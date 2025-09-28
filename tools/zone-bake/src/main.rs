@@ -1,13 +1,13 @@
-//! zone_bake: Bake a Zone snapshot (terrain + tree transforms) to data/zones/<slug>/snapshot.v1
+//! zone-bake: Bake a Zone snapshot (terrain + tree transforms) to data/zones/<slug>/snapshot.v1
 //!
 //! Usage:
-//!   cargo run --bin zone_bake -- <slug>
+//!   cargo run -p zone-bake -- <slug>
 //! Example:
-//!   cargo run --bin zone_bake -- wizard_woods
+//!   cargo run -p zone-bake -- wizard_woods
 
 use anyhow::{Context, Result};
 use data_runtime::zone::load_zone_manifest;
-use ruinsofatlantis::gfx::terrain;
+use render_wgpu::gfx::terrain;
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -116,11 +116,13 @@ fn write_meta(
         },
         content_fingerprint: hfp ^ (tfp.rotate_left(1)),
     };
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("data")
-        .join("zones")
-        .join(slug)
-        .join("snapshot.v1");
+    // Write under workspace root data/, not crate-local
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let data_root = {
+        let ws = here.join("../../data");
+        if ws.is_dir() { ws } else { here.join("data") }
+    };
+    let dir = data_root.join("zones").join(slug).join("snapshot.v1");
     fs::create_dir_all(&dir)?;
     let path = dir.join("zone_meta.json");
     let txt = serde_json::to_string_pretty(&meta)?;
