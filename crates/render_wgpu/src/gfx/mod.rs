@@ -304,6 +304,9 @@ pub struct Renderer {
     pc_anim_start: Option<f32>,
     pc_cast_time: f32,
     pc_cast_fired: bool,
+    // Simple Fire Bolt cooldown tracking (seconds)
+    firebolt_cd_until: f32,
+    firebolt_cd_dur: f32,
     // Deprecated GCD tracking (not used when cast-time only)
     #[allow(dead_code)]
     gcd_until: f32,
@@ -1538,6 +1541,8 @@ impl Renderer {
             pc_anim_start: None,
             pc_cast_time: 1.5,
             pc_cast_fired: false,
+            firebolt_cd_until: 0.0,
+            firebolt_cd_dur: 2.0,
             gcd_until: 0.0,
             gcd_duration: 1.5,
             cam_orbit_yaw: 0.0,
@@ -2562,8 +2567,12 @@ impl Renderer {
             } else {
                 0.0
             };
-            // No GCD overlay when using cast-time only
-            let gcd_frac = 0.0f32;
+            // Hotbar overlay (slot 1): show Fire Bolt cooldown fraction
+            let gcd_frac = if self.last_time < self.firebolt_cd_until && self.firebolt_cd_dur > 0.0 {
+                ((self.firebolt_cd_until - self.last_time) / self.firebolt_cd_dur).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
             // HUD (default on; set RA_OVERLAYS=0 to hide)
             let overlays_disabled = std::env::var("RA_OVERLAYS")
                 .map(|v| v == "0")
@@ -3073,10 +3082,17 @@ impl Renderer {
                         if self.pc_alive =>
                     {
                         if pressed {
-                            self.pc_cast_queued = true;
-                            self.pc_cast_kind = Some(PcCast::FireBolt);
-                            self.pc_cast_time = 0.0; // Instant for Fire Bolt in prototype
-                            log::debug!("PC cast queued: Fire Bolt");
+                            if self.last_time >= self.firebolt_cd_until {
+                                self.pc_cast_queued = true;
+                                self.pc_cast_kind = Some(PcCast::FireBolt);
+                                self.pc_cast_time = 0.0; // instant
+                                log::debug!("PC cast queued: Fire Bolt");
+                            } else {
+                                log::debug!(
+                                    "Fire Bolt on cooldown: {:.0} ms remaining",
+                                    ((self.firebolt_cd_until - self.last_time) * 1000.0).max(0.0)
+                                );
+                            }
                         }
                     }
                     PhysicalKey::Code(KeyCode::Digit2) | PhysicalKey::Code(KeyCode::Numpad2)
@@ -3372,6 +3388,9 @@ impl Renderer {
                             PcCast::FireBolt => {
                                 log::debug!("PC Fire Bolt fired at t={:.2}", t);
                                 self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
+                                // Begin 2.0s cooldown
+                                self.firebolt_cd_dur = 2.0;
+                                self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur;
                             }
                             PcCast::MagicMissile => {
                                 log::debug!("PC Magic Missile fired at t={:.2}", t);
