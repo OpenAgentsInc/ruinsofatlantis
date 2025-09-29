@@ -7,6 +7,13 @@ use crate::server_ext::CollideProjectiles;
 use ra_assets::types::AnimClip;
 
 impl Renderer {
+    #[inline]
+    pub(crate) fn wrap_angle(a: f32) -> f32 {
+        let mut x = a;
+        while x > std::f32::consts::PI { x -= 2.0 * std::f32::consts::PI; }
+        while x < -std::f32::consts::PI { x += 2.0 * std::f32::consts::PI; }
+        x
+    }
     /// Apply a basic WASD character controller to the PC and update its instance data.
     pub(crate) fn update_player_and_camera(&mut self, dt: f32, _aspect: f32) {
         if self.wizard_count == 0 || !self.pc_alive || self.pc_index >= self.wizard_count as usize {

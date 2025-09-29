@@ -332,22 +332,13 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    #[inline]
-    fn wrap_angle(a: f32) -> f32 {
-        let mut x = a;
-        while x > std::f32::consts::PI {
-            x -= 2.0 * std::f32::consts::PI;
-        }
-        while x < -std::f32::consts::PI {
-            x += 2.0 * std::f32::consts::PI;
-        }
-        x
-    }
+    // moved: wrap_angle -> renderer/update.rs
     fn any_zombies_alive(&self) -> bool {
         self.server.npcs.iter().any(|n| n.alive)
     }
     /// Handle player character death: hide visuals, disable input/casting,
     /// and keep camera in a spectator orbit around the last position.
+    // moved: kill_pc -> renderer/update.rs
     fn kill_pc(&mut self) {
         if !self.pc_alive {
             return;
@@ -380,6 +371,7 @@ impl Renderer {
         log::info!("PC died; spectator camera engaged");
     }
 
+    // moved: respawn -> renderer/update.rs
     fn respawn(&mut self) {
         // Rebuild scene and server similar to initial construction.
         // 1) Rebuild wizard scene instances and reset player state
@@ -2619,11 +2611,13 @@ impl Renderer {
 }
 
 impl Renderer {
+    // moved: yaw_from_model -> renderer/update.rs
     fn yaw_from_model(m: &glam::Mat4) -> f32 {
         let f = *m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0);
         f32::atan2(f.x, f.z)
     }
 
+    // moved: turn_towards -> renderer/update.rs
     fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
         let mut delta = target - current;
         while delta > std::f32::consts::PI {
@@ -2641,6 +2635,7 @@ impl Renderer {
         }
     }
 
+    // moved: update_wizard_ai -> renderer/update.rs
     fn update_wizard_ai(&mut self, dt: f32) {
         if self.wizard_count == 0 {
             return;
