@@ -1542,7 +1542,7 @@ impl Renderer {
             pc_cast_time: 1.5,
             pc_cast_fired: false,
             firebolt_cd_until: 0.0,
-            firebolt_cd_dur: 2.0,
+            firebolt_cd_dur: 1.0,
             gcd_until: 0.0,
             gcd_duration: 1.5,
             cam_orbit_yaw: 0.0,
@@ -3388,8 +3388,8 @@ impl Renderer {
                             PcCast::FireBolt => {
                                 log::debug!("PC Fire Bolt fired at t={:.2}", t);
                                 self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
-                                // Begin 2.0s cooldown
-                                self.firebolt_cd_dur = 2.0;
+                                // Begin 1.0s cooldown
+                                self.firebolt_cd_dur = 1.0;
                                 self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur;
                             }
                             PcCast::MagicMissile => {

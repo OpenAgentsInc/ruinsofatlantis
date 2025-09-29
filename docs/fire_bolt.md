@@ -32,7 +32,7 @@ Identity & tags
 Cast, queueing, cooldowns
 - `cast_time_s`: `0.0` (prototype: instant cast for forward‑shot gameplay feel)
  - `gcd_s`: `1.0` (optional; set `0` if no GCD model)
- - `cooldown_s`: `2.0` (prototype: 2 seconds between instant casts)
+- `cooldown_s`: `1.0` (prototype: 1 second between instant casts)
 - `cooldown_s`: `0.0`
 - `resource_cost`: `none`
 - `can_move_while_casting`: `false` (tunable)
