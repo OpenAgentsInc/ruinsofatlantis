@@ -1816,7 +1816,7 @@ impl Renderer {
         // Optional safety mode to bypass offscreen passes
         let present_only = std::env::var("RA_PRESENT_ONLY")
             .map(|v| v == "1")
-            .unwrap_or(true);
+            .unwrap_or(false);
         // Sky-only pass (no depth) into SceneColor
         if !present_only {
             let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1992,15 +1992,21 @@ impl Renderer {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-        self.bars.queue_entries(
-            &self.device,
-            &self.queue,
-            self.config.width,
-            self.config.height,
-            view_proj,
-            &bar_entries,
-        );
-        self.bars.draw(&mut encoder, &self.scene_view);
+        // Gate health bars while isolating macOS validation issues
+        if std::env::var("RA_OVERLAYS")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
+            self.bars.queue_entries(
+                &self.device,
+                &self.queue,
+                self.config.width,
+                self.config.height,
+                view_proj,
+                &bar_entries,
+            );
+            self.bars.draw(&mut encoder, &self.scene_view);
+        }
         // Damage numbers (temporarily disabled while isolating a macOS validation issue)
         // self.damage.update(dt);
         // self.damage.queue(
