@@ -313,6 +313,8 @@ pub struct Renderer {
     wizard_hp: Vec<i32>,
     wizard_hp_max: i32,
     pc_alive: bool,
+    // If true, non‑PC wizards will focus the player as their target
+    wizards_hostile_to_pc: bool,
 }
 
 impl Renderer {
@@ -2515,15 +2517,17 @@ impl Renderer {
         if self.wizard_count == 0 {
             return;
         }
-        // Collect alive zombie positions once
+        // Collect alive zombie positions once (used when not hostile to the player)
         let mut targets: Vec<glam::Vec3> = Vec::new();
-        for n in &self.server.npcs {
-            if n.alive {
-                targets.push(n.pos);
+        if !self.wizards_hostile_to_pc {
+            for n in &self.server.npcs {
+                if n.alive {
+                    targets.push(n.pos);
+                }
             }
-        }
-        if targets.is_empty() {
-            return;
+            if targets.is_empty() && !self.wizards_hostile_to_pc {
+                return;
+            }
         }
         let yaw_rate = 2.5 * dt; // rad per frame
         for i in 0..(self.wizard_count as usize) {
@@ -2537,18 +2541,29 @@ impl Renderer {
                 m.to_cols_array()[13],
                 m.to_cols_array()[14],
             );
-            // Find nearest target
-            let mut best_d2 = f32::INFINITY;
-            let mut best = None;
-            for t in &targets {
-                let d2 = (t.x - pos.x) * (t.x - pos.x) + (t.z - pos.z) * (t.z - pos.z);
-                if d2 < best_d2 {
-                    best_d2 = d2;
-                    best = Some(*t);
+            // Choose target: player if hostile, otherwise nearest zombie
+            let tgt = if self.wizards_hostile_to_pc && self.pc_alive {
+                // Player world position from model matrix
+                let pm = self
+                    .wizard_models
+                    .get(self.pc_index)
+                    .copied()
+                    .unwrap_or(glam::Mat4::IDENTITY)
+                    .to_cols_array();
+                glam::vec3(pm[12], pm[13], pm[14])
+            } else {
+                // Find nearest target among zombies
+                let mut best_d2 = f32::INFINITY;
+                let mut best = None;
+                for t in &targets {
+                    let d2 = (t.x - pos.x) * (t.x - pos.x) + (t.z - pos.z) * (t.z - pos.z);
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        best = Some(*t);
+                    }
                 }
-            }
-            let Some(tgt) = best else {
-                continue;
+                let Some(t) = best else { continue };
+                t
             };
             let desired_yaw = (tgt.x - pos.x).atan2(tgt.z - pos.z);
             let cur_yaw = Self::yaw_from_model(&m);

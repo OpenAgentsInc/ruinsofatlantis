@@ -190,7 +190,8 @@ impl Renderer {
                 let phase = (t + self.wizard_time_offset[i]) % cycle;
                 let crossed = (prev <= bolt_offset && phase >= bolt_offset)
                     || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
-                let allowed = i == self.pc_index || zombies_alive;
+                // If wizards have aggroed on the player, they may fire even without zombies present
+                let allowed = i == self.pc_index || zombies_alive || self.wizards_hostile_to_pc;
                 if allowed && crossed && i != self.pc_index {
                     let clip = self.select_clip(self.wizard_anim_index[i]);
                     let clip_time = if clip.duration > 0.0 {
@@ -447,6 +448,10 @@ impl Renderer {
                     // Floating damage number
                     let head = center + glam::vec3(0.0, 1.7, 0.0);
                     self.damage.spawn(head, damage);
+                    // If the player hit any wizard, all wizards become hostile to the player
+                    if pr.owner_wizard == Some(self.pc_index) {
+                        self.wizards_hostile_to_pc = true;
+                    }
                     if fatal {
                         if j == self.pc_index {
                             self.kill_pc();
