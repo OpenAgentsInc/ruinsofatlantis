@@ -2155,6 +2155,19 @@ impl Renderer {
             blit.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
+        log::info!("end: main pass");
+
+        // Minimal mode: submit immediately after main pass and present
+        if std::env::var("RA_MINIMAL").map(|v| v == "1").unwrap_or(false) {
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("wgpu validation error (minimal mode): {:?}", e);
+                return Ok(());
+            }
+            log::info!("submit: minimal");
+            self.queue.submit(Some(encoder.finish()));
+            frame.present();
+            return Ok(());
+        }
         // Ensure SceneRead is available for bloom pass as well
         if !present_only && self.enable_bloom {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2278,6 +2291,7 @@ impl Renderer {
 
         // Present: if rendering directly to swapchain, skip this pass
         if !direct_present {
+            log::info!("pass: present");
             let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("present-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2310,6 +2324,7 @@ impl Renderer {
             // Skip submit on validation error to keep running without panicking
             log::error!("wgpu validation error (skipping frame): {:?}", e);
         } else {
+            log::info!("submit: normal path");
             // HUD: build, upload, and draw overlay before submit
             let pc_hp = self
                 .wizard_hp
