@@ -474,6 +474,8 @@ impl Renderer {
         {
             req_features |= wgpu::Features::POLYGON_MODE_LINE;
         }
+        let info = adapter.get_info();
+        log::info!("Adapter: {:?} ({:?})", info.name, info.backend);
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("wgpu-device"),
@@ -1891,19 +1893,23 @@ impl Renderer {
             });
 
             // Terrain
-            log::info!("draw: terrain");
             let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
-            if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
-            // lights are packed into globals (binding=1)
-            rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
-            rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
-            self.draw_calls += 1;
-            if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
-                log::error!("validation after terrain: {:?}", e);
+            if std::env::var("RA_DRAW_TERRAIN").map(|v| v == "0").unwrap_or(false) {
+                log::info!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
+            } else {
+                log::info!("draw: terrain");
+                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+                rpass.set_pipeline(&self.pipeline);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
+                // lights are packed into globals (binding=1)
+                rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
+                rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+                self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after terrain: {:?}", e);
+                }
             }
 
             // Trees (instanced static mesh)
