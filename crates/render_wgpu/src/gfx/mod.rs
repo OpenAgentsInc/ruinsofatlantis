@@ -2250,16 +2250,17 @@ impl Renderer {
             };
             self.bars.draw(&mut encoder, target_view);
         }
-        // Damage numbers (temporarily disabled while isolating a macOS validation issue)
-        // self.damage.update(dt);
-        // self.damage.queue(
-        //     &self.device,
-        //     &self.queue,
-        //     self.config.width,
-        //     self.config.height,
-        //     view_proj,
-        // );
-        // self.damage.draw(&mut encoder, &self.scene_view);
+        // Damage numbers
+        self.damage.update(dt);
+        self.damage.queue(
+            &self.device,
+            &self.queue,
+            self.config.width,
+            self.config.height,
+            view_proj,
+        );
+        let damage_target = if self.direct_present { &view } else { &self.scene_view };
+        self.damage.draw(&mut encoder, damage_target);
 
         // Draw wizard nameplates first
         // Draw wizard nameplates for alive wizards only (hide dead PC/NPC labels)
@@ -3122,4 +3123,3 @@ impl Renderer {
 
     
 }
-
