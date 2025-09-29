@@ -1933,13 +1933,27 @@ impl Renderer {
             }
 
             // Wizards
-            log::info!("draw: wizards x{}", self.wizard_count);
-            self.draw_wizards(&mut rpass);
-            self.draw_calls += 1;
+            if std::env::var("RA_DRAW_WIZARDS")
+                .map(|v| v != "0")
+                .unwrap_or(true)
+            {
+                log::info!("draw: wizards x{}", self.wizard_count);
+                self.draw_wizards(&mut rpass);
+                self.draw_calls += 1;
+            } else {
+                log::info!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
+            }
             // Zombies
-            log::info!("draw: zombies x{}", self.zombie_count);
-            self.draw_zombies(&mut rpass);
-            self.draw_calls += 1;
+            if std::env::var("RA_DRAW_ZOMBIES")
+                .map(|v| v != "0")
+                .unwrap_or(true)
+            {
+                log::info!("draw: zombies x{}", self.zombie_count);
+                self.draw_zombies(&mut rpass);
+                self.draw_calls += 1;
+            } else {
+                log::info!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
+            }
 
             // Ruins (instanced) — allow gating via RA_DRAW_RUINS to isolate crashes
             let draw_ruins = std::env::var("RA_DRAW_RUINS")
@@ -1965,7 +1979,12 @@ impl Renderer {
             }
 
             // NPCs (instanced cubes)
-            if self.npc_count > 0 {
+            if std::env::var("RA_DRAW_NPCS")
+                .map(|v| v == "1")
+                .unwrap_or(false)
+                && self.npc_count > 0
+            {
+                log::info!("draw: npcs x{}", self.npc_count);
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -1979,6 +1998,8 @@ impl Renderer {
                 rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
                 self.draw_calls += 1;
+            } else if self.npc_count > 0 {
+                log::info!("draw: npcs skipped (RA_DRAW_NPCS!=1)");
             }
 
             // FX
