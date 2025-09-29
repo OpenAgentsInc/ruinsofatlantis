@@ -27,7 +27,11 @@ pub fn run(state: &mut SimState) {
                 if state.are_allies(actor_idx, tgt_idx) {
                     let actor_id = state.actors[actor_idx].id.clone();
                     let tgt_id = state.actors[tgt_idx].id.clone();
-                    state.events.push(SimEvent::AllyImmunity { actor: actor_id, target: tgt_id, ability: ability_id.clone() });
+                    state.events.push(SimEvent::AllyImmunity {
+                        actor: actor_id,
+                        target: tgt_id,
+                        ability: ability_id.clone(),
+                    });
                     continue;
                 }
                 if !state.actor_alive(tgt_idx) {
@@ -56,11 +60,22 @@ pub fn run(state: &mut SimState) {
                 state.actors[tgt_idx].ac_temp_bonus += 5;
                 state.actors[tgt_idx].reaction_ready = false;
                 target_ac += 5;
-                state.events.push(SimEvent::ShieldReaction { target: state.actors[tgt_idx].id.clone(), new_ac: target_ac });
+                state.events.push(SimEvent::ShieldReaction {
+                    target: state.actors[tgt_idx].id.clone(),
+                    new_ac: target_ac,
+                });
             }
             let hit = total >= target_ac;
             let actor_id = state.actors[actor_idx].id.clone();
-            state.events.push(SimEvent::AttackResolved { actor: actor_id, ability: ability_id.clone(), roll, bonus, total, target_ac, hit });
+            state.events.push(SimEvent::AttackResolved {
+                actor: actor_id,
+                ability: ability_id.clone(),
+                roll,
+                bonus,
+                total,
+                target_ac,
+                hit,
+            });
             if hit {
                 state
                     .pending_damage

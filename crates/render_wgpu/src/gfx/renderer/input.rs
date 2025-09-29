@@ -3,8 +3,8 @@
 use winit::event::WindowEvent;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-use crate::gfx::Renderer;
 use super::update::wrap_angle;
+use crate::gfx::Renderer;
 
 impl Renderer {
     /// Handle platform window events that affect input (keyboard focus/keys).
@@ -89,7 +89,11 @@ impl Renderer {
                             self.hud_model.toggle_perf();
                             log::info!(
                                 "Perf overlay {}",
-                                if self.hud_model.perf_enabled() { "on" } else { "off" }
+                                if self.hud_model.perf_enabled() {
+                                    "on"
+                                } else {
+                                    "off"
+                                }
                             );
                         }
                     }
@@ -98,7 +102,11 @@ impl Renderer {
                             self.hud_model.toggle_hud();
                             log::info!(
                                 "HUD {}",
-                                if self.hud_model.hud_enabled() { "shown" } else { "hidden" }
+                                if self.hud_model.hud_enabled() {
+                                    "shown"
+                                } else {
+                                    "hidden"
+                                }
                             );
                         }
                     }
@@ -168,4 +176,3 @@ impl Renderer {
         }
     }
 }
-

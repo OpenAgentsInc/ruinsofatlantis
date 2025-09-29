@@ -9,6 +9,6 @@ pub mod ids;
 pub mod loader;
 pub mod monster;
 pub mod scenario;
+pub mod specdb;
 pub mod spell;
 pub mod zone;
-pub mod specdb;

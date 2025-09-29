@@ -11,7 +11,9 @@ fn golden_spellpack_matches_builder() {
     for entry in fs::read_dir(spells_dir).expect("spells dir") {
         let entry = entry.expect("dir entry");
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) != Some("json") { continue; }
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
         let name = path.file_stem().unwrap().to_string_lossy().to_string();
         // Validate it parses as a spec via data_runtime
         let rel = format!("spells/{}", path.file_name().unwrap().to_string_lossy());

@@ -1,7 +1,7 @@
 //! Apply buff-type spells without attack/save (e.g., Bless aura).
 
-use crate::sim::state::SimState;
 use crate::sim::events::SimEvent;
+use crate::sim::state::SimState;
 
 pub fn run(state: &mut SimState) {
     let completed = state.cast_completed.clone();
@@ -23,7 +23,10 @@ pub fn run(state: &mut SimState) {
                     state.actors[i].blessed_ms = 10_000;
                 }
             }
-            state.events.push(SimEvent::BlessApplied { caster: state.actors[actor_idx].id.clone(), duration_ms: 10_000 });
+            state.events.push(SimEvent::BlessApplied {
+                caster: state.actors[actor_idx].id.clone(),
+                duration_ms: 10_000,
+            });
             // Bless is a Concentration spell: starting it ends any existing concentration
             let prev = state.actors[actor_idx]
                 .concentration

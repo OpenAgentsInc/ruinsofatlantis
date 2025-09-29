@@ -92,7 +92,17 @@ fn wgsl_validate() -> Result<()> {
     };
 
     // Standalone modules
-    for name in ["shader.wgsl", "sky.wgsl", "hiz.comp.wgsl", "frame_overlay.wgsl", "post_bloom.wgsl", "post_ao.wgsl", "blit_noflip.wgsl", "present.wgsl", "fullscreen.wgsl"] {
+    for name in [
+        "shader.wgsl",
+        "sky.wgsl",
+        "hiz.comp.wgsl",
+        "frame_overlay.wgsl",
+        "post_bloom.wgsl",
+        "post_ao.wgsl",
+        "blit_noflip.wgsl",
+        "present.wgsl",
+        "fullscreen.wgsl",
+    ] {
         let p = gfx.join(name);
         if p.is_file() {
             let txt = std::fs::read_to_string(&p)?;
@@ -127,11 +137,16 @@ fn wgsl_validate() -> Result<()> {
 fn cargo_deny() -> Result<()> {
     // Run `cargo-deny` if available; otherwise warn and continue.
     let mut probe = Command::new("cargo-deny");
-    probe.arg("--version").stdout(Stdio::null()).stderr(Stdio::null());
+    probe
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     match probe.status() {
         Ok(s) if s.success() => {
             let mut run = Command::new("cargo-deny");
-            run.args(["check"]).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            run.args(["check"])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
             let status = run.status().context("cargo-deny run")?;
             if !status.success() {
                 bail!("cargo-deny check failed");

@@ -5,10 +5,10 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::combat::fsm::{ActionDone, ActionState, Gcd};
 use crate::rules::attack::Advantage;
-use data_runtime::loader::{load_class_spec, load_monster_spec};
-use data_runtime::spell::SpellSpec;
-use data_runtime::specdb::SpecDb;
 use crate::sim::events::SimEvent;
+use data_runtime::loader::{load_class_spec, load_monster_spec};
+use data_runtime::specdb::SpecDb;
+use data_runtime::spell::SpellSpec;
 
 #[derive(Debug, Clone)]
 pub struct ActorSim {
@@ -76,12 +76,18 @@ impl SimState {
     }
 
     pub fn load_class_defaults(&self, id: &str) -> anyhow::Result<(i32, i32, i32)> {
+        if let Some(c) = self.spec_db.get_class(id) {
+            return Ok((c.base_ac, c.spell_attack_bonus, c.spell_save_dc));
+        }
         let rel = format!("classes/{}.json", id);
         let spec = load_class_spec(rel)?;
         Ok((spec.base_ac, spec.spell_attack_bonus, spec.spell_save_dc))
     }
 
     pub fn load_monster_defaults(&self, id: &str) -> anyhow::Result<(i32, i32)> {
+        if let Some(m) = self.spec_db.get_monster(id) {
+            return Ok((m.ac, m.hp));
+        }
         let rel = format!("monsters/{}.json", id);
         let spec = load_monster_spec(rel)?;
         Ok((spec.ac, spec.hp))
@@ -105,7 +111,10 @@ impl SimState {
             };
             if let Some(ActionDone::CastCompleted { ability }) = done {
                 self.cast_completed.push((idx, ability.0));
-                self.events.push(SimEvent::CastCompleted { actor: actor_id, ability: "..".into() });
+                self.events.push(SimEvent::CastCompleted {
+                    actor: actor_id,
+                    ability: "..".into(),
+                });
             }
         }
     }

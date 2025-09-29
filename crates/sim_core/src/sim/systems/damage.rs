@@ -1,7 +1,7 @@
 //! Apply damage for pending hits.
 
-use crate::sim::state::SimState;
 use crate::sim::events::SimEvent;
+use crate::sim::state::SimState;
 
 fn level_band(lvl: u8) -> &'static str {
     if lvl <= 4 {
@@ -39,7 +39,11 @@ pub fn run(state: &mut SimState) {
         };
         let Some(dmg) = &spec.damage else { continue };
         // Copy fields we need before mutably borrowing state
-        let lvl = state.actors.get(actor_idx).map(|a| a.char_level).unwrap_or(1);
+        let lvl = state
+            .actors
+            .get(actor_idx)
+            .map(|a| a.char_level)
+            .unwrap_or(1);
         let dice: String = pick_dice_for_level(dmg, lvl);
         let dmg_type = dmg.damage_type.to_ascii_lowercase();
         let _ = spec;
@@ -66,10 +70,21 @@ pub fn run(state: &mut SimState) {
                 let absorbed = total.min(state.actors[tgt_idx].temp_hp);
                 state.actors[tgt_idx].temp_hp -= absorbed;
                 total -= absorbed;
-                state.events.push(SimEvent::TempHpAbsorb { target: state.actors[tgt_idx].id.clone(), absorbed, thp_now: state.actors[tgt_idx].temp_hp });
+                state.events.push(SimEvent::TempHpAbsorb {
+                    target: state.actors[tgt_idx].id.clone(),
+                    absorbed,
+                    thp_now: state.actors[tgt_idx].temp_hp,
+                });
             }
             state.actors[tgt_idx].hp -= total;
-            state.events.push(SimEvent::DamageApplied { caster: state.actors[actor_idx].id.clone(), target: state.actors[tgt_idx].id.clone(), ability: ability_id.clone(), amount: total, hp_before, hp_after: state.actors[tgt_idx].hp });
+            state.events.push(SimEvent::DamageApplied {
+                caster: state.actors[actor_idx].id.clone(),
+                target: state.actors[tgt_idx].id.clone(),
+                ability: ability_id.clone(),
+                amount: total,
+                hp_before,
+                hp_after: state.actors[tgt_idx].hp,
+            });
             // Concentration check (SRD): DC = max(10, floor(damage/2)), cap 30
             if state.actors[tgt_idx].concentration.is_some() && original_total > 0 {
                 let mut dc = (original_total / 2).max(10);
@@ -80,11 +95,19 @@ pub fn run(state: &mut SimState) {
                 // Simple Con save modifier: 0 for now; Bless adds 1d4 via existing logic if we reused it, but keep simple here.
                 let total_save = roll; // + con_mod (0)
                 let ok = total_save >= dc;
-                state.events.push(SimEvent::ConcentrationCheck { target: state.actors[tgt_idx].id.clone(), roll: total_save, dc, keep: ok });
+                state.events.push(SimEvent::ConcentrationCheck {
+                    target: state.actors[tgt_idx].id.clone(),
+                    roll: total_save,
+                    dc,
+                    keep: ok,
+                });
                 if !ok {
                     let ended = state.actors[tgt_idx].concentration.take();
                     if let Some(old) = ended {
-                        state.events.push(SimEvent::ConcentrationBroken { target: state.actors[tgt_idx].id.clone(), ability: old });
+                        state.events.push(SimEvent::ConcentrationBroken {
+                            target: state.actors[tgt_idx].id.clone(),
+                            ability: old,
+                        });
                     }
                 }
             }

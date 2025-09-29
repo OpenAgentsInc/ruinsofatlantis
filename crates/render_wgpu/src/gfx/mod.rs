@@ -387,11 +387,13 @@ impl Renderer {
         for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() {
             inst.model = wizard_models[i].to_cols_array_2d();
         }
-        self.wizard_instances = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("wizard-instances"),
-            contents: bytemuck::cast_slice(&wizard_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
+        self.wizard_instances = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("wizard-instances"),
+                contents: bytemuck::cast_slice(&wizard_instances_cpu),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
         self.wizard_instances_cpu = wizard_instances_cpu;
         self.wizard_models = wizard_models;
         self.wizard_count = self.wizard_instances_cpu.len() as u32;
@@ -435,8 +437,12 @@ impl Renderer {
         self.npc_instances = npcs.instances;
         self.npc_models = npcs.models;
         self.server = npcs.server;
-        let (zinst, zcpu, zmodels, zids, zcount) =
-            zombies::build_instances(&self.device, &self.terrain_cpu, &self.server, self.zombie_joints);
+        let (zinst, zcpu, zmodels, zids, zcount) = zombies::build_instances(
+            &self.device,
+            &self.terrain_cpu,
+            &self.server,
+            self.zombie_joints,
+        );
         self.zombie_instances = zinst;
         self.zombie_instances_cpu = zcpu;
         self.zombie_models = zmodels.clone();
@@ -444,9 +450,16 @@ impl Renderer {
         self.zombie_count = zcount;
         self.zombie_prev_pos = zmodels
             .iter()
-            .map(|m| glam::vec3(m.to_cols_array()[12], m.to_cols_array()[13], m.to_cols_array()[14]))
+            .map(|m| {
+                glam::vec3(
+                    m.to_cols_array()[12],
+                    m.to_cols_array()[13],
+                    m.to_cols_array()[14],
+                )
+            })
             .collect();
-        self.zombie_forward_offsets = vec![zombies::forward_offset(&self.zombie_cpu); self.zombie_count as usize];
+        self.zombie_forward_offsets =
+            vec![zombies::forward_offset(&self.zombie_cpu); self.zombie_count as usize];
         // Recreate zombie palette buffer sized for new count
         let total_z_mats = self.zombie_count as usize * self.zombie_joints as usize;
         self.zombie_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -1376,7 +1389,13 @@ impl Renderer {
         let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
         // Mirror attachments from legacy fields for completeness
-        let attachments_legacy = Attachments::create(&device, config.width, config.height, config.format, wgpu::TextureFormat::Rgba16Float);
+        let attachments_legacy = Attachments::create(
+            &device,
+            config.width,
+            config.height,
+            config.format,
+            wgpu::TextureFormat::Rgba16Float,
+        );
         Ok(Self {
             surface,
             device,
@@ -1519,8 +1538,8 @@ impl Renderer {
 
             // Player/camera
             pc_index: scene_build.pc_index,
-    player: client_core::controller::PlayerController::new(pc_initial_pos),
-        scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
+            player: client_core::controller::PlayerController::new(pc_initial_pos),
+            scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
             input: Default::default(),
             cam_follow: camera_sys::FollowState {
                 current_pos: glam::vec3(0.0, 5.0, -10.0),
@@ -2108,7 +2127,11 @@ impl Renderer {
             self.config.height,
             view_proj,
         );
-        let damage_target = if self.direct_present { &view } else { &self.scene_view };
+        let damage_target = if self.direct_present {
+            &view
+        } else {
+            &self.scene_view
+        };
         self.damage.draw(&mut encoder, damage_target);
 
         // Draw wizard nameplates first
@@ -2406,7 +2429,8 @@ impl Renderer {
                 0.0
             };
             // Hotbar overlay (slot 1): show Fire Bolt cooldown fraction
-            let gcd_frac = if self.last_time < self.firebolt_cd_until && self.firebolt_cd_dur > 0.0 {
+            let gcd_frac = if self.last_time < self.firebolt_cd_until && self.firebolt_cd_dur > 0.0
+            {
                 ((self.firebolt_cd_until - self.last_time) / self.firebolt_cd_dur).clamp(0.0, 1.0)
             } else {
                 0.0
@@ -2903,7 +2927,6 @@ impl Renderer {
     // moved: update_player_and_camera/apply_pc_transform/update_wizard_palettes/select_clip/process_pc_cast
 
     // moved: update_fx -> renderer/update.rs
-    
 
     /* fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
         let mut i = 0usize;
@@ -2969,6 +2992,4 @@ impl Renderer {
             }
         }
     } */
-
-    
 }

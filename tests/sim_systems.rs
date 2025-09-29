@@ -1,7 +1,7 @@
 use ruinsofatlantis::sim::state::{ActorSim, SimState};
-use sim_core::sim::events::SimEvent;
 use ruinsofatlantis::sim::systems;
 use sim_core::combat::fsm::ActionState;
+use sim_core::sim::events::SimEvent;
 
 fn mk_actor(id: &str, role: &str, team: Option<&str>) -> ActorSim {
     ActorSim {
@@ -52,7 +52,11 @@ fn cast_begin_starts_cast_and_sets_gcd() {
     systems::cast_begin::run(&mut s);
     assert!(matches!(s.actors[0].action, ActionState::Casting { .. }));
     assert!(s.actors[0].gcd.remaining_ms > 0);
-    assert!(s.events.iter().any(|e| matches!(e, SimEvent::CastStarted { .. })));
+    assert!(
+        s.events
+            .iter()
+            .any(|e| matches!(e, SimEvent::CastStarted { .. }))
+    );
 }
 
 #[test]
@@ -71,7 +75,11 @@ fn attack_roll_hits_without_shield() {
     s.actors.push(b);
     s.cast_completed.push((0, "wiz.fire_bolt.srd521".into()));
     systems::attack_roll::run(&mut s);
-    assert!(s.events.iter().any(|e| matches!(e, SimEvent::AttackResolved { .. })));
+    assert!(
+        s.events
+            .iter()
+            .any(|e| matches!(e, SimEvent::AttackResolved { .. }))
+    );
     assert_eq!(s.pending_damage.len(), 1);
 }
 
@@ -93,7 +101,11 @@ fn attack_roll_triggers_shield_reaction() {
     s.actors.push(b);
     s.cast_completed.push((0, "wiz.fire_bolt.srd521".into()));
     systems::attack_roll::run(&mut s);
-    assert!(s.events.iter().any(|e| matches!(e, SimEvent::ShieldReaction { .. })));
+    assert!(
+        s.events
+            .iter()
+            .any(|e| matches!(e, SimEvent::ShieldReaction { .. }))
+    );
 }
 
 #[test]
@@ -200,7 +212,11 @@ fn saving_throw_applies_condition_on_fail() {
     s.cast_completed.push((0, "grease".into()));
     systems::saving_throw::run(&mut s);
     systems::conditions::run(&mut s);
-    assert!(s.events.iter().any(|e| matches!(e, SimEvent::ConditionApplied { .. })));
+    assert!(
+        s.events
+            .iter()
+            .any(|e| matches!(e, SimEvent::ConditionApplied { .. }))
+    );
     assert!(
         s.actors[1]
             .statuses
@@ -375,7 +391,8 @@ fn magic_missile_auto_hit_applies_damage() {
         "wiz.magic_missile.srd521".into(),
         data_runtime::loader::load_spell_spec("spells/magic_missile.json").unwrap(),
     );
-    s.cast_completed.push((0, "wiz.magic_missile.srd521".into()));
+    s.cast_completed
+        .push((0, "wiz.magic_missile.srd521".into()));
     systems::attack_roll::run(&mut s);
     // Should enqueue damage even without an attack roll
     assert_eq!(s.pending_damage.len(), 1);
@@ -398,12 +415,18 @@ fn magic_missile_damage_bounds_and_not_halved_underwater() {
         "wiz.magic_missile.srd521".into(),
         data_runtime::loader::load_spell_spec("spells/magic_missile.json").unwrap(),
     );
-    s_dry.cast_completed.push((0, "wiz.magic_missile.srd521".into()));
+    s_dry
+        .cast_completed
+        .push((0, "wiz.magic_missile.srd521".into()));
     systems::attack_roll::run(&mut s_dry);
     systems::damage::run(&mut s_dry);
     let hp_after_dry = s_dry.actors[1].hp;
     let dmg_dry = 30 - hp_after_dry; // boss starts at 30 hp in tests
-    assert!((6..=15).contains(&dmg_dry), "damage out of 3d4+3 bounds: {}", dmg_dry);
+    assert!(
+        (6..=15).contains(&dmg_dry),
+        "damage out of 3d4+3 bounds: {}",
+        dmg_dry
+    );
 
     // Underwater run with same seed/setup: Force should not be halved.
     let mut s_wet = SimState::new(50, 4242);
@@ -417,12 +440,17 @@ fn magic_missile_damage_bounds_and_not_halved_underwater() {
         "wiz.magic_missile.srd521".into(),
         data_runtime::loader::load_spell_spec("spells/magic_missile.json").unwrap(),
     );
-    s_wet.cast_completed.push((0, "wiz.magic_missile.srd521".into()));
+    s_wet
+        .cast_completed
+        .push((0, "wiz.magic_missile.srd521".into()));
     systems::attack_roll::run(&mut s_wet);
     systems::damage::run(&mut s_wet);
     let hp_after_wet = s_wet.actors[1].hp;
     let dmg_wet = 30 - hp_after_wet;
-    assert_eq!(dmg_dry, dmg_wet, "force damage should be identical underwater");
+    assert_eq!(
+        dmg_dry, dmg_wet,
+        "force damage should be identical underwater"
+    );
 }
 
 #[test]
@@ -468,7 +496,10 @@ fn concentration_breaks_on_high_damage() {
     systems::damage::run(&mut s);
     // DC 30 always fails on 1d20 + 0 → concentration must break
     assert!(s.actors[1].concentration.is_none());
-    assert!(s.events.iter().any(|e| matches!(e, sim_core::sim::events::SimEvent::ConcentrationBroken { .. })));
+    assert!(s.events.iter().any(|e| matches!(
+        e,
+        sim_core::sim::events::SimEvent::ConcentrationBroken { .. }
+    )));
 }
 
 #[test]

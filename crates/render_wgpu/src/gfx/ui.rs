@@ -1300,7 +1300,9 @@ impl Hud {
         let mut prev: Option<ab_glyph::GlyphId> = None;
         for ch in text.chars() {
             let gid = self._font.glyph_id(ch);
-            if let Some(pg) = prev { x += scaled.kern(pg, gid); }
+            if let Some(pg) = prev {
+                x += scaled.kern(pg, gid);
+            }
             if let Some(gi) = self.glyphs.get(&ch) {
                 let gx = x + gi.bounds_min[0];
                 let gy = y_baseline - self.ascent + gi.bounds_min[1];
@@ -1314,12 +1316,36 @@ impl Hud {
                 let uv1 = [gi.uv_max[0], gi.uv_min[1]];
                 let uv2 = gi.uv_max;
                 let uv3 = [gi.uv_min[0], gi.uv_max[1]];
-                self.text_verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
-                self.text_verts.push(TextVertex { pos_ndc: p1, uv: uv1, color });
-                self.text_verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
-                self.text_verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
-                self.text_verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
-                self.text_verts.push(TextVertex { pos_ndc: p3, uv: uv3, color });
+                self.text_verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color,
+                });
+                self.text_verts.push(TextVertex {
+                    pos_ndc: p1,
+                    uv: uv1,
+                    color,
+                });
+                self.text_verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color,
+                });
+                self.text_verts.push(TextVertex {
+                    pos_ndc: p0,
+                    uv: uv0,
+                    color,
+                });
+                self.text_verts.push(TextVertex {
+                    pos_ndc: p2,
+                    uv: uv2,
+                    color,
+                });
+                self.text_verts.push(TextVertex {
+                    pos_ndc: p3,
+                    uv: uv3,
+                    color,
+                });
                 x += gi.advance;
                 prev = Some(gi.id);
             } else {
@@ -1605,7 +1631,9 @@ impl Hud {
         let mut prev: Option<ab_glyph::GlyphId> = None;
         for ch in text.chars() {
             let gid = self._font.glyph_id(ch);
-            if let Some(pg) = prev { width += scaled.kern(pg, gid); }
+            if let Some(pg) = prev {
+                width += scaled.kern(pg, gid);
+            }
             if let Some(gi) = self.glyphs.get(&ch) {
                 width += gi.advance;
                 prev = Some(gi.id);

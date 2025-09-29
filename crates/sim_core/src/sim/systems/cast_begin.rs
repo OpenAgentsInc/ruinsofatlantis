@@ -77,7 +77,12 @@ pub fn run(state: &mut SimState) {
             a.id.clone()
         };
         if started {
-            state.events.push(SimEvent::CastStarted { actor: actor_id, ability: first.clone(), cast_ms, gcd_ms });
+            state.events.push(SimEvent::CastStarted {
+                actor: actor_id,
+                ability: first.clone(),
+                cast_ms,
+                gcd_ms,
+            });
         }
     }
 }

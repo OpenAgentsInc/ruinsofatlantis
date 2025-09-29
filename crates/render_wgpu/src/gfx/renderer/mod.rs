@@ -4,11 +4,11 @@
 //! - input.rs: window/input handling for camera + casting
 //! - update.rs: CPU-side updates (AI, palettes, FX)
 
-pub mod passes;
-pub mod resize;
-pub mod init;
-pub mod render;
 mod attachments;
+pub mod init;
+pub mod passes;
+pub mod render;
+pub mod resize;
 pub(crate) use attachments::Attachments;
 mod input;
 mod update;

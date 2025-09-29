@@ -4,16 +4,22 @@
 //! - `new_renderer` remains a thin wrapper used by `gfx::Renderer::new`.
 
 use anyhow::Context;
-use data_runtime::{loader as data_loader, zone::{ZoneManifest, load_zone_manifest}};
+use data_runtime::{
+    loader as data_loader,
+    zone::{ZoneManifest, load_zone_manifest},
+};
 use ra_assets::skinning::load_gltf_skinned;
 use std::time::Instant;
-use wgpu::{rwh::HasDisplayHandle, rwh::HasWindowHandle, SurfaceTargetUnsafe, util::DeviceExt};
+use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 // Bring parent gfx modules into scope so the moved body compiles unchanged.
-use crate::gfx::{asset_path, anim, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks, ruins, scene, sky, terrain, ui, util, zombies};
 use crate::gfx::types::{Globals, Model, VertexSkinned};
+use crate::gfx::{
+    anim, asset_path, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks,
+    ruins, scene, sky, terrain, ui, util, zombies,
+};
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
     // --- Instance + Surface + Adapter (with backend fallback) ---
@@ -236,7 +242,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let plane_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("terrain-model-bg"),
         layout: &model_bgl,
-        entries: &[wgpu::BindGroupEntry { binding: 0, resource: _plane_model_buf.as_entire_binding() }],
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: _plane_model_buf.as_entire_binding(),
+        }],
     });
 
     let shard_model_init = Model {
@@ -253,7 +262,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let shard_model_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("shard-model-bg"),
         layout: &model_bgl,
-        entries: &[wgpu::BindGroupEntry { binding: 0, resource: shard_model_buf.as_entire_binding() }],
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: shard_model_buf.as_entire_binding(),
+        }],
     });
 
     // UI: nameplates + health bars — build against active color format (swapchain if direct-present)
@@ -305,38 +317,120 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("globals-bg"),
         layout: &globals_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: lights_buf.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals_buf.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: lights_buf.as_entire_binding(),
+            },
         ],
     });
 
     // Sky uniforms and zone setup
-    let zone: ZoneManifest = load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
-    log::info!("Zone '{}' (id={}, plane={:?})", zone.display_name, zone.zone_id, zone.plane);
+    let zone: ZoneManifest =
+        load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
+    log::info!(
+        "Zone '{}' (id={}, plane={:?})",
+        zone.display_name,
+        zone.zone_id,
+        zone.plane
+    );
     let mut sky_state = sky::SkyStateCPU::new();
     if let Some(w) = zone.weather {
-        sky_state.weather = crate::gfx::sky::Weather { turbidity: w.turbidity, ground_albedo: w.ground_albedo };
+        sky_state.weather = crate::gfx::sky::Weather {
+            turbidity: w.turbidity,
+            ground_albedo: w.ground_albedo,
+        };
         sky_state.recompute();
     }
-    if let Some(frac) = zone.start_time_frac { sky_state.day_frac = frac.rem_euclid(1.0); sky_state.recompute(); }
-    if let Some(pause) = zone.start_paused { sky_state.paused = pause; }
-    if let Some(scale) = zone.start_time_scale { sky_state.time_scale = scale.clamp(0.01, 1000.0); }
-    log::info!("Start TOD: day_frac={:.3} paused={} sun_elev={:.3}", sky_state.day_frac, sky_state.paused, sky_state.sun_dir.y);
-    let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("sky-uniform"), contents: bytemuck::bytes_of(&sky_state.sky_uniform), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
-    let sky_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("sky-bg"), layout: &sky_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: sky_buf.as_entire_binding() }] });
+    if let Some(frac) = zone.start_time_frac {
+        sky_state.day_frac = frac.rem_euclid(1.0);
+        sky_state.recompute();
+    }
+    if let Some(pause) = zone.start_paused {
+        sky_state.paused = pause;
+    }
+    if let Some(scale) = zone.start_time_scale {
+        sky_state.time_scale = scale.clamp(0.01, 1000.0);
+    }
+    log::info!(
+        "Start TOD: day_frac={:.3} paused={} sun_elev={:.3}",
+        sky_state.day_frac,
+        sky_state.paused,
+        sky_state.sun_dir.y
+    );
+    let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("sky-uniform"),
+        contents: bytemuck::bytes_of(&sky_state.sky_uniform),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+    let sky_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("sky-bg"),
+        layout: &sky_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: sky_buf.as_entire_binding(),
+        }],
+    });
     // Post AO + samplers
-    let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("post-ao-sampler"), address_mode_u: wgpu::AddressMode::ClampToEdge, address_mode_v: wgpu::AddressMode::ClampToEdge, address_mode_w: wgpu::AddressMode::ClampToEdge, mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
-    let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("post-ao-bg"), layout: &post_ao_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.depth_view) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) }] });
-    let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("point-sampler"), address_mode_u: wgpu::AddressMode::ClampToEdge, address_mode_v: wgpu::AddressMode::ClampToEdge, address_mode_w: wgpu::AddressMode::ClampToEdge, mag_filter: wgpu::FilterMode::Nearest, min_filter: wgpu::FilterMode::Nearest, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
-    let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("ssgi-globals-bg"), layout: &ssgi_globals_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }] });
+    let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("post-ao-sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+    let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("post-ao-bg"),
+        layout: &post_ao_bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&attachments.depth_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&post_sampler),
+            },
+        ],
+    });
+    let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("point-sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+    let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("ssgi-globals-bg"),
+        layout: &ssgi_globals_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: globals_buf.as_entire_binding(),
+        }],
+    });
 
     // Bloom bind group reads from SceneRead (copy of SceneColor)
     let bloom_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("bloom-bg"),
         layout: &bloom_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&post_sampler),
+            },
         ],
     });
 
@@ -345,18 +439,36 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("present-bg"),
         layout: &present_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
-            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&attachments.depth_view) },
-            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&point_sampler) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&attachments.scene_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&post_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&attachments.depth_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
+            },
         ],
     });
     let ssgi_depth_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ssgi-depth-bg"),
         layout: &ssgi_depth_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.depth_view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&attachments.depth_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&post_sampler),
+            },
         ],
     });
     // SSR depth BG uses the linear depth view from Hi-Z pyramid
@@ -364,24 +476,42 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("ssr-depth-bg"),
         layout: &ssr_depth_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&hiz.linear_view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&point_sampler) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&hiz.linear_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
+            },
         ],
     });
     let ssgi_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ssgi-scene-bg"),
         layout: &ssgi_scene_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&post_sampler),
+            },
         ],
     });
     let ssr_scene_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ssr-scene-bg"),
         layout: &ssr_scene_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view) },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&post_sampler),
+            },
         ],
     });
 
@@ -404,25 +534,58 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
     let ruins_base_offset = ruins_gpu.base_offset;
     let ruins_radius = ruins_gpu.radius;
-    let (ruins_vb, ruins_ib, ruins_index_count) = (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
+    let (ruins_vb, ruins_ib, ruins_index_count) =
+        (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
     // Load wizard GLTF, possibly merging UVs from simple loader for robustness
-    let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf")).context("load skinned wizard.gltf")?;
+    let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
+        .context("load skinned wizard.gltf")?;
     let viewer_uv: Option<Vec<[f32; 2]>> = (|| {
         let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).ok()?;
         let mesh = doc.meshes().next()?;
         let prim = mesh.primitives().next()?;
         let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-        let uv_set = prim.material().pbr_metallic_roughness().base_color_texture().map(|ti| ti.tex_coord()).unwrap_or(0);
-        let uv = reader.read_tex_coords(uv_set)?.into_f32().collect::<Vec<[f32; 2]>>();
+        let uv_set = prim
+            .material()
+            .pbr_metallic_roughness()
+            .base_color_texture()
+            .map(|ti| ti.tex_coord())
+            .unwrap_or(0);
+        let uv = reader
+            .read_tex_coords(uv_set)?
+            .into_f32()
+            .collect::<Vec<[f32; 2]>>();
         Some(uv)
     })();
-    let wiz_vertices: Vec<VertexSkinned> = skinned_cpu.vertices.iter().enumerate().map(|(i, v)| {
-        let uv = if let Some(ref uvs) = viewer_uv { uvs.get(i).copied().unwrap_or(v.uv) } else { v.uv };
-        VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv }
-    }).collect();
-    let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-vb"), contents: bytemuck::cast_slice(&wiz_vertices), usage: wgpu::BufferUsages::VERTEX });
-    let wizard_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-ib"), contents: bytemuck::cast_slice(&skinned_cpu.indices), usage: wgpu::BufferUsages::INDEX });
+    let wiz_vertices: Vec<VertexSkinned> = skinned_cpu
+        .vertices
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let uv = if let Some(ref uvs) = viewer_uv {
+                uvs.get(i).copied().unwrap_or(v.uv)
+            } else {
+                v.uv
+            };
+            VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                joints: v.joints,
+                weights: v.weights,
+                uv,
+            }
+        })
+        .collect();
+    let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wizard-vb"),
+        contents: bytemuck::cast_slice(&wiz_vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let wizard_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wizard-ib"),
+        contents: bytemuck::cast_slice(&skinned_cpu.indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
     let wizard_index_count = skinned_cpu.indices.len() as u32;
 
     // Zombie assets (skinned)
@@ -433,7 +596,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let zombie_index_count = zombie_assets.index_count;
 
     // Scene assembly
-    let scene_build = scene::build_demo_scene(&device, &skinned_cpu, terrain_extent, Some(&terrain_cpu), ruins_base_offset, ruins_radius);
+    let scene_build = scene::build_demo_scene(
+        &device,
+        &skinned_cpu,
+        terrain_extent,
+        Some(&terrain_cpu),
+        ruins_base_offset,
+        ruins_radius,
+    );
     // Snap initial wizard ring onto terrain height
     let mut wizard_models = scene_build.wizard_models.clone();
     for m in &mut wizard_models {
@@ -443,9 +613,19 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         *m = glam::Mat4::from_scale_rotation_translation(s, r, glam::vec3(c[12], h, c[14]));
     }
     let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
-    for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() { inst.model = wizard_models[i].to_cols_array_2d(); }
-    let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("wizard-instances"), contents: bytemuck::cast_slice(&wizard_instances_cpu), usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST });
-    let pc_initial_pos = { let m = scene_build.wizard_models[scene_build.pc_index]; let c = m.to_cols_array(); glam::vec3(c[12], c[13], c[14]) };
+    for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() {
+        inst.model = wizard_models[i].to_cols_array_2d();
+    }
+    let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wizard-instances"),
+        contents: bytemuck::cast_slice(&wizard_instances_cpu),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    });
+    let pc_initial_pos = {
+        let m = scene_build.wizard_models[scene_build.pc_index];
+        let c = m.to_cols_array();
+        glam::vec3(c[12], c[13], c[14])
+    };
 
     // Upload UI atlases
     nameplates.upload_atlas(&queue);
@@ -454,56 +634,120 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
 
     // FX resources
     let fx_res = fx::create_fx_resources(&device, &model_bgl);
-    let fx_instances = fx_res.instances; let _fx_model_bg = fx_res.model_bg; let quad_vb = fx_res.quad_vb; let fx_capacity = fx_res.capacity; let fx_count: u32 = 0;
+    let fx_instances = fx_res.instances;
+    let _fx_model_bg = fx_res.model_bg;
+    let quad_vb = fx_res.quad_vb;
+    let fx_capacity = fx_res.capacity;
+    let fx_count: u32 = 0;
     let fire_bolt = data_loader::load_spell_spec("spells/fire_bolt.json").ok();
-    let hand_right_node = skinned_cpu.hand_right_node; let root_node = skinned_cpu.root_node;
+    let hand_right_node = skinned_cpu.hand_right_node;
+    let root_node = skinned_cpu.root_node;
     let _strikes_tmp = anim::compute_portalopen_strikes(&skinned_cpu, hand_right_node, root_node);
 
     // Palettes
     let total_mats = scene_build.wizard_count as usize * scene_build.joints_per_wizard as usize;
-    let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor { label: Some("palettes"), size: (total_mats * 64) as u64, usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
-    let palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("palettes-bg"), layout: &palettes_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding { buffer: &palettes_buf, offset: 0, size: None }) }] });
+    let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("palettes"),
+        size: (total_mats * 64) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("palettes-bg"),
+        layout: &palettes_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &palettes_buf,
+                offset: 0,
+                size: None,
+            }),
+        }],
+    });
     let zombie_joints = zombie_cpu.joints_nodes.len() as u32;
 
     // Materials
     let wmat = material::create_wizard_material(&device, &queue, &material_bgl, &skinned_cpu);
-    let wizard_mat_bg = wmat.bind_group; let _wizard_mat_buf = wmat.uniform_buf; let _wizard_tex_view = wmat.texture_view; let _wizard_sampler = wmat.sampler;
+    let wizard_mat_bg = wmat.bind_group;
+    let _wizard_mat_buf = wmat.uniform_buf;
+    let _wizard_tex_view = wmat.texture_view;
+    let _wizard_sampler = wmat.sampler;
     let zmat = material::create_wizard_material(&device, &queue, &material_bgl, &zombie_cpu);
-    let zombie_mat_bg = zmat.bind_group; let _zombie_mat_buf = zmat.uniform_buf; let _zombie_tex_view = zmat.texture_view; let _zombie_sampler = zmat.sampler;
+    let zombie_mat_bg = zmat.bind_group;
+    let _zombie_mat_buf = zmat.uniform_buf;
+    let _zombie_tex_view = zmat.texture_view;
+    let _zombie_sampler = zmat.sampler;
 
     // NPCs and server
     let npcs = npcs::build(&device, terrain_extent);
-    let npc_vb = npcs.vb; let npc_ib = npcs.ib; let npc_index_count = npcs.index_count; let npc_instances = npcs.instances; let npc_models = npcs.models; let server = npcs.server;
+    let npc_vb = npcs.vb;
+    let npc_ib = npcs.ib;
+    let npc_index_count = npcs.index_count;
+    let npc_instances = npcs.instances;
+    let npc_models = npcs.models;
+    let server = npcs.server;
 
     // Vegetation
-    let veg = zone.vegetation.as_ref().map(|v| (v.tree_count as usize, v.tree_seed));
-    let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &slug, veg).context("build trees (instances + mesh) for zone")?;
-    let trees_instances = trees_gpu.instances; let trees_count = trees_gpu.count; let (trees_vb, trees_ib, trees_index_count) = (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
+    let veg = zone
+        .vegetation
+        .as_ref()
+        .map(|v| (v.tree_count as usize, v.tree_seed));
+    let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &slug, veg)
+        .context("build trees (instances + mesh) for zone")?;
+    let trees_instances = trees_gpu.instances;
+    let trees_count = trees_gpu.count;
+    let (trees_vb, trees_ib, trees_index_count) =
+        (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
 
     // Rocks
-    let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None).context("build rocks (instances + mesh) for zone")?;
-    let rocks_instances = rocks_gpu.instances; let rocks_count = rocks_gpu.count; let (rocks_vb, rocks_ib, rocks_index_count) = (rocks_gpu.vb, rocks_gpu.ib, rocks_gpu.index_count);
+    let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
+        .context("build rocks (instances + mesh) for zone")?;
+    let rocks_instances = rocks_gpu.instances;
+    let rocks_count = rocks_gpu.count;
+    let (rocks_vb, rocks_ib, rocks_index_count) =
+        (rocks_gpu.vb, rocks_gpu.ib, rocks_gpu.index_count);
 
     // UI prep
-    bars.queue_entries(&device, &queue, config.width, config.height, glam::Mat4::IDENTITY, &[]);
+    bars.queue_entries(
+        &device,
+        &queue,
+        config.width,
+        config.height,
+        glam::Mat4::IDENTITY,
+        &[],
+    );
     hud.upload_atlas(&queue);
 
     // Zombie instances from server
-    let (zombie_instances, zombie_instances_cpu, zombie_models, zombie_ids, zombie_count) = zombies::build_instances(&device, &terrain_cpu, &server, zombie_joints);
+    let (zombie_instances, zombie_instances_cpu, zombie_models, zombie_ids, zombie_count) =
+        zombies::build_instances(&device, &terrain_cpu, &server, zombie_joints);
     let total_z_mats = zombie_count as usize * zombie_joints as usize;
-    let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor { label: Some("zombie-palettes"), size: (total_z_mats * 64) as u64, usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
-    let zombie_palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("zombie-palettes-bg"), layout: &palettes_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: zombie_palettes_buf.as_entire_binding() }] });
+    let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("zombie-palettes"),
+        size: (total_z_mats * 64) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let zombie_palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("zombie-palettes-bg"),
+        layout: &palettes_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: zombie_palettes_buf.as_entire_binding(),
+        }],
+    });
 
     // Determine asset forward offset from the zombie root node (if present).
     let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
     // Ability timings from SpecDb (canonical)
     let specdb = data_runtime::specdb::SpecDb::load_default();
-    let (pc_cast_time, firebolt_cd_dur, gcd_duration) = if let Some(fb) = specdb.get_spell("wiz.fire_bolt.srd521") {
-        (fb.cast_time_s, fb.cooldown_s, fb.gcd_s)
-    } else {
-        (1.5, 0.5, 1.5)
-    };
+    let (pc_cast_time, firebolt_cd_dur, gcd_duration) =
+        if let Some(fb) = specdb.get_spell("wiz.fire_bolt.srd521") {
+            (fb.cast_time_s, fb.cooldown_s, fb.gcd_s)
+        } else {
+            (1.5, 0.5, 1.5)
+        };
 
     Ok(crate::gfx::Renderer {
         surface,
@@ -639,7 +883,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         player: client_core::controller::PlayerController::new(pc_initial_pos),
         scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
         input: Default::default(),
-        cam_follow: camera_sys::FollowState { current_pos: glam::vec3(0.0, 5.0, -10.0), current_look: scene_build.cam_target },
+        cam_follow: camera_sys::FollowState {
+            current_pos: glam::vec3(0.0, 5.0, -10.0),
+            current_look: scene_build.cam_target,
+        },
         pc_cast_queued: false,
         pc_cast_kind: Some(super::super::PcCast::FireBolt),
         pc_anim_start: None,
@@ -666,9 +913,17 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         zombie_joints,
         zombie_models: zombie_models.clone(),
         zombie_cpu,
-        zombie_time_offset: (0..zombie_count as usize).map(|i| i as f32 * 0.35).collect(),
+        zombie_time_offset: (0..zombie_count as usize)
+            .map(|i| i as f32 * 0.35)
+            .collect(),
         zombie_ids,
-        zombie_prev_pos: zombie_models.iter().map(|m| { let c = m.to_cols_array(); glam::vec3(c[12], c[13], c[14]) }).collect(),
+        zombie_prev_pos: zombie_models
+            .iter()
+            .map(|m| {
+                let c = m.to_cols_array();
+                glam::vec3(c[12], c[13], c[14])
+            })
+            .collect(),
         zombie_forward_offsets: vec![zombie_forward_offset; zombie_count as usize],
     })
 }
