@@ -310,6 +310,8 @@ pub struct Renderer {
     cam_look_height: f32,
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
+    // Window scale factor (DPI). Used to convert logical cursor coords → physical px.
+    window_scale: f64,
 
     // UI capture helpers
     screenshot_start: Option<f32>,
@@ -436,6 +438,7 @@ impl Renderer {
         self.cam_look_height = 1.6;
         self.rmb_down = false;
         self.last_cursor_pos = None;
+        self.window_scale = self.window_scale.max(1.0); // keep prior scale if known
         self.death_btn_rect = None;
         self.pc_cast_queued = false;
         self.pc_anim_start = None;
@@ -1541,6 +1544,7 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
+            window_scale: 1.0,
             screenshot_start: None,
             death_btn_rect: None,
 
@@ -3186,8 +3190,11 @@ impl Renderer {
                     self.cam_orbit_pitch =
                         (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
                 }
-                // Track last cursor position for button hit-testing
-                self.last_cursor_pos = Some((position.x, position.y));
+                // Track last cursor position in PHYSICAL px for button hit-testing
+                self.last_cursor_pos = Some((position.x * self.window_scale, position.y * self.window_scale));
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.window_scale = *scale_factor;
             }
             WindowEvent::Focused(false) => {
                 // Clear sticky keys when window loses focus
