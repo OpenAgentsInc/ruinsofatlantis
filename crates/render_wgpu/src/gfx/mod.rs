@@ -1821,13 +1821,22 @@ impl Renderer {
         let present_only = std::env::var("RA_PRESENT_ONLY")
             .map(|v| v == "1")
             .unwrap_or(false);
-        // Sky-only pass (no depth) into SceneColor
+        // Direct-present path: render directly to the swapchain view instead of SceneColor
+        let direct_present = std::env::var("RA_DIRECT_PRESENT")
+            .map(|v| v != "0")
+            .unwrap_or(true);
+        let render_view: &wgpu::TextureView = if direct_present {
+            &view
+        } else {
+            &self.scene_view
+        };
+        // Sky-only pass (no depth)
         log::info!("pass: sky");
         if !present_only {
             let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.scene_view,
+                    view: render_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
@@ -1850,13 +1859,13 @@ impl Renderer {
             sky.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
-        // Main pass with depth into SceneColor; load color from sky pass
+        // Main pass with depth; load color from sky pass when offscreen
         log::info!("pass: main");
         if !present_only {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.scene_view,
+                    view: render_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
@@ -2241,8 +2250,8 @@ impl Renderer {
             rp.draw(0..3, 0..1);
         }
 
-        // Present SceneColor to swapchain
-        {
+        // Present: if rendering directly to swapchain, skip this pass
+        if !direct_present {
             let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("present-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
