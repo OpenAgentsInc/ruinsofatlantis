@@ -520,14 +520,21 @@ impl Renderer {
         });
     }
 
+    /// Spawn Magic Missile visuals: three darts on a horizontal plane.
+    /// The center dart flies straight forward; the side darts fly with a slight
+    /// outward yaw so they gradually spread as they travel.
     pub(crate) fn spawn_magic_missile(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
-        let right = glam::vec3(dir.z, 0.0, -dir.x).normalize_or_zero();
-        let offsets = [-0.12f32, 0.0, 0.12f32];
+        let base_dir = dir.normalize_or_zero();
+        // Ultra-tight spread: ±2 degrees about Y (horizontal plane)
+        let spread_rad = 2.0_f32.to_radians();
+        let left_dir = glam::Quat::from_rotation_y(-spread_rad) * base_dir;
+        let right_dir = glam::Quat::from_rotation_y(spread_rad) * base_dir;
+
         let mm_col = [1.3, 0.7, 2.3];
-        for off in offsets {
-            let o = origin + right * off;
-            self.spawn_firebolt(o, dir, t, Some(self.pc_index), false, mm_col);
-        }
+        // Spawn all three at the same origin so they separate over distance
+        self.spawn_firebolt(origin, base_dir, t, Some(self.pc_index), false, mm_col);
+        self.spawn_firebolt(origin, left_dir, t, Some(self.pc_index), false, mm_col);
+        self.spawn_firebolt(origin, right_dir, t, Some(self.pc_index), false, mm_col);
     }
 
     pub(crate) fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
