@@ -3,6 +3,7 @@
 //! have a known ability. Cast times and GCD are pulled from loaded SpellSpecs.
 
 use crate::combat::fsm::ActionState;
+use crate::sim::events::SimEvent;
 use crate::sim::state::{ActorSim, SimState};
 use data_runtime::ids::Id;
 
@@ -76,10 +77,12 @@ pub fn run(state: &mut SimState) {
             a.id.clone()
         };
         if started {
-            state.log(format!(
-                "cast_started actor={} ability={} cast_ms={} gcd_ms={}",
-                actor_id, first, cast_ms, gcd_ms
-            ));
+            state.events.push(SimEvent::CastStarted {
+                actor: actor_id,
+                ability: first.clone(),
+                cast_ms,
+                gcd_ms,
+            });
         }
     }
 }

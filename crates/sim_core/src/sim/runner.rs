@@ -107,12 +107,9 @@ pub fn run_scenario(scn: &Scenario, result_only: bool) {
     }
 
     // Print summary
-    for log in &state.logs {
-        println!("[sim] {}", log);
-    }
     if !result_only {
-        for log in &state.logs {
-            println!("[sim] {}", log);
+        for ev in &state.events {
+            println!("[sim] {:?}", ev);
         }
     }
     for a in &state.actors {

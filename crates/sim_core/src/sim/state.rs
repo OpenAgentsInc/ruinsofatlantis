@@ -5,8 +5,9 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::combat::fsm::{ActionDone, ActionState, Gcd};
 use crate::rules::attack::Advantage;
-use data_runtime::loader::load_spell_spec;
+use crate::sim::events::SimEvent;
 use data_runtime::loader::{load_class_spec, load_monster_spec};
+use data_runtime::specdb::SpecDb;
 use data_runtime::spell::SpellSpec;
 
 #[derive(Debug, Clone)]
@@ -43,10 +44,11 @@ pub struct SimState {
     pub rng: ChaCha8Rng,
     pub actors: Vec<ActorSim>,
     pub spells: HashMap<String, SpellSpec>,
+    pub spec_db: SpecDb,
     pub cast_completed: Vec<(usize, String)>,
     pub pending_damage: Vec<(usize, String, bool)>,
     pub pending_status: Vec<(usize, crate::combat::conditions::Condition, u32)>,
-    pub logs: Vec<String>,
+    pub events: Vec<SimEvent>,
     pub underwater: bool,
 }
 
@@ -57,75 +59,35 @@ impl SimState {
             rng: ChaCha8Rng::seed_from_u64(seed),
             actors: Vec::new(),
             spells: HashMap::new(),
+            spec_db: SpecDb::load_default(),
             cast_completed: Vec::new(),
             pending_damage: Vec::new(),
             pending_status: Vec::new(),
-            logs: Vec::new(),
+            events: Vec::new(),
             underwater: false,
         }
     }
 
     pub fn load_spell(&self, id: &str) -> anyhow::Result<SpellSpec> {
-        // Try exact id.json under spells/
-        let primary = format!("spells/{}.json", id);
-        if let Ok(spec) = load_spell_spec(&primary) {
-            return Ok(spec);
+        if let Some(s) = self.spec_db.get_spell(id) {
+            return Ok(s.clone());
         }
-        // Try last segment after '.' (e.g., wiz.fire_bolt.srd521 -> srd521.json or fire_bolt.json)
-        if let Some(last) = id.rsplit('.').next() {
-            let alt = format!("spells/{}.json", last);
-            if let Ok(spec) = load_spell_spec(&alt) {
-                return Ok(spec);
-            }
-        }
-        // Heuristic: if the id contains "fire_bolt", fall back to fire_bolt.json
-        if id.contains("fire_bolt")
-            && let Ok(spec) = load_spell_spec("spells/fire_bolt.json")
-        {
-            return Ok(spec);
-        }
-        if id.contains("bless")
-            && let Ok(spec) = load_spell_spec("spells/bless.json")
-        {
-            return Ok(spec);
-        }
-        if id.contains("shield")
-            && let Ok(spec) = load_spell_spec("spells/shield.json")
-        {
-            return Ok(spec);
-        }
-        if id.contains("grease")
-            && let Ok(spec) = load_spell_spec("spells/grease.json")
-        {
-            return Ok(spec);
-        }
-        if id.contains("heroism")
-            && let Ok(spec) = load_spell_spec("spells/heroism.json")
-        {
-            return Ok(spec);
-        }
-        if id.contains("magic_missile")
-            && let Ok(spec) = load_spell_spec("spells/magic_missile.json")
-        {
-            return Ok(spec);
-        }
-        // Fallback: try the filename portion after a slash if present
-        if let Some((_ns, tail)) = id.rsplit_once('/') {
-            let alt = format!("spells/{}.json", tail);
-            if let Ok(spec) = load_spell_spec(&alt) {
-                return Ok(spec);
-            }
-        }
-        load_spell_spec(&primary)
+        anyhow::bail!("spell not found: {}", id)
     }
 
     pub fn load_class_defaults(&self, id: &str) -> anyhow::Result<(i32, i32, i32)> {
+        if let Some(c) = self.spec_db.get_class(id) {
+            return Ok((c.base_ac, c.spell_attack_bonus, c.spell_save_dc));
+        }
         let rel = format!("classes/{}.json", id);
         let spec = load_class_spec(rel)?;
         Ok((spec.base_ac, spec.spell_attack_bonus, spec.spell_save_dc))
     }
 
     pub fn load_monster_defaults(&self, id: &str) -> anyhow::Result<(i32, i32)> {
+        if let Some(m) = self.spec_db.get_monster(id) {
+            return Ok((m.ac, m.hp));
+        }
         let rel = format!("monsters/{}.json", id);
         let spec = load_monster_spec(rel)?;
         Ok((spec.ac, spec.hp))
@@ -149,13 +111,12 @@ impl SimState {
             };
             if let Some(ActionDone::CastCompleted { ability }) = done {
                 self.cast_completed.push((idx, ability.0));
-                self.log(format!("cast_completed actor={} ability=..", actor_id));
+                self.events.push(SimEvent::CastCompleted {
+                    actor: actor_id,
+                    ability: "..".into(),
+                });
             }
         }
-    }
-
-    pub fn log(&mut self, s: String) {
-        self.logs.push(s);
     }
 
     pub fn target_ac(&self, actor_idx: usize) -> Option<i32> {

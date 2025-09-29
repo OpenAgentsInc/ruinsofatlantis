@@ -1,6 +1,7 @@
 //! Resolve attack rolls for newly completed casts.
 
 use crate::rules::attack::Advantage;
+use crate::sim::events::SimEvent;
 use crate::sim::state::SimState;
 
 pub fn run(state: &mut SimState) {
@@ -26,10 +27,11 @@ pub fn run(state: &mut SimState) {
                 if state.are_allies(actor_idx, tgt_idx) {
                     let actor_id = state.actors[actor_idx].id.clone();
                     let tgt_id = state.actors[tgt_idx].id.clone();
-                    state.log(format!(
-                        "ally_immunity actor={} -> tgt={} ability={} (skipped)",
-                        actor_id, tgt_id, ability_id
-                    ));
+                    state.events.push(SimEvent::AllyImmunity {
+                        actor: actor_id,
+                        target: tgt_id,
+                        ability: ability_id.clone(),
+                    });
                     continue;
                 }
                 if !state.actor_alive(tgt_idx) {
@@ -58,23 +60,22 @@ pub fn run(state: &mut SimState) {
                 state.actors[tgt_idx].ac_temp_bonus += 5;
                 state.actors[tgt_idx].reaction_ready = false;
                 target_ac += 5;
-                state.log(format!(
-                    "shield_reaction tgt={} +5 AC -> {}",
-                    state.actors[tgt_idx].id, target_ac
-                ));
+                state.events.push(SimEvent::ShieldReaction {
+                    target: state.actors[tgt_idx].id.clone(),
+                    new_ac: target_ac,
+                });
             }
             let hit = total >= target_ac;
             let actor_id = state.actors[actor_idx].id.clone();
-            state.log(format!(
-                "attack_resolved actor={} ability={} d20={} + {} = {} vs AC{} => {}",
-                actor_id,
-                ability_id,
+            state.events.push(SimEvent::AttackResolved {
+                actor: actor_id,
+                ability: ability_id.clone(),
                 roll,
                 bonus,
                 total,
                 target_ac,
-                if hit { "HIT" } else { "MISS" }
-            ));
+                hit,
+            });
             if hit {
                 state
                     .pending_damage

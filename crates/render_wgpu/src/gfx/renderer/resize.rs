@@ -28,19 +28,26 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
     let offscreen = wgpu::TextureFormat::Rgba16Float;
     r.attachments.swapchain_format = sc_fmt;
     r.attachments.offscreen_format = offscreen;
-    r.attachments.rebuild(&r.device, r.config.width, r.config.height);
+    r.attachments
+        .rebuild(&r.device, r.config.width, r.config.height);
 
     // Rebuild bind groups referencing resized textures
     r.present_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("present-bg"),
         layout: &r.present_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&r.attachments.scene_view) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&r.attachments.scene_view),
+            },
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&r._post_sampler),
             },
-            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view) },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+            },
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Sampler(&r.point_sampler),
@@ -51,7 +58,10 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         label: Some("post-ao-bg"),
         layout: &r.post_ao_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+            },
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&r._post_sampler),
@@ -62,7 +72,10 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         label: Some("ssgi-depth-bg"),
         layout: &r.ssgi_depth_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+            },
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&r._post_sampler),
@@ -73,7 +86,10 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         label: Some("ssgi-scene-bg"),
         layout: &r.ssgi_scene_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&r.attachments.scene_read_view) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&r.attachments.scene_read_view),
+            },
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&r._post_sampler),
@@ -111,7 +127,10 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         label: Some("ssr-scene-bg"),
         layout: &r.ssr_scene_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&r.attachments.scene_read_view) },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&r.attachments.scene_read_view),
+            },
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&r._post_sampler),

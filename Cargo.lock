@@ -4889,6 +4889,7 @@ dependencies = [
  "serde",
  "serde_json",
  "server_core",
+ "sha2",
  "ux_hud",
  "wgpu 26.0.1",
  "winit",

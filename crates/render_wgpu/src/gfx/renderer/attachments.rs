@@ -27,7 +27,8 @@ impl Attachments {
         swapchain_format: TextureFormat,
         offscreen_format: TextureFormat,
     ) -> Self {
-        let depth_view = crate::gfx::util::create_depth_view(device, width, height, swapchain_format);
+        let depth_view =
+            crate::gfx::util::create_depth_view(device, width, height, swapchain_format);
         // Offscreen SceneColor (HDR)
         let scene_color = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-color"),
@@ -48,7 +49,11 @@ impl Attachments {
         let scene_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
         let scene_read = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("scene-read"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -75,7 +80,13 @@ impl Attachments {
             // Idempotent for equal sizes
             return;
         }
-        *self = Self::create(device, width, height, self.swapchain_format, self.offscreen_format);
+        *self = Self::create(
+            device,
+            width,
+            height,
+            self.swapchain_format,
+            self.offscreen_format,
+        );
     }
 }
 

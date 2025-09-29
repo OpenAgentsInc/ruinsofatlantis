@@ -43,7 +43,13 @@ pub fn build_trees(
         });
         // Create a small dummy mesh (cube) that will never be drawn since count=0.
         let (vb, ib, index_count) = super::mesh::create_cube(device);
-        return Ok(TreesGpu { instances, count: 0, vb, ib, index_count });
+        return Ok(TreesGpu {
+            instances,
+            count: 0,
+            vb,
+            ib,
+            index_count,
+        });
     }
     // Prefer baked instances if available and sane, else scatter using vegetation params.
     let mut trees_models_opt = if std::env::var("RA_TREES_PROCEDURAL")
