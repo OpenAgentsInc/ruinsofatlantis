@@ -15,10 +15,7 @@
 //! - util.rs: small helpers (clamp surface size while preserving aspect)
 
 mod camera;
-pub mod renderer {
-    pub mod passes;
-    pub mod resize;
-}
+mod renderer;
 mod gbuffer;
 mod hiz;
 mod mesh;
@@ -52,10 +49,10 @@ use ra_assets::skinning::merge_gltf_animations;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
-use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
+use types::{Globals, InstanceSkin, Model, VertexSkinned};
 use util::scale_to_max;
 
-use crate::server_ext::CollideProjectiles;
+// moved trait import to renderer/update.rs
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PcCast {
@@ -68,8 +65,7 @@ use wgpu::{
     SurfaceError, SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt,
 };
 use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
-use winit::keyboard::{KeyCode, PhysicalKey};
+// input handling moved to renderer/input.rs
 use winit::window::Window;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
@@ -3057,362 +3053,12 @@ impl Renderer {
             self.queue.write_buffer(&self.zombie_instances, 0, bytes);
         }
     }
-    /// Handle platform window events that affect input (keyboard focus/keys).
-    pub fn handle_window_event(&mut self, event: &WindowEvent) {
-        match event {
-            WindowEvent::KeyboardInput { event, .. } => {
-                let pressed = event.state.is_pressed();
-                match event.physical_key {
-                    // Ignore movement/casting inputs if the PC is dead
-                    PhysicalKey::Code(KeyCode::KeyW) if self.pc_alive => {
-                        self.input.forward = pressed
-                    }
-                    PhysicalKey::Code(KeyCode::KeyS) if self.pc_alive => {
-                        self.input.backward = pressed
-                    }
-                    PhysicalKey::Code(KeyCode::KeyA) if self.pc_alive => self.input.left = pressed,
-                    PhysicalKey::Code(KeyCode::KeyD) if self.pc_alive => self.input.right = pressed,
-                    PhysicalKey::Code(KeyCode::ShiftLeft)
-                    | PhysicalKey::Code(KeyCode::ShiftRight)
-                        if self.pc_alive =>
-                    {
-                        self.input.run = pressed
-                    }
-                    PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
-                        if self.pc_alive =>
-                    {
-                        if pressed {
-                            if self.last_time >= self.firebolt_cd_until {
-                                self.pc_cast_queued = true;
-                                self.pc_cast_kind = Some(PcCast::FireBolt);
-                                self.pc_cast_time = 0.0; // instant
-                                log::debug!("PC cast queued: Fire Bolt");
-                            } else {
-                                log::debug!(
-                                    "Fire Bolt on cooldown: {:.0} ms remaining",
-                                    ((self.firebolt_cd_until - self.last_time) * 1000.0).max(0.0)
-                                );
-                            }
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::Digit2) | PhysicalKey::Code(KeyCode::Numpad2)
-                        if self.pc_alive =>
-                    {
-                        if pressed {
-                            self.pc_cast_queued = true;
-                            self.pc_cast_kind = Some(PcCast::MagicMissile);
-                            self.pc_cast_time = 1.0; // Magic Missile uses Action pacing
-                            log::debug!("PC cast queued: Magic Missile");
-                        }
-                    }
-                    // Sky controls (pause/scrub/speed)
-                    PhysicalKey::Code(KeyCode::Space) => {
-                        if pressed {
-                            self.sky.toggle_pause();
-                        }
-                    }
+    // moved to renderer/input.rs
 
-                    PhysicalKey::Code(KeyCode::BracketLeft) => {
-                        if pressed {
-                            self.sky.scrub(-0.01);
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::BracketRight) => {
-                        if pressed {
-                            self.sky.scrub(0.01);
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::Minus) => {
-                        if pressed {
-                            self.sky.speed_mul(0.5);
-                            log::info!("time_scale: {:.2}", self.sky.time_scale);
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::Equal) => {
-                        if pressed {
-                            self.sky.speed_mul(2.0);
-                            log::info!("time_scale: {:.2}", self.sky.time_scale);
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::F1) => {
-                        if pressed {
-                            self.hud_model.toggle_perf();
-                            log::info!(
-                                "Perf overlay {}",
-                                if self.hud_model.perf_enabled() {
-                                    "on"
-                                } else {
-                                    "off"
-                                }
-                            );
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::KeyH) => {
-                        if pressed {
-                            self.hud_model.toggle_hud();
-                            log::info!(
-                                "HUD {}",
-                                if self.hud_model.hud_enabled() {
-                                    "shown"
-                                } else {
-                                    "hidden"
-                                }
-                            );
-                        }
-                    }
-                    PhysicalKey::Code(KeyCode::F5) => {
-                        if pressed {
-                            // Start a 5-second smooth orbit capture
-                            self.screenshot_start = Some(self.last_time);
-                            log::info!("Screenshot mode: 5s orbit starting");
-                        }
-                    }
-                    // Allow keyboard respawn as fallback when dead
-                    PhysicalKey::Code(KeyCode::KeyR) | PhysicalKey::Code(KeyCode::Enter) => {
-                        if pressed && !self.pc_alive {
-                            log::info!("Respawn via keyboard");
-                            self.respawn();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                let mut step = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, y) => *y,
-                    winit::event::MouseScrollDelta::PixelDelta(p) => (p.y as f32) * 0.05,
-                };
-                if step.abs() < 1e-3 {
-                    step = 0.0;
-                }
-                if step != 0.0 {
-                    // Allow a closer near-zoom so the camera can sit just
-                    // behind and slightly above the wizard's head.
-                    self.cam_distance = (self.cam_distance - step).clamp(1.6, 25.0);
-                }
-            }
-            WindowEvent::MouseInput { state, button, .. } => {
-                if *button == winit::event::MouseButton::Right {
-                    self.rmb_down = state.is_pressed();
-                    if !self.rmb_down {
-                        self.last_cursor_pos = None; // reset deltas
-                    }
-                }
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                // Use previous cursor for deltas, then update to current.
-                if self.rmb_down
-                    && let Some((lx, ly)) = self.last_cursor_pos
-                {
-                    let dx = position.x - lx;
-                    let dy = position.y - ly;
-                    let sens = 0.005;
-                    // Fully sync player facing with mouse drag; keep camera behind the player
-                    let yaw_delta = dx as f32 * sens;
-                    self.player.yaw = wrap_angle(self.player.yaw - yaw_delta);
-                    self.cam_orbit_yaw = 0.0;
-                    // Invert pitch control (mouse up pitches camera down, and vice versa)
-                    self.cam_orbit_pitch =
-                        (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
-                }
-                // Track last cursor position
-                self.last_cursor_pos = Some((position.x, position.y));
-            }
-            WindowEvent::Focused(false) => {
-                // Clear sticky keys when window loses focus
-                self.input.clear();
-            }
-            _ => {}
-        }
-    }
+    // moved: update_player_and_camera/apply_pc_transform/update_wizard_palettes/select_clip/process_pc_cast
 
-    /// Apply a basic WASD character controller to the PC and update its instance data.
-    fn update_player_and_camera(&mut self, dt: f32, _aspect: f32) {
-        if self.wizard_count == 0 || !self.pc_alive || self.pc_index >= self.wizard_count as usize {
-            return;
-        }
-        let cam_fwd = self.cam_follow.current_look - self.cam_follow.current_pos;
-        let before = self.player.pos;
-        self.player.update(&self.input, dt, cam_fwd);
-        if let Some(idx) = &self.static_index {
-            // Resolve against static colliders (capsule approx for wizard)
-            let cap = collision_static::Capsule {
-                p0: glam::vec3(
-                    self.player.pos.x,
-                    self.player.pos.y + 0.4,
-                    self.player.pos.z,
-                ),
-                p1: glam::vec3(
-                    self.player.pos.x,
-                    self.player.pos.y + 1.8,
-                    self.player.pos.z,
-                ),
-                radius: 0.4,
-            };
-            let a = collision_static::Aabb {
-                min: glam::vec3(
-                    cap.p0.x.min(cap.p1.x) - cap.radius,
-                    cap.p0.y.min(cap.p1.y) - cap.radius,
-                    cap.p0.z.min(cap.p1.z) - cap.radius,
-                ),
-                max: glam::vec3(
-                    cap.p0.x.max(cap.p1.x) + cap.radius,
-                    cap.p0.y.max(cap.p1.y) + cap.radius,
-                    cap.p0.z.max(cap.p1.z) + cap.radius,
-                ),
-            };
-            let _ = a; // reserved for future broadphase tuning
-            let resolved =
-                collision_static::resolve_slide(before, self.player.pos, &cap, idx, 0.25, 4);
-            self.player.pos = resolved;
-        }
-        self.apply_pc_transform();
-    }
-
-    fn apply_pc_transform(&mut self) {
-        if !self.pc_alive || self.pc_index >= self.wizard_count as usize {
-            return;
-        }
-        // Update CPU model matrix and upload only the PC instance
-        let rot = glam::Quat::from_rotation_y(self.player.yaw);
-        // Project player onto terrain height
-        let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
-        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
-        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
-        self.wizard_models[self.pc_index] = m;
-        let mut inst = self.wizard_instances_cpu[self.pc_index];
-        inst.model = m.to_cols_array_2d();
-        self.wizard_instances_cpu[self.pc_index] = inst;
-        let offset = (self.pc_index * std::mem::size_of::<InstanceSkin>()) as u64;
-        self.queue
-            .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
-    }
-    fn update_wizard_palettes(&mut self, time_global: f32) {
-        // Build palettes for each wizard with its animation + offset.
-        if self.wizard_count == 0 {
-            return;
-        }
-        let joints = self.joints_per_wizard as usize;
-        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
-        for i in 0..(self.wizard_count as usize) {
-            let clip = self.select_clip(self.wizard_anim_index[i]);
-            let palette = if self.pc_alive
-                && i == self.pc_index
-                && self.pc_index < self.wizard_count as usize
-            {
-                if let Some(start) = self.pc_anim_start {
-                    let lt = (time_global - start).clamp(0.0, clip.duration.max(0.0));
-                    anim::sample_palette(&self.skinned_cpu, clip, lt)
-                } else {
-                    anim::sample_palette(&self.skinned_cpu, clip, time_global)
-                }
-            } else {
-                let t = time_global + self.wizard_time_offset[i];
-                anim::sample_palette(&self.skinned_cpu, clip, t)
-            };
-            mats.extend(palette);
-        }
-        // Upload as raw f32x16
-
-        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
-        for m in mats {
-            raw.push(m.to_cols_array());
-        }
-        self.queue
-            .write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
-    }
-
-    fn select_clip(&self, idx: usize) -> &AnimClip {
-        // Honor the requested clip first; fallback only if missing.
-        let requested = match idx {
-            0 => "PortalOpen",
-            1 => "Still",
-            _ => "Waiting",
-        };
-        if let Some(c) = self.skinned_cpu.animations.get(requested) {
-            return c;
-        }
-        // Fallback preference order
-        for name in ["Waiting", "Still", "PortalOpen"] {
-            if let Some(c) = self.skinned_cpu.animations.get(name) {
-                return c;
-            }
-        }
-        // Last resort: any available clip
-        self.skinned_cpu
-            .animations
-            .values()
-            .next()
-            .expect("at least one animation clip present")
-    }
-
-    fn process_pc_cast(&mut self, t: f32) {
-        if !self.pc_alive || self.pc_index >= self.wizard_count as usize {
-            return;
-        }
-        if self.pc_cast_queued {
-            self.pc_cast_queued = false;
-            if self.wizard_anim_index[self.pc_index] != 0 && self.pc_anim_start.is_none() {
-                // Start PortalOpen now
-                self.wizard_anim_index[self.pc_index] = 0;
-                self.wizard_time_offset[self.pc_index] = -t; // phase=0 at start
-                self.wizard_last_phase[self.pc_index] = 0.0;
-                self.pc_anim_start = Some(t);
-                self.pc_cast_fired = false;
-            }
-        }
-        if let Some(start) = self.pc_anim_start {
-            if self.wizard_anim_index[self.pc_index] == 0 {
-                let clip = self.select_clip(0);
-                let elapsed = t - start;
-                // Fire bolt exactly at cast end if not yet fired
-                if !self.pc_cast_fired && elapsed >= self.pc_cast_time {
-                    let phase = self.pc_cast_time;
-                    if let Some(origin_local) = self.right_hand_world(clip, phase) {
-                        let inst = self
-                            .wizard_models
-                            .get(self.pc_index)
-                            .copied()
-                            .unwrap_or(glam::Mat4::IDENTITY);
-                        let origin_w = inst
-                            * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
-                        let dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
-                            .truncate()
-                            .normalize_or_zero();
-                        let right_w = (inst * glam::Vec4::new(1.0, 0.0, 0.0, 0.0))
-                            .truncate()
-                            .normalize_or_zero();
-                        let lateral = 0.20;
-                        let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
-                            PcCast::FireBolt => {
-                                log::debug!("PC Fire Bolt fired at t={:.2}", t);
-                        // Bright orange for Fire Bolt
-                        let fb_col = [2.6, 0.7, 0.18];
-                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false, fb_col);
-                                // Begin 1.0s cooldown
-                                self.firebolt_cd_dur = 1.0;
-                                self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur;
-                            }
-                            PcCast::MagicMissile => {
-                                log::debug!("PC Magic Missile fired at t={:.2}", t);
-                                self.spawn_magic_missile(spawn, dir_w, t);
-                            }
-                        }
-                        self.pc_cast_fired = true;
-                    }
-                    // Immediately end cast animation and start cooldown window
-                    self.wizard_anim_index[self.pc_index] = 1;
-                    self.pc_anim_start = None;
-                }
-            } else {
-                self.pc_anim_start = None;
-            }
-        }
-    }
-
-    // Update and render-side state for projectiles/particles
-    fn update_fx(&mut self, t: f32, dt: f32) {
+    // moved: update_fx -> renderer/update.rs
+    /* fn update_fx(&mut self, t: f32, dt: f32) {
         // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
         // PC is always allowed to cast; NPC wizards only cast while zombies remain.
         if self.wizard_count > 0 {
@@ -3687,9 +3333,9 @@ impl Renderer {
                 }
             }
         }
-    }
+    } */
 
-    fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
+    /* fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
         let mut i = 0usize;
         while i < self.projectiles.len() {
             let pr = self.projectiles[i];
@@ -3752,9 +3398,9 @@ impl Renderer {
                 i += 1;
             }
         }
-    }
+    } */
 
-    fn spawn_firebolt(
+    /* fn spawn_firebolt(
         &mut self,
         origin: glam::Vec3,
         dir: glam::Vec3,
@@ -3826,9 +3472,10 @@ impl Renderer {
             None
         }
     }
+*/
 }
 
-fn wrap_angle(a: f32) -> f32 {
+/* fn wrap_angle(a: f32) -> f32 {
     let mut x = a;
     while x > std::f32::consts::PI {
         x -= std::f32::consts::TAU;
@@ -3871,3 +3518,5 @@ mod proj_tests {
         assert!(segment_hits_circle_xz(p0, p1, c, 0.5));
     }
 }
+
+*/
