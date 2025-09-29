@@ -1452,7 +1452,8 @@ impl Renderer {
             enable_post_ao: false,
             enable_ssgi: false,
             enable_ssr: false,
-            enable_bloom: false,
+            // Enable bloom by default to accent bright fire bolts
+            enable_bloom: true,
             // frame overlay removed
         })
     }
@@ -1771,7 +1772,7 @@ impl Renderer {
                     let before = *hp;
                     *hp = (*hp - dmg).max(0);
                     let fatal = *hp == 0;
-                    log::info!(
+                    log::debug!(
                         "wizard melee hit: idx={} hp {} -> {} (dmg {}), fatal={}",
                         widx,
                         before,
@@ -1815,13 +1816,13 @@ impl Renderer {
                 color: [[0.0; 4]; 16],
             };
             let mut n = 0usize;
-            let maxr = 8.0f32;
+            let maxr = 10.0f32;
             for p in &self.projectiles {
                 if n >= 16 {
                     break;
                 }
                 raw.pos_radius[n] = [p.pos.x, p.pos.y, p.pos.z, maxr];
-                raw.color[n] = [1.6, 0.8, 0.3, 0.0];
+                raw.color[n] = [3.0, 1.2, 0.4, 0.0];
                 n += 1;
             }
             raw.count = n as u32;
@@ -1849,7 +1850,7 @@ impl Renderer {
             &self.scene_view
         };
         // Sky-only pass (no depth)
-        log::info!("pass: sky");
+        log::debug!("pass: sky");
         if !present_only {
             let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky-pass"),
@@ -1878,7 +1879,7 @@ impl Renderer {
             self.draw_calls += 1;
         }
         // Main pass with depth; load color from sky pass when offscreen
-        log::info!("pass: main");
+        log::debug!("pass: main");
         if !present_only {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main-pass"),
@@ -1909,9 +1910,9 @@ impl Renderer {
                 .map(|v| v == "0")
                 .unwrap_or(false)
             {
-                log::info!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
+                log::debug!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
             } else {
-                log::info!("draw: terrain");
+                log::debug!("draw: terrain");
                 if trace {
                     self.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
@@ -1930,7 +1931,7 @@ impl Renderer {
 
             // Trees (instanced static mesh)
             if self.trees_count > 0 {
-                log::info!("draw: trees x{}", self.trees_count);
+                log::debug!("draw: trees x{}", self.trees_count);
                 if trace {
                     self.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
@@ -1954,7 +1955,7 @@ impl Renderer {
 
             // Rocks (instanced static mesh)
             if self.rocks_count > 0 {
-                log::info!("draw: rocks x{}", self.rocks_count);
+                log::debug!("draw: rocks x{}", self.rocks_count);
                 if trace {
                     self.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
@@ -1981,7 +1982,7 @@ impl Renderer {
                 .map(|v| v != "0")
                 .unwrap_or(true)
             {
-                log::info!("draw: wizards x{}", self.wizard_count);
+                log::debug!("draw: wizards x{}", self.wizard_count);
                 if trace {
                     self.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
@@ -1991,14 +1992,14 @@ impl Renderer {
                     log::error!("validation after wizards: {:?}", e);
                 }
             } else {
-                log::info!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
+                log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
             }
             // Zombies
             if std::env::var("RA_DRAW_ZOMBIES")
                 .map(|v| v != "0")
                 .unwrap_or(true)
             {
-                log::info!("draw: zombies x{}", self.zombie_count);
+                log::debug!("draw: zombies x{}", self.zombie_count);
                 if trace {
                     self.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
@@ -2008,7 +2009,7 @@ impl Renderer {
                     log::error!("validation after zombies: {:?}", e);
                 }
             } else {
-                log::info!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
+                log::debug!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
             }
 
             // Ruins (instanced) — allow gating via RA_DRAW_RUINS to isolate crashes
@@ -2016,7 +2017,7 @@ impl Renderer {
                 .map(|v| v == "1")
                 .unwrap_or(false);
             if draw_ruins && self.ruins_count > 0 {
-                log::info!("draw: ruins x{} (enabled)", self.ruins_count);
+                log::debug!("draw: ruins x{} (enabled)", self.ruins_count);
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -2031,7 +2032,7 @@ impl Renderer {
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
                 self.draw_calls += 1;
             } else {
-                log::info!("draw: ruins skipped (RA_DRAW_RUINS!=1)");
+                log::debug!("draw: ruins skipped (RA_DRAW_RUINS!=1)");
             }
 
             // NPCs (instanced cubes)
@@ -2040,7 +2041,7 @@ impl Renderer {
                 .unwrap_or(false)
                 && self.npc_count > 0
             {
-                log::info!("draw: npcs x{}", self.npc_count);
+                log::debug!("draw: npcs x{}", self.npc_count);
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -2055,7 +2056,7 @@ impl Renderer {
                 rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
                 self.draw_calls += 1;
             } else if self.npc_count > 0 {
-                log::info!("draw: npcs skipped (RA_DRAW_NPCS!=1)");
+                log::debug!("draw: npcs skipped (RA_DRAW_NPCS!=1)");
             }
 
             // FX
@@ -2231,14 +2232,14 @@ impl Renderer {
             blit.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
-        log::info!("end: main pass");
+        log::debug!("end: main pass");
 
         // Minimal mode: submit immediately after main pass and present
         if std::env::var("RA_MINIMAL")
             .map(|v| v == "1")
             .unwrap_or(false)
         {
-            log::info!("submit: minimal");
+            log::debug!("submit: minimal");
             self.queue.submit(Some(encoder.finish()));
             if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
                 log::error!("wgpu validation error (minimal mode): {:?}", e);
@@ -2371,7 +2372,7 @@ impl Renderer {
 
         // Present: if rendering directly to swapchain, skip this pass
         if !self.direct_present {
-            log::info!("pass: present");
+            log::debug!("pass: present");
             let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("present-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2405,7 +2406,7 @@ impl Renderer {
             // Skip submit on validation error to keep running without panicking
             log::error!("wgpu validation error (skipping frame): {:?}", e);
         } else {
-            log::info!("submit: normal path");
+            log::debug!("submit: normal path");
             // HUD: build, upload, and draw overlay before submit
             let pc_hp = self
                 .wizard_hp
@@ -2918,7 +2919,7 @@ impl Renderer {
                     {
                         if pressed {
                             self.pc_cast_queued = true;
-                            log::info!("PC cast queued: Fire Bolt");
+                        log::debug!("PC cast queued: Fire Bolt");
                         }
                     }
                     // Sky controls (pause/scrub/speed)
@@ -3186,7 +3187,7 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        log::info!("PC Fire Bolt fired at t={:.2}", t);
+                        log::debug!("PC Fire Bolt fired at t={:.2}", t);
                         self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index));
                         self.pc_cast_fired = true;
                     }
@@ -3251,12 +3252,12 @@ impl Renderer {
         // 2) Integrate projectiles and keep them slightly above ground
         // so they don't clip into small terrain undulations.
         let ground_clearance = 0.15f32; // meters above terrain
-        for p in &mut self.projectiles {
-            p.pos += p.vel * dt;
-            // Clamp to be a bit above the terrain height at current XZ.
-            p.pos =
-                crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
-        }
+            for p in &mut self.projectiles {
+                p.pos += p.vel * dt;
+                // Clamp to be a bit above the terrain height at current XZ.
+                p.pos =
+                    crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
+            }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
@@ -3264,7 +3265,7 @@ impl Renderer {
                 .server
                 .collide_and_damage(&mut self.projectiles, dt, damage);
             for h in &hits {
-                log::info!(
+                log::debug!(
                     "hit NPC id={} hp {} -> {} (dmg {}), fatal={}",
                     (h.npc).0,
                     h.hp_before,
@@ -3278,11 +3279,11 @@ impl Renderer {
                     let r = 4.0 + rand_unit() * 1.2;
                     self.particles.push(Particle {
                         pos: h.pos,
-                        vel: glam::vec3(a.cos() * r, 2.0 + rand_unit() * 1.0, a.sin() * r),
+                        vel: glam::vec3(a.cos() * r, 2.0 + rand_unit() * 1.2, a.sin() * r),
                         age: 0.0,
                         life: 0.18,
                         size: 0.02,
-                        color: [1.0, 0.5, 0.2],
+                        color: [1.7, 0.85, 0.35],
                     });
                 }
                 // Update zombie visuals: remove model/instance if dead; otherwise keep
@@ -3351,7 +3352,7 @@ impl Renderer {
                     age: 0.0,
                     life: 0.12,
                     size: 0.06,
-                    color: [1.0, 0.8, 0.25],
+                    color: [1.8, 1.2, 0.4],
                 });
                 for _ in 0..10 {
                     let a = rand_unit() * std::f32::consts::TAU;
@@ -3362,7 +3363,7 @@ impl Renderer {
                         age: 0.0,
                         life: 0.12,
                         size: 0.015,
-                        color: [1.0, 0.55, 0.15],
+                        color: [1.6, 0.9, 0.3],
                     });
                 }
                 self.projectiles.swap_remove(i);
@@ -3406,12 +3407,14 @@ impl Renderer {
         // 4) Upload FX instances (billboard particles) — bolts (with tiny trails) + impact sprites
         let mut inst: Vec<ParticleInstance> =
             Vec::with_capacity(self.projectiles.len() * 3 + self.particles.len());
+        // Brighter firebolt sprites: larger head and boosted emissive color.
+        // Keep additive blending; values >1.0 feed bloom nicely.
         for pr in &self.projectiles {
             // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
-                size: 0.14,
-                color: [1.0, 0.35, 0.08],
+                size: 0.18,
+                color: [2.6, 0.7, 0.18],
                 _pad: 0.0,
             });
             // short trail segments behind
@@ -3422,8 +3425,8 @@ impl Renderer {
                 let fade = 1.0 - (k as f32) * 0.35;
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
-                    size: 0.11,
-                    color: [1.0 * fade, 0.35 * fade, 0.08 * fade],
+                    size: 0.13,
+                    color: [2.0 * fade, 0.55 * fade, 0.16 * fade],
                     _pad: 0.0,
                 });
             }
@@ -3435,7 +3438,7 @@ impl Renderer {
             inst.push(ParticleInstance {
                 pos: [p.pos.x, p.pos.y, p.pos.z],
                 size,
-                color: [p.color[0] * f, p.color[1] * f, p.color[2] * f],
+                color: [p.color[0] * f * 1.5, p.color[1] * f * 1.5, p.color[2] * f * 1.5],
                 _pad: 0.0,
             });
         }
@@ -3514,7 +3517,7 @@ impl Renderer {
                             age: 0.0,
                             life: 0.16,
                             size: 0.02,
-                            color: [1.0, 0.45, 0.15],
+                            color: [1.8, 0.8, 0.3],
                         });
                     }
                     self.projectiles.swap_remove(i);
