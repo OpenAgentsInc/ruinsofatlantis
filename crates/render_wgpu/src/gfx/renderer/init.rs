@@ -629,6 +629,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hud_model: Default::default(),
         pc_index: scene_build.pc_index,
         player: client_core::controller::PlayerController::new(pc_initial_pos),
+        scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
         input: Default::default(),
         cam_follow: camera_sys::FollowState { current_pos: glam::vec3(0.0, 5.0, -10.0), current_look: scene_build.cam_target },
         pc_cast_queued: false,

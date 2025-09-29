@@ -1,0 +1,9 @@
+[package]
+name = "client_runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = "0.30"
+client_core = { path = "../client_core", version = "0.1.0" }
+collision_static = { path = "../collision_static", version = "0.1.0" }
