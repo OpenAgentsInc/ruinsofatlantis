@@ -74,21 +74,8 @@ pub fn create_bind_group_layouts(device: &wgpu::Device) -> (BindGroupLayout, Bin
     (globals, model)
 }
 
-pub fn create_lights_bgl(device: &wgpu::Device) -> BindGroupLayout {
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("lights-bgl"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    })
-}
+// Note: lights UBO is packed into the Globals bind group (binding=1) to stay under
+// max_bind_groups across pipelines. No separate lights bind group is used.
 
 pub fn create_palettes_bgl(device: &wgpu::Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

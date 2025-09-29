@@ -9,7 +9,6 @@ pub struct NpcGpu {
     pub ib: wgpu::Buffer,
     pub index_count: u32,
     pub instances: wgpu::Buffer,
-    pub count: u32,
     pub models: Vec<glam::Mat4>,
     pub server: server_core::ServerState,
 }
@@ -71,9 +70,7 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         ib,
         index_count,
         instances,
-        count: instances_cpu.len() as u32,
         models,
         server,
     }
 }
-

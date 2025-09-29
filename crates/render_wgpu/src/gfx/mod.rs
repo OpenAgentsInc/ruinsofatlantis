@@ -34,22 +34,22 @@ pub mod fx;
 mod material;
 mod npcs;
 mod rocks;
-mod zombies;
 mod ruins;
 mod scene;
 mod sky;
 pub mod terrain;
 mod ui;
 mod util;
+mod zombies;
 
 use data_runtime::{
     loader as data_loader,
     spell::SpellSpec,
     zone::{ZoneManifest, load_zone_manifest},
 };
+use ra_assets::skinning::load_gltf_skinned;
 use ra_assets::skinning::merge_gltf_animations;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
-use ra_assets::skinning::load_gltf_skinned;
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
@@ -1093,7 +1093,6 @@ impl Renderer {
         let zombie_vb = zombie_assets.vb;
         let zombie_ib = zombie_assets.ib;
         let zombie_index_count = zombie_assets.index_count;
-        let zombie_joints = zombie_assets.joints;
 
         let (ruins_vb, ruins_ib, ruins_index_count) =
             (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
@@ -1200,7 +1199,7 @@ impl Renderer {
         let npc_index_count = npcs.index_count;
         let npc_instances = npcs.instances;
         let npc_models = npcs.models;
-        let mut server = npcs.server;
+        let server = npcs.server;
 
         // Trees: delegate to foliage module for instance generation and mesh upload
         let veg = zone

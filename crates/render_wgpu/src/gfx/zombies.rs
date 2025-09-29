@@ -5,15 +5,14 @@
 use anyhow::{Context, Result};
 use wgpu::util::DeviceExt;
 
-use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
 use crate::gfx::types::{InstanceSkin, VertexSkinned};
+use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
 
 pub struct ZombieAssets {
     pub cpu: ra_assets::types::SkinnedMeshCPU,
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub index_count: u32,
-    pub joints: u32,
 }
 
 pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
@@ -22,7 +21,12 @@ pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
         .with_context(|| format!("load skinned {}", zombie_model_path))?;
 
     // Optional external clips in assets/models/zombie_clips/*.glb
-    for (_alias, file) in [("Idle", "idle.glb"), ("Walk", "walk.glb"), ("Run", "run.glb"), ("Attack", "attack.glb")] {
+    for (_alias, file) in [
+        ("Idle", "idle.glb"),
+        ("Walk", "walk.glb"),
+        ("Run", "run.glb"),
+        ("Attack", "attack.glb"),
+    ] {
         let p = asset_path(&format!("assets/models/zombie_clips/{}", file));
         if p.exists() {
             let _ = merge_gltf_animations(&mut cpu, &p);
@@ -32,7 +36,13 @@ pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
     let verts: Vec<VertexSkinned> = cpu
         .vertices
         .iter()
-        .map(|v| VertexSkinned { pos: v.pos, nrm: v.nrm, joints: v.joints, weights: v.weights, uv: v.uv })
+        .map(|v| VertexSkinned {
+            pos: v.pos,
+            nrm: v.nrm,
+            joints: v.joints,
+            weights: v.weights,
+            uv: v.uv,
+        })
         .collect();
     let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("zombie-vb"),
@@ -45,9 +55,12 @@ pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
         usage: wgpu::BufferUsages::INDEX,
     });
     let index_count = cpu.indices.len() as u32;
-    let joints = cpu.joints_nodes.len() as u32;
-
-    Ok(ZombieAssets { cpu, vb, ib, index_count, joints })
+    Ok(ZombieAssets {
+        cpu,
+        vb,
+        ib,
+        index_count,
+    })
 }
 
 pub fn build_instances(
@@ -55,7 +68,13 @@ pub fn build_instances(
     terrain_cpu: &crate::gfx::terrain::TerrainCPU,
     server: &server_core::ServerState,
     zombie_joints: u32,
-) -> (wgpu::Buffer, Vec<InstanceSkin>, Vec<glam::Mat4>, Vec<server_core::NpcId>, u32) {
+) -> (
+    wgpu::Buffer,
+    Vec<InstanceSkin>,
+    Vec<glam::Mat4>,
+    Vec<server_core::NpcId>,
+    u32,
+) {
     let mut instances_cpu: Vec<InstanceSkin> = Vec::new();
     let mut models: Vec<glam::Mat4> = Vec::new();
     let mut ids: Vec<server_core::NpcId> = Vec::new();
@@ -63,7 +82,11 @@ pub fn build_instances(
         // Snap initial zombie spawn to terrain height
         let (h, _n) = crate::gfx::terrain::height_at(terrain_cpu, npc.pos.x, npc.pos.z);
         let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
-        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), glam::Quat::IDENTITY, pos);
+        let m = glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::splat(1.0),
+            glam::Quat::IDENTITY,
+            pos,
+        );
         models.push(m);
         ids.push(npc.id);
         instances_cpu.push(InstanceSkin {
@@ -85,7 +108,11 @@ pub fn build_instances(
 
 pub fn forward_offset(cpu: &ra_assets::types::SkinnedMeshCPU) -> f32 {
     if let Some(root_ix) = cpu.root_node {
-        let r = cpu.base_r.get(root_ix).copied().unwrap_or(glam::Quat::IDENTITY);
+        let r = cpu
+            .base_r
+            .get(root_ix)
+            .copied()
+            .unwrap_or(glam::Quat::IDENTITY);
         let f = r * glam::Vec3::Z; // authoring forward
         f32::atan2(f.x, f.z) + std::f32::consts::PI
     } else {
@@ -98,4 +125,3 @@ fn asset_path(rel: &str) -> std::path::PathBuf {
     let ws = here.join("../../").join(rel);
     if ws.exists() { ws } else { here.join(rel) }
 }
-

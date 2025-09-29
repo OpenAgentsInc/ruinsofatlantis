@@ -210,18 +210,18 @@ fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
   let base_term = mix(0.2, 0.02, nf);
   let amb_term = mix(0.5, 0.05, nf) * amb_int;
   var base = albedo * (base_term + amb_term + 0.8 * ndl);
-  // Dynamic lights (wizard group)
+  // Dynamic lights (same lights UBO as base/instanced)
   let world = in.world;
   var add = vec3<f32>(0.0);
-  for (var i:u32=0u; i<min(lights_wiz.count, MAX_LIGHTS); i++) {
-    let Lw = lights_wiz.pos_radius[i].xyz - world;
-    let r = lights_wiz.pos_radius[i].w;
+  for (var i:u32=0u; i<min(lights.count, MAX_LIGHTS); i++) {
+    let Lw = lights.pos_radius[i].xyz - world;
+    let r = lights.pos_radius[i].w;
     let d = length(Lw);
     if (d < r) {
       let nL = normalize(Lw);
       let atten = pow(1.0 - (d / r), 2.0);
       let l = max(dot(in.nrm, nL), 0.0) * atten;
-      add += lights_wiz.color[i].rgb * l;
+      add += lights.color[i].rgb * l;
     }
   }
   base += add;
