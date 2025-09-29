@@ -34,6 +34,7 @@ pub mod fx;
 mod material;
 mod npcs;
 mod rocks;
+mod zombies;
 mod ruins;
 mod scene;
 mod sky;
@@ -1086,29 +1087,13 @@ impl Renderer {
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
 
-        // Zombie vertex buffer (use same VertexSkinned layout)
-        let zom_vertices: Vec<VertexSkinned> = zombie_cpu
-            .vertices
-            .iter()
-            .map(|v| VertexSkinned {
-                pos: v.pos,
-                nrm: v.nrm,
-                joints: v.joints,
-                weights: v.weights,
-                uv: v.uv,
-            })
-            .collect();
-        let zombie_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("zombie-vb"),
-            contents: bytemuck::cast_slice(&zom_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let zombie_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("zombie-ib"),
-            contents: bytemuck::cast_slice(&zombie_cpu.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let zombie_index_count = zombie_cpu.indices.len() as u32;
+        // Zombie vertex/index buffers (skinned)
+        let zombie_assets = zombies::load_assets(&device).context("load zombie assets")?;
+        let zombie_cpu = zombie_assets.cpu;
+        let zombie_vb = zombie_assets.vb;
+        let zombie_ib = zombie_assets.ib;
+        let zombie_index_count = zombie_assets.index_count;
+        let zombie_joints = zombie_assets.joints;
 
         let (ruins_vb, ruins_ib, ruins_index_count) =
             (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
@@ -1251,35 +1236,8 @@ impl Renderer {
         );
         hud.upload_atlas(&queue);
         // Build zombie instances from server NPCs
-        let mut zombie_instances_cpu: Vec<InstanceSkin> = Vec::new();
-        let mut zombie_models: Vec<glam::Mat4> = Vec::new();
-        let mut zombie_ids: Vec<server_core::NpcId> = Vec::new();
-        for (idx, npc) in server.npcs.iter().enumerate() {
-            // Snap initial zombie spawn to terrain height
-            let (h, _n) = terrain::height_at(&terrain_cpu, npc.pos.x, npc.pos.z);
-            let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
-            let m = glam::Mat4::from_scale_rotation_translation(
-                glam::Vec3::splat(1.0),
-                glam::Quat::IDENTITY,
-                pos,
-            );
-            zombie_models.push(m);
-            zombie_ids.push(npc.id);
-            zombie_instances_cpu.push(InstanceSkin {
-                model: m.to_cols_array_2d(),
-                color: [1.0, 1.0, 1.0],
-                selected: 0.0,
-                palette_base: (idx as u32) * zombie_joints,
-                _pad_inst: [0; 3],
-            });
-        }
-        let zombie_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("zombie-instances"),
-            contents: bytemuck::cast_slice(&zombie_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-        // Zombie palettes storage sized to instance count
-        let zombie_count = zombie_instances_cpu.len() as u32;
+        let (zombie_instances, zombie_instances_cpu, zombie_models, zombie_ids, zombie_count) =
+            zombies::build_instances(&device, &terrain_cpu, &server, zombie_joints);
         let total_z_mats = zombie_count as usize * zombie_joints as usize;
         let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("zombie-palettes"),
@@ -1297,18 +1255,7 @@ impl Renderer {
         });
 
         // Determine asset forward offset from the zombie root node (if present).
-        let zombie_forward_offset = if let Some(root_ix) = zombie_cpu.root_node {
-            let r = zombie_cpu
-                .base_r
-                .get(root_ix)
-                .copied()
-                .unwrap_or(glam::Quat::IDENTITY);
-            let f = r * glam::Vec3::Z; // authoring forward in model space
-            // Flip by 180° to align attack/walk with target direction in our scene.
-            f32::atan2(f.x, f.z) + std::f32::consts::PI
-        } else {
-            0.0
-        };
+        let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
         Ok(Self {
             surface,
