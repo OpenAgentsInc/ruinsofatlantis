@@ -279,6 +279,66 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.draw_calls += 1;
         }
     }
+    // Overlay: health bars, floating damage numbers, then nameplates
+    // Build entries for bars and queue damage/nameplates using the current view-projection.
+    let view_proj = glam::Mat4::from_cols_array_2d(&globals.view_proj);
+    let overlays_disabled = std::env::var("RA_OVERLAYS").map(|v| v == "0").unwrap_or(false);
+    if !overlays_disabled {
+        // Bars for wizards
+        let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
+        for (i, m) in r.wizard_models.iter().enumerate() {
+            let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
+            let frac = (r.wizard_hp.get(i).copied().unwrap_or(r.wizard_hp_max) as f32) / (r.wizard_hp_max as f32);
+            bar_entries.push((head.truncate(), frac));
+        }
+        // Bars for alive zombies
+        use std::collections::HashMap;
+        let mut npc_map: HashMap<server_core::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        for n in &r.server.npcs { npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius)); }
+        for (i, id) in r.zombie_ids.iter().enumerate() {
+            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() && alive {
+                let m = r.zombie_models.get(i).copied().unwrap_or(glam::Mat4::IDENTITY);
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
+                bar_entries.push((head.truncate(), frac));
+            }
+        }
+        // Queue bars vertices and draw to the active target
+        r.bars.queue_entries(&r.device, &r.queue, r.config.width, r.config.height, view_proj, &bar_entries);
+        let bars_target = if r.direct_present { &view } else { &r.scene_view };
+        r.bars.draw(&mut encoder, bars_target);
+    }
+
+    // Damage numbers: update, queue, draw (independent of RA_OVERLAYS to ensure visibility)
+    r.damage.update(dt);
+    r.damage.queue(&r.device, &r.queue, r.config.width, r.config.height, view_proj);
+    let damage_target = if r.direct_present { &view } else { &r.scene_view };
+    r.damage.draw(&mut encoder, damage_target);
+
+    // Nameplates: wizards and NPCs (honor RA_OVERLAYS)
+    if !overlays_disabled {
+        // alive wizards only
+        let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
+        for (i, m) in r.wizard_models.iter().enumerate() {
+            if r.wizard_hp.get(i).copied().unwrap_or(0) > 0 { wiz_alive.push(*m); }
+        }
+        let labels_target = if r.direct_present { &view } else { &r.scene_view };
+        r.nameplates.queue_labels(&r.device, &r.queue, r.config.width, r.config.height, view_proj, &wiz_alive);
+        r.nameplates.draw(&mut encoder, labels_target);
+
+        // NPC nameplates (e.g., "Zombie")
+        let mut npc_positions: Vec<glam::Vec3> = Vec::new();
+        for (idx, m) in r.zombie_models.iter().enumerate() {
+            if let Some(npc) = r.server.npcs.get(idx) && !npc.alive { continue; }
+            let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            npc_positions.push(head.truncate());
+        }
+        if !npc_positions.is_empty() {
+            r.nameplates_npc.queue_npc_labels(&r.device, &r.queue, r.config.width, r.config.height, view_proj, &npc_positions, "Zombie");
+            r.nameplates_npc.draw(&mut encoder, labels_target);
+        }
+    }
+
     log::debug!("end: main pass");
 
     if std::env::var("RA_MINIMAL").map(|v| v == "1").unwrap_or(false) {
