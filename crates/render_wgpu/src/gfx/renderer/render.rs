@@ -741,17 +741,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             0.0
         };
-<<<<<<< HEAD
         let gcd_frac =
             r.scene_inputs
                 .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
-=======
-        let gcd_frac = r.scene_inputs.cooldown_frac(
-            "wiz.fire_bolt.srd521",
-            r.last_time,
-            r.firebolt_cd_dur,
-        );
->>>>>>> origin/main
         let overlays_disabled = std::env::var("RA_OVERLAYS")
             .map(|v| v == "0")
             .unwrap_or(false);
