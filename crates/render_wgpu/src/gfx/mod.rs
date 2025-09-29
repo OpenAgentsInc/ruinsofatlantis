@@ -485,6 +485,11 @@ impl Renderer {
             .await
             .context("request device")?;
 
+        // Downgrade uncaptured errors to logs so we can see details without panicking
+        device.on_uncaptured_error(Box::new(|e| {
+            log::error!("wgpu uncaptured error: {:?}", e);
+        }));
+
         // --- Surface configuration (with clamping to device limits) ---
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
@@ -2159,12 +2164,13 @@ impl Renderer {
 
         // Minimal mode: submit immediately after main pass and present
         if std::env::var("RA_MINIMAL").map(|v| v == "1").unwrap_or(false) {
-            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
-                log::error!("wgpu validation error (minimal mode): {:?}", e);
-                return Ok(());
-            }
             log::info!("submit: minimal");
             self.queue.submit(Some(encoder.finish()));
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("wgpu validation error (minimal mode): {:?}", e);
+                // Don’t panic; render loop continues
+                return Ok(());
+            }
             frame.present();
             return Ok(());
         }
@@ -2320,6 +2326,7 @@ impl Renderer {
         }
 
         // Submit only if no validation errors occurred
+        // Pop error scope AFTER submitting to ensure validation covers command submission
         if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
             // Skip submit on validation error to keep running without panicking
             log::error!("wgpu validation error (skipping frame): {:?}", e);
