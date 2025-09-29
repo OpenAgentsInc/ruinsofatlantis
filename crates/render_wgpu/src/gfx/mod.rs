@@ -655,12 +655,16 @@ impl Renderer {
             _pad: [f32; 3],
             pos_radius: [[f32; 4]; 16],
             color: [[f32; 4]; 16],
+            // Trailing padding to satisfy stricter std140/uniform layout expectations on some drivers.
+            // WGSL may round the struct size up; ensure our UBO is at least as large as the shader's view.
+            _tail_pad: [f32; 4],
         }
         let lights_init = LightsRaw {
             count: 0,
             _pad: [0.0; 3],
             pos_radius: [[0.0; 4]; 16],
             color: [[0.0; 4]; 16],
+            _tail_pad: [0.0; 4],
         };
         let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("lights-ubo"),
