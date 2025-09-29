@@ -32,7 +32,15 @@ pub fn build_trees(
     vegetation: Option<(usize, u32)>,
 ) -> Result<TreesGpu> {
     // Prefer baked instances if available and sane, else scatter using vegetation params.
-    let mut trees_models_opt = terrain::load_trees_snapshot(zone_slug);
+    let mut trees_models_opt = if std::env::var("RA_TREES_PROCEDURAL")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        log::info!("RA_TREES_PROCEDURAL=1 => ignoring baked trees snapshot");
+        None
+    } else {
+        terrain::load_trees_snapshot(zone_slug)
+    };
     if let Some(models) = &trees_models_opt {
         if snapshot_is_collapsed(models) {
             log::warn!(
@@ -55,6 +63,7 @@ pub fn build_trees(
         inst.selected = 0.25; // below 0.5 so it won't render as highlighted
     }
     let count = trees_instances_cpu.len() as u32;
+    log::info!("trees: building {} instances (zone='{}')", count, zone_slug);
     let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("trees-instances"),
         contents: bytemuck::cast_slice(&trees_instances_cpu),

@@ -1684,7 +1684,8 @@ impl Renderer {
         };
 
         #[allow(unused_assignments)]
-        let follow_dt = if self.rmb_down { 0.0 } else { dt };
+        // While RMB is held, snap follow (no lag); otherwise use smoothed dt
+        let follow_dt = if self.rmb_down { 1.0 } else { dt };
         let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
             pc_anchor,

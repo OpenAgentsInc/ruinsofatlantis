@@ -136,9 +136,15 @@ struct TreesSnapshotJson {
 }
 
 fn zones_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("data")
-        .join("zones")
+    // Prefer workspace-level data/zones when present so tools like zone-bake
+    // (which write under the workspace root) are immediately picked up at runtime.
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ws = here.join("../../data/zones");
+    if ws.is_dir() {
+        ws
+    } else {
+        here.join("data").join("zones")
+    }
 }
 
 fn snap_dir(slug: &str) -> PathBuf {
@@ -415,8 +421,11 @@ fn splitmix(mut z: u64) -> u64 {
 }
 
 fn next_u64(state: &mut u64) -> u64 {
+    // Advance the splitmix64 state and return a scrambled value.
+    // IMPORTANT: also write the advanced state back so successive calls differ.
     let mut z = *state;
     z = z.wrapping_add(0x9E3779B97F4A7C15);
+    *state = z; // persist advance
     let mut x = z;
     x = (x ^ (x >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
     x = (x ^ (x >> 27)).wrapping_mul(0x94D049BB133111EB);
