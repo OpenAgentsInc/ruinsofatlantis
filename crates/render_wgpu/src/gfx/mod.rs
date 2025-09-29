@@ -1683,10 +1683,9 @@ impl Renderer {
             self.player.pos + glam::vec3(0.0, 1.2, 0.0)
         };
 
-        #[allow(unused_assignments)]
         // While RMB is held, snap follow (no lag); otherwise use smoothed dt
         let follow_dt = if self.rmb_down { 1.0 } else { dt };
-        let (_cam, mut globals) = camera_sys::third_person_follow(
+        let _ = camera_sys::third_person_follow(
             &mut self.cam_follow,
             pc_anchor,
             glam::Quat::from_rotation_y(self.player.yaw),
@@ -1709,7 +1708,7 @@ impl Renderer {
             self.cam_follow.current_look.y = hy2 + clearance_look;
         }
         // Recompute camera/globals without smoothing after clamping
-        let (_cam2, globals2) = camera_sys::third_person_follow(
+        let (_cam2, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
             pc_anchor,
             glam::Quat::from_rotation_y(self.player.yaw),
@@ -1718,7 +1717,6 @@ impl Renderer {
             aspect,
             0.0,
         );
-        globals = globals2;
         // Advance sky & lighting
         self.sky.update(dt);
         globals.sun_dir_time = [
@@ -2930,7 +2928,7 @@ impl Renderer {
                     {
                         if pressed {
                             self.pc_cast_queued = true;
-                        log::debug!("PC cast queued: Fire Bolt");
+                            log::debug!("PC cast queued: Fire Bolt");
                         }
                     }
                     // Sky controls (pause/scrub/speed)
@@ -3268,12 +3266,12 @@ impl Renderer {
         // 2) Integrate projectiles and keep them slightly above ground
         // so they don't clip into small terrain undulations.
         let ground_clearance = 0.15f32; // meters above terrain
-            for p in &mut self.projectiles {
-                p.pos += p.vel * dt;
-                // Clamp to be a bit above the terrain height at current XZ.
-                p.pos =
-                    crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
-            }
+        for p in &mut self.projectiles {
+            p.pos += p.vel * dt;
+            // Clamp to be a bit above the terrain height at current XZ.
+            p.pos =
+                crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
+        }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
@@ -3454,7 +3452,11 @@ impl Renderer {
             inst.push(ParticleInstance {
                 pos: [p.pos.x, p.pos.y, p.pos.z],
                 size,
-                color: [p.color[0] * f * 1.5, p.color[1] * f * 1.5, p.color[2] * f * 1.5],
+                color: [
+                    p.color[0] * f * 1.5,
+                    p.color[1] * f * 1.5,
+                    p.color[2] * f * 1.5,
+                ],
                 _pad: 0.0,
             });
         }

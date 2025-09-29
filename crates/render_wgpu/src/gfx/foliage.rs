@@ -41,15 +41,15 @@ pub fn build_trees(
     } else {
         terrain::load_trees_snapshot(zone_slug)
     };
-    if let Some(models) = &trees_models_opt {
-        if snapshot_is_collapsed(models) {
-            log::warn!(
-                "baked trees snapshot for '{}' appears collapsed ({} models at ~one spot); using procedural scatter",
-                zone_slug,
-                models.len()
-            );
-            trees_models_opt = None;
-        }
+    if let Some(models) = &trees_models_opt
+        && snapshot_is_collapsed(models)
+    {
+        log::warn!(
+            "baked trees snapshot for '{}' appears collapsed ({} models at ~one spot); using procedural scatter",
+            zone_slug,
+            models.len()
+        );
+        trees_models_opt = None;
     }
     let mut trees_instances_cpu: Vec<super::types::Instance> =
         if let Some(models) = &trees_models_opt {
@@ -127,16 +127,33 @@ fn asset_path(rel: &str) -> std::path::PathBuf {
 /// Heuristic: detect a broken/degenerate bake where all instance transforms
 /// share (nearly) the same translation, causing trees to stack into one.
 fn snapshot_is_collapsed(models: &[[[f32; 4]; 4]]) -> bool {
-    if models.len() <= 1 { return true; }
+    if models.len() <= 1 {
+        return true;
+    }
     let mut min = [f32::INFINITY; 3];
     let mut max = [f32::NEG_INFINITY; 3];
     for m in models {
         let x = m[3][0];
         let y = m[3][1];
         let z = m[3][2];
-        if x < min[0] { min[0] = x; } if x > max[0] { max[0] = x; }
-        if y < min[1] { min[1] = y; } if y > max[1] { max[1] = y; }
-        if z < min[2] { min[2] = z; } if z > max[2] { max[2] = z; }
+        if x < min[0] {
+            min[0] = x;
+        }
+        if x > max[0] {
+            max[0] = x;
+        }
+        if y < min[1] {
+            min[1] = y;
+        }
+        if y > max[1] {
+            max[1] = y;
+        }
+        if z < min[2] {
+            min[2] = z;
+        }
+        if z > max[2] {
+            max[2] = z;
+        }
     }
     let dx = (max[0] - min[0]).abs();
     let dz = (max[2] - min[2]).abs();
