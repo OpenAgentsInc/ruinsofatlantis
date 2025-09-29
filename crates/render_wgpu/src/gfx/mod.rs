@@ -573,14 +573,19 @@ impl Renderer {
         let material_bgl = pipeline::create_material_bgl(&device);
         let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
         // Allow direct-present path: build main pipelines targeting swapchain format
-        let direct_present = std::env::var("RA_DIRECT_PRESENT").map(|v| v != "0").unwrap_or(true);
-        let draw_fmt = if direct_present { config.format } else { offscreen_fmt };
+        let direct_present = std::env::var("RA_DIRECT_PRESENT")
+            .map(|v| v != "0")
+            .unwrap_or(true);
+        let draw_fmt = if direct_present {
+            config.format
+        } else {
+            offscreen_fmt
+        };
         let (pipeline, inst_pipeline, wire_pipeline) =
             pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
-        let sky_pipeline =
-            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
+        let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline =
@@ -1900,11 +1905,16 @@ impl Renderer {
 
             // Terrain
             let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
-            if std::env::var("RA_DRAW_TERRAIN").map(|v| v == "0").unwrap_or(false) {
+            if std::env::var("RA_DRAW_TERRAIN")
+                .map(|v| v == "0")
+                .unwrap_or(false)
+            {
                 log::info!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
             } else {
                 log::info!("draw: terrain");
-                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 rpass.set_pipeline(&self.pipeline);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
@@ -1921,7 +1931,9 @@ impl Renderer {
             // Trees (instanced static mesh)
             if self.trees_count > 0 {
                 log::info!("draw: trees x{}", self.trees_count);
-                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -1943,7 +1955,9 @@ impl Renderer {
             // Rocks (instanced static mesh)
             if self.rocks_count > 0 {
                 log::info!("draw: rocks x{}", self.rocks_count);
-                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -1968,7 +1982,9 @@ impl Renderer {
                 .unwrap_or(true)
             {
                 log::info!("draw: wizards x{}", self.wizard_count);
-                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 self.draw_wizards(&mut rpass);
                 self.draw_calls += 1;
                 if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
@@ -1983,7 +1999,9 @@ impl Renderer {
                 .unwrap_or(true)
             {
                 log::info!("draw: zombies x{}", self.zombie_count);
-                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 self.draw_zombies(&mut rpass);
                 self.draw_calls += 1;
                 if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
@@ -2077,11 +2095,13 @@ impl Renderer {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-        // Gate health bars while isolating macOS validation issues
+        // Health bars (default on; set RA_OVERLAYS=0 to hide)
         if std::env::var("RA_OVERLAYS")
-            .map(|v| v == "1")
+            .map(|v| v == "0")
             .unwrap_or(false)
         {
+            // disabled
+        } else {
             self.bars.queue_entries(
                 &self.device,
                 &self.queue,
@@ -2090,7 +2110,13 @@ impl Renderer {
                 view_proj,
                 &bar_entries,
             );
-            self.bars.draw(&mut encoder, &self.scene_view);
+            // Draw bars to the active render target
+            let target_view = if self.direct_present {
+                &view
+            } else {
+                &self.scene_view
+            };
+            self.bars.draw(&mut encoder, target_view);
         }
         // Damage numbers (temporarily disabled while isolating a macOS validation issue)
         // self.damage.update(dt);
@@ -2112,9 +2138,16 @@ impl Renderer {
                 wiz_alive.push(*m);
             }
         }
-        // Temporarily gate nameplates to isolate a startup validation crash on macOS
-        let draw_labels = false;
+        // Nameplates default on; set RA_OVERLAYS=0 to hide
+        let draw_labels = std::env::var("RA_OVERLAYS")
+            .map(|v| v != "0")
+            .unwrap_or(true);
         if draw_labels {
+            let target_view = if self.direct_present {
+                &view
+            } else {
+                &self.scene_view
+            };
             self.nameplates.queue_labels(
                 &self.device,
                 &self.queue,
@@ -2123,7 +2156,7 @@ impl Renderer {
                 view_proj,
                 &wiz_alive,
             );
-            self.nameplates.draw(&mut encoder, &self.scene_view);
+            self.nameplates.draw(&mut encoder, target_view);
         }
 
         // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
@@ -2139,6 +2172,11 @@ impl Renderer {
             npc_positions.push(head.truncate());
         }
         if draw_labels && !npc_positions.is_empty() {
+            let target_view = if self.direct_present {
+                &view
+            } else {
+                &self.scene_view
+            };
             self.nameplates_npc.queue_npc_labels(
                 &self.device,
                 &self.queue,
@@ -2148,7 +2186,7 @@ impl Renderer {
                 &npc_positions,
                 "Zombie",
             );
-            self.nameplates_npc.draw(&mut encoder, &self.scene_view);
+            self.nameplates_npc.draw(&mut encoder, target_view);
         }
 
         // Temporarily disable Hi-Z pyramid to isolate a macOS validation crash
@@ -2196,7 +2234,10 @@ impl Renderer {
         log::info!("end: main pass");
 
         // Minimal mode: submit immediately after main pass and present
-        if std::env::var("RA_MINIMAL").map(|v| v == "1").unwrap_or(false) {
+        if std::env::var("RA_MINIMAL")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
             log::info!("submit: minimal");
             self.queue.submit(Some(encoder.finish()));
             if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
@@ -2384,8 +2425,13 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            // Temporarily disable HUD drawing to isolate a macOS validation crash
-            if false {
+            // HUD (default on; set RA_OVERLAYS=0 to hide)
+            if std::env::var("RA_OVERLAYS")
+                .map(|v| v == "0")
+                .unwrap_or(false)
+            {
+                // disabled
+            } else {
                 self.hud.build(
                     self.size.width,
                     self.size.height,
