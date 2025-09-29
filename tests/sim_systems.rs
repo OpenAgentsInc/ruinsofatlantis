@@ -1,4 +1,5 @@
 use ruinsofatlantis::sim::state::{ActorSim, SimState};
+use sim_core::sim::events::SimEvent;
 use ruinsofatlantis::sim::systems;
 use sim_core::combat::fsm::ActionState;
 
@@ -51,7 +52,7 @@ fn cast_begin_starts_cast_and_sets_gcd() {
     systems::cast_begin::run(&mut s);
     assert!(matches!(s.actors[0].action, ActionState::Casting { .. }));
     assert!(s.actors[0].gcd.remaining_ms > 0);
-    assert!(s.logs.iter().any(|l| l.contains("cast_started")));
+    assert!(s.events.iter().any(|e| matches!(e, SimEvent::CastStarted { .. })));
 }
 
 #[test]
@@ -70,7 +71,7 @@ fn attack_roll_hits_without_shield() {
     s.actors.push(b);
     s.cast_completed.push((0, "wiz.fire_bolt.srd521".into()));
     systems::attack_roll::run(&mut s);
-    assert!(s.logs.iter().any(|l| l.contains("attack_resolved")));
+    assert!(s.events.iter().any(|e| matches!(e, SimEvent::AttackResolved { .. })));
     assert_eq!(s.pending_damage.len(), 1);
 }
 
@@ -92,7 +93,7 @@ fn attack_roll_triggers_shield_reaction() {
     s.actors.push(b);
     s.cast_completed.push((0, "wiz.fire_bolt.srd521".into()));
     systems::attack_roll::run(&mut s);
-    assert!(s.logs.iter().any(|l| l.contains("shield_reaction")));
+    assert!(s.events.iter().any(|e| matches!(e, SimEvent::ShieldReaction { .. })));
 }
 
 #[test]
@@ -199,7 +200,7 @@ fn saving_throw_applies_condition_on_fail() {
     s.cast_completed.push((0, "grease".into()));
     systems::saving_throw::run(&mut s);
     systems::conditions::run(&mut s);
-    assert!(s.logs.iter().any(|l| l.contains("condition_applied")));
+    assert!(s.events.iter().any(|e| matches!(e, SimEvent::ConditionApplied { .. })));
     assert!(
         s.actors[1]
             .statuses
@@ -467,7 +468,7 @@ fn concentration_breaks_on_high_damage() {
     systems::damage::run(&mut s);
     // DC 30 always fails on 1d20 + 0 → concentration must break
     assert!(s.actors[1].concentration.is_none());
-    assert!(s.logs.iter().any(|l| l.contains("concentration_broken")));
+    assert!(s.events.iter().any(|e| matches!(e, sim_core::sim::events::SimEvent::ConcentrationBroken { .. })));
 }
 
 #[test]
@@ -489,7 +490,7 @@ fn ability_cooldown_starts_on_cast() {
         .ability_cooldowns
         .insert("wiz.fire_bolt.srd521".into(), 5000);
     // Try starting again; should not start due to cooldown
-    let before_logs = s.logs.len();
+    let before_logs = s.events.len();
     systems::cast_begin::run(&mut s);
-    assert_eq!(before_logs, s.logs.len());
+    assert_eq!(before_logs, s.events.len());
 }

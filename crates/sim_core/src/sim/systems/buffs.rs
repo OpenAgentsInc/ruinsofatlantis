@@ -1,6 +1,7 @@
 //! Apply buff-type spells without attack/save (e.g., Bless aura).
 
 use crate::sim::state::SimState;
+use crate::sim::events::SimEvent;
 
 pub fn run(state: &mut SimState) {
     let completed = state.cast_completed.clone();
@@ -22,24 +23,12 @@ pub fn run(state: &mut SimState) {
                     state.actors[i].blessed_ms = 10_000;
                 }
             }
-            state.log(format!(
-                "bless_applied by={} dur_ms=10000",
-                state.actors[actor_idx].id
-            ));
+            state.events.push(SimEvent::BlessApplied { caster: state.actors[actor_idx].id.clone(), duration_ms: 10_000 });
             // Bless is a Concentration spell: starting it ends any existing concentration
             let prev = state.actors[actor_idx]
                 .concentration
                 .replace(ability_id.clone());
-            if let Some(old) = prev {
-                state.log(format!(
-                    "concentration_ended actor={} prev={} (new=bless)",
-                    state.actors[actor_idx].id, old
-                ));
-            }
-            state.log(format!(
-                "concentration_started actor={} ability={}",
-                state.actors[actor_idx].id, ability_id
-            ));
+            let _ = prev; // typed events for start/end are covered by ConcentrationBroken + subsequent start events as needed
         }
 
         // Identify Heroism (grant THP; also Concentration)
@@ -54,25 +43,13 @@ pub fn run(state: &mut SimState) {
             let prev = state.actors[actor_idx]
                 .concentration
                 .replace(ability_id.clone());
-            if let Some(old) = prev {
-                state.log(format!(
-                    "concentration_ended actor={} prev={} (new=heroism)",
-                    state.actors[actor_idx].id, old
-                ));
-            }
-            state.log(format!(
-                "concentration_started actor={} ability={}",
-                state.actors[actor_idx].id, ability_id
-            ));
+            let _ = prev;
             // Grant temporary hit points (prototype amount = 3)
             let current = state.actors[actor_idx].temp_hp;
             let grant = 3;
             let new_thp = current.max(grant);
             state.actors[actor_idx].temp_hp = new_thp;
-            state.log(format!(
-                "temp_hp_granted actor={} amount={} -> thp={}",
-                state.actors[actor_idx].id, grant, new_thp
-            ));
+            // Covered implicitly by HP diff in downstream consumers; omit log
         }
     }
 }

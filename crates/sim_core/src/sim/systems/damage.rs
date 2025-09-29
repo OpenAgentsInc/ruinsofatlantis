@@ -1,6 +1,7 @@
 //! Apply damage for pending hits.
 
 use crate::sim::state::SimState;
+use crate::sim::events::SimEvent;
 
 fn level_band(lvl: u8) -> &'static str {
     if lvl <= 4 {
@@ -65,21 +66,10 @@ pub fn run(state: &mut SimState) {
                 let absorbed = total.min(state.actors[tgt_idx].temp_hp);
                 state.actors[tgt_idx].temp_hp -= absorbed;
                 total -= absorbed;
-                state.log(format!(
-                    "temp_hp_absorb tgt={} absorbed={} thp_now={}",
-                    state.actors[tgt_idx].id, absorbed, state.actors[tgt_idx].temp_hp
-                ));
+                state.events.push(SimEvent::TempHpAbsorb { target: state.actors[tgt_idx].id.clone(), absorbed, thp_now: state.actors[tgt_idx].temp_hp });
             }
             state.actors[tgt_idx].hp -= total;
-            state.log(format!(
-                "damage_applied src={} tgt={} ability={} dmg={} hp: {} -> {}",
-                state.actors[actor_idx].id,
-                state.actors[tgt_idx].id,
-                ability_id,
-                total,
-                hp_before,
-                state.actors[tgt_idx].hp
-            ));
+            state.events.push(SimEvent::DamageApplied { caster: state.actors[actor_idx].id.clone(), target: state.actors[tgt_idx].id.clone(), ability: ability_id.clone(), amount: total, hp_before, hp_after: state.actors[tgt_idx].hp });
             // Concentration check (SRD): DC = max(10, floor(damage/2)), cap 30
             if state.actors[tgt_idx].concentration.is_some() && original_total > 0 {
                 let mut dc = (original_total / 2).max(10);
@@ -90,20 +80,11 @@ pub fn run(state: &mut SimState) {
                 // Simple Con save modifier: 0 for now; Bless adds 1d4 via existing logic if we reused it, but keep simple here.
                 let total_save = roll; // + con_mod (0)
                 let ok = total_save >= dc;
-                state.log(format!(
-                    "concentration_check tgt={} roll={} vs DC{} => {}",
-                    state.actors[tgt_idx].id,
-                    total_save,
-                    dc,
-                    if ok { "KEEP" } else { "BREAK" }
-                ));
+                state.events.push(SimEvent::ConcentrationCheck { target: state.actors[tgt_idx].id.clone(), roll: total_save, dc, keep: ok });
                 if !ok {
                     let ended = state.actors[tgt_idx].concentration.take();
                     if let Some(old) = ended {
-                        state.log(format!(
-                            "concentration_broken tgt={} ability={}",
-                            state.actors[tgt_idx].id, old
-                        ));
+                        state.events.push(SimEvent::ConcentrationBroken { target: state.actors[tgt_idx].id.clone(), ability: old });
                     }
                 }
             }

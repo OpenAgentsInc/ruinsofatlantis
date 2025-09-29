@@ -497,6 +497,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Determine asset forward offset from the zombie root node (if present).
     let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
+    // Ability timings from SpecDb (canonical)
+    let specdb = data_runtime::specdb::SpecDb::load_default();
+    let (pc_cast_time, firebolt_cd_dur, gcd_duration) = if let Some(fb) = specdb.get_spell("wiz.fire_bolt.srd521") {
+        (fb.cast_time_s, fb.cooldown_s, fb.gcd_s)
+    } else {
+        (1.5, 0.5, 1.5)
+    };
+
     Ok(crate::gfx::Renderer {
         surface,
         device,
@@ -635,12 +643,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cast_queued: false,
         pc_cast_kind: Some(super::super::PcCast::FireBolt),
         pc_anim_start: None,
-        pc_cast_time: 1.5,
+        pc_cast_time,
         pc_cast_fired: false,
         firebolt_cd_until: 0.0,
-        firebolt_cd_dur: 0.5,
+        firebolt_cd_dur,
         gcd_until: 0.0,
-        gcd_duration: 1.5,
+        gcd_duration,
         cam_orbit_yaw: 0.0,
         cam_orbit_pitch: 0.2,
         cam_distance: 8.5,

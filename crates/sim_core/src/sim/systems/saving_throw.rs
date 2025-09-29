@@ -3,6 +3,7 @@
 use crate::combat::conditions::Condition;
 use crate::rules::saves::SaveKind;
 use crate::sim::state::SimState;
+use crate::sim::events::SimEvent;
 
 fn parse_save_kind(s: &str) -> SaveKind {
     match s.to_ascii_lowercase().as_str() {
@@ -56,16 +57,7 @@ pub fn run(state: &mut SimState) {
         let caster_id = state.actors[actor_idx].id.clone();
         let tgt_id = state.actors[tgt_idx].id.clone();
         let ok = total >= dc;
-        state.log(format!(
-            "save_resolved src={} tgt={} ability={} save={} total={} vs DC{} => {}",
-            caster_id,
-            tgt_id,
-            ability_id,
-            save_kind_s,
-            total,
-            dc,
-            if ok { "SUCCEED" } else { "FAIL" }
-        ));
+        state.events.push(SimEvent::SaveResolved { caster: caster_id.clone(), target: tgt_id.clone(), ability: ability_id.clone(), save: save_kind_s.clone(), total, dc, success: ok });
         if !ok
             && let Some(of) = on_fail
             && let Some(name) = of.apply_condition.as_deref()

@@ -105,8 +105,7 @@ impl Renderer {
                             super::super::PcCast::FireBolt => {
                                 let fb_col = [2.6, 0.7, 0.18];
                                 self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false, fb_col);
-                                self.firebolt_cd_dur = 0.5;
-                                self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur;
+                                self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur.max(0.0);
                             }
                             super::super::PcCast::MagicMissile => {
                                 self.spawn_magic_missile(spawn, dir_w, t);

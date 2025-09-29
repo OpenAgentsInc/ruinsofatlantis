@@ -11,3 +11,4 @@ pub mod monster;
 pub mod scenario;
 pub mod spell;
 pub mod zone;
+pub mod specdb;
