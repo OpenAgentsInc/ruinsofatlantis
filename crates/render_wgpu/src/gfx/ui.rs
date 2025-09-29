@@ -1299,56 +1299,34 @@ impl Hud {
         // Measure width if we see a center marker "|c" or left align otherwise
         let mut prev: Option<ab_glyph::GlyphId> = None;
         for ch in text.chars() {
-            let Some(gi) = self.glyphs.get(&ch) else {
-                continue;
-            };
-            if let Some(pg) = prev {
-                x += scaled.kern(pg, gi.id);
+            let gid = self._font.glyph_id(ch);
+            if let Some(pg) = prev { x += scaled.kern(pg, gid); }
+            if let Some(gi) = self.glyphs.get(&ch) {
+                let gx = x + gi.bounds_min[0];
+                let gy = y_baseline - self.ascent + gi.bounds_min[1];
+                let w_px = gi.size[0];
+                let h_px = gi.size[1];
+                let p0 = Self::ndc_from_px(gx, gy, w, h);
+                let p1 = Self::ndc_from_px(gx + w_px, gy, w, h);
+                let p2 = Self::ndc_from_px(gx + w_px, gy + h_px, w, h);
+                let p3 = Self::ndc_from_px(gx, gy + h_px, w, h);
+                let uv0 = gi.uv_min;
+                let uv1 = [gi.uv_max[0], gi.uv_min[1]];
+                let uv2 = gi.uv_max;
+                let uv3 = [gi.uv_min[0], gi.uv_max[1]];
+                self.text_verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
+                self.text_verts.push(TextVertex { pos_ndc: p1, uv: uv1, color });
+                self.text_verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
+                self.text_verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
+                self.text_verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
+                self.text_verts.push(TextVertex { pos_ndc: p3, uv: uv3, color });
+                x += gi.advance;
+                prev = Some(gi.id);
+            } else {
+                // Missing glyph (e.g., space) — advance without rendering.
+                x += scaled.h_advance(gid);
+                prev = Some(gid);
             }
-            let gx = x + gi.bounds_min[0];
-            let gy = y_baseline - self.ascent + gi.bounds_min[1];
-            let w_px = gi.size[0];
-            let h_px = gi.size[1];
-            let p0 = Self::ndc_from_px(gx, gy, w, h);
-            let p1 = Self::ndc_from_px(gx + w_px, gy, w, h);
-            let p2 = Self::ndc_from_px(gx + w_px, gy + h_px, w, h);
-            let p3 = Self::ndc_from_px(gx, gy + h_px, w, h);
-            let uv0 = gi.uv_min;
-            let uv1 = [gi.uv_max[0], gi.uv_min[1]];
-            let uv2 = gi.uv_max;
-            let uv3 = [gi.uv_min[0], gi.uv_max[1]];
-            self.text_verts.push(TextVertex {
-                pos_ndc: p0,
-                uv: uv0,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p1,
-                uv: uv1,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p2,
-                uv: uv2,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p0,
-                uv: uv0,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p2,
-                uv: uv2,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p3,
-                uv: uv3,
-                color,
-            });
-            x += gi.advance;
-            prev = Some(gi.id);
         }
     }
 
@@ -1607,17 +1585,19 @@ impl Hud {
         y_baseline: f32,
         color: [f32; 4],
     ) {
-        // Measure width with kerning, then emit at centered X
+        // Measure width with kerning; treat missing glyphs (e.g., space) via font advances.
         let scaled = self._font.as_scaled(self.scale);
         let mut width = 0.0f32;
         let mut prev: Option<ab_glyph::GlyphId> = None;
         for ch in text.chars() {
+            let gid = self._font.glyph_id(ch);
+            if let Some(pg) = prev { width += scaled.kern(pg, gid); }
             if let Some(gi) = self.glyphs.get(&ch) {
-                if let Some(pg) = prev {
-                    width += scaled.kern(pg, gi.id);
-                }
                 width += gi.advance;
                 prev = Some(gi.id);
+            } else {
+                width += scaled.h_advance(gid);
+                prev = Some(gid);
             }
         }
         let cx = (surface_w as f32) * 0.5 - width * 0.5;

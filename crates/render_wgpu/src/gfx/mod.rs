@@ -3123,6 +3123,13 @@ impl Renderer {
                             log::info!("Screenshot mode: 5s orbit starting");
                         }
                     }
+                    // Allow keyboard respawn as fallback when dead
+                    PhysicalKey::Code(KeyCode::KeyR) | PhysicalKey::Code(KeyCode::Enter) => {
+                        if pressed && !self.pc_alive {
+                            log::info!("Respawn via keyboard");
+                            self.respawn();
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -3163,10 +3170,10 @@ impl Renderer {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // Track last cursor position for button hit-testing
-                self.last_cursor_pos = Some((position.x, position.y));
+                // Use previous cursor for deltas, then update to current.
+                let prev = self.last_cursor_pos;
                 if self.rmb_down
-                    && let Some((lx, ly)) = self.last_cursor_pos
+                    && let Some((lx, ly)) = prev
                 {
                     let dx = position.x - lx;
                     let dy = position.y - ly;
@@ -3179,6 +3186,8 @@ impl Renderer {
                     self.cam_orbit_pitch =
                         (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
                 }
+                // Track last cursor position for button hit-testing
+                self.last_cursor_pos = Some((position.x, position.y));
             }
             WindowEvent::Focused(false) => {
                 // Clear sticky keys when window loses focus
