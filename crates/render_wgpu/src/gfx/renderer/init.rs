@@ -569,7 +569,6 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         npc_ib,
         npc_index_count,
         npc_instances,
-        npc_count: 0,
         npc_instances_cpu: Vec::new(),
         npc_models,
         trees_instances,

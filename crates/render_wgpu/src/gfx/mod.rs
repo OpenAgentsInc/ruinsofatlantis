@@ -40,18 +40,9 @@ mod ui;
 mod util;
 mod zombies;
 
-use data_runtime::{
-    loader as data_loader,
-    spell::SpellSpec,
-    zone::{ZoneManifest, load_zone_manifest},
-};
-use ra_assets::skinning::load_gltf_skinned;
-use ra_assets::skinning::merge_gltf_animations;
+use data_runtime::spell::SpellSpec;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
-// (scene building now encapsulated; ECS types unused here)
-use anyhow::Context;
-use types::{Globals, InstanceSkin, Model, VertexSkinned};
-use util::scale_to_max;
+use types::InstanceSkin;
 
 // moved trait import to renderer/update.rs
 
@@ -62,9 +53,7 @@ enum PcCast {
 }
 use std::time::Instant;
 
-use wgpu::{
-    SurfaceError, SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt,
-};
+use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use winit::window::Window;
@@ -171,12 +160,11 @@ pub struct Renderer {
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
 
-    // NPC cubes
+    // NPC cubes (legacy scaffolding)
     npc_vb: wgpu::Buffer,
     npc_ib: wgpu::Buffer,
     npc_index_count: u32,
     npc_instances: wgpu::Buffer,
-    npc_count: u32,
     #[allow(dead_code)]
     npc_instances_cpu: Vec<types::Instance>,
     #[allow(dead_code)]
