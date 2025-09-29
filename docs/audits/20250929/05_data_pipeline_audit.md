@@ -34,3 +34,6 @@ Recommendations
 - Document that runtime prefers pre-decompressed `.decompressed.gltf`; enforce via loader warnings if Draco is detected at runtime.
 - Provide a one-shot migrator in `xtask` for batch decompress and manifest rewrite when needed.
 
+6) Single Source of Truth for Ability Metadata
+- Designate `SpecDb` as the canonical source for ability timings (`cast_time_s`, `gcd_s`, `cooldown_s`).
+- Clients (renderer/HUD/input) and sim must read durations from `SpecDb` or server-reported state; forbid crate‑local constants to prevent drift across layers.
