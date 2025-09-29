@@ -2072,8 +2072,9 @@ impl Renderer {
             self.nameplates_npc.draw(&mut encoder, &self.scene_view);
         }
 
-        // Build Hi-Z Z-MAX pyramid from current frame depth
-        if let Some(hiz) = &self.hiz {
+        // Temporarily disable Hi-Z pyramid to isolate a macOS validation crash
+        if false {
+            let Some(hiz) = &self.hiz else { unreachable!() };
             let znear = 0.1f32; // mirrors Globals.clip.x
             let zfar = 1000.0f32; // mirrors Globals.clip.y
             hiz.build_mips(
@@ -2287,7 +2288,8 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            if self.hud_model.hud_enabled() {
+            // Temporarily disable HUD drawing to isolate a macOS validation crash
+            if false {
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2296,7 +2298,6 @@ impl Renderer {
                     cast_frac,
                     gcd_frac,
                 );
-                // Append perf overlay (ms and FPS)
                 if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
                     let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
