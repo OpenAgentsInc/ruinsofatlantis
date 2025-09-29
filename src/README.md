@@ -68,6 +68,13 @@ Note: the old `core/` facade has been removed; crates use `data_runtime` and `si
 
 - gfx/
   - mod.rs — Thin re‑export of `render_wgpu::gfx`.
+  - renderer/ — Extracted renderer internals split by responsibility:
+    - init.rs — Full constructor (`Renderer::new_core`) moved here; `gfx::Renderer::new()` delegates
+    - render.rs — Full frame render path moved here; `gfx::Renderer::render()` delegates
+    - passes.rs — Post/overlay passes invoked from render()
+    - resize.rs — Swapchain + attachments rebuild on window resize
+    - input.rs — Window/input handling (WASD, camera orbit, HUD toggles)
+    - update.rs — CPU updates (player/camera, AI facing, skinning palettes, FX)
 
 - server/
   - mod.rs — In‑process server scaffold: authoritative NPC state (positions/health) and projectile collision/damage resolution. Designed to move into its own crate/process in a future workspace split.
