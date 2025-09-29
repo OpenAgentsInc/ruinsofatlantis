@@ -514,7 +514,13 @@ impl Renderer {
         self.queue.write_buffer(&self.wizard_instances, 0, bytes);
     }
     /// Create a renderer bound to a window surface.
+    /// Delegates to renderer::init to keep this file thin.
     pub async fn new(window: &Window) -> anyhow::Result<Self> {
+        renderer::init::new_renderer(window).await
+    }
+
+    /// Internal constructor retained until full split is complete.
+    pub async fn new_core(window: &Window) -> anyhow::Result<Self> {
         // --- Instance + Surface + Adapter (with backend fallback) ---
         fn backend_from_env() -> Option<wgpu::Backends> {
             match std::env::var("RA_BACKEND").ok().as_deref() {
@@ -1744,8 +1750,13 @@ impl Renderer {
         ));
     }
 
-    /// Render one frame.
+    /// Render one frame (delegate wrapper).
     pub fn render(&mut self) -> Result<(), SurfaceError> {
+        renderer::render::render_impl(self)
+    }
+
+    /// Internal render implementation retained until full split is complete.
+    pub fn render_core(&mut self) -> Result<(), SurfaceError> {
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture

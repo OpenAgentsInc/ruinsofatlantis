@@ -6,6 +6,7 @@
 
 pub mod passes;
 pub mod resize;
+pub mod init;
+pub mod render;
 mod input;
 mod update;
-
