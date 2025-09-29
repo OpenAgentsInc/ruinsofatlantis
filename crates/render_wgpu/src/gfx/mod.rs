@@ -90,15 +90,8 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
     max_dim: u32,
-    // Consolidated attachments group (also keep legacy fields below for now)
+    // Consolidated attachments group for depth + offscreen targets
     attachments: Attachments,
-    depth: wgpu::TextureView,
-    // Offscreen scene color
-    scene_color: wgpu::Texture,
-    scene_view: wgpu::TextureView,
-    // Read-only copy of scene for post passes that sample while writing to SceneColor
-    scene_read: wgpu::Texture,
-    scene_read_view: wgpu::TextureView,
 
     // Lighting M1: G-Buffer + Hi-Z scaffolding
     gbuffer: Option<gbuffer::GBuffer>,
@@ -522,7 +515,13 @@ impl Renderer {
         renderer::init::new_renderer(window).await
     }
 
-    /// Legacy constructor body (moved). Kept only for reference; not used.
+    /// Back-compat stub for old constructor path.
+    pub async fn new_core_legacy(window: &Window) -> anyhow::Result<Self> {
+        renderer::init::new_renderer(window).await
+    }
+
+    /// Legacy constructor body (disabled).
+    #[cfg(any())]
     pub async fn new_core_legacy(window: &Window) -> anyhow::Result<Self> {
         // --- Instance + Surface + Adapter (with backend fallback) ---
         fn backend_from_env() -> Option<wgpu::Backends> {
@@ -1542,7 +1541,7 @@ impl Renderer {
             pc_cast_time: 1.5,
             pc_cast_fired: false,
             firebolt_cd_until: 0.0,
-            firebolt_cd_dur: 1.0,
+            firebolt_cd_dur: 0.5,
             gcd_until: 0.0,
             gcd_duration: 1.5,
             cam_orbit_yaw: 0.0,
@@ -1588,172 +1587,8 @@ impl Renderer {
     }
 
     /// Resize the swapchain while preserving aspect and device limits.
-    #[allow(unreachable_code)]
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        return renderer::resize::resize_impl(self, new_size);
-        if new_size.width == 0 || new_size.height == 0 {
-            return;
-        }
-        let (w, h) = scale_to_max((new_size.width, new_size.height), self.max_dim);
-        if (w, h) != (new_size.width, new_size.height) {
-            log::debug!(
-                "Resized {}x{} exceeds max {}, clamped to {}x{} (aspect kept)",
-                new_size.width,
-                new_size.height,
-                self.max_dim,
-                w,
-                h
-            );
-        }
-        self.size = PhysicalSize::new(w, h);
-        self.config.width = w;
-        self.config.height = h;
-        self.surface.configure(&self.device, &self.config);
-        self.depth = util::create_depth_view(
-            &self.device,
-            self.config.width,
-            self.config.height,
-            self.config.format,
-        );
-        // Recreate SceneColor
-        self.scene_color = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("scene-color"),
-            size: wgpu::Extent3d {
-                width: self.config.width,
-                height: self.config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        self.scene_view = self
-            .scene_color
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        self.scene_read = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("scene-read"),
-            size: wgpu::Extent3d {
-                width: self.config.width,
-                height: self.config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        self.scene_read_view = self
-            .scene_read
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        // Rebuild bind groups that reference resized textures
-        self.present_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("present-bg"),
-            layout: &self.present_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.scene_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&self.depth),
-                },
-            ],
-        });
-        self.post_ao_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("post-ao-bg"),
-            layout: &self.post_ao_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.depth),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
-                },
-            ],
-        });
-        self.ssgi_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("ssgi-depth-bg"),
-            layout: &self.ssgi_depth_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.depth),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
-                },
-            ],
-        });
-        self.ssgi_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("ssgi-scene-bg"),
-            layout: &self.ssgi_scene_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.scene_read_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
-                },
-            ],
-        });
-        if let Some(hiz) = &self.hiz {
-            self.ssr_depth_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ssr-depth-bg"),
-                layout: &self.ssr_depth_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&hiz.linear_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.point_sampler),
-                    },
-                ],
-            });
-        }
-        self.ssr_scene_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("ssr-scene-bg"),
-            layout: &self.ssr_scene_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.scene_read_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self._post_sampler),
-                },
-            ],
-        });
-        // Resize Lighting M1 resources
-        self.gbuffer = Some(gbuffer::GBuffer::create(
-            &self.device,
-            self.config.width,
-            self.config.height,
-        ));
-        self.hiz = Some(hiz::HiZPyramid::create(
-            &self.device,
-            self.config.width,
-            self.config.height,
-        ));
+        renderer::resize::resize_impl(self, new_size)
     }
 
     /// Render one frame (delegate wrapper).
@@ -1761,7 +1596,13 @@ impl Renderer {
         renderer::render::render_impl(self)
     }
 
-    /// Legacy render body (moved). Kept only for reference; not used.
+    /// Back-compat stub for old render body.
+    pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {
+        renderer::render::render_impl(self)
+    }
+
+    /// Legacy render body (disabled).
+    #[cfg(any())]
     pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {
         let frame = self.surface.get_current_texture()?;
         let view = frame

@@ -150,11 +150,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wgpu::TextureFormat::Rgba16Float,
     );
     // Legacy fields: mirror attachments for existing struct layout
-    let depth = attachments.depth_view.clone();
-    let scene_color = attachments.scene_color.clone();
-    let scene_view = attachments.scene_view.clone();
-    let scene_read = attachments.scene_read.clone();
-    let scene_read_view = attachments.scene_read_view.clone();
+    let _depth = attachments.depth_view.clone();
+    let _scene_color = attachments.scene_color.clone();
+    let _scene_view = attachments.scene_view.clone();
+    let _scene_read = attachments.scene_read.clone();
+    let _scene_read_view = attachments.scene_read_view.clone();
     // Lighting M1: allocate G-Buffer attachments and linear depth (Hi-Z) pyramid
     let gbuffer = gbuffer::GBuffer::create(&device, config.width, config.height);
     let hiz = hiz::HiZPyramid::create(&device, config.width, config.height);
@@ -504,11 +504,6 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         config,
         size: PhysicalSize::new(w, h),
         max_dim,
-        depth,
-        scene_color,
-        scene_view,
-        scene_read,
-        scene_read_view,
         attachments,
         gbuffer: Some(gbuffer),
         hiz: Some(hiz),
@@ -643,7 +638,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cast_time: 1.5,
         pc_cast_fired: false,
         firebolt_cd_until: 0.0,
-        firebolt_cd_dur: 1.0,
+        firebolt_cd_dur: 0.5,
         gcd_until: 0.0,
         gcd_duration: 1.5,
         cam_orbit_yaw: 0.0,

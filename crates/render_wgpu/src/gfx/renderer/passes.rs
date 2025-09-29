@@ -12,7 +12,7 @@ impl Renderer {
             hiz.build_mips(
                 &self.device,
                 encoder,
-                &self.depth,
+                &self.attachments.depth_view,
                 &self._post_sampler,
                 znear,
                 zfar,
@@ -27,7 +27,7 @@ impl Renderer {
         let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("blit-scene-to-read"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.scene_read_view,
+                view: &self.attachments.scene_read_view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -56,7 +56,7 @@ impl Renderer {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssr-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.scene_view,
+                view: &self.attachments.scene_view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -81,7 +81,7 @@ impl Renderer {
         let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssgi-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.scene_view,
+                view: &self.attachments.scene_view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -107,7 +107,7 @@ impl Renderer {
         let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("post-ao-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.scene_view,
+                view: &self.attachments.scene_view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
