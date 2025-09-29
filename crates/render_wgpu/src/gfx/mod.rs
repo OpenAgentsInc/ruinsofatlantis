@@ -112,6 +112,7 @@ pub struct Renderer {
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     bloom_pipeline: wgpu::RenderPipeline,
     bloom_bg: wgpu::BindGroup,
+    direct_present: bool,
     lights_buf: wgpu::Buffer,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
@@ -571,12 +572,15 @@ impl Renderer {
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let material_bgl = pipeline::create_material_bgl(&device);
         let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+        // Allow direct-present path: build main pipelines targeting swapchain format
+        let direct_present = std::env::var("RA_DIRECT_PRESENT").map(|v| v != "0").unwrap_or(true);
+        let draw_fmt = if direct_present { config.format } else { offscreen_fmt };
         let (pipeline, inst_pipeline, wire_pipeline) =
-            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, offscreen_fmt);
+            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
-            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, offscreen_fmt);
+            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline =
@@ -615,10 +619,10 @@ impl Renderer {
             &model_bgl,
             &palettes_bgl,
             &material_bgl,
-            offscreen_fmt,
+            draw_fmt,
         );
         let particle_pipeline =
-            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, offscreen_fmt);
+            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
         // UI: nameplates + health bars
         let nameplates = ui::Nameplates::new(&device, offscreen_fmt)?;
@@ -1277,6 +1281,7 @@ impl Renderer {
             bloom_pipeline,
             bloom_bg,
             lights_buf,
+            direct_present,
             static_index,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
@@ -1829,10 +1834,7 @@ impl Renderer {
             .map(|v| v == "1")
             .unwrap_or(false);
         // Direct-present path: render directly to the swapchain view instead of SceneColor
-        let direct_present = std::env::var("RA_DIRECT_PRESENT")
-            .map(|v| v != "0")
-            .unwrap_or(true);
-        let render_view: &wgpu::TextureView = if direct_present {
+        let render_view: &wgpu::TextureView = if self.direct_present {
             &view
         } else {
             &self.scene_view
@@ -2323,7 +2325,7 @@ impl Renderer {
         }
 
         // Present: if rendering directly to swapchain, skip this pass
-        if !direct_present {
+        if !self.direct_present {
             log::info!("pass: present");
             let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("present-pass"),
