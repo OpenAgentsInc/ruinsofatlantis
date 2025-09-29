@@ -330,6 +330,8 @@ impl Renderer {
             return;
         }
         self.pc_alive = false;
+        // Clear player aggro so NPC wizards stop prioritizing the player after death
+        self.wizards_hostile_to_pc = false;
         if let Some(hp) = self.wizard_hp.get_mut(self.pc_index) {
             *hp = 0;
         }
@@ -360,6 +362,8 @@ impl Renderer {
     // moved: respawn -> renderer/update.rs
     fn respawn(&mut self) {
         // Rebuild scene and server similar to initial construction.
+        // Clear any lingering player aggro from before death
+        self.wizards_hostile_to_pc = false;
         // 1) Rebuild wizard scene instances and reset player state
         let terrain_extent = self.max_dim as f32 * 0.5;
         let ruins_base_offset = 0.4f32;
