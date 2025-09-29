@@ -838,6 +838,10 @@ impl Renderer {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&depth),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&point_sampler),
+                },
             ],
         });
         // Bloom bind group reads from SceneRead (copy of SceneColor)

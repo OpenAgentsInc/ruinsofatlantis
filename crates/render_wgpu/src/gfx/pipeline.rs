@@ -604,6 +604,13 @@ pub fn create_present_bgl(device: &wgpu::Device) -> BindGroupLayout {
                 },
                 count: None,
             },
+            // Non-filtering sampler used when sampling depth
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                count: None,
+            },
         ],
     })
 }

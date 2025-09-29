@@ -13,8 +13,9 @@ struct Globals {
 @group(0) @binding(0) var<uniform> globals: Globals;
 
 @group(1) @binding(0) var scene_tex: texture_2d<f32>;
-@group(1) @binding(1) var samp: sampler;
+@group(1) @binding(1) var samp_color: sampler;
 @group(1) @binding(2) var depth_tex: texture_depth_2d;
+@group(1) @binding(3) var samp_depth: sampler;
 
 struct VsOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 
@@ -49,9 +50,9 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   let sz = vec2<f32>(textureDimensions(scene_tex));
   let eps = vec2<f32>(0.5) / sz;
   let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
-  var col = textureSample(scene_tex, samp, uv).rgb;
+  var col = textureSample(scene_tex, samp_color, uv).rgb;
   // Fog (exponential) based on linearized depth
-  let depth = textureSample(depth_tex, samp, uv);
+  let depth = textureSample(depth_tex, samp_depth, uv);
   let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
   let density = globals.fog.a;
   if (density > 0.0) {
