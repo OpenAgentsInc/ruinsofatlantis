@@ -16,6 +16,7 @@
 
 mod camera;
 mod renderer;
+use renderer::Attachments;
 mod gbuffer;
 mod hiz;
 mod mesh;
@@ -89,6 +90,8 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     size: PhysicalSize<u32>,
     max_dim: u32,
+    // Consolidated attachments group (also keep legacy fields below for now)
+    attachments: Attachments,
     depth: wgpu::TextureView,
     // Offscreen scene color
     scene_color: wgpu::Texture,
@@ -1383,6 +1386,8 @@ impl Renderer {
         // Determine asset forward offset from the zombie root node (if present).
         let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
+        // Mirror attachments from legacy fields for completeness
+        let attachments_legacy = Attachments::create(&device, config.width, config.height, config.format, wgpu::TextureFormat::Rgba16Float);
         Ok(Self {
             surface,
             device,
@@ -1390,6 +1395,7 @@ impl Renderer {
             config,
             size: PhysicalSize::new(w, h),
             max_dim,
+            attachments: attachments_legacy,
             depth,
             scene_color,
             scene_view,

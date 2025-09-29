@@ -156,7 +156,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder = r.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
     let present_only = std::env::var("RA_PRESENT_ONLY").map(|v| v == "1").unwrap_or(false);
-    let render_view: &wgpu::TextureView = if r.direct_present { &view } else { &r.scene_view };
+    let render_view: &wgpu::TextureView = if r.direct_present { &view } else { &r.attachments.scene_view };
     // Sky-only pass
     log::debug!("pass: sky");
     if !present_only {
@@ -179,7 +179,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: render_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment { view: &r.depth, depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }), stencil_ops: None }),
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment { view: &r.attachments.depth_view, depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }), stencil_ops: None }),
             occlusion_query_set: None,
             timestamp_writes: None,
         });
@@ -268,7 +268,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             drop(rp);
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-read"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.scene_read_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: wgpu::StoreOp::Store } })],
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.attachments.scene_read_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }), store: wgpu::StoreOp::Store } })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
@@ -305,14 +305,14 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         // Queue bars vertices and draw to the active target
         r.bars.queue_entries(&r.device, &r.queue, r.config.width, r.config.height, view_proj, &bar_entries);
-        let bars_target = if r.direct_present { &view } else { &r.scene_view };
+        let bars_target = if r.direct_present { &view } else { &r.attachments.scene_view };
         r.bars.draw(&mut encoder, bars_target);
     }
 
     // Damage numbers: update, queue, draw (independent of RA_OVERLAYS to ensure visibility)
     r.damage.update(dt);
     r.damage.queue(&r.device, &r.queue, r.config.width, r.config.height, view_proj);
-    let damage_target = if r.direct_present { &view } else { &r.scene_view };
+    let damage_target = if r.direct_present { &view } else { &r.attachments.scene_view };
     r.damage.draw(&mut encoder, damage_target);
 
     // Nameplates: wizards and NPCs (honor RA_OVERLAYS)
@@ -322,7 +322,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         for (i, m) in r.wizard_models.iter().enumerate() {
             if r.wizard_hp.get(i).copied().unwrap_or(0) > 0 { wiz_alive.push(*m); }
         }
-        let labels_target = if r.direct_present { &view } else { &r.scene_view };
+        let labels_target = if r.direct_present { &view } else { &r.attachments.scene_view };
         r.nameplates.queue_labels(&r.device, &r.queue, r.config.width, r.config.height, view_proj, &wiz_alive);
         r.nameplates.draw(&mut encoder, labels_target);
 
@@ -353,14 +353,14 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     // Ensure SceneRead is available for bloom pass as well
     if !present_only && r.enable_bloom {
-        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("blit-scene-to-read(bloom)"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.scene_read_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
+        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("blit-scene-to-read(bloom)"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.attachments.scene_read_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
         blit.set_pipeline(&r.blit_scene_read_pipeline);
         blit.set_bind_group(0, &r.present_bg, &[]);
         blit.draw(0..3, 0..1);
     }
     // SSR overlay
     if !present_only && r.enable_ssr {
-        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("ssr-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
+        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("ssr-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.attachments.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
         rp.set_pipeline(&r.ssr_pipeline);
         rp.set_bind_group(0, &r.ssr_depth_bg, &[]);
         rp.set_bind_group(1, &r.ssr_scene_bg, &[]);
@@ -369,7 +369,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     // SSGI additive overlay
     if !present_only && r.enable_ssgi {
-        let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("ssgi-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
+        let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("ssgi-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.attachments.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
         gi.set_pipeline(&r.ssgi_pipeline);
         gi.set_bind_group(0, &r.ssgi_globals_bg, &[]);
         gi.set_bind_group(1, &r.ssgi_depth_bg, &[]);
@@ -379,7 +379,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     // Post AO
     if !present_only && r.enable_post_ao {
-        let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("post-ao"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
+        let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("post-ao"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.attachments.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
         post.set_pipeline(&r.post_ao_pipeline);
         post.set_bind_group(0, &r.globals_bg, &[]);
         post.set_bind_group(1, &r.post_ao_bg, &[]);
@@ -388,7 +388,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     // Bloom
     if r.enable_bloom {
-        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("bloom-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
+        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("bloom-pass"), color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &r.attachments.scene_view, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store } })], depth_stencil_attachment: None, occlusion_query_set: None, timestamp_writes: None });
         rp.set_pipeline(&r.bloom_pipeline);
         rp.set_bind_group(0, &r.bloom_bg, &[]);
         rp.draw(0..3, 0..1);

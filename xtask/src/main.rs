@@ -14,6 +14,8 @@ struct Cli {
 enum Cmd {
     /// fmt + clippy -D warnings + tests (workspace)
     Ci,
+    /// Validate all WGSL shaders across the workspace
+    Wgsl,
     /// Validate data against serde models (zone manifests, spells)
     SchemaCheck,
     /// Build all packs (spells, zones)
@@ -43,8 +45,51 @@ fn cargo(args: &[&str]) -> Result<()> {
 fn ci() -> Result<()> {
     cargo(&["fmt", "--all"])?;
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
+    wgsl_validate()?;
+    cargo_deny()?;
     cargo(&["test"])?;
     schema_check()?;
+    Ok(())
+}
+
+fn wgsl_validate() -> Result<()> {
+    // Find all .wgsl files in the workspace and parse them with Naga.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut count = 0usize;
+    for entry in walkdir::WalkDir::new(&root).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("wgsl") {
+            continue;
+        }
+        let txt = std::fs::read_to_string(path)
+            .with_context(|| format!("read WGSL: {}", path.display()))?;
+        match naga::front::wgsl::parse_str(&txt) {
+            Ok(_module) => {
+                count += 1;
+            }
+            Err(err) => {
+                bail!("WGSL validation failed for {}: {}", path.display(), err);
+            }
+        }
+    }
+    println!("xtask: WGSL validated ({} files)", count);
+    Ok(())
+}
+
+fn cargo_deny() -> Result<()> {
+    // Attempt to run `cargo deny check` if installed; otherwise warn and continue.
+    let mut cmd = Command::new("cargo");
+    cmd.args(["deny", "check"]).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    match cmd.status() {
+        Ok(status) => {
+            if !status.success() {
+                bail!("cargo deny check failed");
+            }
+        }
+        Err(e) => {
+            eprintln!("xtask: cargo-deny not found or failed to launch: {} (skipping)", e);
+        }
+    }
     Ok(())
 }
 
@@ -177,6 +222,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Ci => ci(),
+        Cmd::Wgsl => wgsl_validate(),
         Cmd::SchemaCheck => schema_check(),
         Cmd::BuildPacks => build_packs(),
         Cmd::BuildSpells => build_spells(),
