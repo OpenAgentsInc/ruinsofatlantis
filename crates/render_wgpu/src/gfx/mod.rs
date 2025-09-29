@@ -423,7 +423,8 @@ impl Renderer {
                 wgpu::Backends::PRIMARY,
             ]
         } else {
-            &[wgpu::Backends::PRIMARY]
+            // On macOS, try PRIMARY (Metal) first, then fall back to GL for stability if needed.
+            &[wgpu::Backends::PRIMARY, wgpu::Backends::GL]
         };
 
         // Create a surface per candidate instance and try to get an adapter
@@ -493,25 +494,8 @@ impl Renderer {
             .copied()
             .find(|f| f.is_srgb())
             .unwrap_or(caps.formats[0]);
-        let present_mode = caps
-            .present_modes
-            .iter()
-            .copied()
-            .find(|m| {
-                // Optional no-vsync override via env flag.
-                // If RA_NO_VSYNC=1 or --no-vsync present, prefer Immediate; else prefer Mailbox.
-                let no_vsync_env = std::env::var("RA_NO_VSYNC")
-                    .map(|v| v == "1")
-                    .unwrap_or(false);
-                let no_vsync_flag = std::env::args().any(|a| a == "--no-vsync");
-                let no_vsync = no_vsync_env || no_vsync_flag;
-                if no_vsync {
-                    *m == wgpu::PresentMode::Immediate
-                } else {
-                    *m == wgpu::PresentMode::Mailbox
-                }
-            })
-            .unwrap_or(wgpu::PresentMode::Fifo);
+        // Use FIFO everywhere for stability across drivers; opt-in overrides can come later.
+        let present_mode = wgpu::PresentMode::Fifo;
         let alpha_mode = caps.alpha_modes[0];
         let max_dim = device.limits().max_texture_dimension_2d.clamp(1, 2048);
         let (w, h) = scale_to_max((size.width, size.height), max_dim);
@@ -2013,16 +1997,16 @@ impl Renderer {
             &bar_entries,
         );
         self.bars.draw(&mut encoder, &self.scene_view);
-        // Damage numbers
-        self.damage.update(dt);
-        self.damage.queue(
-            &self.device,
-            &self.queue,
-            self.config.width,
-            self.config.height,
-            view_proj,
-        );
-        self.damage.draw(&mut encoder, &self.scene_view);
+        // Damage numbers (temporarily disabled while isolating a macOS validation issue)
+        // self.damage.update(dt);
+        // self.damage.queue(
+        //     &self.device,
+        //     &self.queue,
+        //     self.config.width,
+        //     self.config.height,
+        //     view_proj,
+        // );
+        // self.damage.draw(&mut encoder, &self.scene_view);
 
         // Draw wizard nameplates first
         // Draw wizard nameplates for alive wizards only (hide dead PC/NPC labels)

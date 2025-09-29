@@ -22,6 +22,7 @@ struct GlyphInfo {
 }
 
 // ---- Damage Floaters (red numbers on hit) ----
+#[allow(dead_code)]
 pub struct DamageFloaters {
     // Font + metrics + atlas
     font: FontArc,
@@ -49,6 +50,7 @@ pub struct DamageFloaters {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 struct Floater {
     world: Vec3,
     value: i32,
@@ -58,6 +60,7 @@ struct Floater {
     rise_px_s: f32,
 }
 
+#[allow(dead_code)]
 impl DamageFloaters {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
         // Reuse the same font as nameplates
