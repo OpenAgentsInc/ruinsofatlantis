@@ -123,6 +123,7 @@ pub struct Renderer {
     ssgi_scene_bgl: wgpu::BindGroupLayout,
     ssr_depth_bgl: wgpu::BindGroupLayout,
     ssr_scene_bgl: wgpu::BindGroupLayout,
+    palettes_bgl: wgpu::BindGroupLayout,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
     ssgi_globals_bg: wgpu::BindGroup,
@@ -313,6 +314,9 @@ pub struct Renderer {
     // UI capture helpers
     screenshot_start: Option<f32>,
 
+    // Death overlay button rect for click hit-testing: (x0, y0, x1, y1) in px
+    death_btn_rect: Option<(f32, f32, f32, f32)>,
+
     // Server state (NPCs/health)
     server: server_core::ServerState,
 
@@ -369,6 +373,119 @@ impl Renderer {
             }
         }
         log::info!("PC died; spectator camera engaged");
+    }
+
+    fn respawn(&mut self) {
+        // Rebuild scene and server similar to initial construction.
+        // 1) Rebuild wizard scene instances and reset player state
+        let terrain_extent = self.max_dim as f32 * 0.5;
+        let ruins_base_offset = 0.4f32;
+        let ruins_radius = 6.5f32;
+        let scene_build = scene::build_demo_scene(
+            &self.device,
+            &self.skinned_cpu,
+            terrain_extent,
+            Some(&self.terrain_cpu),
+            ruins_base_offset,
+            ruins_radius,
+        );
+        // Snap to terrain heights again
+        let mut wizard_models = scene_build.wizard_models.clone();
+        for m in &mut wizard_models {
+            let c = m.to_cols_array();
+            let x = c[12];
+            let z = c[14];
+            let (h, _n) = terrain::height_at(&self.terrain_cpu, x, z);
+            let pos = glam::vec3(x, h, z);
+            let (s, r, _t) = glam::Mat4::from_cols_array(&c).to_scale_rotation_translation();
+            *m = glam::Mat4::from_scale_rotation_translation(s, r, pos);
+        }
+        let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+        for (i, inst) in wizard_instances_cpu.iter_mut().enumerate() {
+            inst.model = wizard_models[i].to_cols_array_2d();
+        }
+        self.wizard_instances = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wizard-instances"),
+            contents: bytemuck::cast_slice(&wizard_instances_cpu),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        self.wizard_instances_cpu = wizard_instances_cpu;
+        self.wizard_models = wizard_models;
+        self.wizard_count = self.wizard_instances_cpu.len() as u32;
+        self.wizard_anim_index = scene_build.wizard_anim_index;
+        self.wizard_time_offset = scene_build.wizard_time_offset;
+        self.wizard_last_phase = vec![0.0; self.wizard_count as usize];
+
+        // 2) Reset player and camera
+        let pc_initial_pos = {
+            let m = scene_build.wizard_models[scene_build.pc_index];
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
+        self.pc_index = scene_build.pc_index;
+        self.player = client_core::controller::PlayerController::new(pc_initial_pos);
+        self.input.clear();
+        self.cam_follow = camera_sys::FollowState {
+            current_pos: glam::vec3(0.0, 5.0, -10.0),
+            current_look: scene_build.cam_target,
+        };
+        self.cam_orbit_yaw = 0.0;
+        self.cam_orbit_pitch = 0.2;
+        self.cam_distance = 8.5;
+        self.cam_lift = 3.5;
+        self.cam_look_height = 1.6;
+        self.rmb_down = false;
+        self.last_cursor_pos = None;
+        self.death_btn_rect = None;
+        self.pc_cast_queued = false;
+        self.pc_anim_start = None;
+        self.pc_cast_fired = false;
+
+        // Reset HP and alive flag
+        self.wizard_hp = vec![self.wizard_hp_max; self.wizard_count as usize];
+        self.pc_alive = true;
+
+        // 3) Reset server and zombies
+        let npcs = npcs::build(&self.device, terrain_extent);
+        self.npc_vb = npcs.vb;
+        self.npc_ib = npcs.ib;
+        self.npc_index_count = npcs.index_count;
+        self.npc_instances = npcs.instances;
+        self.npc_models = npcs.models;
+        self.server = npcs.server;
+        let (zinst, zcpu, zmodels, zids, zcount) =
+            zombies::build_instances(&self.device, &self.terrain_cpu, &self.server, self.zombie_joints);
+        self.zombie_instances = zinst;
+        self.zombie_instances_cpu = zcpu;
+        self.zombie_models = zmodels.clone();
+        self.zombie_ids = zids;
+        self.zombie_count = zcount;
+        self.zombie_prev_pos = zmodels
+            .iter()
+            .map(|m| glam::vec3(m.to_cols_array()[12], m.to_cols_array()[13], m.to_cols_array()[14]))
+            .collect();
+        self.zombie_forward_offsets = vec![zombies::forward_offset(&self.zombie_cpu); self.zombie_count as usize];
+        // Recreate zombie palette buffer sized for new count
+        let total_z_mats = self.zombie_count as usize * self.zombie_joints as usize;
+        self.zombie_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("zombie-palettes"),
+            size: (total_z_mats * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.zombie_palettes_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("zombie-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: self.zombie_palettes_buf.as_entire_binding(),
+            }],
+        });
+
+        // 4) Clear FX
+        self.projectiles.clear();
+        self.particles.clear();
+        log::info!("Respawn complete");
     }
     fn remove_wizard_at(&mut self, idx: usize) {
         if idx >= self.wizard_count as usize {
@@ -1299,6 +1416,7 @@ impl Renderer {
             ssgi_scene_bgl: ssgi_scene_bgl.clone(),
             ssr_depth_bgl: ssr_depth_bgl.clone(),
             ssr_scene_bgl: ssr_scene_bgl.clone(),
+            palettes_bgl: palettes_bgl.clone(),
             globals_bg,
             post_ao_bg,
             ssgi_globals_bg,
@@ -1424,6 +1542,7 @@ impl Renderer {
             rmb_down: false,
             last_cursor_pos: None,
             screenshot_start: None,
+            death_btn_rect: None,
 
             npc_vb,
             npc_ib,
@@ -1676,10 +1795,15 @@ impl Renderer {
         );
         #[allow(unused_assignments)]
         // Anchor camera to the center of the PC model, not the feet.
-        let pc_anchor = if self.pc_index < self.wizard_models.len() {
-            let m = self.wizard_models[self.pc_index];
-            (m * glam::Vec4::new(0.0, 1.2, 0.0, 1.0)).truncate()
+        let pc_anchor = if self.pc_alive {
+            if self.pc_index < self.wizard_models.len() {
+                let m = self.wizard_models[self.pc_index];
+                (m * glam::Vec4::new(0.0, 1.2, 0.0, 1.0)).truncate()
+            } else {
+                self.player.pos + glam::vec3(0.0, 1.2, 0.0)
+            }
         } else {
+            // When dead, keep camera around the last known player position instead of the hidden model.
             self.player.pos + glam::vec3(0.0, 1.2, 0.0)
         };
 
@@ -2436,12 +2560,17 @@ impl Renderer {
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
             // HUD (default on; set RA_OVERLAYS=0 to hide)
-            if std::env::var("RA_OVERLAYS")
+            let overlays_disabled = std::env::var("RA_OVERLAYS")
                 .map(|v| v == "0")
-                .unwrap_or(false)
-            {
-                // disabled
-            } else {
+                .unwrap_or(false);
+            if !self.pc_alive {
+                // Show death overlay regardless of RA_OVERLAYS setting
+                self.hud.reset();
+                let rect = self
+                    .hud
+                    .death_overlay(self.size.width, self.size.height, "You died.", "Respawn");
+                self.death_btn_rect = Some(rect);
+            } else if !overlays_disabled {
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2457,9 +2586,10 @@ impl Renderer {
                     self.hud
                         .append_perf_text(self.size.width, self.size.height, &line);
                 }
-                self.hud.queue(&self.device, &self.queue);
-                self.hud.draw(&mut encoder, &view);
             }
+            // Queue+draw HUD (either normal or death overlay)
+            self.hud.queue(&self.device, &self.queue);
+            self.hud.draw(&mut encoder, &view);
             self.queue.submit(Some(encoder.finish()));
             frame.present();
         }
@@ -3016,23 +3146,38 @@ impl Renderer {
                     if !self.rmb_down {
                         self.last_cursor_pos = None; // reset deltas
                     }
+                } else if *button == winit::event::MouseButton::Left
+                    && state.is_pressed() && !self.pc_alive
+                {
+                    // Hit-test respawn button if visible
+                    if let (Some((mx, my)), Some((x0, y0, x1, y1))) =
+                        (self.last_cursor_pos, self.death_btn_rect)
+                    {
+                        let x = mx as f32;
+                        let y = my as f32;
+                        if x >= x0 && x <= x1 && y >= y0 && y <= y1 {
+                            log::info!("Respawn clicked");
+                            self.respawn();
+                        }
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.rmb_down {
-                    if let Some((lx, ly)) = self.last_cursor_pos {
-                        let dx = position.x - lx;
-                        let dy = position.y - ly;
-                        let sens = 0.005;
-                        // Fully sync player facing with mouse drag; keep camera behind the player
-                        let yaw_delta = dx as f32 * sens;
-                        self.player.yaw = wrap_angle(self.player.yaw - yaw_delta);
-                        self.cam_orbit_yaw = 0.0;
-                        // Invert pitch control (mouse up pitches camera down, and vice versa)
-                        self.cam_orbit_pitch =
-                            (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
-                    }
-                    self.last_cursor_pos = Some((position.x, position.y));
+                // Track last cursor position for button hit-testing
+                self.last_cursor_pos = Some((position.x, position.y));
+                if self.rmb_down
+                    && let Some((lx, ly)) = self.last_cursor_pos
+                {
+                    let dx = position.x - lx;
+                    let dy = position.y - ly;
+                    let sens = 0.005;
+                    // Fully sync player facing with mouse drag; keep camera behind the player
+                    let yaw_delta = dx as f32 * sens;
+                    self.player.yaw = wrap_angle(self.player.yaw - yaw_delta);
+                    self.cam_orbit_yaw = 0.0;
+                    // Invert pitch control (mouse up pitches camera down, and vice versa)
+                    self.cam_orbit_pitch =
+                        (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
                 }
             }
             WindowEvent::Focused(false) => {

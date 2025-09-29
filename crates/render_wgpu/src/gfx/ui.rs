@@ -1590,6 +1590,135 @@ impl Hud {
         }
     }
 
+    /// Clear any queued HUD geometry for building a custom overlay.
+    pub fn reset(&mut self) {
+        self.bars_verts.clear();
+        self.text_verts.clear();
+        self.bars_vcount = 0;
+        self.text_vcount = 0;
+    }
+
+    /// Append a centered single-line text at the given baseline Y.
+    pub fn append_center_text(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        text: &str,
+        y_baseline: f32,
+        color: [f32; 4],
+    ) {
+        // Measure width with kerning, then emit at centered X
+        let scaled = self._font.as_scaled(self.scale);
+        let mut width = 0.0f32;
+        let mut prev: Option<ab_glyph::GlyphId> = None;
+        for ch in text.chars() {
+            if let Some(gi) = self.glyphs.get(&ch) {
+                if let Some(pg) = prev {
+                    width += scaled.kern(pg, gi.id);
+                }
+                width += gi.advance;
+                prev = Some(gi.id);
+            }
+        }
+        let cx = (surface_w as f32) * 0.5 - width * 0.5;
+        self.push_text_line(surface_w, surface_h, cx, y_baseline, text, color);
+        self.text_vcount = self.text_verts.len() as u32;
+    }
+
+    /// Draw a simple death overlay with centered message and a button.
+    /// Returns button rect in px as (x0, y0, x1, y1) for hit testing.
+    pub fn death_overlay(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        title: &str,
+        button_text: &str,
+    ) -> (f32, f32, f32, f32) {
+        self.bars_verts.clear();
+        self.text_verts.clear();
+        // Dim background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            0.0,
+            0.0,
+            surface_w as f32,
+            surface_h as f32,
+            [0.0, 0.0, 0.0, 0.45],
+        );
+        // Panel
+        let panel_w = 420.0f32;
+        let panel_h = 180.0f32;
+        let cx = surface_w as f32 * 0.5;
+        let cy = surface_h as f32 * 0.5;
+        let x0 = cx - panel_w * 0.5;
+        let y0 = cy - panel_h * 0.5;
+        let x1 = cx + panel_w * 0.5;
+        let y1 = cy + panel_h * 0.5;
+        // Border + background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0 - 2.0,
+            y0 - 2.0,
+            x1 + 2.0,
+            y1 + 2.0,
+            [0.02, 0.02, 0.02, 0.95],
+        );
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0,
+            y0,
+            x1,
+            y1,
+            [0.10, 0.10, 0.10, 0.9],
+        );
+        // Title
+        self.append_center_text(
+            surface_w,
+            surface_h,
+            title,
+            y0 + 60.0,
+            [1.0, 0.3, 0.25, 1.0],
+        );
+        // Button
+        let btn_w = 160.0f32;
+        let btn_h = 36.0f32;
+        let bx0 = cx - btn_w * 0.5;
+        let by0 = y1 - 60.0 - btn_h * 0.5 + btn_h * 0.5; // a bit above bottom of panel
+        let bx1 = cx + btn_w * 0.5;
+        let by1 = by0 + btn_h;
+        self.push_rect(
+            surface_w,
+            surface_h,
+            bx0 - 2.0,
+            by0 - 2.0,
+            bx1 + 2.0,
+            by1 + 2.0,
+            [0.02, 0.02, 0.02, 0.95],
+        );
+        self.push_rect(
+            surface_w,
+            surface_h,
+            bx0,
+            by0,
+            bx1,
+            by1,
+            [0.18, 0.18, 0.18, 0.95],
+        );
+        self.append_center_text(
+            surface_w,
+            surface_h,
+            button_text,
+            by0 + btn_h - 10.0,
+            [0.95, 0.98, 1.0, 0.95],
+        );
+        self.bars_vcount = self.bars_verts.len() as u32;
+        self.text_vcount = self.text_verts.len() as u32;
+        (bx0, by0, bx1, by1)
+    }
+
     /// Append a single-line perf overlay in the top-left corner.
     pub fn append_perf_text(&mut self, surface_w: u32, surface_h: u32, text: &str) {
         // Slight shadow for readability
