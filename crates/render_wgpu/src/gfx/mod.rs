@@ -29,8 +29,10 @@ pub use types::Vertex;
 mod anim;
 mod camera_sys;
 mod draw;
+mod foliage;
 pub mod fx;
 mod material;
+mod rocks;
 mod scene;
 mod sky;
 pub mod terrain;
@@ -44,9 +46,7 @@ use data_runtime::{
 };
 use ra_assets::skinning::merge_gltf_animations;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
-use ra_assets::{
-    gltf::load_gltf_mesh, load_obj_static as load_obj_mesh, skinning::load_gltf_skinned,
-};
+use ra_assets::{gltf::load_gltf_mesh, skinning::load_gltf_skinned};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
@@ -109,6 +109,8 @@ pub struct Renderer {
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     bloom_pipeline: wgpu::RenderPipeline,
     bloom_bg: wgpu::BindGroup,
+    lights_buf: wgpu::Buffer,
+    lights_bg: wgpu::BindGroup,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
     post_ao_bgl: wgpu::BindGroupLayout,
@@ -184,6 +186,13 @@ pub struct Renderer {
     trees_vb: wgpu::Buffer,
     trees_ib: wgpu::Buffer,
     trees_index_count: u32,
+
+    // Rocks (instanced static mesh)
+    rocks_instances: wgpu::Buffer,
+    rocks_count: u32,
+    rocks_vb: wgpu::Buffer,
+    rocks_ib: wgpu::Buffer,
+    rocks_index_count: u32,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -566,11 +575,18 @@ impl Renderer {
         // --- Pipelines + BGLs ---
         let shader = pipeline::create_shader(&device);
         let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
+        let lights_bgl = pipeline::create_lights_bgl(&device);
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let material_bgl = pipeline::create_material_bgl(&device);
         let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
-        let (pipeline, inst_pipeline, wire_pipeline) =
-            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, offscreen_fmt);
+        let (pipeline, inst_pipeline, wire_pipeline) = pipeline::create_pipelines(
+            &device,
+            &shader,
+            &globals_bgl,
+            &model_bgl,
+            &lights_bgl,
+            offscreen_fmt,
+        );
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
@@ -613,6 +629,7 @@ impl Renderer {
             &model_bgl,
             &palettes_bgl,
             &material_bgl,
+            &lights_bgl,
             offscreen_fmt,
         );
         let particle_pipeline =
@@ -834,7 +851,34 @@ impl Renderer {
                 },
             ],
         });
-        // (removed) frame overlay UBO/BG
+        // Dynamic lights UBO/BG
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct LightsRaw {
+            count: u32,
+            _pad: [f32; 3],
+            pos_radius: [[f32; 4]; 16],
+            color: [[f32; 4]; 16],
+        }
+        let lights_init = LightsRaw {
+            count: 0,
+            _pad: [0.0; 3],
+            pos_radius: [[0.0; 4]; 16],
+            color: [[0.0; 4]; 16],
+        };
+        let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("lights-ubo"),
+            contents: bytemuck::bytes_of(&lights_init),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let lights_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("lights-bg"),
+            layout: &lights_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: lights_buf.as_entire_binding(),
+            }],
+        });
 
         // Per-draw Model buffers (plane and shard base)
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
@@ -1248,70 +1292,25 @@ impl Renderer {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Trees: prefer baked instances if available, else scatter using manifest vegetation params
-        let trees_models_opt = terrain::load_trees_snapshot("wizard_woods");
-        let mut trees_instances_cpu: Vec<types::Instance> = if let Some(models) = &trees_models_opt
-        {
-            terrain::instances_from_models(models)
-        } else {
-            let (tree_count, tree_seed) = zone
-                .vegetation
-                .as_ref()
-                .map(|v| (v.tree_count as usize, v.tree_seed))
-                .unwrap_or((350usize, 20250926u32));
-            terrain::place_trees(&terrain_cpu, tree_count, tree_seed)
-        };
-        // Mark trees with a non-highlight selection value to enable wind sway in the shader
-        for inst in &mut trees_instances_cpu {
-            inst.selected = 0.25; // below 0.5 so it won't render as highlighted
-        }
-        let trees_count = trees_instances_cpu.len() as u32;
-        let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("trees-instances"),
-            contents: bytemuck::cast_slice(&trees_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        // Load a static tree mesh (OBJ) and upload
-        let tree_mesh_path = asset_path("assets/models/trees/OBJ/Tree_3.obj");
-        let tree_mesh_cpu = if tree_mesh_path.exists() {
-            // If OBJ not vendored yet, fall back to cube
-            load_obj_mesh(&tree_mesh_path).context("load OBJ tree mesh")?
-        } else {
-            log::warn!("tree OBJ not found; falling back to cube mesh for trees");
-            // Build a CpuMesh from the cube VB/IB? Simpler: reuse cube buffers
-            // We'll just keep using cube buffers when OBJ is missing.
-            // Placeholder buffers (will be overwritten by npc_vb/ib below if missing)
-            ra_assets::types::CpuMesh {
-                vertices: vec![],
-                indices: vec![],
-            }
-        };
-        let (trees_vb, trees_ib, trees_index_count) = if !tree_mesh_cpu.vertices.is_empty() {
-            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("trees-vb"),
-                contents: bytemuck::cast_slice(&tree_mesh_cpu.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("trees-ib"),
-                contents: bytemuck::cast_slice(&tree_mesh_cpu.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-            (vb, ib, tree_mesh_cpu.indices.len() as u32)
-        } else {
-            // Fallback: reuse the cube geometry
-            (npc_vb.clone(), npc_ib.clone(), npc_index_count)
-        };
-        // If meta exists, verify fingerprints
-        if let Some(models) = &trees_models_opt
-            && let Some(ok) =
-                terrain::verify_snapshot_fingerprints("wizard_woods", &terrain_cpu, Some(models))
-        {
-            log::info!(
-                "zone snapshot meta verification: {}",
-                if ok { "ok" } else { "MISMATCH" }
-            );
-        }
+        // Trees: delegate to foliage module for instance generation and mesh upload
+        let veg = zone
+            .vegetation
+            .as_ref()
+            .map(|v| (v.tree_count as usize, v.tree_seed));
+        let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &zone.slug, veg)
+            .context("build trees (instances + mesh) for zone")?;
+        let trees_instances = trees_gpu.instances;
+        let trees_count = trees_gpu.count;
+        let (trees_vb, trees_ib, trees_index_count) =
+            (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
+
+        // Rocks: load GLB and scatter instances
+        let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &zone.slug, None)
+            .context("build rocks (instances + mesh) for zone")?;
+        let rocks_instances = rocks_gpu.instances;
+        let rocks_count = rocks_gpu.count;
+        let (rocks_vb, rocks_ib, rocks_index_count) =
+            (rocks_gpu.vb, rocks_gpu.ib, rocks_gpu.index_count);
 
         log::info!(
             "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
@@ -1419,6 +1418,8 @@ impl Renderer {
             blit_scene_read_pipeline,
             bloom_pipeline,
             bloom_bg,
+            lights_buf,
+            lights_bg,
             static_index,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
@@ -1565,6 +1566,11 @@ impl Renderer {
             trees_vb,
             trees_ib,
             trees_index_count,
+            rocks_instances,
+            rocks_count,
+            rocks_vb,
+            rocks_ib,
+            rocks_index_count,
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
@@ -1575,7 +1581,7 @@ impl Renderer {
             enable_post_ao: false,
             enable_ssgi: false,
             enable_ssr: false,
-            enable_bloom: true,
+            enable_bloom: false,
             // frame overlay removed
         })
     }
@@ -1849,7 +1855,7 @@ impl Renderer {
         // Fog color/density based on time-of-day: dark navy at night, light blue by day.
         // Night fog helps suppress the horizon band and prevents the sky from reading pink.
         if self.sky.sun_dir.y <= 0.0 {
-            globals.fog_params = [0.03, 0.04, 0.06, 0.0065];
+            globals.fog_params = [0.01, 0.015, 0.02, 0.018];
         } else {
             globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
         }
@@ -1921,6 +1927,36 @@ impl Renderer {
         }
         // FX update (projectiles/particles)
         self.update_fx(t, dt);
+        // Update dynamic lights from active projectiles (up to 16)
+        {
+            #[repr(C)]
+            #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+            struct LightsRaw {
+                count: u32,
+                _pad: [f32; 3],
+                pos_radius: [[f32; 4]; 16],
+                color: [[f32; 4]; 16],
+            }
+            let mut raw = LightsRaw {
+                count: 0,
+                _pad: [0.0; 3],
+                pos_radius: [[0.0; 4]; 16],
+                color: [[0.0; 4]; 16],
+            };
+            let mut n = 0usize;
+            let maxr = 8.0f32;
+            for p in &self.projectiles {
+                if n >= 16 {
+                    break;
+                }
+                raw.pos_radius[n] = [p.pos.x, p.pos.y, p.pos.z, maxr];
+                raw.color[n] = [1.6, 0.8, 0.3, 0.0];
+                n += 1;
+            }
+            raw.count = n as u32;
+            self.queue
+                .write_buffer(&self.lights_buf, 0, bytemuck::bytes_of(&raw));
+        }
 
         // Begin commands
         // Capture validation errors locally to avoid process-wide panic
@@ -1987,6 +2023,8 @@ impl Renderer {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
+            rpass.set_bind_group(2, &self.lights_bg, &[]);
+            rpass.set_bind_group(2, &self.lights_bg, &[]);
             rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
             rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
@@ -2002,10 +2040,29 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.trees_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
                 rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
+                self.draw_calls += 1;
+            }
+
+            // Rocks (instanced static mesh)
+            if self.rocks_count > 0 {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_bind_group(2, &self.lights_bg, &[]);
+                rpass.set_vertex_buffer(0, self.rocks_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.rocks_instances.slice(..));
+                rpass.set_index_buffer(self.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.rocks_index_count, 0, 0..self.rocks_count);
                 self.draw_calls += 1;
             }
 
@@ -2026,6 +2083,7 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
                 rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
@@ -2043,6 +2101,7 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.npc_instances.slice(..));
                 rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);

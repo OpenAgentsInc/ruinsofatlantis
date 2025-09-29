@@ -62,6 +62,22 @@ pub fn create_bind_group_layouts(device: &wgpu::Device) -> (BindGroupLayout, Bin
     (globals, model)
 }
 
+pub fn create_lights_bgl(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("lights-bgl"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    })
+}
+
 pub fn create_palettes_bgl(device: &wgpu::Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("palettes-bgl"),
@@ -117,11 +133,12 @@ pub fn create_pipelines(
     shader: &ShaderModule,
     globals_bgl: &BindGroupLayout,
     model_bgl: &BindGroupLayout,
+    lights_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> (RenderPipeline, RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("pipeline-layout"),
-        bind_group_layouts: &[globals_bgl, model_bgl],
+        bind_group_layouts: &[globals_bgl, model_bgl, lights_bgl],
         push_constant_ranges: &[],
     });
 
@@ -300,6 +317,7 @@ pub fn create_sky_pipeline(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_wizard_pipelines(
     device: &wgpu::Device,
     shader: &ShaderModule,
@@ -307,11 +325,18 @@ pub fn create_wizard_pipelines(
     model_bgl: &BindGroupLayout,
     palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
+    lights_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> (RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("wizard-pipeline-layout"),
-        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl, material_bgl],
+        bind_group_layouts: &[
+            globals_bgl,
+            model_bgl,
+            palettes_bgl,
+            material_bgl,
+            lights_bgl,
+        ],
         push_constant_ranges: &[],
     });
 

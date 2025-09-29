@@ -60,6 +60,10 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   }
   // Tonemap in linear
   var mapped = tonemap_aces_approx(col);
+  // Exposure: darker at night based on sun elevation
+  let elev = globals.sunDirTime.y;
+  let nf = smoothstep(0.0, 0.2, -elev);
+  mapped *= mix(1.0, 0.45, nf);
   // Optional lightweight color grade (teal/orange) — subtle
   // This is intentionally conservative so it doesn’t override art direction,
   // but provides a little extra separation for the first‑playable demo.
