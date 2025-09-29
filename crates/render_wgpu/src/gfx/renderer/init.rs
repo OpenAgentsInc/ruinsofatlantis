@@ -912,6 +912,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_hp: vec![100; scene_build.wizard_count as usize],
         wizard_hp_max: 100,
         pc_alive: true,
+        wizards_hostile_to_pc: false,
         zombie_palettes_buf,
         zombie_palettes_bg,
         zombie_joints,
