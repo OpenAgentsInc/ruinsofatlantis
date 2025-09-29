@@ -84,7 +84,7 @@ pub fn upload_from_cpu(device: &wgpu::Device, cpu: &TerrainCPU) -> TerrainBuffer
 pub fn place_trees(cpu: &TerrainCPU, count: usize, seed: u32) -> Vec<Instance> {
     let mut out: Vec<Instance> = Vec::with_capacity(count);
     let mut s = splitmix(seed as u64);
-    let center_excl = cpu.extent * 0.2; // keep a clearing near the spawn
+    let center_excl = cpu.extent * 0.25; // wider clearing near the player
     for _ in 0..count {
         let x = (rand01(&mut s) * 2.0 - 1.0) * cpu.extent;
         let z = (rand01(&mut s) * 2.0 - 1.0) * cpu.extent;
@@ -93,20 +93,24 @@ pub fn place_trees(cpu: &TerrainCPU, count: usize, seed: u32) -> Vec<Instance> {
         }
         let p = Vec2::new(x, z);
         let (y, n) = sample_height_normal(cpu, p);
-        if n.y < 0.8 {
+        if n.y < 0.85 {
             // avoid steep slopes
             continue;
         }
         let yaw = (rand01(&mut s) * 2.0 - 1.0) * std::f32::consts::PI;
-        let sxy = 0.6 + rand01(&mut s) * 0.8; // random scale
+        let sxy = 0.8 + rand01(&mut s) * 0.6; // slightly wider baseline
         let model = Mat4::from_scale_rotation_translation(
-            Vec3::new(0.8, 2.4 * sxy, 0.8),
+            // Shorter, fuller trees: broader XZ, lower Y
+            Vec3::new(1.1 * sxy, 1.8 * sxy, 1.1 * sxy),
             glam::Quat::from_rotation_y(yaw),
             Vec3::new(x, y, z),
         );
+        // Subtle per-instance color variation to avoid a flat look
+        let tint = 0.9 + 0.2 * rand01(&mut s);
+        let base = [0.16, 0.42, 0.20];
         out.push(Instance {
             model: model.to_cols_array_2d(),
-            color: [0.14, 0.45, 0.18],
+            color: [base[0] * tint, base[1] * tint, base[2] * tint],
             selected: 0.0,
         });
     }
