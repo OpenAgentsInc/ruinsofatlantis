@@ -1658,12 +1658,21 @@ impl Renderer {
         // Simple AI: rotate non-PC wizards to face nearest alive zombie so firebolts aim correctly
         self.update_wizard_ai(dt);
         // Compute local orbit offsets (relative to PC orientation)
+        // Adapt lift and look height as we zoom in so the close view
+        // sits just behind and slightly above the wizard's head.
+        let near_d = 1.6f32;
+        let far_d = 25.0f32;
+        let zoom_t = ((self.cam_distance - near_d) / (far_d - near_d)).clamp(0.0, 1.0);
+        let near_lift = 0.5f32; // meters above anchor when fully zoomed-in
+        let near_look = 0.5f32; // aim point above anchor when fully zoomed-in
+        let eff_lift = near_lift * (1.0 - zoom_t) + self.cam_lift * zoom_t;
+        let eff_look = near_look * (1.0 - zoom_t) + self.cam_look_height * zoom_t;
         let (off_local, look_local) = camera_sys::compute_local_orbit_offsets(
             self.cam_distance,
             self.cam_orbit_yaw,
             self.cam_orbit_pitch,
-            self.cam_lift,
-            self.cam_look_height,
+            eff_lift,
+            eff_look,
         );
         #[allow(unused_assignments)]
         // Anchor camera to the center of the PC model, not the feet.
@@ -1675,6 +1684,7 @@ impl Renderer {
         };
 
         #[allow(unused_assignments)]
+        let follow_dt = if self.rmb_down { 0.0 } else { dt };
         let (_cam, mut globals) = camera_sys::third_person_follow(
             &mut self.cam_follow,
             pc_anchor,
@@ -1682,7 +1692,7 @@ impl Renderer {
             off_local,
             look_local,
             aspect,
-            dt,
+            follow_dt,
         );
         // Keep camera above terrain: clamp eye/target Y to terrain height + clearance
         let clearance_eye = 0.2f32;
@@ -2012,10 +2022,10 @@ impl Renderer {
                 log::debug!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
             }
 
-            // Ruins (instanced) — allow gating via RA_DRAW_RUINS to isolate crashes
+            // Ruins (instanced) — draw by default; allow disabling with RA_DRAW_RUINS=0
             let draw_ruins = std::env::var("RA_DRAW_RUINS")
-                .map(|v| v == "1")
-                .unwrap_or(false);
+                .map(|v| v != "0")
+                .unwrap_or(true);
             if draw_ruins && self.ruins_count > 0 {
                 log::debug!("draw: ruins x{} (enabled)", self.ruins_count);
                 let inst_pipe = if self.wire_enabled {
@@ -2996,7 +3006,9 @@ impl Renderer {
                     step = 0.0;
                 }
                 if step != 0.0 {
-                    self.cam_distance = (self.cam_distance - step).clamp(3.0, 25.0);
+                    // Allow a closer near-zoom so the camera can sit just
+                    // behind and slightly above the wizard's head.
+                    self.cam_distance = (self.cam_distance - step).clamp(1.6, 25.0);
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -3013,7 +3025,10 @@ impl Renderer {
                         let dx = position.x - lx;
                         let dy = position.y - ly;
                         let sens = 0.005;
-                        self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx as f32 * sens);
+                        // Fully sync player facing with mouse drag; keep camera behind the player
+                        let yaw_delta = dx as f32 * sens;
+                        self.player.yaw = wrap_angle(self.player.yaw - yaw_delta);
+                        self.cam_orbit_yaw = 0.0;
                         // Invert pitch control (mouse up pitches camera down, and vice versa)
                         self.cam_orbit_pitch =
                             (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
@@ -3188,7 +3203,7 @@ impl Renderer {
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
                         log::debug!("PC Fire Bolt fired at t={:.2}", t);
-                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index));
+                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
                         self.pc_cast_fired = true;
                     }
                     // Immediately end cast animation and start cooldown window
@@ -3242,7 +3257,7 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20; // meters to shift toward center
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        self.spawn_firebolt(spawn, dir_w, t, Some(i));
+                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true);
                     }
                 }
                 self.wizard_last_phase[i] = phase;
@@ -3537,6 +3552,7 @@ impl Renderer {
         dir: glam::Vec3,
         t: f32,
         owner: Option<usize>,
+        snap_to_ground: bool,
     ) {
         let mut speed = 40.0;
         // Extend projectile lifetime by 50% so paths travel farther.
@@ -3546,8 +3562,15 @@ impl Renderer {
         {
             speed = p.speed_mps;
         }
-        // Ensure initial spawn sits a bit above the terrain.
-        let origin = crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15);
+        // Ensure initial spawn is terrain-aware.
+        // - PC: keep hand height but raise if below clearance (clamp above).
+        // - NPC: snap onto terrain + clearance so bolts hug the ground like the PC's do.
+        let origin = if snap_to_ground {
+            let (h, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, origin.x, origin.z);
+            glam::vec3(origin.x, h + 0.15, origin.z)
+        } else {
+            crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15)
+        };
         self.projectiles.push(Projectile {
             pos: origin,
             vel: dir * speed,
