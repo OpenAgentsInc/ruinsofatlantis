@@ -181,14 +181,14 @@ impl SimState {
         let mut base = dice.trim();
         let mut flat: i32 = 0;
         // Handle +K or -K suffix
-        if let Some(pos) = base.rfind(['+', '-']) {
-            if pos > 0 {
-                let (left, right) = base.split_at(pos);
-                base = left;
-                let sign = &right[..1];
-                let k = right[1..].parse::<i32>().unwrap_or(0);
-                flat = if sign == "+" { k } else { -k };
-            }
+        if let Some(pos) = base.rfind(['+', '-'])
+            && pos > 0
+        {
+            let (left, right) = base.split_at(pos);
+            base = left;
+            let sign = &right[..1];
+            let k = right[1..].parse::<i32>().unwrap_or(0);
+            flat = if sign == "+" { k } else { -k };
         }
         let (n, m) = if let Some((n, m)) = base.split_once('d') {
             (n.parse::<i32>().unwrap_or(1), m.parse::<i32>().unwrap_or(1))

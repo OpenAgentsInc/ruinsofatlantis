@@ -402,7 +402,7 @@ fn magic_missile_damage_bounds_and_not_halved_underwater() {
     systems::damage::run(&mut s_dry);
     let hp_after_dry = s_dry.actors[1].hp;
     let dmg_dry = 30 - hp_after_dry; // boss starts at 30 hp in tests
-    assert!(dmg_dry >= 6 && dmg_dry <= 15, "damage out of 3d4+3 bounds: {}", dmg_dry);
+    assert!((6..=15).contains(&dmg_dry), "damage out of 3d4+3 bounds: {}", dmg_dry);
 
     // Underwater run with same seed/setup: Force should not be halved.
     let mut s_wet = SimState::new(50, 4242);

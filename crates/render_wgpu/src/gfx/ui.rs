@@ -1331,6 +1331,7 @@ impl Hud {
     }
 
     /// Build a minimal HUD for the wizard scene.
+    #[allow(clippy::too_many_arguments)] // UI layout builder: grouping these into a struct is overkill for the prototype
     pub fn build(
         &mut self,
         surface_w: u32,
