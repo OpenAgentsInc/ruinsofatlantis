@@ -2033,15 +2033,19 @@ impl Renderer {
                 wiz_alive.push(*m);
             }
         }
-        self.nameplates.queue_labels(
-            &self.device,
-            &self.queue,
-            self.config.width,
-            self.config.height,
-            view_proj,
-            &wiz_alive,
-        );
-        self.nameplates.draw(&mut encoder, &self.scene_view);
+        // Temporarily gate nameplates to isolate a startup validation crash on macOS
+        let draw_labels = false;
+        if draw_labels {
+            self.nameplates.queue_labels(
+                &self.device,
+                &self.queue,
+                self.config.width,
+                self.config.height,
+                view_proj,
+                &wiz_alive,
+            );
+            self.nameplates.draw(&mut encoder, &self.scene_view);
+        }
 
         // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
@@ -2055,7 +2059,7 @@ impl Renderer {
             let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             npc_positions.push(head.truncate());
         }
-        if !npc_positions.is_empty() {
+        if draw_labels && !npc_positions.is_empty() {
             self.nameplates_npc.queue_npc_labels(
                 &self.device,
                 &self.queue,
