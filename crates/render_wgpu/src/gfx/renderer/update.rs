@@ -525,8 +525,8 @@ impl Renderer {
     /// outward yaw so they gradually spread as they travel.
     pub(crate) fn spawn_magic_missile(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
         let base_dir = dir.normalize_or_zero();
-        // Tighter spread: ±5 degrees about Y (horizontal plane)
-        let spread_rad = 5.0_f32.to_radians();
+        // Ultra-tight spread: ±2 degrees about Y (horizontal plane)
+        let spread_rad = 2.0_f32.to_radians();
         let left_dir = glam::Quat::from_rotation_y(-spread_rad) * base_dir;
         let right_dir = glam::Quat::from_rotation_y(spread_rad) * base_dir;
 
