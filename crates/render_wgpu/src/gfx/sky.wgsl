@@ -74,6 +74,12 @@ fn fs_sky(in: VsOut) -> @location(0) vec4<f32> {
   let theta = acos(clamp(dir.y, -1.0, 1.0));
   let gamma = acos(clamp(dot(dir, sky.sun_dir_time.xyz), -1.0, 1.0));
   var col = sky_radiance(theta, gamma);
+  // Suppress the HW horizon hot-band so it doesn’t draw a hard line across the middle
+  // of the screen. Apply a gentle reduction near |dir.y|≈0, stronger at night.
+  let night = smoothstep(0.0, 0.1, -sky.sun_dir_time.y); // 0 day .. 1 night
+  let near_horizon = 1.0 - smoothstep(0.0, 0.08, abs(dir.y));
+  let suppress = mix(0.18, 0.45, night); // reduce up to 45% at night
+  col *= 1.0 - suppress * near_horizon;
   // Simple tonemap (Reinhard) to keep things in-gamut
   col = col / (1.0 + col);
   return vec4<f32>(col, 1.0);
