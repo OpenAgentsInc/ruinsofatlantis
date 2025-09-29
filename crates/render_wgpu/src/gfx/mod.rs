@@ -3387,7 +3387,9 @@ impl Renderer {
                         match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
                             PcCast::FireBolt => {
                                 log::debug!("PC Fire Bolt fired at t={:.2}", t);
-                                self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
+                        // Bright orange for Fire Bolt
+                        let fb_col = [2.6, 0.7, 0.18];
+                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false, fb_col);
                                 // Begin 1.0s cooldown
                                 self.firebolt_cd_dur = 1.0;
                                 self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur;
@@ -3450,7 +3452,9 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20; // meters to shift toward center
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true);
+                        // Bright orange for Fire Bolt (NPC casts)
+                        let fb_col = [2.6, 0.7, 0.18];
+                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
                     }
                 }
                 self.wizard_last_phase[i] = phase;
@@ -3629,7 +3633,7 @@ impl Renderer {
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
                 size: 0.18,
-                color: [2.6 * head_fade, 0.7 * head_fade, 0.18 * head_fade],
+                color: [pr.color[0] * head_fade, pr.color[1] * head_fade, pr.color[2] * head_fade],
                 _pad: 0.0,
             });
             // short trail segments behind
@@ -3641,7 +3645,7 @@ impl Renderer {
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
                     size: 0.13,
-                    color: [2.0 * fade, 0.55 * fade, 0.16 * fade],
+                    color: [pr.color[0] * 0.8 * fade, pr.color[1] * 0.8 * fade, pr.color[2] * 0.8 * fade],
                     _pad: 0.0,
                 });
             }
@@ -3757,6 +3761,7 @@ impl Renderer {
         t: f32,
         owner: Option<usize>,
         snap_to_ground: bool,
+        color: [f32; 3],
     ) {
         let mut speed = 40.0;
         // Base lifetime for visuals; will be clamped by spec range below.
@@ -3785,6 +3790,7 @@ impl Renderer {
             vel: dir * speed,
             t_die: t + life,
             owner_wizard: owner,
+            color,
         });
     }
 
@@ -3793,9 +3799,11 @@ impl Renderer {
         // Slight lateral offsets for readability.
         let right = glam::vec3(dir.z, 0.0, -dir.x).normalize_or_zero();
         let offsets = [-0.12f32, 0.0, 0.12f32];
+        // Light purple color for Magic Missile
+        let mm_col = [1.3, 0.7, 2.3];
         for off in offsets {
             let o = origin + right * off;
-            self.spawn_firebolt(o, dir, t, Some(self.pc_index), false);
+            self.spawn_firebolt(o, dir, t, Some(self.pc_index), false, mm_col);
         }
     }
 
