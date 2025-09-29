@@ -1941,9 +1941,12 @@ impl Renderer {
             self.draw_zombies(&mut rpass);
             self.draw_calls += 1;
 
-            // Ruins (instanced) — only draw when we have instances
-            if self.ruins_count > 0 {
-                log::info!("draw: ruins x{}", self.ruins_count);
+            // Ruins (instanced) — allow gating via RA_DRAW_RUINS to isolate crashes
+            let draw_ruins = std::env::var("RA_DRAW_RUINS")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if draw_ruins && self.ruins_count > 0 {
+                log::info!("draw: ruins x{} (enabled)", self.ruins_count);
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -1957,6 +1960,8 @@ impl Renderer {
                 rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
                 self.draw_calls += 1;
+            } else {
+                log::info!("draw: ruins skipped (RA_DRAW_RUINS!=1)");
             }
 
             // NPCs (instanced cubes)
