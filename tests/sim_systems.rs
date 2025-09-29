@@ -384,6 +384,47 @@ fn magic_missile_auto_hit_applies_damage() {
 }
 
 #[test]
+fn magic_missile_damage_bounds_and_not_halved_underwater() {
+    // Validate aggregate dice parsing (3d4+3) and that underwater doesn't halve force damage.
+    // Dry run
+    let mut s_dry = SimState::new(50, 4242);
+    let mut a = mk_actor("wiz", "dps", Some("players"));
+    a.ability_ids.push("wiz.magic_missile.srd521".into());
+    a.target = Some(1);
+    s_dry.actors.push(a);
+    s_dry.actors.push(mk_actor("boss", "boss", Some("boss")));
+    s_dry.spells.insert(
+        "wiz.magic_missile.srd521".into(),
+        data_runtime::loader::load_spell_spec("spells/magic_missile.json").unwrap(),
+    );
+    s_dry.cast_completed.push((0, "wiz.magic_missile.srd521".into()));
+    systems::attack_roll::run(&mut s_dry);
+    systems::damage::run(&mut s_dry);
+    let hp_after_dry = s_dry.actors[1].hp;
+    let dmg_dry = 30 - hp_after_dry; // boss starts at 30 hp in tests
+    assert!(dmg_dry >= 6 && dmg_dry <= 15, "damage out of 3d4+3 bounds: {}", dmg_dry);
+
+    // Underwater run with same seed/setup: Force should not be halved.
+    let mut s_wet = SimState::new(50, 4242);
+    s_wet.underwater = true;
+    let mut a2 = mk_actor("wiz", "dps", Some("players"));
+    a2.ability_ids.push("wiz.magic_missile.srd521".into());
+    a2.target = Some(1);
+    s_wet.actors.push(a2);
+    s_wet.actors.push(mk_actor("boss", "boss", Some("boss")));
+    s_wet.spells.insert(
+        "wiz.magic_missile.srd521".into(),
+        data_runtime::loader::load_spell_spec("spells/magic_missile.json").unwrap(),
+    );
+    s_wet.cast_completed.push((0, "wiz.magic_missile.srd521".into()));
+    systems::attack_roll::run(&mut s_wet);
+    systems::damage::run(&mut s_wet);
+    let hp_after_wet = s_wet.actors[1].hp;
+    let dmg_wet = 30 - hp_after_wet;
+    assert_eq!(dmg_dry, dmg_wet, "force damage should be identical underwater");
+}
+
+#[test]
 fn concentration_breaks_on_high_damage() {
     let mut s = SimState::new(50, 456);
     // Caster/Source
