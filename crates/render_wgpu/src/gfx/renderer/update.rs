@@ -14,39 +14,7 @@ impl Renderer {
         while x < -std::f32::consts::PI { x += 2.0 * std::f32::consts::PI; }
         x
     }
-    /// Apply a basic WASD character controller to the PC and update its instance data.
-    pub(crate) fn update_player_and_camera(&mut self, dt: f32, _aspect: f32) {
-        if self.wizard_count == 0 || !self.pc_alive || self.pc_index >= self.wizard_count as usize {
-            return;
-        }
-        let cam_fwd = self.cam_follow.current_look - self.cam_follow.current_pos;
-        let before = self.player.pos;
-        self.player.update(&self.input, dt, cam_fwd);
-        if let Some(idx) = &self.static_index {
-            // Resolve against static colliders (capsule approx for wizard)
-            let cap = collision_static::Capsule {
-                p0: glam::vec3(self.player.pos.x, self.player.pos.y + 0.4, self.player.pos.z),
-                p1: glam::vec3(self.player.pos.x, self.player.pos.y + 1.8, self.player.pos.z),
-                radius: 0.4,
-            };
-            let a = collision_static::Aabb {
-                min: glam::vec3(
-                    cap.p0.x.min(cap.p1.x) - cap.radius,
-                    cap.p0.y.min(cap.p1.y) - cap.radius,
-                    cap.p0.z.min(cap.p1.z) - cap.radius,
-                ),
-                max: glam::vec3(
-                    cap.p0.x.max(cap.p1.x) + cap.radius,
-                    cap.p0.y.max(cap.p1.y) + cap.radius,
-                    cap.p0.z.max(cap.p1.z) + cap.radius,
-                ),
-            };
-            let _ = a; // reserved for future broadphase tuning
-            let resolved = collision_static::resolve_slide(before, self.player.pos, &cap, idx, 0.25, 4);
-            self.player.pos = resolved;
-        }
-        self.apply_pc_transform();
-    }
+    // update_player_and_camera removed: moved to client_runtime::SceneInputs
 
     pub(crate) fn apply_pc_transform(&mut self) {
         if !self.pc_alive || self.pc_index >= self.wizard_count as usize {
