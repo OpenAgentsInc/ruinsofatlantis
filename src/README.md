@@ -18,7 +18,7 @@ Workspace crates (added for modularization)
 - platform_winit.rs — Window/event loop integration using winit 0.30.
 
 ## Controls
-- RMB drag: orbit camera around the player
+- RMB drag: orbit camera and rotate player facing
 - Scroll: zoom in/out
 - WASD: move (A/D turn in place)
 - Shift: run

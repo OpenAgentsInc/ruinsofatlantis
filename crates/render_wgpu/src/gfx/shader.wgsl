@@ -115,8 +115,9 @@ fn vs_inst(input: InstIn) -> InstOut {
   if (input.iselected > 0.1 && input.iselected < 0.5) {
     // Low-amplitude sway increases with world Y (tops sway more than trunks)
     let t = globals.camRightTime.w;
-    let f1 = 0.15 * sin(world_pos.x * 0.18 + t * 1.2);
-    let f2 = 0.12 * cos(world_pos.z * 0.22 + t * 0.9);
+    // Gentle sway: reduce amplitude to avoid rubbery look
+    let f1 = 0.06 * sin(world_pos.x * 0.18 + t * 1.1);
+    let f2 = 0.05 * cos(world_pos.z * 0.22 + t * 0.85);
     let sway = vec2<f32>(f1, f2) * clamp(world_pos.y * 0.15, 0.0, 1.0);
     world_pos.x += sway.x;
     world_pos.z += sway.y;
