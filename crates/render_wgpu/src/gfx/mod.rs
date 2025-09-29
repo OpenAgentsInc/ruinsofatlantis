@@ -2578,6 +2578,14 @@ impl Renderer {
                     "Press R to respawn",
                 );
             } else if !overlays_disabled {
+                let cast_label = if cast_frac > 0.0 {
+                    match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
+                        PcCast::FireBolt => Some("Fire Bolt"),
+                        PcCast::MagicMissile => Some("Magic Missile"),
+                    }
+                } else {
+                    None
+                };
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2585,6 +2593,7 @@ impl Renderer {
                     self.wizard_hp_max,
                     cast_frac,
                     gcd_frac,
+                    cast_label,
                 );
                 if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
@@ -3066,6 +3075,7 @@ impl Renderer {
                         if pressed {
                             self.pc_cast_queued = true;
                             self.pc_cast_kind = Some(PcCast::FireBolt);
+                            self.pc_cast_time = 0.0; // Instant for Fire Bolt in prototype
                             log::debug!("PC cast queued: Fire Bolt");
                         }
                     }
@@ -3075,6 +3085,7 @@ impl Renderer {
                         if pressed {
                             self.pc_cast_queued = true;
                             self.pc_cast_kind = Some(PcCast::MagicMissile);
+                            self.pc_cast_time = 1.0; // Magic Missile uses Action pacing
                             log::debug!("PC cast queued: Magic Missile");
                         }
                     }

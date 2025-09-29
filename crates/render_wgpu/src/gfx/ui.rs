@@ -1339,6 +1339,7 @@ impl Hud {
         pc_hp_max: i32,
         cast_frac: f32,
         gcd_frac: f32,
+        cast_label: Option<&str>,
     ) {
         self.bars_verts.clear();
         self.text_verts.clear();
@@ -1530,14 +1531,17 @@ impl Hud {
                 [0.85, 0.75, 0.25, 1.0],
             );
             // label
-            self.push_text_line(
-                surface_w,
-                surface_h,
-                x0 + 6.0,
-                y0 - 4.0,
-                "Casting Fire Bolt",
-                [1.0, 1.0, 1.0, 0.9],
-            );
+            if let Some(label) = cast_label {
+                let text = format!("Casting {}", label);
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 6.0,
+                    y0 - 4.0,
+                    &text,
+                    [1.0, 1.0, 1.0, 0.9],
+                );
+            }
         }
 
         self.bars_vcount = self.bars_verts.len() as u32;

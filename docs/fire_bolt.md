@@ -30,7 +30,7 @@ Identity & tags
 - `tags`: `["projectile","direct-damage","fire","ranged-spell-attack"]`
 
 Cast, queueing, cooldowns
-- `cast_time_s`: `1.0` (SRD “Action”; pick 1.0 s for real‑time pacing)
+- `cast_time_s`: `0.0` (prototype: instant cast for forward‑shot gameplay feel)
 - `gcd_s`: `1.0` (optional; set `0` if no GCD model)
 - `cooldown_s`: `0.0`
 - `resource_cost`: `none`
@@ -63,6 +63,8 @@ Projectile model (viz + travel time)
 - `spawn_offset_m`: `{x:0.0,y:1.6,z:0.5}`
 - Impact time = `cast_end + flight_time`, snapped to server tick.
 - Renderer behavior (prototype): forward‑shot only (no explicit targeting yet). Projectiles are clamped to the SRD range (120 ft) and visually fade out as they approach the max range.
+
+Note: While Fire Bolt is an Action in SRD, our prototype maps it to an instant cast for responsiveness. Magic Missile retains a 1.0 s cast bar.
 
 Secondary effects
 - `ignite_on_flammable_object`: `true` (objects only; not worn/carried)
