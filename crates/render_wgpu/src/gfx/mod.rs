@@ -2963,9 +2963,9 @@ impl Renderer {
                 let mut yaw = if delta.length_squared() > 1e-5 {
                     let desired = delta.x.atan2(delta.z);
                     let current = Self::yaw_from_model(&m_old);
-                    let error = Self::wrap_angle(current - desired);
+                    // Calibrate authoring-forward offset so that yaw = desired - off
+                    let error = Self::wrap_angle(desired - current);
                     if let Some(off) = self.zombie_forward_offsets.get_mut(i) {
-                        // Smoothly track observed error so facing matches velocity.
                         let k = 0.3f32;
                         *off = Self::wrap_angle(*off * (1.0 - k) + error * k);
                         desired - *off
@@ -3122,5 +3122,4 @@ impl Renderer {
 
     
 }
-
 
