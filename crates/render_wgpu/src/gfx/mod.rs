@@ -1819,7 +1819,9 @@ impl Renderer {
                     break;
                 }
                 raw.pos_radius[n] = [p.pos.x, p.pos.y, p.pos.z, maxr];
-                raw.color[n] = [3.0, 1.2, 0.4, 0.0];
+                // Match dynamic light tint to projectile color (e.g. purple for Magic Missile)
+                let s = 1.2f32;
+                raw.color[n] = [p.color[0] * s, p.color[1] * s, p.color[2] * s, 0.0];
                 n += 1;
             }
             raw.count = n as u32;
