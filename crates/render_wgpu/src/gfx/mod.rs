@@ -32,6 +32,7 @@ mod draw;
 mod foliage;
 pub mod fx;
 mod material;
+mod npcs;
 mod rocks;
 mod ruins;
 mod scene;
@@ -1207,47 +1208,14 @@ impl Renderer {
         let _zombie_tex_view = zmat.texture_view;
         let _zombie_sampler = zmat.sampler;
 
-        // NPCs: simple cubes as targets on multiple rings
-        let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
-        let mut server = server_core::ServerState::new();
-        // Configure ring distances and counts (keep existing ones, add more)
-        // Reduce zombies ~25% overall by lowering ring counts
-        let near_count = 8usize; // was 10
-        let near_radius = 15.0f32;
-        let mid1_count = 12usize; // was 16
-        let mid1_radius = 30.0f32;
-        let mid2_count = 15usize; // was 20
-        let mid2_radius = 45.0f32;
-        let mid3_count = 18usize; // was 24
-        let mid3_radius = 60.0f32;
-        let far_count = 9usize; // was 12
-        let far_radius = terrain_extent * 0.7;
-        // Spawn rings (hp scales mildly with distance)
-        server.ring_spawn(near_count, near_radius, 20);
-        server.ring_spawn(mid1_count, mid1_radius, 25);
-        server.ring_spawn(mid2_count, mid2_radius, 30);
-        server.ring_spawn(mid3_count, mid3_radius, 35);
-        server.ring_spawn(far_count, far_radius, 30);
-        let mut npc_instances_cpu: Vec<types::Instance> = Vec::new();
-        let mut npc_models: Vec<glam::Mat4> = Vec::new();
-        for npc in &server.npcs {
-            let m = glam::Mat4::from_scale_rotation_translation(
-                glam::Vec3::splat(1.2),
-                glam::Quat::IDENTITY,
-                npc.pos,
-            );
-            npc_models.push(m);
-            npc_instances_cpu.push(types::Instance {
-                model: m.to_cols_array_2d(),
-                color: [0.75, 0.2, 0.2],
-                selected: 0.0,
-            });
-        }
-        let npc_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("npc-instances"),
-            contents: bytemuck::cast_slice(&npc_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
+        // NPC rings: cube instances + server state for zombies
+        let npcs = npcs::build(&device, terrain_extent);
+        let npc_vb = npcs.vb;
+        let npc_ib = npcs.ib;
+        let npc_index_count = npcs.index_count;
+        let npc_instances = npcs.instances;
+        let npc_models = npcs.models;
+        let mut server = npcs.server;
 
         // Trees: delegate to foliage module for instance generation and mesh upload
         let veg = zone
@@ -1269,15 +1237,7 @@ impl Renderer {
         let (rocks_vb, rocks_ib, rocks_index_count) =
             (rocks_gpu.vb, rocks_gpu.ib, rocks_gpu.index_count);
 
-        log::info!(
-            "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
-            server.npcs.len(),
-            near_count,
-            mid1_count,
-            mid2_count,
-            mid3_count,
-            far_count
-        );
+        // Atlases
         // Upload UI atlases
         nameplates.upload_atlas(&queue);
         nameplates_npc.upload_atlas(&queue);
@@ -1515,7 +1475,7 @@ impl Renderer {
             npc_index_count,
             npc_instances,
             npc_count: 0, // cubes hidden; zombies replace them visually
-            npc_instances_cpu,
+            npc_instances_cpu: Vec::new(),
             npc_models,
             trees_instances,
             trees_count,
