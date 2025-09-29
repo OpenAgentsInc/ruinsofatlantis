@@ -413,6 +413,8 @@ impl Renderer {
         };
         self.pc_index = scene_build.pc_index;
         self.player = client_core::controller::PlayerController::new(pc_initial_pos);
+        // Reset scene inputs (position, input state, and ability cooldowns)
+        self.scene_inputs = client_runtime::SceneInputs::new(pc_initial_pos);
         self.input.clear();
         self.cam_follow = camera_sys::FollowState {
             current_pos: glam::vec3(0.0, 5.0, -10.0),
