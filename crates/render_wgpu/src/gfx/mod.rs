@@ -81,6 +81,8 @@ pub struct Renderer {
     max_dim: u32,
     // Consolidated attachments group for depth + offscreen targets
     attachments: Attachments,
+    // Externalized client updates (controls + collision)
+    scene_inputs: client_runtime::SceneInputs,
 
     // Lighting M1: G-Buffer + Hi-Z scaffolding
     gbuffer: Option<gbuffer::GBuffer>,
@@ -1517,7 +1519,8 @@ impl Renderer {
 
             // Player/camera
             pc_index: scene_build.pc_index,
-            player: client_core::controller::PlayerController::new(pc_initial_pos),
+    player: client_core::controller::PlayerController::new(pc_initial_pos),
+        scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
             input: Default::default(),
             cam_follow: camera_sys::FollowState {
                 current_pos: glam::vec3(0.0, 5.0, -10.0),

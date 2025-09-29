@@ -29,8 +29,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
     }
 
-    // Update player transform from input (WASD) then camera follow
-    r.update_player_and_camera(dt, aspect);
+    // Update player transform (controls + collision) via external scene inputs
+    {
+        let cam_fwd = r.cam_follow.current_look - r.cam_follow.current_pos;
+        r.scene_inputs.apply_input(&r.input);
+        r.scene_inputs.update(dt, cam_fwd, r.static_index.as_ref());
+        r.player.pos = r.scene_inputs.pos();
+        r.player.yaw = r.scene_inputs.yaw();
+        r.apply_pc_transform();
+    }
     // Simple AI: rotate non-PC wizards to face nearest alive zombie so firebolts aim correctly
     r.update_wizard_ai(dt);
     // Compute local orbit offsets (relative to PC orientation)

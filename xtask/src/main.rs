@@ -48,6 +48,8 @@ fn ci() -> Result<()> {
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
     wgsl_validate()?;
     cargo_deny()?;
+    // Build packs so golden tests can read outputs
+    build_packs()?;
     cargo(&["test"])?;
     schema_check()?;
     Ok(())

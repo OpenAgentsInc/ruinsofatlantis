@@ -21,7 +21,7 @@ members = [
     "crates/platform_winit", # winit platform loop
     "crates/ux_hud"          # HUD logic
     ,"crates/collision_static"
-]
+, "crates/client_runtime"]
 resolver = "2"
 
 [features]
@@ -47,3 +47,4 @@ draco_decoder = { path = "vendor/draco_decoder-0.0.10" }
 data_runtime = { path = "crates/data_runtime" }
 glam = "0.30.8"
 serde_json = "1.0.145"
+sha2 = "0.10.9"
