@@ -210,7 +210,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 break;
             }
             raw.pos_radius[n] = [p.pos.x, p.pos.y, p.pos.z, maxr];
-            raw.color[n] = [3.0, 1.2, 0.4, 0.0];
+            // Tint dynamic light by projectile color so different spells light correctly
+            // Fire Bolt remains warm; Magic Missile emits a purple light.
+            // Slightly reduced intensity for a more subtle look
+            let s = 0.9f32;
+            raw.color[n] = [p.color[0] * s, p.color[1] * s, p.color[2] * s, 0.0];
             n += 1;
         }
         raw.count = n as u32;
