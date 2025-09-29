@@ -409,8 +409,8 @@ impl Renderer {
                 .write_buffer(&self.fx_instances, 0, bytemuck::cast_slice(&inst));
         }
 
-        // 5) If no zombies remain, retire NPC wizards from the casting loop
-        if !self.any_zombies_alive() {
+        // 5) If no zombies remain, retire NPC wizards from the casting loop unless hostile to player
+        if !self.any_zombies_alive() && !self.wizards_hostile_to_pc {
             for i in 0..(self.wizard_count as usize) {
                 if i == self.pc_index {
                     continue;
