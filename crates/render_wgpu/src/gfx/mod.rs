@@ -1813,8 +1813,12 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
+        // Optional safety mode to bypass offscreen passes
+        let present_only = std::env::var("RA_PRESENT_ONLY")
+            .map(|v| v == "1")
+            .unwrap_or(true);
         // Sky-only pass (no depth) into SceneColor
-        {
+        if !present_only {
             let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1842,7 +1846,7 @@ impl Renderer {
             self.draw_calls += 1;
         }
         // Main pass with depth into SceneColor; load color from sky pass
-        {
+        if !present_only {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2072,7 +2076,7 @@ impl Renderer {
         }
 
         // Copy SceneColor to a read-only texture when SSR or SSGI need it
-        if self.enable_ssgi || self.enable_ssr {
+        if !present_only && (self.enable_ssgi || self.enable_ssr) {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-to-read"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2099,7 +2103,7 @@ impl Renderer {
             self.draw_calls += 1;
         }
         // Ensure SceneRead is available for bloom pass as well
-        if self.enable_bloom {
+        if !present_only && self.enable_bloom {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-to-read(bloom)"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2121,7 +2125,7 @@ impl Renderer {
         }
 
         // SSR overlay into SceneColor (alpha blend)
-        if self.enable_ssr {
+        if !present_only && self.enable_ssr {
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ssr-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2146,7 +2150,7 @@ impl Renderer {
         }
 
         // SSGI additive overlay (fullscreen) into SceneColor
-        if self.enable_ssgi {
+        if !present_only && self.enable_ssgi {
             let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ssgi-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2172,7 +2176,7 @@ impl Renderer {
         // (removed) frame overlay
         // (frame overlay removed)
         // Post-process AO overlay (fullscreen) multiplying into SceneColor
-        if self.enable_post_ao {
+        if !present_only && self.enable_post_ao {
             {
                 let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("post-ao"),
