@@ -42,7 +42,13 @@ impl Renderer {
                             } else {
                                 log::debug!(
                                     "Fire Bolt on cooldown: {:.0} ms remaining",
-                                    ((self.scene_inputs.cooldown_frac(spell_id, self.last_time, self.firebolt_cd_dur) * self.firebolt_cd_dur) * 1000.0).max(0.0)
+                                    ((self.scene_inputs.cooldown_frac(
+                                        spell_id,
+                                        self.last_time,
+                                        self.firebolt_cd_dur
+                                    ) * self.firebolt_cd_dur)
+                                        * 1000.0)
+                                        .max(0.0)
                                 );
                             }
                         }

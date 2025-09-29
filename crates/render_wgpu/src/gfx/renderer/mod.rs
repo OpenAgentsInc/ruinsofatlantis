@@ -5,6 +5,7 @@
 //! - update.rs: CPU-side updates (AI, palettes, FX)
 
 mod attachments;
+pub mod graph;
 pub mod init;
 pub mod passes;
 pub mod render;

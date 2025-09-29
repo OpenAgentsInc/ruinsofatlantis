@@ -218,6 +218,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             .write_buffer(&r.lights_buf, 0, bytemuck::bytes_of(&raw));
     }
 
+    // Validate frame-graph invariants for this frame
+    {
+        let g = super::graph::graph_for(r.enable_ssgi, r.enable_ssr, r.enable_bloom, r.direct_present);
+        g.validate();
+    }
+
     // Begin commands
     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder = r
@@ -730,11 +736,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             0.0
         };
-        let gcd_frac = r.scene_inputs.cooldown_frac(
-            "wiz.fire_bolt.srd521",
-            r.last_time,
-            r.firebolt_cd_dur,
-        );
+        let gcd_frac =
+            r.scene_inputs
+                .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
         let overlays_disabled = std::env::var("RA_OVERLAYS")
             .map(|v| v == "0")
             .unwrap_or(false);

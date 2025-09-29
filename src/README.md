@@ -107,6 +107,20 @@ Gameplay wiring (prototype)
   - `cargo watch -x run` (rebuild and rerun on change), or
   - `cargo dev` / `cargo dev-test` via Cargo aliases in `.cargo/config.toml`.
 
+## Frame Graph (Renderer)
+- The renderer encodes pass I/O in a minimal static frame-graph (`renderer::graph`).
+- Invariants validated each frame:
+  - A pass may not sample from a resource it writes this frame.
+  - Depth is read-only in passes.
+- Passes and I/O:
+  - sky: writes SceneColor
+  - main: reads Depth, writes SceneColor
+  - blit_scene_to_read: reads SceneColor, writes SceneRead (when not direct-present)
+  - ssr: reads Depth + SceneRead, writes SceneColor
+  - ssgi: reads Depth + SceneRead, writes SceneColor
+  - post_ao: reads Depth, writes SceneColor
+  - bloom: reads SceneRead, writes SceneColor
+
 - sim_core/
   - rules/ — SRD rules helpers (`attack`, `dice`, `saves`).
   - combat/ — Combat model (`fsm`, `damage`, `conditions`).

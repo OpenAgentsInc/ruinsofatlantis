@@ -1,5 +1,13 @@
 //! Renderer passes split out of the monolithic render() for readability.
 //! These helpers are invoked from render() incrementally as we refactor.
+//! Pass I/O overview (see `renderer::graph` for validation):
+//! - sky: writes SceneColor
+//! - main: reads Depth, writes SceneColor
+//! - blit_scene_to_read: reads SceneColor, writes SceneRead (when not direct-present)
+//! - ssr: reads linear Depth + SceneRead, writes SceneColor
+//! - ssgi: reads Depth + SceneRead, writes SceneColor
+//! - post_ao: reads Depth, writes SceneColor
+//! - bloom: reads SceneRead, writes SceneColor
 #![allow(dead_code)] // staged extraction; called progressively during renderer split
 
 use crate::gfx::Renderer;
