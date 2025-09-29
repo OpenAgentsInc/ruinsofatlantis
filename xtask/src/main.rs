@@ -77,17 +77,20 @@ fn wgsl_validate() -> Result<()> {
 }
 
 fn cargo_deny() -> Result<()> {
-    // Attempt to run `cargo deny check` if installed; otherwise warn and continue.
-    let mut cmd = Command::new("cargo");
-    cmd.args(["deny", "check"]).stdout(Stdio::inherit()).stderr(Stdio::inherit());
-    match cmd.status() {
-        Ok(status) => {
+    // Run `cargo-deny` if available; otherwise warn and continue.
+    let mut probe = Command::new("cargo-deny");
+    probe.arg("--version").stdout(Stdio::null()).stderr(Stdio::null());
+    match probe.status() {
+        Ok(s) if s.success() => {
+            let mut run = Command::new("cargo-deny");
+            run.args(["check"]).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            let status = run.status().context("cargo-deny run")?;
             if !status.success() {
-                bail!("cargo deny check failed");
+                bail!("cargo-deny check failed");
             }
         }
-        Err(e) => {
-            eprintln!("xtask: cargo-deny not found or failed to launch: {} (skipping)", e);
+        _ => {
+            eprintln!("xtask: cargo-deny not installed; skipping dependency checks");
         }
     }
     Ok(())

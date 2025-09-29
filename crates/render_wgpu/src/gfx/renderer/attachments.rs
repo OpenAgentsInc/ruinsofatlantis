@@ -81,7 +81,6 @@ impl Attachments {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use winit::dpi::PhysicalSize;
 
     fn compute_extents(max_dim: u32, requested: PhysicalSize<u32>) -> (u32, u32) {
@@ -107,4 +106,3 @@ mod tests {
         assert_eq!(second, (1920, 1080));
     }
 }
-
