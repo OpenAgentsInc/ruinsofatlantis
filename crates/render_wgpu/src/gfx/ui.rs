@@ -1299,56 +1299,34 @@ impl Hud {
         // Measure width if we see a center marker "|c" or left align otherwise
         let mut prev: Option<ab_glyph::GlyphId> = None;
         for ch in text.chars() {
-            let Some(gi) = self.glyphs.get(&ch) else {
-                continue;
-            };
-            if let Some(pg) = prev {
-                x += scaled.kern(pg, gi.id);
+            let gid = self._font.glyph_id(ch);
+            if let Some(pg) = prev { x += scaled.kern(pg, gid); }
+            if let Some(gi) = self.glyphs.get(&ch) {
+                let gx = x + gi.bounds_min[0];
+                let gy = y_baseline - self.ascent + gi.bounds_min[1];
+                let w_px = gi.size[0];
+                let h_px = gi.size[1];
+                let p0 = Self::ndc_from_px(gx, gy, w, h);
+                let p1 = Self::ndc_from_px(gx + w_px, gy, w, h);
+                let p2 = Self::ndc_from_px(gx + w_px, gy + h_px, w, h);
+                let p3 = Self::ndc_from_px(gx, gy + h_px, w, h);
+                let uv0 = gi.uv_min;
+                let uv1 = [gi.uv_max[0], gi.uv_min[1]];
+                let uv2 = gi.uv_max;
+                let uv3 = [gi.uv_min[0], gi.uv_max[1]];
+                self.text_verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
+                self.text_verts.push(TextVertex { pos_ndc: p1, uv: uv1, color });
+                self.text_verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
+                self.text_verts.push(TextVertex { pos_ndc: p0, uv: uv0, color });
+                self.text_verts.push(TextVertex { pos_ndc: p2, uv: uv2, color });
+                self.text_verts.push(TextVertex { pos_ndc: p3, uv: uv3, color });
+                x += gi.advance;
+                prev = Some(gi.id);
+            } else {
+                // Missing glyph (e.g., space) — advance without rendering.
+                x += scaled.h_advance(gid);
+                prev = Some(gid);
             }
-            let gx = x + gi.bounds_min[0];
-            let gy = y_baseline - self.ascent + gi.bounds_min[1];
-            let w_px = gi.size[0];
-            let h_px = gi.size[1];
-            let p0 = Self::ndc_from_px(gx, gy, w, h);
-            let p1 = Self::ndc_from_px(gx + w_px, gy, w, h);
-            let p2 = Self::ndc_from_px(gx + w_px, gy + h_px, w, h);
-            let p3 = Self::ndc_from_px(gx, gy + h_px, w, h);
-            let uv0 = gi.uv_min;
-            let uv1 = [gi.uv_max[0], gi.uv_min[1]];
-            let uv2 = gi.uv_max;
-            let uv3 = [gi.uv_min[0], gi.uv_max[1]];
-            self.text_verts.push(TextVertex {
-                pos_ndc: p0,
-                uv: uv0,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p1,
-                uv: uv1,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p2,
-                uv: uv2,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p0,
-                uv: uv0,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p2,
-                uv: uv2,
-                color,
-            });
-            self.text_verts.push(TextVertex {
-                pos_ndc: p3,
-                uv: uv3,
-                color,
-            });
-            x += gi.advance;
-            prev = Some(gi.id);
         }
     }
 
@@ -1588,6 +1566,111 @@ impl Hud {
         if !tbytes.is_empty() {
             queue.write_buffer(&self.text_vbuf, 0, tbytes);
         }
+    }
+
+    /// Clear any queued HUD geometry for building a custom overlay.
+    pub fn reset(&mut self) {
+        self.bars_verts.clear();
+        self.text_verts.clear();
+        self.bars_vcount = 0;
+        self.text_vcount = 0;
+    }
+
+    /// Append a centered single-line text at the given baseline Y.
+    pub fn append_center_text(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        text: &str,
+        y_baseline: f32,
+        color: [f32; 4],
+    ) {
+        // Measure width with kerning; treat missing glyphs (e.g., space) via font advances.
+        let scaled = self._font.as_scaled(self.scale);
+        let mut width = 0.0f32;
+        let mut prev: Option<ab_glyph::GlyphId> = None;
+        for ch in text.chars() {
+            let gid = self._font.glyph_id(ch);
+            if let Some(pg) = prev { width += scaled.kern(pg, gid); }
+            if let Some(gi) = self.glyphs.get(&ch) {
+                width += gi.advance;
+                prev = Some(gi.id);
+            } else {
+                width += scaled.h_advance(gid);
+                prev = Some(gid);
+            }
+        }
+        let cx = (surface_w as f32) * 0.5 - width * 0.5;
+        self.push_text_line(surface_w, surface_h, cx, y_baseline, text, color);
+        self.text_vcount = self.text_verts.len() as u32;
+    }
+
+    /// Draw a simple death overlay with centered messages.
+    pub fn death_overlay(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        title: &str,
+        helper_text: &str,
+    ) {
+        self.bars_verts.clear();
+        self.text_verts.clear();
+        // Dim background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            0.0,
+            0.0,
+            surface_w as f32,
+            surface_h as f32,
+            [0.0, 0.0, 0.0, 0.45],
+        );
+        // Panel
+        let panel_w = 420.0f32;
+        let panel_h = 180.0f32;
+        let cx = surface_w as f32 * 0.5;
+        let cy = surface_h as f32 * 0.5;
+        let x0 = cx - panel_w * 0.5;
+        let y0 = cy - panel_h * 0.5;
+        let x1 = cx + panel_w * 0.5;
+        let y1 = cy + panel_h * 0.5;
+        // Border + background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0 - 2.0,
+            y0 - 2.0,
+            x1 + 2.0,
+            y1 + 2.0,
+            [0.02, 0.02, 0.02, 0.95],
+        );
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0,
+            y0,
+            x1,
+            y1,
+            [0.10, 0.10, 0.10, 0.9],
+        );
+        // Title
+        self.append_center_text(
+            surface_w,
+            surface_h,
+            title,
+            y0 + 60.0,
+            [1.0, 0.3, 0.25, 1.0],
+        );
+        // Helper text: e.g., "Press R to respawn"
+        self.append_center_text(
+            surface_w,
+            surface_h,
+            helper_text,
+            y1 - 40.0,
+            [0.95, 0.98, 1.0, 0.95],
+        );
+        self.bars_vcount = self.bars_verts.len() as u32;
+        self.text_vcount = self.text_verts.len() as u32;
     }
 
     /// Append a single-line perf overlay in the top-left corner.
