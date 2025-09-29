@@ -28,11 +28,10 @@ impl SpecDb {
         let mut db = SpecDb::default();
         let root = workspace_root();
         let spells_dir = root.join("data/spells");
-        if spells_dir.is_dir() {
-            for ent in std::fs::read_dir(&spells_dir)
-                .unwrap_or_else(|_| std::fs::read_dir(".").unwrap())
-                .flatten()
-            {
+        if spells_dir.is_dir()
+            && let Ok(rd) = std::fs::read_dir(&spells_dir)
+        {
+            for ent in rd.flatten() {
                 let path = ent.path();
                 if path.extension().and_then(|s| s.to_str()) != Some("json") {
                     continue;
@@ -44,11 +43,10 @@ impl SpecDb {
             }
         }
         let classes_dir = root.join("data/classes");
-        if classes_dir.is_dir() {
-            for ent in std::fs::read_dir(&classes_dir)
-                .unwrap_or_else(|_| std::fs::read_dir(".").unwrap())
-                .flatten()
-            {
+        if classes_dir.is_dir()
+            && let Ok(rd) = std::fs::read_dir(&classes_dir)
+        {
+            for ent in rd.flatten() {
                 let path = ent.path();
                 if path.extension().and_then(|s| s.to_str()) != Some("json") {
                     continue;
@@ -60,11 +58,10 @@ impl SpecDb {
             }
         }
         let monsters_dir = root.join("data/monsters");
-        if monsters_dir.is_dir() {
-            for ent in std::fs::read_dir(&monsters_dir)
-                .unwrap_or_else(|_| std::fs::read_dir(".").unwrap())
-                .flatten()
-            {
+        if monsters_dir.is_dir()
+            && let Ok(rd) = std::fs::read_dir(&monsters_dir)
+        {
+            for ent in rd.flatten() {
                 let path = ent.path();
                 if path.extension().and_then(|s| s.to_str()) != Some("json") {
                     continue;

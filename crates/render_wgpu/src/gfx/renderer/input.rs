@@ -57,10 +57,26 @@ impl Renderer {
                         if self.pc_alive =>
                     {
                         if pressed {
-                            self.pc_cast_queued = true;
-                            self.pc_cast_kind = Some(super::super::PcCast::MagicMissile);
-                            self.pc_cast_time = 1.0; // Magic Missile uses Action pacing
-                            log::debug!("PC cast queued: Magic Missile");
+                            // Gate by cooldown via client_runtime ability state
+                            let spell_id = "wiz.magic_missile.srd521";
+                            if self.scene_inputs.can_cast(spell_id, self.last_time) {
+                                self.pc_cast_queued = true;
+                                self.pc_cast_kind = Some(super::super::PcCast::MagicMissile);
+                                // Use SpecDb-provided cast time captured at init
+                                self.pc_cast_time = self.magic_missile_cast_time.max(0.0);
+                                log::debug!("PC cast queued: Magic Missile");
+                            } else {
+                                log::debug!(
+                                    "Magic Missile on cooldown: {:.0} ms remaining",
+                                    ((self.scene_inputs.cooldown_frac(
+                                        spell_id,
+                                        self.last_time,
+                                        self.magic_missile_cd_dur,
+                                    ) * self.magic_missile_cd_dur)
+                                        * 1000.0)
+                                        .max(0.0)
+                                );
+                            }
                         }
                     }
                     // Sky controls (pause/scrub/speed)

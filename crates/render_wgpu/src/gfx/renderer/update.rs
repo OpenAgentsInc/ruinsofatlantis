@@ -154,6 +154,13 @@ impl Renderer {
                             }
                             super::super::PcCast::MagicMissile => {
                                 self.spawn_magic_missile(spawn, dir_w, t);
+                                // Start cooldown via SceneInputs
+                                let spell_id = "wiz.magic_missile.srd521";
+                                self.scene_inputs.start_cooldown(
+                                    spell_id,
+                                    self.last_time,
+                                    self.magic_missile_cd_dur,
+                                );
                             }
                         }
                         self.pc_cast_fired = true;

@@ -285,14 +285,13 @@ pub struct Renderer {
     pc_cast_kind: Option<PcCast>,
     pc_anim_start: Option<f32>,
     pc_cast_time: f32,
+    // Ability timings cached from SpecDb
+    magic_missile_cast_time: f32,
+    magic_missile_cd_dur: f32,
     pc_cast_fired: bool,
     // Fire Bolt cooldown duration (seconds); remaining tracked in SceneInputs
     firebolt_cd_dur: f32,
-    // Deprecated GCD tracking (not used when cast-time only)
-    #[allow(dead_code)]
-    gcd_until: f32,
-    #[allow(dead_code)]
-    gcd_duration: f32,
+    // Deprecated GCD tracking removed — gating via SceneInputs + SpecDb
     // Orbit params
     cam_orbit_yaw: f32,
     cam_orbit_pitch: f32,

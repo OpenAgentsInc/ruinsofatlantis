@@ -174,7 +174,7 @@ struct ColliderBin {
 fn write_colliders_snapshot(slug: &str, trees: &[[[f32; 4]; 4]]) -> Result<()> {
     // Simple uniform grid chunking
     let here = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let data_root = {
+    let _data_root = {
         let ws = here.join("../../data");
         if ws.is_dir() { ws } else { here.join("data") }
     };
