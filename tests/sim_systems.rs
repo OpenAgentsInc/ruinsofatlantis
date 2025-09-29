@@ -15,6 +15,7 @@ fn mk_actor(id: &str, role: &str, team: Option<&str>) -> ActorSim {
         action: ActionState::Idle,
         gcd: Default::default(),
         target: None,
+        char_level: 1,
         spell_attack_bonus: 5,
         spell_save_dc: 13,
         statuses: vec![],
@@ -301,6 +302,85 @@ fn temp_hp_absorbs_before_hp() {
     // THP 5 absorbs first; remaining 2 reduces HP
     assert_eq!(s.actors[1].temp_hp, 0);
     assert_eq!(s.actors[1].hp, 28);
+}
+
+#[test]
+fn cantrip_scaling_picks_band_by_level() {
+    // Two casts of a synthetic spell with level-banded dice ensure different totals.
+    // Use d1 so the total equals number of dice.
+    let txt = r#"{
+      "id": "deal_band",
+      "name": "DealBand",
+      "school": "evocation",
+      "level": 0,
+      "classes": [],
+      "tags": [],
+      "cast_time_s": 0.0,
+      "gcd_s": 0.0,
+      "cooldown_s": 0.0,
+      "resource_cost": null,
+      "can_move_while_casting": false,
+      "targeting": "unit",
+      "requires_line_of_sight": true,
+      "range_ft": 120,
+      "minimum_range_ft": 0,
+      "firing_arc_deg": 180,
+      "attack": null,
+      "damage": {"type":"fire", "add_spell_mod_to_damage":false, "dice_by_level_band":{"1-4":"7d1", "5-10":"13d1"}},
+      "projectile": null,
+      "save": null
+    }"#;
+    // Level 1
+    let mut s1 = SimState::new(50, 555);
+    let mut a1 = mk_actor("wiz", "dps", Some("players"));
+    a1.ability_ids.push("deal_band".into());
+    a1.target = Some(1);
+    a1.char_level = 1;
+    s1.actors.push(a1);
+    s1.actors.push(mk_actor("boss", "boss", Some("boss")));
+    let spec: data_runtime::spell::SpellSpec = serde_json::from_str(txt).unwrap();
+    s1.spells.insert("deal_band".into(), spec.clone());
+    s1.cast_completed.push((0, "deal_band".into()));
+    systems::attack_roll::run(&mut s1);
+    systems::damage::run(&mut s1);
+    let hp_after_lvl1 = s1.actors[1].hp;
+    // Level 5
+    let mut s5 = SimState::new(50, 555);
+    let mut a5 = mk_actor("wiz", "dps", Some("players"));
+    a5.ability_ids.push("deal_band".into());
+    a5.target = Some(1);
+    a5.char_level = 5;
+    s5.actors.push(a5);
+    s5.actors.push(mk_actor("boss", "boss", Some("boss")));
+    s5.spells.insert("deal_band".into(), spec);
+    s5.cast_completed.push((0, "deal_band".into()));
+    systems::attack_roll::run(&mut s5);
+    systems::damage::run(&mut s5);
+    let hp_after_lvl5 = s5.actors[1].hp;
+    // Level 5 should lose more HP (13 vs 7)
+    assert!(hp_after_lvl5 < hp_after_lvl1);
+}
+
+#[test]
+fn magic_missile_auto_hit_applies_damage() {
+    let mut s = SimState::new(50, 2024);
+    let mut a = mk_actor("wiz", "dps", Some("players"));
+    a.ability_ids.push("wiz.magic_missile.srd521".into());
+    a.target = Some(1);
+    s.actors.push(a);
+    s.actors.push(mk_actor("boss", "boss", Some("boss")));
+    // Load from data file
+    s.spells.insert(
+        "wiz.magic_missile.srd521".into(),
+        data_runtime::loader::load_spell_spec("spells/magic_missile.json").unwrap(),
+    );
+    s.cast_completed.push((0, "wiz.magic_missile.srd521".into()));
+    systems::attack_roll::run(&mut s);
+    // Should enqueue damage even without an attack roll
+    assert_eq!(s.pending_damage.len(), 1);
+    systems::damage::run(&mut s);
+    // Damage should reduce boss HP by at least 1 (3d4+3 min 6)
+    assert!(s.actors[1].hp < 30);
 }
 
 #[test]

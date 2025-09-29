@@ -44,6 +44,7 @@ pub fn run_scenario(scn: &Scenario, result_only: bool) {
             action: Default::default(),
             gcd: Default::default(),
             target: None,
+            char_level: 1,
             spell_attack_bonus: atk,
             spell_save_dc: dc,
             statuses: Vec::new(),

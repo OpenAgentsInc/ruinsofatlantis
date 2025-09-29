@@ -1,0 +1,37 @@
+{
+  "id": "wiz.magic_missile.srd521",
+  "name": "Magic Missile",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "evocation",
+  "level": 1,
+  "classes": ["wizard", "sorcerer"],
+  "tags": ["auto-hit", "force"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 0.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "unit",
+  "requires_line_of_sight": true,
+  "range_ft": 120,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 180,
+
+  "attack": null,
+  "save": null,
+
+  "damage": {
+    "type": "force",
+    "add_spell_mod_to_damage": false,
+    "dice_by_level_band": { "1-20": "3d4+3" }
+  },
+  "projectile": null,
+
+  "events": ["CastStarted", "CastCompleted", "DamageApplied"],
+  "metrics": null,
+  "policy": { "role": "dps", "priority_index": 1 }
+}
+

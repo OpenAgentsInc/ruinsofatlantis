@@ -3562,11 +3562,18 @@ impl Renderer {
         // Brighter firebolt sprites: larger head and boosted emissive color.
         // Keep additive blending; values >1.0 feed bloom nicely.
         for pr in &self.projectiles {
+            // Fade as the projectile nears its lifetime end (range cap or base life)
+            let mut head_fade = 1.0f32;
+            let fade_window = 0.15f32;
+            if pr.t_die > 0.0 {
+                let remain = (pr.t_die - t).max(0.0);
+                head_fade = (remain / fade_window).clamp(0.0, 1.0);
+            }
             // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
                 size: 0.18,
-                color: [2.6, 0.7, 0.18],
+                color: [2.6 * head_fade, 0.7 * head_fade, 0.18 * head_fade],
                 _pad: 0.0,
             });
             // short trail segments behind
@@ -3574,7 +3581,7 @@ impl Renderer {
             for k in 1..=2 {
                 let t = k as f32 * 0.02;
                 let p = pr.pos - dir * (t * pr.vel.length());
-                let fade = 1.0 - (k as f32) * 0.35;
+                let fade = (1.0 - (k as f32) * 0.35) * head_fade;
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
                     size: 0.13,
@@ -3696,13 +3703,18 @@ impl Renderer {
         snap_to_ground: bool,
     ) {
         let mut speed = 40.0;
-        // Extend projectile lifetime by 50% so paths travel farther.
-        let life = 1.2 * 1.5;
+        // Base lifetime for visuals; will be clamped by spec range below.
+        let base_life = 1.2 * 1.5;
+        // Compute range clamp from spell spec (default 120 ft)
+        let mut max_range_m = 120.0 * 0.3048;
         if let Some(spec) = &self.fire_bolt
             && let Some(p) = &spec.projectile
         {
             speed = p.speed_mps;
+            max_range_m = (spec.range_ft as f32) * 0.3048;
         }
+        let flight_time = if speed > 0.01 { max_range_m / speed } else { base_life };
+        let life = base_life.min(flight_time);
         // Ensure initial spawn is terrain-aware.
         // - PC: keep hand height but raise if below clearance (clamp above).
         // - NPC: snap onto terrain + clearance so bolts hug the ground like the PC's do.

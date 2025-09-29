@@ -22,6 +22,8 @@ pub struct ActorSim {
     pub action: ActionState,
     pub gcd: Gcd,
     pub target: Option<usize>,
+    // Character level for scaling (e.g., cantrip dice bands)
+    pub char_level: u8,
     pub spell_attack_bonus: i32,
     pub spell_save_dc: i32,
     pub statuses: Vec<(crate::combat::conditions::Condition, u32)>,
@@ -102,6 +104,11 @@ impl SimState {
         {
             return Ok(spec);
         }
+        if id.contains("magic_missile")
+            && let Ok(spec) = load_spell_spec("spells/magic_missile.json")
+        {
+            return Ok(spec);
+        }
         // Fallback: try the filename portion after a slash if present
         if let Some((_ns, tail)) = id.rsplit_once('/') {
             let alt = format!("spells/{}.json", tail);
@@ -169,17 +176,30 @@ impl SimState {
     }
 
     pub fn roll_dice_str(&mut self, dice: &str) -> i32 {
-        // Very small parser for NdM
-        let (n, m) = if let Some((n, m)) = dice.split_once('d') {
+        // Parser for NdM, optionally with +K/-K (e.g., 3d4+3, 2d6-1). Whitespace not expected.
+        // Fallbacks default to 1d1.
+        let mut base = dice.trim();
+        let mut flat: i32 = 0;
+        // Handle +K or -K suffix
+        if let Some(pos) = base.rfind(['+', '-']) {
+            if pos > 0 {
+                let (left, right) = base.split_at(pos);
+                base = left;
+                let sign = &right[..1];
+                let k = right[1..].parse::<i32>().unwrap_or(0);
+                flat = if sign == "+" { k } else { -k };
+            }
+        }
+        let (n, m) = if let Some((n, m)) = base.split_once('d') {
             (n.parse::<i32>().unwrap_or(1), m.parse::<i32>().unwrap_or(1))
         } else {
             (1, 1)
         };
         let mut sum = 0;
-        for _ in 0..n {
-            sum += (self.rng.random::<u32>() % (m as u32) + 1) as i32;
+        for _ in 0..n.max(0) {
+            sum += (self.rng.random::<u32>() % (m.max(1) as u32) + 1) as i32;
         }
-        sum
+        sum + flat
     }
 
     pub fn actor_alive(&self, idx: usize) -> bool {
