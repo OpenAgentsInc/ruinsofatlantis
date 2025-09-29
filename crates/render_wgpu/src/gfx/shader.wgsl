@@ -14,8 +14,8 @@ struct LightsU {
   pos_radius: array<vec4<f32>, 16>, // xyz pos, w radius
   color: array<vec4<f32>, 16>,      // rgb color, a unused
 };
-// For base/instanced pipelines
-@group(2) @binding(0) var<uniform> lights: LightsU;
+// Lights live in the same group as Globals (group 0, binding 1)
+@group(0) @binding(1) var<uniform> lights: LightsU;
 
 struct VSIn {
   @location(0) pos: vec3<f32>,
@@ -184,8 +184,7 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
   return vec4<f32>(base, 1.0);
 }
 
-// Wizard material lighting (uses same model + dynamic lights)
-@group(4) @binding(0) var<uniform> lights_wiz: LightsU;
+// Wizard material lighting uses the same lights buffer
 @fragment
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
   let albedo = textureSample(base_tex, base_sam, in.uv).rgb;

@@ -11,7 +11,6 @@ impl Renderer {
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
         rpass.set_bind_group(2, &self.palettes_bg, &[]);
         rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
-        rpass.set_bind_group(4, &self.lights_bg, &[]);
         rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
         rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
         rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
@@ -38,7 +37,6 @@ impl Renderer {
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
         rpass.set_bind_group(2, &self.zombie_palettes_bg, &[]);
         rpass.set_bind_group(3, &self.zombie_mat_bg, &[]);
-        rpass.set_bind_group(4, &self.lights_bg, &[]);
         rpass.set_vertex_buffer(0, self.zombie_vb.slice(..));
         rpass.set_vertex_buffer(1, self.zombie_instances.slice(..));
         rpass.set_index_buffer(self.zombie_ib.slice(..), IndexFormat::Uint16);

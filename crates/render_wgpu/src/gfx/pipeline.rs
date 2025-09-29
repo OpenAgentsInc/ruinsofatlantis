@@ -29,19 +29,31 @@ pub fn create_shader(device: &wgpu::Device) -> ShaderModule {
 }
 
 pub fn create_bind_group_layouts(device: &wgpu::Device) -> (BindGroupLayout, BindGroupLayout) {
-    // Globals (view/proj + time)
+    // Globals (view/proj + time) + Lights (packed UBO)
     let globals = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("globals-bgl"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
     });
 
     // Per-draw Model
@@ -133,12 +145,11 @@ pub fn create_pipelines(
     shader: &ShaderModule,
     globals_bgl: &BindGroupLayout,
     model_bgl: &BindGroupLayout,
-    lights_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> (RenderPipeline, RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("pipeline-layout"),
-        bind_group_layouts: &[globals_bgl, model_bgl, lights_bgl],
+        bind_group_layouts: &[globals_bgl, model_bgl],
         push_constant_ranges: &[],
     });
 
@@ -325,18 +336,11 @@ pub fn create_wizard_pipelines(
     model_bgl: &BindGroupLayout,
     palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
-    lights_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> (RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("wizard-pipeline-layout"),
-        bind_group_layouts: &[
-            globals_bgl,
-            model_bgl,
-            palettes_bgl,
-            material_bgl,
-            lights_bgl,
-        ],
+        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl, material_bgl],
         push_constant_ranges: &[],
     });
 

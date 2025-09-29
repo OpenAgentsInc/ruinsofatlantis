@@ -33,6 +33,7 @@ mod foliage;
 pub mod fx;
 mod material;
 mod rocks;
+mod ruins;
 mod scene;
 mod sky;
 pub mod terrain;
@@ -46,7 +47,7 @@ use data_runtime::{
 };
 use ra_assets::skinning::merge_gltf_animations;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
-use ra_assets::{gltf::load_gltf_mesh, skinning::load_gltf_skinned};
+use ra_assets::skinning::load_gltf_skinned;
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
@@ -110,7 +111,6 @@ pub struct Renderer {
     bloom_pipeline: wgpu::RenderPipeline,
     bloom_bg: wgpu::BindGroup,
     lights_buf: wgpu::Buffer,
-    lights_bg: wgpu::BindGroup,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
     post_ao_bgl: wgpu::BindGroupLayout,
@@ -575,18 +575,11 @@ impl Renderer {
         // --- Pipelines + BGLs ---
         let shader = pipeline::create_shader(&device);
         let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
-        let lights_bgl = pipeline::create_lights_bgl(&device);
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let material_bgl = pipeline::create_material_bgl(&device);
         let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
-        let (pipeline, inst_pipeline, wire_pipeline) = pipeline::create_pipelines(
-            &device,
-            &shader,
-            &globals_bgl,
-            &model_bgl,
-            &lights_bgl,
-            offscreen_fmt,
-        );
+        let (pipeline, inst_pipeline, wire_pipeline) =
+            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, offscreen_fmt);
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
         let sky_pipeline =
@@ -629,7 +622,6 @@ impl Renderer {
             &model_bgl,
             &palettes_bgl,
             &material_bgl,
-            &lights_bgl,
             offscreen_fmt,
         );
         let particle_pipeline =
@@ -658,13 +650,39 @@ impl Renderer {
             contents: bytemuck::bytes_of(&globals_init),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        // Dynamic lights buffer (packed into globals bind group at binding=1)
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct LightsRaw {
+            count: u32,
+            _pad: [f32; 3],
+            pos_radius: [[f32; 4]; 16],
+            color: [[f32; 4]; 16],
+        }
+        let lights_init = LightsRaw {
+            count: 0,
+            _pad: [0.0; 3],
+            pos_radius: [[0.0; 4]; 16],
+            color: [[0.0; 4]; 16],
+        };
+        let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("lights-ubo"),
+            contents: bytemuck::bytes_of(&lights_init),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("globals-bg"),
             layout: &globals_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: globals_buf.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: globals_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: lights_buf.as_entire_binding(),
+                },
+            ],
         });
 
         // Sky uniforms
@@ -851,34 +869,7 @@ impl Renderer {
                 },
             ],
         });
-        // Dynamic lights UBO/BG
-        #[repr(C)]
-        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-        struct LightsRaw {
-            count: u32,
-            _pad: [f32; 3],
-            pos_radius: [[f32; 4]; 16],
-            color: [[f32; 4]; 16],
-        }
-        let lights_init = LightsRaw {
-            count: 0,
-            _pad: [0.0; 3],
-            pos_radius: [[0.0; 4]; 16],
-            color: [[0.0; 4]; 16],
-        };
-        let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("lights-ubo"),
-            contents: bytemuck::bytes_of(&lights_init),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let lights_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("lights-bg"),
-            layout: &lights_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: lights_buf.as_entire_binding(),
-            }],
-        });
+        // (Lights UBO is part of globals bind group; see earlier)
 
         // Per-draw Model buffers (plane and shard base)
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
@@ -1035,30 +1026,10 @@ impl Renderer {
                 }
             }
         }
-        let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
-        // Determine a base offset so the lowest vertex sits on ground, with a small embed.
-        let (ruins_base_offset, ruins_radius): (f32, f32) = match &ruins_cpu_res {
-            Ok(cpu) => {
-                let mut min_y = f32::INFINITY;
-                let mut min_x = f32::INFINITY;
-                let mut max_x = f32::NEG_INFINITY;
-                let mut min_z = f32::INFINITY;
-                let mut max_z = f32::NEG_INFINITY;
-                for v in &cpu.vertices {
-                    min_y = min_y.min(v.pos[1]);
-                    min_x = min_x.min(v.pos[0]);
-                    max_x = max_x.max(v.pos[0]);
-                    min_z = min_z.min(v.pos[2]);
-                    max_z = max_z.max(v.pos[2]);
-                }
-                let sx = (max_x - min_x).abs();
-                let sz = (max_z - min_z).abs();
-                let radius = 0.5 * sx.max(sz);
-                // Embed slightly to avoid hovering
-                ((-min_y) - 0.05, radius)
-            }
-            Err(_) => (0.6, 6.0),
-        };
+        // Ruins mesh + metrics
+        let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
+        let ruins_base_offset = ruins_gpu.base_offset;
+        let ruins_radius = ruins_gpu.radius;
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
@@ -1138,22 +1109,8 @@ impl Renderer {
         });
         let zombie_index_count = zombie_cpu.indices.len() as u32;
 
-        let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
-            Ok(ruins_cpu) => {
-                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("ruins-vb"),
-                    contents: bytemuck::cast_slice(&ruins_cpu.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("ruins-ib"),
-                    contents: bytemuck::cast_slice(&ruins_cpu.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-                (vb, ib, ruins_cpu.indices.len() as u32)
-            }
-            Err(e) => return Err(anyhow::anyhow!("failed to load ruins model: {e}")),
-        };
+        let (ruins_vb, ruins_ib, ruins_index_count) =
+            (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
         // Build scene instance buffers and camera target
         let scene_build = scene::build_demo_scene(
@@ -1419,7 +1376,6 @@ impl Renderer {
             bloom_pipeline,
             bloom_bg,
             lights_buf,
-            lights_bg,
             static_index,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
@@ -1954,6 +1910,7 @@ impl Renderer {
                 n += 1;
             }
             raw.count = n as u32;
+            // Write packed lights into globals bind group (binding=1 holds the lights UBO)
             self.queue
                 .write_buffer(&self.lights_buf, 0, bytemuck::bytes_of(&raw));
         }
@@ -2023,8 +1980,7 @@ impl Renderer {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
-            rpass.set_bind_group(2, &self.lights_bg, &[]);
-            rpass.set_bind_group(2, &self.lights_bg, &[]);
+            // lights are packed into globals (binding=1)
             rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
             rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
@@ -2040,7 +1996,6 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.trees_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.trees_instances.slice(..));
                 rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
@@ -2058,7 +2013,6 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.rocks_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.rocks_instances.slice(..));
                 rpass.set_index_buffer(self.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
@@ -2083,7 +2037,6 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.ruins_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.ruins_instances.slice(..));
                 rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
@@ -2101,7 +2054,6 @@ impl Renderer {
                 rpass.set_pipeline(inst_pipe);
                 rpass.set_bind_group(0, &self.globals_bg, &[]);
                 rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-                rpass.set_bind_group(2, &self.lights_bg, &[]);
                 rpass.set_vertex_buffer(0, self.npc_vb.slice(..));
                 rpass.set_vertex_buffer(1, self.npc_instances.slice(..));
                 rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);
