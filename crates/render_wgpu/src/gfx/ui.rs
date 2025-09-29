@@ -1605,15 +1605,14 @@ impl Hud {
         self.text_vcount = self.text_verts.len() as u32;
     }
 
-    /// Draw a simple death overlay with centered message and a button.
-    /// Returns button rect in px as (x0, y0, x1, y1) for hit testing.
+    /// Draw a simple death overlay with centered messages.
     pub fn death_overlay(
         &mut self,
         surface_w: u32,
         surface_h: u32,
         title: &str,
-        button_text: &str,
-    ) -> (f32, f32, f32, f32) {
+        helper_text: &str,
+    ) {
         self.bars_verts.clear();
         self.text_verts.clear();
         // Dim background
@@ -1662,41 +1661,16 @@ impl Hud {
             y0 + 60.0,
             [1.0, 0.3, 0.25, 1.0],
         );
-        // Button
-        let btn_w = 160.0f32;
-        let btn_h = 36.0f32;
-        let bx0 = cx - btn_w * 0.5;
-        let by0 = y1 - 60.0 - btn_h * 0.5 + btn_h * 0.5; // a bit above bottom of panel
-        let bx1 = cx + btn_w * 0.5;
-        let by1 = by0 + btn_h;
-        self.push_rect(
-            surface_w,
-            surface_h,
-            bx0 - 2.0,
-            by0 - 2.0,
-            bx1 + 2.0,
-            by1 + 2.0,
-            [0.02, 0.02, 0.02, 0.95],
-        );
-        self.push_rect(
-            surface_w,
-            surface_h,
-            bx0,
-            by0,
-            bx1,
-            by1,
-            [0.18, 0.18, 0.18, 0.95],
-        );
+        // Helper text: e.g., "Press R to respawn"
         self.append_center_text(
             surface_w,
             surface_h,
-            button_text,
-            by0 + btn_h - 10.0,
+            helper_text,
+            y1 - 40.0,
             [0.95, 0.98, 1.0, 0.95],
         );
         self.bars_vcount = self.bars_verts.len() as u32;
         self.text_vcount = self.text_verts.len() as u32;
-        (bx0, by0, bx1, by1)
     }
 
     /// Append a single-line perf overlay in the top-left corner.

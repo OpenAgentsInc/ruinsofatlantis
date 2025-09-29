@@ -310,14 +310,11 @@ pub struct Renderer {
     cam_look_height: f32,
     rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
-    // Window scale factor (DPI). Used to convert logical cursor coords → physical px.
-    window_scale: f64,
 
     // UI capture helpers
     screenshot_start: Option<f32>,
 
-    // Death overlay button rect for click hit-testing: (x0, y0, x1, y1) in px
-    death_btn_rect: Option<(f32, f32, f32, f32)>,
+    // No interactive death UI — we show text only.
 
     // Server state (NPCs/health)
     server: server_core::ServerState,
@@ -438,8 +435,6 @@ impl Renderer {
         self.cam_look_height = 1.6;
         self.rmb_down = false;
         self.last_cursor_pos = None;
-        self.window_scale = self.window_scale.max(1.0); // keep prior scale if known
-        self.death_btn_rect = None;
         self.pc_cast_queued = false;
         self.pc_anim_start = None;
         self.pc_cast_fired = false;
@@ -1544,9 +1539,7 @@ impl Renderer {
             cam_look_height: 1.6,
             rmb_down: false,
             last_cursor_pos: None,
-            window_scale: 1.0,
             screenshot_start: None,
-            death_btn_rect: None,
 
             npc_vb,
             npc_ib,
@@ -2570,10 +2563,12 @@ impl Renderer {
             if !self.pc_alive {
                 // Show death overlay regardless of RA_OVERLAYS setting
                 self.hud.reset();
-                let rect = self
-                    .hud
-                    .death_overlay(self.size.width, self.size.height, "You died.", "Respawn");
-                self.death_btn_rect = Some(rect);
+                self.hud.death_overlay(
+                    self.size.width,
+                    self.size.height,
+                    "You died.",
+                    "Press R to respawn",
+                );
             } else if !overlays_disabled {
                 self.hud.build(
                     self.size.width,
@@ -3157,27 +3152,12 @@ impl Renderer {
                     if !self.rmb_down {
                         self.last_cursor_pos = None; // reset deltas
                     }
-                } else if *button == winit::event::MouseButton::Left
-                    && state.is_pressed() && !self.pc_alive
-                {
-                    // Hit-test respawn button if visible
-                    if let (Some((mx, my)), Some((x0, y0, x1, y1))) =
-                        (self.last_cursor_pos, self.death_btn_rect)
-                    {
-                        let x = mx as f32;
-                        let y = my as f32;
-                        if x >= x0 && x <= x1 && y >= y0 && y <= y1 {
-                            log::info!("Respawn clicked");
-                            self.respawn();
-                        }
-                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // Use previous cursor for deltas, then update to current.
-                let prev = self.last_cursor_pos;
                 if self.rmb_down
-                    && let Some((lx, ly)) = prev
+                    && let Some((lx, ly)) = self.last_cursor_pos
                 {
                     let dx = position.x - lx;
                     let dy = position.y - ly;
@@ -3190,11 +3170,8 @@ impl Renderer {
                     self.cam_orbit_pitch =
                         (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
                 }
-                // Track last cursor position in PHYSICAL px for button hit-testing
-                self.last_cursor_pos = Some((position.x * self.window_scale, position.y * self.window_scale));
-            }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.window_scale = *scale_factor;
+                // Track last cursor position
+                self.last_cursor_pos = Some((position.x, position.y));
             }
             WindowEvent::Focused(false) => {
                 // Clear sticky keys when window loses focus
