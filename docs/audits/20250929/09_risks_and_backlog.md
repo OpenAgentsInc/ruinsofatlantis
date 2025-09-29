@@ -13,6 +13,7 @@ P0 – High Impact, Low/Med Effort
 - Add `cargo deny` checks.
 - Add golden tests for `spellpack.v1.bin` (size, header, hash).
 - Consolidate asset path policy in `shared/assets` + tests; deprecate local helpers.
+- Consolidate ability cooldown source. Eliminate renderer hardcoding; HUD and input gating read `SpecDb`/server state for durations. Add a check or test that flags hardcoded cooldowns.
 
 P1 – High Impact, Med Effort
 - Renderer: Extract `Attachments` and `Pipelines` structs; centralize resize & BGL management; module docs.
@@ -32,4 +33,3 @@ Definition of Done (examples)
 - Renderer resize idempotent test: reconfigure N times, attachments identical; no leaks.
 - Golden spells pack stable across runs; failure shows diff and source of nondeterminism.
 - `cargo deny` passes with documented exceptions.
-

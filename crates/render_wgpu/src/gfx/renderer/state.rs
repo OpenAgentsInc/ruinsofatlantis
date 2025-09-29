@@ -1,6 +1,7 @@
 //! Renderer state: struct and small enums, extracted from gfx/mod.rs.
 
 use winit::dpi::PhysicalSize;
+use super::Attachments;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PcCast {
@@ -16,13 +17,8 @@ pub struct Renderer {
     pub(crate) config: wgpu::SurfaceConfiguration,
     pub(crate) size: PhysicalSize<u32>,
     pub(crate) max_dim: u32,
-    pub(crate) depth: wgpu::TextureView,
-    // Offscreen scene color
-    pub(crate) scene_color: wgpu::Texture,
-    pub(crate) scene_view: wgpu::TextureView,
-    // Read-only copy of scene for post passes that sample while writing to SceneColor
-    pub(crate) scene_read: wgpu::Texture,
-    pub(crate) scene_read_view: wgpu::TextureView,
+    // Consolidated depth + offscreen scene targets
+    pub(crate) attachments: Attachments,
 
     // Lighting M1: G-Buffer + Hi-Z scaffolding
     pub(crate) gbuffer: Option<crate::gfx::gbuffer::GBuffer>,
@@ -244,4 +240,3 @@ pub struct Renderer {
     pub(crate) wizard_hp_max: i32,
     pub(crate) pc_alive: bool,
 }
-

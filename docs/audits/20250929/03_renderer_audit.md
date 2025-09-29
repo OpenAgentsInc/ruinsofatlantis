@@ -29,6 +29,7 @@ Recommendations
 3) Extract Update Pipelines
 - Move client/controller updates and collision resolve into a `client_core` or `gameplay_client` crate where the renderer consumes only derived transforms/instances.
 - Use a narrow trait in the renderer for “scene inputs” (instances, transforms, palettes, toggles).
+- Remove renderer‑local ability cooldown tracking. Input gating and HUD timers must consume ability state from `client_core`/server and derive durations from `SpecDb`; do not hardcode values (e.g., Fire Bolt’s cooldown) inside renderer modules.
 
 4) BGL/Pipeline Registry
 - Centralize bind group layout creation and keep typed keys per pass to avoid mismatched BG usage after resizes.
@@ -51,4 +52,3 @@ Incremental Plan (safe steps)
 - Week 2: Extract update logic (controller/collision) behind a trait; renderer consumes scene inputs. Add CPU hashing tests.
 - Week 3: Add minimal frame-graph (static DAG) for scene → post → present; enforce resource access rules.
 - Week 4: Rename and split files; add WGSL CI validation and BGL registry.
-

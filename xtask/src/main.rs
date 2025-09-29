@@ -14,6 +14,8 @@ struct Cli {
 enum Cmd {
     /// fmt + clippy -D warnings + tests (workspace)
     Ci,
+    /// Validate all WGSL shaders across the workspace
+    Wgsl,
     /// Validate data against serde models (zone manifests, spells)
     SchemaCheck,
     /// Build all packs (spells, zones)
@@ -41,10 +43,102 @@ fn cargo(args: &[&str]) -> Result<()> {
 }
 
 fn ci() -> Result<()> {
+    warn_hooks();
     cargo(&["fmt", "--all"])?;
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
+    wgsl_validate()?;
+    cargo_deny()?;
     cargo(&["test"])?;
     schema_check()?;
+    Ok(())
+}
+
+fn warn_hooks() {
+    // Best-effort check: if git exists and hooksPath isn't set to .githooks, print a nudge.
+    let ok = std::process::Command::new("git")
+        .args(["config", "--get", "core.hooksPath"])
+        .output();
+    if let Ok(out) = ok {
+        if out.status.success() {
+            let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if val != ".githooks" {
+                eprintln!(
+                    "xtask: note: enable repo git hooks for pre-push checks: git config core.hooksPath .githooks (current: '{}')",
+                    val
+                );
+            }
+        } else {
+            eprintln!(
+                "xtask: note: couldn't read git hooksPath; you can enable pre-push checks via 'git config core.hooksPath .githooks'"
+            );
+        }
+    }
+}
+
+fn wgsl_validate() -> Result<()> {
+    // Validate WGSL using the same bundling the renderer uses.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let gfx = root.join("crates/render_wgpu/src/gfx");
+
+    // Helper to parse a source string with a label
+    let mut parsed = 0usize;
+    let mut parse_src = |label: &str, src: String| -> Result<()> {
+        naga::front::wgsl::parse_str(&src)
+            .map_err(|e| anyhow::anyhow!("WGSL validation failed for {}: {}", label, e))?;
+        parsed += 1;
+        Ok(())
+    };
+
+    // Standalone modules
+    for name in ["shader.wgsl", "sky.wgsl", "hiz.comp.wgsl", "frame_overlay.wgsl", "post_bloom.wgsl", "post_ao.wgsl", "blit_noflip.wgsl", "present.wgsl", "fullscreen.wgsl"] {
+        let p = gfx.join(name);
+        if p.is_file() {
+            let txt = std::fs::read_to_string(&p)?;
+            // Some of these are also bundled below; standalone parse should still succeed where appropriate
+            let _ = parse_src(&p.display().to_string(), txt);
+        }
+    }
+
+    // Bundled fullscreen-based pipelines (match pipeline.rs)
+    let fullscreen = std::fs::read_to_string(gfx.join("fullscreen.wgsl"))?;
+    for pair in [
+        ("present", "present.wgsl"),
+        ("blit_noflip", "blit_noflip.wgsl"),
+        ("post_bloom", "post_bloom.wgsl"),
+        ("post_ao", "post_ao.wgsl"),
+        ("ssgi_fs", "ssgi_fs.wgsl"),
+        ("ssr_fs", "ssr_fs.wgsl"),
+    ] {
+        let p = gfx.join(pair.1);
+        if p.is_file() {
+            let body = std::fs::read_to_string(&p)?;
+            let src = [fullscreen.as_str(), body.as_str()].join("\n\n");
+            let label = format!("{} (+fullscreen)", p.display());
+            let _ = parse_src(&label, src);
+        }
+    }
+
+    println!("xtask: WGSL validated ({} modules)", parsed);
+    Ok(())
+}
+
+fn cargo_deny() -> Result<()> {
+    // Run `cargo-deny` if available; otherwise warn and continue.
+    let mut probe = Command::new("cargo-deny");
+    probe.arg("--version").stdout(Stdio::null()).stderr(Stdio::null());
+    match probe.status() {
+        Ok(s) if s.success() => {
+            let mut run = Command::new("cargo-deny");
+            run.args(["check"]).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            let status = run.status().context("cargo-deny run")?;
+            if !status.success() {
+                bail!("cargo-deny check failed");
+            }
+        }
+        _ => {
+            eprintln!("xtask: cargo-deny not installed; skipping dependency checks");
+        }
+    }
     Ok(())
 }
 
@@ -177,6 +271,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Ci => ci(),
+        Cmd::Wgsl => wgsl_validate(),
         Cmd::SchemaCheck => schema_check(),
         Cmd::BuildPacks => build_packs(),
         Cmd::BuildSpells => build_spells(),

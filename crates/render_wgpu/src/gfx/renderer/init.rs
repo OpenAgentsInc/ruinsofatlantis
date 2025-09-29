@@ -142,40 +142,19 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
-    let depth = util::create_depth_view(&device, config.width, config.height, config.format);
-    // Offscreen SceneColor (HDR)
-    let scene_color = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("scene-color"),
-        size: wgpu::Extent3d {
-            width: config.width,
-            height: config.height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba16Float,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::TEXTURE_BINDING
-            | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    });
-    let scene_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
-    let scene_read = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("scene-read"),
-        size: wgpu::Extent3d {
-            width: config.width,
-            height: config.height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba16Float,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    let scene_read_view = scene_read.create_view(&wgpu::TextureViewDescriptor::default());
+    let attachments = super::Attachments::create(
+        &device,
+        config.width,
+        config.height,
+        config.format,
+        wgpu::TextureFormat::Rgba16Float,
+    );
+    // Legacy fields: mirror attachments for existing struct layout
+    let _depth = attachments.depth_view.clone();
+    let _scene_color = attachments.scene_color.clone();
+    let _scene_view = attachments.scene_view.clone();
+    let _scene_read = attachments.scene_read.clone();
+    let _scene_read_view = attachments.scene_read_view.clone();
     // Lighting M1: allocate G-Buffer attachments and linear depth (Hi-Z) pyramid
     let gbuffer = gbuffer::GBuffer::create(&device, config.width, config.height);
     let hiz = hiz::HiZPyramid::create(&device, config.width, config.height);
@@ -347,7 +326,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let sky_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("sky-bg"), layout: &sky_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: sky_buf.as_entire_binding() }] });
     // Post AO + samplers
     let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("post-ao-sampler"), address_mode_u: wgpu::AddressMode::ClampToEdge, address_mode_v: wgpu::AddressMode::ClampToEdge, address_mode_w: wgpu::AddressMode::ClampToEdge, mag_filter: wgpu::FilterMode::Linear, min_filter: wgpu::FilterMode::Linear, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
-    let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("post-ao-bg"), layout: &post_ao_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) }] });
+    let post_ao_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("post-ao-bg"), layout: &post_ao_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.depth_view) }, wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) }] });
     let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor { label: Some("point-sampler"), address_mode_u: wgpu::AddressMode::ClampToEdge, address_mode_v: wgpu::AddressMode::ClampToEdge, address_mode_w: wgpu::AddressMode::ClampToEdge, mag_filter: wgpu::FilterMode::Nearest, min_filter: wgpu::FilterMode::Nearest, mipmap_filter: wgpu::FilterMode::Nearest, ..Default::default() });
     let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("ssgi-globals-bg"), layout: &ssgi_globals_bgl, entries: &[wgpu::BindGroupEntry { binding: 0, resource: globals_buf.as_entire_binding() }] });
 
@@ -356,7 +335,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("bloom-bg"),
         layout: &bloom_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
+            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view) },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
         ],
     });
@@ -366,9 +345,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("present-bg"),
         layout: &present_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_view) },
+            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_view) },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
-            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&depth) },
+            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&attachments.depth_view) },
             wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::Sampler(&point_sampler) },
         ],
     });
@@ -376,7 +355,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("ssgi-depth-bg"),
         layout: &ssgi_depth_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&depth) },
+            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.depth_view) },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
         ],
     });
@@ -393,7 +372,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("ssgi-scene-bg"),
         layout: &ssgi_scene_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
+            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view) },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
         ],
     });
@@ -401,7 +380,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         label: Some("ssr-scene-bg"),
         layout: &ssr_scene_bgl,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&scene_read_view) },
+            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&attachments.scene_read_view) },
             wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&post_sampler) },
         ],
     });
@@ -525,11 +504,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         config,
         size: PhysicalSize::new(w, h),
         max_dim,
-        depth,
-        scene_color,
-        scene_view,
-        scene_read,
-        scene_read_view,
+        attachments,
         gbuffer: Some(gbuffer),
         hiz: Some(hiz),
         pipeline,
@@ -594,7 +569,6 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         npc_ib,
         npc_index_count,
         npc_instances,
-        npc_count: 0,
         npc_instances_cpu: Vec::new(),
         npc_models,
         trees_instances,
@@ -663,7 +637,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cast_time: 1.5,
         pc_cast_fired: false,
         firebolt_cd_until: 0.0,
-        firebolt_cd_dur: 1.0,
+        firebolt_cd_dur: 0.5,
         gcd_until: 0.0,
         gcd_duration: 1.5,
         cam_orbit_yaw: 0.0,

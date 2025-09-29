@@ -7082,8 +7082,10 @@ dependencies = [
  "clap",
  "data_runtime",
  "jsonschema",
+ "naga 26.0.0",
  "serde",
  "serde_json",
+ "walkdir",
 ]
 
 [[package]]
