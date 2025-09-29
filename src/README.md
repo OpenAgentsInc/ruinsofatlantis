@@ -23,6 +23,7 @@ Workspace crates (added for modularization)
 - WASD: move (A/D turn in place)
 - Shift: run
 - 1: cast Fire Bolt (PC)
+- 2: cast Magic Missile (PC)
 - Space: toggle sky pause (also active when PC is dead)
 - [: scrub time backward a bit; ]: forward a bit
 - - / =: halve / double time scale

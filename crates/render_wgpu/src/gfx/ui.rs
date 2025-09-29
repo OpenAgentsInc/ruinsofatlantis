@@ -1454,7 +1454,7 @@ impl Hud {
                 key,
                 [0.9, 0.9, 0.9, 0.95],
             );
-            // Ability text (slot 1 only for now)
+            // Ability text (slot 1 and 2 for now)
             if i == 0 {
                 self.push_text_line(
                     surface_w,
@@ -1463,6 +1463,15 @@ impl Hud {
                     y1 - 6.0,
                     "Fire Bolt",
                     [1.0, 0.9, 0.3, 0.95],
+                );
+            } else if i == 1 {
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    "Magic Missile",
+                    [0.8, 0.9, 1.0, 0.95],
                 );
             }
             // GCD overlay (if active): simple top-down fill

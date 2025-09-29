@@ -56,6 +56,12 @@ use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
 use util::scale_to_max;
 
 use crate::server_ext::CollideProjectiles;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PcCast {
+    FireBolt,
+    MagicMissile,
+}
 use std::time::Instant;
 
 use wgpu::{
@@ -294,6 +300,7 @@ pub struct Renderer {
     input: client_core::input::InputState,
     cam_follow: camera_sys::FollowState,
     pc_cast_queued: bool,
+    pc_cast_kind: Option<PcCast>,
     pc_anim_start: Option<f32>,
     pc_cast_time: f32,
     pc_cast_fired: bool,
@@ -1527,6 +1534,7 @@ impl Renderer {
                 current_look: scene_build.cam_target,
             },
             pc_cast_queued: false,
+            pc_cast_kind: Some(PcCast::FireBolt),
             pc_anim_start: None,
             pc_cast_time: 1.5,
             pc_cast_fired: false,
@@ -3057,7 +3065,17 @@ impl Renderer {
                     {
                         if pressed {
                             self.pc_cast_queued = true;
+                            self.pc_cast_kind = Some(PcCast::FireBolt);
                             log::debug!("PC cast queued: Fire Bolt");
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::Digit2) | PhysicalKey::Code(KeyCode::Numpad2)
+                        if self.pc_alive =>
+                    {
+                        if pressed {
+                            self.pc_cast_queued = true;
+                            self.pc_cast_kind = Some(PcCast::MagicMissile);
+                            log::debug!("PC cast queued: Magic Missile");
                         }
                     }
                     // Sky controls (pause/scrub/speed)
@@ -3339,8 +3357,16 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        log::debug!("PC Fire Bolt fired at t={:.2}", t);
-                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
+                        match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
+                            PcCast::FireBolt => {
+                                log::debug!("PC Fire Bolt fired at t={:.2}", t);
+                                self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
+                            }
+                            PcCast::MagicMissile => {
+                                log::debug!("PC Magic Missile fired at t={:.2}", t);
+                                self.spawn_magic_missile(spawn, dir_w, t);
+                            }
+                        }
                         self.pc_cast_fired = true;
                     }
                     // Immediately end cast animation and start cooldown window
@@ -3730,6 +3756,17 @@ impl Renderer {
             t_die: t + life,
             owner_wizard: owner,
         });
+    }
+
+    fn spawn_magic_missile(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
+        // For v1, just fire three forward darts similar to Fire Bolt visuals.
+        // Slight lateral offsets for readability.
+        let right = glam::vec3(dir.z, 0.0, -dir.x).normalize_or_zero();
+        let offsets = [-0.12f32, 0.0, 0.12f32];
+        for off in offsets {
+            let o = origin + right * off;
+            self.spawn_firebolt(o, dir, t, Some(self.pc_index), false);
+        }
     }
 
     fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
