@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[pre-push] Running cargo test..."
-cargo test
+# Allow developers to skip hooks explicitly (e.g., hotfixing CI only)
+if [[ "${RA_SKIP_HOOKS:-0}" == "1" ]]; then
+  echo "[pre-push] Skipped via RA_SKIP_HOOKS=1"
+  exit 0
+fi
 
-echo "[pre-push] Running cargo clippy (no warnings)..."
-cargo clippy --all-targets -- -D warnings
+echo "[pre-push] Running workspace CI via xtask (fmt+clippy+wgsl+deny+tests+schemas)"
+if cargo xtask --version >/dev/null 2>&1; then
+  cargo xtask ci
+else
+  cargo run -q -p xtask -- ci
+fi
 
 echo "[pre-push] OK"
-
