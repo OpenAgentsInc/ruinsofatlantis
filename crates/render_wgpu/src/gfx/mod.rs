@@ -1892,6 +1892,8 @@ impl Renderer {
 
             // Terrain
             log::info!("draw: terrain");
+            let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+            if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
@@ -1900,10 +1902,14 @@ impl Renderer {
             rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
             self.draw_calls += 1;
+            if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("validation after terrain: {:?}", e);
+            }
 
             // Trees (instanced static mesh)
             if self.trees_count > 0 {
                 log::info!("draw: trees x{}", self.trees_count);
+                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -1917,11 +1923,15 @@ impl Renderer {
                 rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
                 self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after trees: {:?}", e);
+                }
             }
 
             // Rocks (instanced static mesh)
             if self.rocks_count > 0 {
                 log::info!("draw: rocks x{}", self.rocks_count);
+                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -1935,6 +1945,9 @@ impl Renderer {
                 rpass.set_index_buffer(self.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.rocks_index_count, 0, 0..self.rocks_count);
                 self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after rocks: {:?}", e);
+                }
             }
 
             // Wizards
@@ -1943,8 +1956,12 @@ impl Renderer {
                 .unwrap_or(true)
             {
                 log::info!("draw: wizards x{}", self.wizard_count);
+                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
                 self.draw_wizards(&mut rpass);
                 self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after wizards: {:?}", e);
+                }
             } else {
                 log::info!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
             }
@@ -1954,8 +1971,12 @@ impl Renderer {
                 .unwrap_or(true)
             {
                 log::info!("draw: zombies x{}", self.zombie_count);
+                if trace { self.device.push_error_scope(wgpu::ErrorFilter::Validation); }
                 self.draw_zombies(&mut rpass);
                 self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after zombies: {:?}", e);
+                }
             } else {
                 log::info!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
             }
