@@ -30,7 +30,9 @@ fn sky_radiance(theta: f32, gamma: f32) -> vec3<f32> {
   // Recreate the scalar function per channel
   let cos_gamma = cos(gamma);
   let cos_gamma2 = cos_gamma * cos_gamma;
-  let cos_theta = abs(cos(theta));
+  // Avoid numerical instability around the horizon (theta ~= pi/2).
+  // Clamp cos(theta) smoothly to a small floor to prevent sharp bands.
+  let cos_theta = max(abs(cos(theta)), 0.02);
   let exp_m = exp(sky.params[4].x * gamma);
   let ray_m = cos_gamma2;
   let mie_m_lhs = 1.0 + cos_gamma2;
@@ -71,6 +73,14 @@ fn fs_sky(in: VsOut) -> @location(0) vec4<f32> {
   let tan_half = globals.camUpPad.w;
   let aspect = globals.clip.z;
   let dir = normalize(fwd + right * (in.ndc.x * tan_half * aspect) + up * (in.ndc.y * tan_half));
+  // Night fallback: use a smooth vertical gradient to avoid Hosek numeric seams.
+  if (sky.sun_dir_time.y <= 0.0) {
+    let t = smoothstep(-0.05, 0.45, dir.y);
+    let c_horizon = vec3<f32>(0.008, 0.012, 0.02);
+    let c_zenith  = vec3<f32>(0.004, 0.007, 0.012);
+    let col = mix(c_horizon, c_zenith, t);
+    return vec4<f32>(col, 1.0);
+  }
   let theta = acos(clamp(dir.y, -1.0, 1.0));
   let gamma = acos(clamp(dot(dir, sky.sun_dir_time.xyz), -1.0, 1.0));
   var col = sky_radiance(theta, gamma);

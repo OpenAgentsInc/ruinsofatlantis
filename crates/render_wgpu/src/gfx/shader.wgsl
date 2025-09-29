@@ -6,6 +6,17 @@ struct Globals { view_proj: mat4x4<f32>, camRightTime: vec4<f32>, camUpPad: vec4
 struct Model { model: mat4x4<f32>, color: vec3<f32>, emissive: f32, _pad: vec2<f32> };
 @group(1) @binding(0) var<uniform> model_u: Model;
 
+// Dynamic point lights (fixed max)
+const MAX_LIGHTS: u32 = 16u;
+struct LightsU {
+  count: u32,
+  _pad: vec3<f32>,
+  pos_radius: array<vec4<f32>, 16>, // xyz pos, w radius
+  color: array<vec4<f32>, 16>,      // rgb color, a unused
+};
+// Lights live in the same group as Globals (group 0, binding 1)
+@group(0) @binding(1) var<uniform> lights: LightsU;
+
 struct VSIn {
   @location(0) pos: vec3<f32>,
   @location(1) nrm: vec3<f32>,
@@ -59,7 +70,12 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   }
   // Convert ambient to a scalar intensity to avoid tinting albedo blue
   let amb_int = max(dot(amb, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
-  var base = model_u.color * (0.2 + 0.5 * amb_int + 0.8 * ndl) + model_u.emissive;
+  // Night factor based on sun elevation (y < 0 at night)
+  let nf = smoothstep(0.0, 0.2, -globals.sunDirTime.y);
+  // Dim baseline and ambient at night; direct light already 0 at night
+  let base_term = mix(0.2, 0.02, nf);
+  let amb_term = mix(0.5, 0.05, nf) * amb_int;
+  var base = model_u.color * (base_term + amb_term + 0.8 * ndl) + model_u.emissive;
   // Subtle hemisphere ground bounce: greenish tint near low sun
   let sun = normalize(globals.sunDirTime.xyz);
   let sun_elev = max(sun.y, 0.0);
@@ -135,7 +151,10 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
   for (var i:u32=0u; i<9u; i++) { amb += globals.sh[i].xyz * shb[i]; }
   // Scalar ambient to preserve material hue
   let amb_int = max(dot(amb, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
-  var base = in.icolor * (0.2 + 0.5 * amb_int + 0.8 * ndl) + model_u.emissive;
+  let nf = smoothstep(0.0, 0.2, -globals.sunDirTime.y);
+  let base_term = mix(0.2, 0.02, nf);
+  let amb_term = mix(0.5, 0.05, nf) * amb_int;
+  var base = in.icolor * (base_term + amb_term + 0.8 * ndl) + model_u.emissive;
   // Subtle hemisphere ground bounce (packed like above)
   let sun = normalize(globals.sunDirTime.xyz);
   let sun_elev = max(sun.y, 0.0);
@@ -147,24 +166,66 @@ fn fs_inst(in: InstOut) -> @location(0) vec4<f32> {
   if (in.sel > 0.5) {
     base = vec3<f32>(1.0, 1.0, 0.1);
   }
+  // Additive dynamic lights
+  let world = in.world;
+  var add = vec3<f32>(0.0);
+  for (var i:u32=0u; i<min(lights.count, MAX_LIGHTS); i++) {
+    let Lw = lights.pos_radius[i].xyz - world;
+    let r = lights.pos_radius[i].w;
+    let d = length(Lw);
+    if (d < r) {
+      let nL = normalize(Lw);
+      let atten = pow(1.0 - (d / r), 2.0);
+      let l = max(dot(in.nrm, nL), 0.0) * atten;
+      add += lights.color[i].rgb * l;
+    }
+  }
+  base += add;
   return vec4<f32>(base, 1.0);
 }
 
+// Wizard material lighting uses the same lights buffer
 @fragment
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {
-  // Base color from material (keep viewer parity)
   let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
-  // Subtle Fresnel-like rim term to hint gloss under sun lighting.
-  // Approximate view direction using camera right/up from Globals.
-  let right = globals.camRightTime.xyz;
-  let up = globals.camUpPad.xyz;
-  // Forward is up x right (note: right x up = -forward)
-  let fwd = normalize(cross(up, right));
-  let ndv = max(dot(in.nrm, -fwd), 0.0);
-  let rim = pow(1.0 - ndv, 3.0);
-  let rim_strength = 0.15; // keep very subtle
-  let color = clamp(albedo + vec3<f32>(rim * rim_strength), vec3<f32>(0.0), vec3<f32>(1.0));
-  return vec4<f32>(color, 1.0);
+  let light_dir = normalize(globals.sunDirTime.xyz);
+  let ndl = max(dot(in.nrm, light_dir), 0.0);
+  // Ambient via SH
+  let n = in.nrm;
+  let shb = array<f32,9>(
+    0.282095,
+    0.488603 * n.y,
+    0.488603 * n.z,
+    0.488603 * n.x,
+    1.092548 * n.x * n.y,
+    1.092548 * n.y * n.z,
+    0.315392 * (3.0 * n.z * n.z - 1.0),
+    1.092548 * n.x * n.z,
+    0.546274 * (n.x * n.x - n.y * n.y)
+  );
+  var amb = vec3<f32>(0.0);
+  for (var i:u32=0u; i<9u; i++) { amb += globals.sh[i].xyz * shb[i]; }
+  let amb_int = max(dot(amb, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
+  let nf = smoothstep(0.0, 0.2, -globals.sunDirTime.y);
+  let base_term = mix(0.2, 0.02, nf);
+  let amb_term = mix(0.5, 0.05, nf) * amb_int;
+  var base = albedo * (base_term + amb_term + 0.8 * ndl);
+  // Dynamic lights (same lights UBO as base/instanced)
+  let world = in.world;
+  var add = vec3<f32>(0.0);
+  for (var i:u32=0u; i<min(lights.count, MAX_LIGHTS); i++) {
+    let Lw = lights.pos_radius[i].xyz - world;
+    let r = lights.pos_radius[i].w;
+    let d = length(Lw);
+    if (d < r) {
+      let nL = normalize(Lw);
+      let atten = pow(1.0 - (d / r), 2.0);
+      let l = max(dot(in.nrm, nL), 0.0) * atten;
+      add += lights.color[i].rgb * l;
+    }
+  }
+  base += add;
+  return vec4<f32>(base, 1.0);
 }
 
 // Skinned instanced pipeline (wizards)

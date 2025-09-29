@@ -103,7 +103,7 @@ cargo xtask bake-zone --slug wizard_woods
 ```
 
 NOTE FOR AGENTS
-- Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`). The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
+- Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`) unless the user specifically directs you to. The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
 
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).

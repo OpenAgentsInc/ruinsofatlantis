@@ -29,24 +29,27 @@ pub use types::Vertex;
 mod anim;
 mod camera_sys;
 mod draw;
+mod foliage;
 pub mod fx;
 mod material;
+mod npcs;
+mod rocks;
+mod ruins;
 mod scene;
 mod sky;
 pub mod terrain;
 mod ui;
 mod util;
+mod zombies;
 
 use data_runtime::{
     loader as data_loader,
     spell::SpellSpec,
     zone::{ZoneManifest, load_zone_manifest},
 };
+use ra_assets::skinning::load_gltf_skinned;
 use ra_assets::skinning::merge_gltf_animations;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
-use ra_assets::{
-    gltf::load_gltf_mesh, load_obj_static as load_obj_mesh, skinning::load_gltf_skinned,
-};
 // (scene building now encapsulated; ECS types unused here)
 use anyhow::Context;
 use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
@@ -109,6 +112,8 @@ pub struct Renderer {
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     bloom_pipeline: wgpu::RenderPipeline,
     bloom_bg: wgpu::BindGroup,
+    direct_present: bool,
+    lights_buf: wgpu::Buffer,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
     post_ao_bgl: wgpu::BindGroupLayout,
@@ -184,6 +189,13 @@ pub struct Renderer {
     trees_vb: wgpu::Buffer,
     trees_ib: wgpu::Buffer,
     trees_index_count: u32,
+
+    // Rocks (instanced static mesh)
+    rocks_instances: wgpu::Buffer,
+    rocks_count: u32,
+    rocks_vb: wgpu::Buffer,
+    rocks_ib: wgpu::Buffer,
+    rocks_index_count: u32,
 
     // Instancing buffers
     wizard_instances: wgpu::Buffer,
@@ -412,7 +424,8 @@ impl Renderer {
                 wgpu::Backends::PRIMARY,
             ]
         } else {
-            &[wgpu::Backends::PRIMARY]
+            // On macOS, try PRIMARY (Metal) first, then fall back to GL for stability if needed.
+            &[wgpu::Backends::PRIMARY, wgpu::Backends::GL]
         };
 
         // Create a surface per candidate instance and try to get an adapter
@@ -462,6 +475,8 @@ impl Renderer {
         {
             req_features |= wgpu::Features::POLYGON_MODE_LINE;
         }
+        let info = adapter.get_info();
+        log::info!("Adapter: {:?} ({:?})", info.name, info.backend);
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("wgpu-device"),
@@ -473,6 +488,11 @@ impl Renderer {
             .await
             .context("request device")?;
 
+        // Downgrade uncaptured errors to logs so we can see details without panicking
+        device.on_uncaptured_error(Box::new(|e| {
+            log::error!("wgpu uncaptured error: {:?}", e);
+        }));
+
         // --- Surface configuration (with clamping to device limits) ---
         let size = window.inner_size();
         let caps = surface.get_capabilities(&adapter);
@@ -482,25 +502,8 @@ impl Renderer {
             .copied()
             .find(|f| f.is_srgb())
             .unwrap_or(caps.formats[0]);
-        let present_mode = caps
-            .present_modes
-            .iter()
-            .copied()
-            .find(|m| {
-                // Optional no-vsync override via env flag.
-                // If RA_NO_VSYNC=1 or --no-vsync present, prefer Immediate; else prefer Mailbox.
-                let no_vsync_env = std::env::var("RA_NO_VSYNC")
-                    .map(|v| v == "1")
-                    .unwrap_or(false);
-                let no_vsync_flag = std::env::args().any(|a| a == "--no-vsync");
-                let no_vsync = no_vsync_env || no_vsync_flag;
-                if no_vsync {
-                    *m == wgpu::PresentMode::Immediate
-                } else {
-                    *m == wgpu::PresentMode::Mailbox
-                }
-            })
-            .unwrap_or(wgpu::PresentMode::Fifo);
+        // Use FIFO everywhere for stability across drivers; opt-in overrides can come later.
+        let present_mode = wgpu::PresentMode::Fifo;
         let alpha_mode = caps.alpha_modes[0];
         let max_dim = device.limits().max_texture_dimension_2d.clamp(1, 2048);
         let (w, h) = scale_to_max((size.width, size.height), max_dim);
@@ -569,12 +572,20 @@ impl Renderer {
         let palettes_bgl = pipeline::create_palettes_bgl(&device);
         let material_bgl = pipeline::create_material_bgl(&device);
         let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+        // Allow direct-present path: build main pipelines targeting swapchain format
+        let direct_present = std::env::var("RA_DIRECT_PRESENT")
+            .map(|v| v != "0")
+            .unwrap_or(true);
+        let draw_fmt = if direct_present {
+            config.format
+        } else {
+            offscreen_fmt
+        };
         let (pipeline, inst_pipeline, wire_pipeline) =
-            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, offscreen_fmt);
+            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
-        let sky_pipeline =
-            pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, offscreen_fmt);
+        let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline =
@@ -613,17 +624,17 @@ impl Renderer {
             &model_bgl,
             &palettes_bgl,
             &material_bgl,
-            offscreen_fmt,
+            draw_fmt,
         );
         let particle_pipeline =
-            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, offscreen_fmt);
+            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
-        // UI: nameplates + health bars
-        let nameplates = ui::Nameplates::new(&device, offscreen_fmt)?;
-        let nameplates_npc = ui::Nameplates::new(&device, offscreen_fmt)?;
-        let mut bars = ui::HealthBars::new(&device, offscreen_fmt)?;
-        let hud = ui::Hud::new(&device, config.format)?;
-        let damage = ui::DamageFloaters::new(&device, offscreen_fmt)?;
+        // UI: nameplates + health bars — build against active color format (swapchain if direct-present)
+        let nameplates = ui::Nameplates::new(&device, draw_fmt)?;
+        let nameplates_npc = ui::Nameplates::new(&device, draw_fmt)?;
+        let mut bars = ui::HealthBars::new(&device, draw_fmt)?;
+        let hud = ui::Hud::new(&device, draw_fmt)?;
+        let damage = ui::DamageFloaters::new(&device, draw_fmt)?;
 
         // --- Buffers & bind groups ---
         // Globals
@@ -641,13 +652,43 @@ impl Renderer {
             contents: bytemuck::bytes_of(&globals_init),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        // Dynamic lights buffer (packed into globals bind group at binding=1)
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct LightsRaw {
+            count: u32,
+            _pad: [f32; 3],
+            pos_radius: [[f32; 4]; 16],
+            color: [[f32; 4]; 16],
+            // Trailing padding to satisfy stricter std140/uniform layout expectations on some drivers.
+            // WGSL may round the struct size up; ensure our UBO is at least as large as the shader's view.
+            _tail_pad: [f32; 4],
+        }
+        let lights_init = LightsRaw {
+            count: 0,
+            _pad: [0.0; 3],
+            pos_radius: [[0.0; 4]; 16],
+            color: [[0.0; 4]; 16],
+            _tail_pad: [0.0; 4],
+        };
+        let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("lights-ubo"),
+            contents: bytemuck::bytes_of(&lights_init),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("globals-bg"),
             layout: &globals_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: globals_buf.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: globals_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: lights_buf.as_entire_binding(),
+                },
+            ],
         });
 
         // Sky uniforms
@@ -817,6 +858,10 @@ impl Renderer {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&depth),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&point_sampler),
+                },
             ],
         });
         // Bloom bind group reads from SceneRead (copy of SceneColor)
@@ -834,7 +879,7 @@ impl Renderer {
                 },
             ],
         });
-        // (removed) frame overlay UBO/BG
+        // (Lights UBO is part of globals bind group; see earlier)
 
         // Per-draw Model buffers (plane and shard base)
         // Nudge the plane slightly downward to avoid z-fighting/overlap with wizard feet.
@@ -991,30 +1036,10 @@ impl Renderer {
                 }
             }
         }
-        let ruins_cpu_res = load_gltf_mesh(&asset_path("assets/models/ruins.gltf"));
-        // Determine a base offset so the lowest vertex sits on ground, with a small embed.
-        let (ruins_base_offset, ruins_radius): (f32, f32) = match &ruins_cpu_res {
-            Ok(cpu) => {
-                let mut min_y = f32::INFINITY;
-                let mut min_x = f32::INFINITY;
-                let mut max_x = f32::NEG_INFINITY;
-                let mut min_z = f32::INFINITY;
-                let mut max_z = f32::NEG_INFINITY;
-                for v in &cpu.vertices {
-                    min_y = min_y.min(v.pos[1]);
-                    min_x = min_x.min(v.pos[0]);
-                    max_x = max_x.max(v.pos[0]);
-                    min_z = min_z.min(v.pos[2]);
-                    max_z = max_z.max(v.pos[2]);
-                }
-                let sx = (max_x - min_x).abs();
-                let sz = (max_z - min_z).abs();
-                let radius = 0.5 * sx.max(sz);
-                // Embed slightly to avoid hovering
-                ((-min_y) - 0.05, radius)
-            }
-            Err(_) => (0.6, 6.0),
-        };
+        // Ruins mesh + metrics
+        let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
+        let ruins_base_offset = ruins_gpu.base_offset;
+        let ruins_radius = ruins_gpu.radius;
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
@@ -1070,46 +1095,15 @@ impl Renderer {
         });
         let wizard_index_count = skinned_cpu.indices.len() as u32;
 
-        // Zombie vertex buffer (use same VertexSkinned layout)
-        let zom_vertices: Vec<VertexSkinned> = zombie_cpu
-            .vertices
-            .iter()
-            .map(|v| VertexSkinned {
-                pos: v.pos,
-                nrm: v.nrm,
-                joints: v.joints,
-                weights: v.weights,
-                uv: v.uv,
-            })
-            .collect();
-        let zombie_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("zombie-vb"),
-            contents: bytemuck::cast_slice(&zom_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let zombie_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("zombie-ib"),
-            contents: bytemuck::cast_slice(&zombie_cpu.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let zombie_index_count = zombie_cpu.indices.len() as u32;
+        // Zombie vertex/index buffers (skinned)
+        let zombie_assets = zombies::load_assets(&device).context("load zombie assets")?;
+        let zombie_cpu = zombie_assets.cpu;
+        let zombie_vb = zombie_assets.vb;
+        let zombie_ib = zombie_assets.ib;
+        let zombie_index_count = zombie_assets.index_count;
 
-        let (ruins_vb, ruins_ib, ruins_index_count) = match ruins_cpu_res {
-            Ok(ruins_cpu) => {
-                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("ruins-vb"),
-                    contents: bytemuck::cast_slice(&ruins_cpu.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("ruins-ib"),
-                    contents: bytemuck::cast_slice(&ruins_cpu.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-                (vb, ib, ruins_cpu.indices.len() as u32)
-            }
-            Err(e) => return Err(anyhow::anyhow!("failed to load ruins model: {e}")),
-        };
+        let (ruins_vb, ruins_ib, ruins_index_count) =
+            (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
         // Build scene instance buffers and camera target
         let scene_build = scene::build_demo_scene(
@@ -1206,122 +1200,36 @@ impl Renderer {
         let _zombie_tex_view = zmat.texture_view;
         let _zombie_sampler = zmat.sampler;
 
-        // NPCs: simple cubes as targets on multiple rings
-        let (npc_vb, npc_ib, npc_index_count) = mesh::create_cube(&device);
-        let mut server = server_core::ServerState::new();
-        // Configure ring distances and counts (keep existing ones, add more)
-        // Reduce zombies ~25% overall by lowering ring counts
-        let near_count = 8usize; // was 10
-        let near_radius = 15.0f32;
-        let mid1_count = 12usize; // was 16
-        let mid1_radius = 30.0f32;
-        let mid2_count = 15usize; // was 20
-        let mid2_radius = 45.0f32;
-        let mid3_count = 18usize; // was 24
-        let mid3_radius = 60.0f32;
-        let far_count = 9usize; // was 12
-        let far_radius = terrain_extent * 0.7;
-        // Spawn rings (hp scales mildly with distance)
-        server.ring_spawn(near_count, near_radius, 20);
-        server.ring_spawn(mid1_count, mid1_radius, 25);
-        server.ring_spawn(mid2_count, mid2_radius, 30);
-        server.ring_spawn(mid3_count, mid3_radius, 35);
-        server.ring_spawn(far_count, far_radius, 30);
-        let mut npc_instances_cpu: Vec<types::Instance> = Vec::new();
-        let mut npc_models: Vec<glam::Mat4> = Vec::new();
-        for npc in &server.npcs {
-            let m = glam::Mat4::from_scale_rotation_translation(
-                glam::Vec3::splat(1.2),
-                glam::Quat::IDENTITY,
-                npc.pos,
-            );
-            npc_models.push(m);
-            npc_instances_cpu.push(types::Instance {
-                model: m.to_cols_array_2d(),
-                color: [0.75, 0.2, 0.2],
-                selected: 0.0,
-            });
-        }
-        let npc_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("npc-instances"),
-            contents: bytemuck::cast_slice(&npc_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
+        // NPC rings: cube instances + server state for zombies
+        let npcs = npcs::build(&device, terrain_extent);
+        let npc_vb = npcs.vb;
+        let npc_ib = npcs.ib;
+        let npc_index_count = npcs.index_count;
+        let npc_instances = npcs.instances;
+        let npc_models = npcs.models;
+        let server = npcs.server;
 
-        // Trees: prefer baked instances if available, else scatter using manifest vegetation params
-        let trees_models_opt = terrain::load_trees_snapshot("wizard_woods");
-        let mut trees_instances_cpu: Vec<types::Instance> = if let Some(models) = &trees_models_opt
-        {
-            terrain::instances_from_models(models)
-        } else {
-            let (tree_count, tree_seed) = zone
-                .vegetation
-                .as_ref()
-                .map(|v| (v.tree_count as usize, v.tree_seed))
-                .unwrap_or((350usize, 20250926u32));
-            terrain::place_trees(&terrain_cpu, tree_count, tree_seed)
-        };
-        // Mark trees with a non-highlight selection value to enable wind sway in the shader
-        for inst in &mut trees_instances_cpu {
-            inst.selected = 0.25; // below 0.5 so it won't render as highlighted
-        }
-        let trees_count = trees_instances_cpu.len() as u32;
-        let trees_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("trees-instances"),
-            contents: bytemuck::cast_slice(&trees_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        // Load a static tree mesh (OBJ) and upload
-        let tree_mesh_path = asset_path("assets/models/trees/OBJ/Tree_3.obj");
-        let tree_mesh_cpu = if tree_mesh_path.exists() {
-            // If OBJ not vendored yet, fall back to cube
-            load_obj_mesh(&tree_mesh_path).context("load OBJ tree mesh")?
-        } else {
-            log::warn!("tree OBJ not found; falling back to cube mesh for trees");
-            // Build a CpuMesh from the cube VB/IB? Simpler: reuse cube buffers
-            // We'll just keep using cube buffers when OBJ is missing.
-            // Placeholder buffers (will be overwritten by npc_vb/ib below if missing)
-            ra_assets::types::CpuMesh {
-                vertices: vec![],
-                indices: vec![],
-            }
-        };
-        let (trees_vb, trees_ib, trees_index_count) = if !tree_mesh_cpu.vertices.is_empty() {
-            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("trees-vb"),
-                contents: bytemuck::cast_slice(&tree_mesh_cpu.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("trees-ib"),
-                contents: bytemuck::cast_slice(&tree_mesh_cpu.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-            (vb, ib, tree_mesh_cpu.indices.len() as u32)
-        } else {
-            // Fallback: reuse the cube geometry
-            (npc_vb.clone(), npc_ib.clone(), npc_index_count)
-        };
-        // If meta exists, verify fingerprints
-        if let Some(models) = &trees_models_opt
-            && let Some(ok) =
-                terrain::verify_snapshot_fingerprints("wizard_woods", &terrain_cpu, Some(models))
-        {
-            log::info!(
-                "zone snapshot meta verification: {}",
-                if ok { "ok" } else { "MISMATCH" }
-            );
-        }
+        // Trees: delegate to foliage module for instance generation and mesh upload
+        let veg = zone
+            .vegetation
+            .as_ref()
+            .map(|v| (v.tree_count as usize, v.tree_seed));
+        let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &zone.slug, veg)
+            .context("build trees (instances + mesh) for zone")?;
+        let trees_instances = trees_gpu.instances;
+        let trees_count = trees_gpu.count;
+        let (trees_vb, trees_ib, trees_index_count) =
+            (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
 
-        log::info!(
-            "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
-            server.npcs.len(),
-            near_count,
-            mid1_count,
-            mid2_count,
-            mid3_count,
-            far_count
-        );
+        // Rocks: load GLB and scatter instances
+        let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &zone.slug, None)
+            .context("build rocks (instances + mesh) for zone")?;
+        let rocks_instances = rocks_gpu.instances;
+        let rocks_count = rocks_gpu.count;
+        let (rocks_vb, rocks_ib, rocks_index_count) =
+            (rocks_gpu.vb, rocks_gpu.ib, rocks_gpu.index_count);
+
+        // Atlases
         // Upload UI atlases
         nameplates.upload_atlas(&queue);
         nameplates_npc.upload_atlas(&queue);
@@ -1335,35 +1243,8 @@ impl Renderer {
         );
         hud.upload_atlas(&queue);
         // Build zombie instances from server NPCs
-        let mut zombie_instances_cpu: Vec<InstanceSkin> = Vec::new();
-        let mut zombie_models: Vec<glam::Mat4> = Vec::new();
-        let mut zombie_ids: Vec<server_core::NpcId> = Vec::new();
-        for (idx, npc) in server.npcs.iter().enumerate() {
-            // Snap initial zombie spawn to terrain height
-            let (h, _n) = terrain::height_at(&terrain_cpu, npc.pos.x, npc.pos.z);
-            let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
-            let m = glam::Mat4::from_scale_rotation_translation(
-                glam::Vec3::splat(1.0),
-                glam::Quat::IDENTITY,
-                pos,
-            );
-            zombie_models.push(m);
-            zombie_ids.push(npc.id);
-            zombie_instances_cpu.push(InstanceSkin {
-                model: m.to_cols_array_2d(),
-                color: [1.0, 1.0, 1.0],
-                selected: 0.0,
-                palette_base: (idx as u32) * zombie_joints,
-                _pad_inst: [0; 3],
-            });
-        }
-        let zombie_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("zombie-instances"),
-            contents: bytemuck::cast_slice(&zombie_instances_cpu),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-        // Zombie palettes storage sized to instance count
-        let zombie_count = zombie_instances_cpu.len() as u32;
+        let (zombie_instances, zombie_instances_cpu, zombie_models, zombie_ids, zombie_count) =
+            zombies::build_instances(&device, &terrain_cpu, &server, zombie_joints);
         let total_z_mats = zombie_count as usize * zombie_joints as usize;
         let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("zombie-palettes"),
@@ -1381,18 +1262,7 @@ impl Renderer {
         });
 
         // Determine asset forward offset from the zombie root node (if present).
-        let zombie_forward_offset = if let Some(root_ix) = zombie_cpu.root_node {
-            let r = zombie_cpu
-                .base_r
-                .get(root_ix)
-                .copied()
-                .unwrap_or(glam::Quat::IDENTITY);
-            let f = r * glam::Vec3::Z; // authoring forward in model space
-            // Flip by 180° to align attack/walk with target direction in our scene.
-            f32::atan2(f.x, f.z) + std::f32::consts::PI
-        } else {
-            0.0
-        };
+        let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
         Ok(Self {
             surface,
@@ -1419,6 +1289,8 @@ impl Renderer {
             blit_scene_read_pipeline,
             bloom_pipeline,
             bloom_bg,
+            lights_buf,
+            direct_present,
             static_index,
             present_bgl: present_bgl.clone(),
             post_ao_bgl: post_ao_bgl.clone(),
@@ -1558,13 +1430,18 @@ impl Renderer {
             npc_index_count,
             npc_instances,
             npc_count: 0, // cubes hidden; zombies replace them visually
-            npc_instances_cpu,
+            npc_instances_cpu: Vec::new(),
             npc_models,
             trees_instances,
             trees_count,
             trees_vb,
             trees_ib,
             trees_index_count,
+            rocks_instances,
+            rocks_count,
+            rocks_vb,
+            rocks_ib,
+            rocks_index_count,
             server,
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
@@ -1575,6 +1452,7 @@ impl Renderer {
             enable_post_ao: false,
             enable_ssgi: false,
             enable_ssr: false,
+            // Enable bloom by default to accent bright fire bolts
             enable_bloom: true,
             // frame overlay removed
         })
@@ -1849,7 +1727,7 @@ impl Renderer {
         // Fog color/density based on time-of-day: dark navy at night, light blue by day.
         // Night fog helps suppress the horizon band and prevents the sky from reading pink.
         if self.sky.sun_dir.y <= 0.0 {
-            globals.fog_params = [0.03, 0.04, 0.06, 0.0065];
+            globals.fog_params = [0.01, 0.015, 0.02, 0.018];
         } else {
             globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
         }
@@ -1894,7 +1772,7 @@ impl Renderer {
                     let before = *hp;
                     *hp = (*hp - dmg).max(0);
                     let fatal = *hp == 0;
-                    log::info!(
+                    log::debug!(
                         "wizard melee hit: idx={} hp {} -> {} (dmg {}), fatal={}",
                         widx,
                         before,
@@ -1921,6 +1799,37 @@ impl Renderer {
         }
         // FX update (projectiles/particles)
         self.update_fx(t, dt);
+        // Update dynamic lights from active projectiles (up to 16)
+        {
+            #[repr(C)]
+            #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+            struct LightsRaw {
+                count: u32,
+                _pad: [f32; 3],
+                pos_radius: [[f32; 4]; 16],
+                color: [[f32; 4]; 16],
+            }
+            let mut raw = LightsRaw {
+                count: 0,
+                _pad: [0.0; 3],
+                pos_radius: [[0.0; 4]; 16],
+                color: [[0.0; 4]; 16],
+            };
+            let mut n = 0usize;
+            let maxr = 10.0f32;
+            for p in &self.projectiles {
+                if n >= 16 {
+                    break;
+                }
+                raw.pos_radius[n] = [p.pos.x, p.pos.y, p.pos.z, maxr];
+                raw.color[n] = [3.0, 1.2, 0.4, 0.0];
+                n += 1;
+            }
+            raw.count = n as u32;
+            // Write packed lights into globals bind group (binding=1 holds the lights UBO)
+            self.queue
+                .write_buffer(&self.lights_buf, 0, bytemuck::bytes_of(&raw));
+        }
 
         // Begin commands
         // Capture validation errors locally to avoid process-wide panic
@@ -1930,12 +1839,23 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
-        // Sky-only pass (no depth) into SceneColor
-        {
+        // Optional safety mode to bypass offscreen passes
+        let present_only = std::env::var("RA_PRESENT_ONLY")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        // Direct-present path: render directly to the swapchain view instead of SceneColor
+        let render_view: &wgpu::TextureView = if self.direct_present {
+            &view
+        } else {
+            &self.scene_view
+        };
+        // Sky-only pass (no depth)
+        log::debug!("pass: sky");
+        if !present_only {
             let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("sky-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.scene_view,
+                    view: render_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
@@ -1958,12 +1878,13 @@ impl Renderer {
             sky.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
-        // Main pass with depth into SceneColor; load color from sky pass
-        {
+        // Main pass with depth; load color from sky pass when offscreen
+        log::debug!("pass: main");
+        if !present_only {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("main-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.scene_view,
+                    view: render_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
@@ -1984,16 +1905,36 @@ impl Renderer {
             });
 
             // Terrain
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.globals_bg, &[]);
-            rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
-            rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
-            rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
-            self.draw_calls += 1;
+            let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+            if std::env::var("RA_DRAW_TERRAIN")
+                .map(|v| v == "0")
+                .unwrap_or(false)
+            {
+                log::debug!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
+            } else {
+                log::debug!("draw: terrain");
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                rpass.set_pipeline(&self.pipeline);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
+                // lights are packed into globals (binding=1)
+                rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
+                rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+                self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after terrain: {:?}", e);
+                }
+            }
 
             // Trees (instanced static mesh)
             if self.trees_count > 0 {
+                log::debug!("draw: trees x{}", self.trees_count);
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -2007,17 +1948,76 @@ impl Renderer {
                 rpass.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
                 self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after trees: {:?}", e);
+                }
+            }
+
+            // Rocks (instanced static mesh)
+            if self.rocks_count > 0 {
+                log::debug!("draw: rocks x{}", self.rocks_count);
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.rocks_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.rocks_instances.slice(..));
+                rpass.set_index_buffer(self.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..self.rocks_index_count, 0, 0..self.rocks_count);
+                self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after rocks: {:?}", e);
+                }
             }
 
             // Wizards
-            self.draw_wizards(&mut rpass);
-            self.draw_calls += 1;
+            if std::env::var("RA_DRAW_WIZARDS")
+                .map(|v| v != "0")
+                .unwrap_or(true)
+            {
+                log::debug!("draw: wizards x{}", self.wizard_count);
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                self.draw_wizards(&mut rpass);
+                self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after wizards: {:?}", e);
+                }
+            } else {
+                log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
+            }
             // Zombies
-            self.draw_zombies(&mut rpass);
-            self.draw_calls += 1;
+            if std::env::var("RA_DRAW_ZOMBIES")
+                .map(|v| v != "0")
+                .unwrap_or(true)
+            {
+                log::debug!("draw: zombies x{}", self.zombie_count);
+                if trace {
+                    self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                self.draw_zombies(&mut rpass);
+                self.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("validation after zombies: {:?}", e);
+                }
+            } else {
+                log::debug!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
+            }
 
-            // Ruins (instanced) — only draw when we have instances
-            if self.ruins_count > 0 {
+            // Ruins (instanced) — allow gating via RA_DRAW_RUINS to isolate crashes
+            let draw_ruins = std::env::var("RA_DRAW_RUINS")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if draw_ruins && self.ruins_count > 0 {
+                log::debug!("draw: ruins x{} (enabled)", self.ruins_count);
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -2031,10 +2031,17 @@ impl Renderer {
                 rpass.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
                 self.draw_calls += 1;
+            } else {
+                log::debug!("draw: ruins skipped (RA_DRAW_RUINS!=1)");
             }
 
             // NPCs (instanced cubes)
-            if self.npc_count > 0 {
+            if std::env::var("RA_DRAW_NPCS")
+                .map(|v| v == "1")
+                .unwrap_or(false)
+                && self.npc_count > 0
+            {
+                log::debug!("draw: npcs x{}", self.npc_count);
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
                 } else {
@@ -2048,6 +2055,8 @@ impl Renderer {
                 rpass.set_index_buffer(self.npc_ib.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.draw_indexed(0..self.npc_index_count, 0, 0..self.npc_count);
                 self.draw_calls += 1;
+            } else if self.npc_count > 0 {
+                log::debug!("draw: npcs skipped (RA_DRAW_NPCS!=1)");
             }
 
             // FX
@@ -2087,25 +2096,39 @@ impl Renderer {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-        self.bars.queue_entries(
-            &self.device,
-            &self.queue,
-            self.config.width,
-            self.config.height,
-            view_proj,
-            &bar_entries,
-        );
-        self.bars.draw(&mut encoder, &self.scene_view);
-        // Damage numbers
-        self.damage.update(dt);
-        self.damage.queue(
-            &self.device,
-            &self.queue,
-            self.config.width,
-            self.config.height,
-            view_proj,
-        );
-        self.damage.draw(&mut encoder, &self.scene_view);
+        // Health bars (default on; set RA_OVERLAYS=0 to hide)
+        if std::env::var("RA_OVERLAYS")
+            .map(|v| v == "0")
+            .unwrap_or(false)
+        {
+            // disabled
+        } else {
+            self.bars.queue_entries(
+                &self.device,
+                &self.queue,
+                self.config.width,
+                self.config.height,
+                view_proj,
+                &bar_entries,
+            );
+            // Draw bars to the active render target
+            let target_view = if self.direct_present {
+                &view
+            } else {
+                &self.scene_view
+            };
+            self.bars.draw(&mut encoder, target_view);
+        }
+        // Damage numbers (temporarily disabled while isolating a macOS validation issue)
+        // self.damage.update(dt);
+        // self.damage.queue(
+        //     &self.device,
+        //     &self.queue,
+        //     self.config.width,
+        //     self.config.height,
+        //     view_proj,
+        // );
+        // self.damage.draw(&mut encoder, &self.scene_view);
 
         // Draw wizard nameplates first
         // Draw wizard nameplates for alive wizards only (hide dead PC/NPC labels)
@@ -2116,15 +2139,26 @@ impl Renderer {
                 wiz_alive.push(*m);
             }
         }
-        self.nameplates.queue_labels(
-            &self.device,
-            &self.queue,
-            self.config.width,
-            self.config.height,
-            view_proj,
-            &wiz_alive,
-        );
-        self.nameplates.draw(&mut encoder, &self.scene_view);
+        // Nameplates default on; set RA_OVERLAYS=0 to hide
+        let draw_labels = std::env::var("RA_OVERLAYS")
+            .map(|v| v != "0")
+            .unwrap_or(true);
+        if draw_labels {
+            let target_view = if self.direct_present {
+                &view
+            } else {
+                &self.scene_view
+            };
+            self.nameplates.queue_labels(
+                &self.device,
+                &self.queue,
+                self.config.width,
+                self.config.height,
+                view_proj,
+                &wiz_alive,
+            );
+            self.nameplates.draw(&mut encoder, target_view);
+        }
 
         // Then NPC nameplates (separate atlas/vbuf instance to avoid intra-frame buffer overwrites)
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
@@ -2138,7 +2172,12 @@ impl Renderer {
             let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             npc_positions.push(head.truncate());
         }
-        if !npc_positions.is_empty() {
+        if draw_labels && !npc_positions.is_empty() {
+            let target_view = if self.direct_present {
+                &view
+            } else {
+                &self.scene_view
+            };
             self.nameplates_npc.queue_npc_labels(
                 &self.device,
                 &self.queue,
@@ -2148,11 +2187,12 @@ impl Renderer {
                 &npc_positions,
                 "Zombie",
             );
-            self.nameplates_npc.draw(&mut encoder, &self.scene_view);
+            self.nameplates_npc.draw(&mut encoder, target_view);
         }
 
-        // Build Hi-Z Z-MAX pyramid from current frame depth
-        if let Some(hiz) = &self.hiz {
+        // Temporarily disable Hi-Z pyramid to isolate a macOS validation crash
+        if false {
+            let Some(hiz) = &self.hiz else { unreachable!() };
             let znear = 0.1f32; // mirrors Globals.clip.x
             let zfar = 1000.0f32; // mirrors Globals.clip.y
             hiz.build_mips(
@@ -2166,7 +2206,7 @@ impl Renderer {
         }
 
         // Copy SceneColor to a read-only texture when SSR or SSGI need it
-        if self.enable_ssgi || self.enable_ssr {
+        if !present_only && (self.enable_ssgi || self.enable_ssr) {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-to-read"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2192,8 +2232,25 @@ impl Renderer {
             blit.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
+        log::debug!("end: main pass");
+
+        // Minimal mode: submit immediately after main pass and present
+        if std::env::var("RA_MINIMAL")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
+            log::debug!("submit: minimal");
+            self.queue.submit(Some(encoder.finish()));
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("wgpu validation error (minimal mode): {:?}", e);
+                // Don’t panic; render loop continues
+                return Ok(());
+            }
+            frame.present();
+            return Ok(());
+        }
         // Ensure SceneRead is available for bloom pass as well
-        if self.enable_bloom {
+        if !present_only && self.enable_bloom {
             let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("blit-scene-to-read(bloom)"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2215,7 +2272,7 @@ impl Renderer {
         }
 
         // SSR overlay into SceneColor (alpha blend)
-        if self.enable_ssr {
+        if !present_only && self.enable_ssr {
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ssr-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2240,7 +2297,7 @@ impl Renderer {
         }
 
         // SSGI additive overlay (fullscreen) into SceneColor
-        if self.enable_ssgi {
+        if !present_only && self.enable_ssgi {
             let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ssgi-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2266,7 +2323,7 @@ impl Renderer {
         // (removed) frame overlay
         // (frame overlay removed)
         // Post-process AO overlay (fullscreen) multiplying into SceneColor
-        if self.enable_post_ao {
+        if !present_only && self.enable_post_ao {
             {
                 let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("post-ao"),
@@ -2313,8 +2370,9 @@ impl Renderer {
             rp.draw(0..3, 0..1);
         }
 
-        // Present SceneColor to swapchain
-        {
+        // Present: if rendering directly to swapchain, skip this pass
+        if !self.direct_present {
+            log::debug!("pass: present");
             let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("present-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2343,10 +2401,12 @@ impl Renderer {
         }
 
         // Submit only if no validation errors occurred
+        // Pop error scope AFTER submitting to ensure validation covers command submission
         if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
             // Skip submit on validation error to keep running without panicking
             log::error!("wgpu validation error (skipping frame): {:?}", e);
         } else {
+            log::debug!("submit: normal path");
             // HUD: build, upload, and draw overlay before submit
             let pc_hp = self
                 .wizard_hp
@@ -2366,7 +2426,13 @@ impl Renderer {
             };
             // No GCD overlay when using cast-time only
             let gcd_frac = 0.0f32;
-            if self.hud_model.hud_enabled() {
+            // HUD (default on; set RA_OVERLAYS=0 to hide)
+            if std::env::var("RA_OVERLAYS")
+                .map(|v| v == "0")
+                .unwrap_or(false)
+            {
+                // disabled
+            } else {
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2375,7 +2441,6 @@ impl Renderer {
                     cast_frac,
                     gcd_frac,
                 );
-                // Append perf overlay (ms and FPS)
                 if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
                     let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
@@ -2854,7 +2919,7 @@ impl Renderer {
                     {
                         if pressed {
                             self.pc_cast_queued = true;
-                            log::info!("PC cast queued: Fire Bolt");
+                        log::debug!("PC cast queued: Fire Bolt");
                         }
                     }
                     // Sky controls (pause/scrub/speed)
@@ -3122,7 +3187,7 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        log::info!("PC Fire Bolt fired at t={:.2}", t);
+                        log::debug!("PC Fire Bolt fired at t={:.2}", t);
                         self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index));
                         self.pc_cast_fired = true;
                     }
@@ -3187,12 +3252,12 @@ impl Renderer {
         // 2) Integrate projectiles and keep them slightly above ground
         // so they don't clip into small terrain undulations.
         let ground_clearance = 0.15f32; // meters above terrain
-        for p in &mut self.projectiles {
-            p.pos += p.vel * dt;
-            // Clamp to be a bit above the terrain height at current XZ.
-            p.pos =
-                crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
-        }
+            for p in &mut self.projectiles {
+                p.pos += p.vel * dt;
+                // Clamp to be a bit above the terrain height at current XZ.
+                p.pos =
+                    crate::gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
+            }
         // 2.5) Server-side collision vs NPCs
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
@@ -3200,7 +3265,7 @@ impl Renderer {
                 .server
                 .collide_and_damage(&mut self.projectiles, dt, damage);
             for h in &hits {
-                log::info!(
+                log::debug!(
                     "hit NPC id={} hp {} -> {} (dmg {}), fatal={}",
                     (h.npc).0,
                     h.hp_before,
@@ -3214,11 +3279,11 @@ impl Renderer {
                     let r = 4.0 + rand_unit() * 1.2;
                     self.particles.push(Particle {
                         pos: h.pos,
-                        vel: glam::vec3(a.cos() * r, 2.0 + rand_unit() * 1.0, a.sin() * r),
+                        vel: glam::vec3(a.cos() * r, 2.0 + rand_unit() * 1.2, a.sin() * r),
                         age: 0.0,
                         life: 0.18,
                         size: 0.02,
-                        color: [1.0, 0.5, 0.2],
+                        color: [1.7, 0.85, 0.35],
                     });
                 }
                 // Update zombie visuals: remove model/instance if dead; otherwise keep
@@ -3287,7 +3352,7 @@ impl Renderer {
                     age: 0.0,
                     life: 0.12,
                     size: 0.06,
-                    color: [1.0, 0.8, 0.25],
+                    color: [1.8, 1.2, 0.4],
                 });
                 for _ in 0..10 {
                     let a = rand_unit() * std::f32::consts::TAU;
@@ -3298,7 +3363,7 @@ impl Renderer {
                         age: 0.0,
                         life: 0.12,
                         size: 0.015,
-                        color: [1.0, 0.55, 0.15],
+                        color: [1.6, 0.9, 0.3],
                     });
                 }
                 self.projectiles.swap_remove(i);
@@ -3342,12 +3407,14 @@ impl Renderer {
         // 4) Upload FX instances (billboard particles) — bolts (with tiny trails) + impact sprites
         let mut inst: Vec<ParticleInstance> =
             Vec::with_capacity(self.projectiles.len() * 3 + self.particles.len());
+        // Brighter firebolt sprites: larger head and boosted emissive color.
+        // Keep additive blending; values >1.0 feed bloom nicely.
         for pr in &self.projectiles {
             // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
-                size: 0.14,
-                color: [1.0, 0.35, 0.08],
+                size: 0.18,
+                color: [2.6, 0.7, 0.18],
                 _pad: 0.0,
             });
             // short trail segments behind
@@ -3358,8 +3425,8 @@ impl Renderer {
                 let fade = 1.0 - (k as f32) * 0.35;
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
-                    size: 0.11,
-                    color: [1.0 * fade, 0.35 * fade, 0.08 * fade],
+                    size: 0.13,
+                    color: [2.0 * fade, 0.55 * fade, 0.16 * fade],
                     _pad: 0.0,
                 });
             }
@@ -3371,7 +3438,7 @@ impl Renderer {
             inst.push(ParticleInstance {
                 pos: [p.pos.x, p.pos.y, p.pos.z],
                 size,
-                color: [p.color[0] * f, p.color[1] * f, p.color[2] * f],
+                color: [p.color[0] * f * 1.5, p.color[1] * f * 1.5, p.color[2] * f * 1.5],
                 _pad: 0.0,
             });
         }
@@ -3450,7 +3517,7 @@ impl Renderer {
                             age: 0.0,
                             life: 0.16,
                             size: 0.02,
-                            color: [1.0, 0.45, 0.15],
+                            color: [1.8, 0.8, 0.3],
                         });
                     }
                     self.projectiles.swap_remove(i);

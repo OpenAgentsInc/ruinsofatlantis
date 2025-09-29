@@ -29,19 +29,31 @@ pub fn create_shader(device: &wgpu::Device) -> ShaderModule {
 }
 
 pub fn create_bind_group_layouts(device: &wgpu::Device) -> (BindGroupLayout, BindGroupLayout) {
-    // Globals (view/proj + time)
+    // Globals (view/proj + time) + Lights (packed UBO)
     let globals = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("globals-bgl"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
     });
 
     // Per-draw Model
@@ -61,6 +73,9 @@ pub fn create_bind_group_layouts(device: &wgpu::Device) -> (BindGroupLayout, Bin
 
     (globals, model)
 }
+
+// Note: lights UBO is packed into the Globals bind group (binding=1) to stay under
+// max_bind_groups across pipelines. No separate lights bind group is used.
 
 pub fn create_palettes_bgl(device: &wgpu::Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -300,6 +315,7 @@ pub fn create_sky_pipeline(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_wizard_pipelines(
     device: &wgpu::Device,
     shader: &ShaderModule,
@@ -586,6 +602,13 @@ pub fn create_present_bgl(device: &wgpu::Device) -> BindGroupLayout {
                     view_dimension: wgpu::TextureViewDimension::D2,
                     sample_type: wgpu::TextureSampleType::Depth,
                 },
+                count: None,
+            },
+            // Non-filtering sampler used when sampling depth
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
         ],
