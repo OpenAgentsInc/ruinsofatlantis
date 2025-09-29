@@ -220,7 +220,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
 
     // Validate frame-graph invariants for this frame
     {
-        let g = super::graph::graph_for(r.enable_ssgi, r.enable_ssr, r.enable_bloom, r.direct_present);
+        let g = super::graph::graph_for(
+            r.enable_ssgi,
+            r.enable_ssr,
+            r.enable_bloom,
+            r.direct_present,
+        );
         g.validate();
     }
 
