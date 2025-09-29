@@ -519,8 +519,8 @@ impl Renderer {
         renderer::init::new_renderer(window).await
     }
 
-    /// Internal constructor retained until full split is complete.
-    pub async fn new_core(window: &Window) -> anyhow::Result<Self> {
+    /// Legacy constructor body (moved). Kept only for reference; not used.
+    pub async fn new_core_legacy(window: &Window) -> anyhow::Result<Self> {
         // --- Instance + Surface + Adapter (with backend fallback) ---
         fn backend_from_env() -> Option<wgpu::Backends> {
             match std::env::var("RA_BACKEND").ok().as_deref() {
@@ -1755,8 +1755,8 @@ impl Renderer {
         renderer::render::render_impl(self)
     }
 
-    /// Internal render implementation retained until full split is complete.
-    pub fn render_core(&mut self) -> Result<(), SurfaceError> {
+    /// Legacy render body (moved). Kept only for reference; not used.
+    pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
