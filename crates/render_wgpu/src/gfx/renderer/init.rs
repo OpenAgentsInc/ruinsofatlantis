@@ -742,12 +742,17 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
 
     // Ability timings from SpecDb (canonical)
     let specdb = data_runtime::specdb::SpecDb::load_default();
-    let (pc_cast_time, firebolt_cd_dur, gcd_duration) =
-        if let Some(fb) = specdb.get_spell("wiz.fire_bolt.srd521") {
-            (fb.cast_time_s, fb.cooldown_s, fb.gcd_s)
-        } else {
-            (1.5, 0.5, 1.5)
-        };
+    let (pc_cast_time, firebolt_cd_dur) = if let Some(fb) = specdb.get_spell("wiz.fire_bolt.srd521")
+    {
+        (fb.cast_time_s, fb.cooldown_s)
+    } else {
+        (1.5, 0.5)
+    };
+    let (mm_cast_time, mm_cd_dur) = if let Some(mm) = specdb.get_spell("wiz.magic_missile.srd521") {
+        (mm.cast_time_s, mm.cooldown_s)
+    } else {
+        (1.0, 0.0)
+    };
 
     Ok(crate::gfx::Renderer {
         surface,
@@ -891,10 +896,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cast_kind: Some(super::super::PcCast::FireBolt),
         pc_anim_start: None,
         pc_cast_time,
+        magic_missile_cast_time: mm_cast_time,
+        magic_missile_cd_dur: mm_cd_dur,
         pc_cast_fired: false,
         firebolt_cd_dur,
-        gcd_until: 0.0,
-        gcd_duration,
         cam_orbit_yaw: 0.0,
         cam_orbit_pitch: 0.2,
         cam_distance: 8.5,

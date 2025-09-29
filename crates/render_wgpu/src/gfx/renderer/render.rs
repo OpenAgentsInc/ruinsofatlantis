@@ -741,9 +741,16 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             0.0
         };
-        let gcd_frac =
+        // Hotbar overlay (slot 1): show cooldown fraction (max across active tracked spells)
+        let gcd_frac_fb =
             r.scene_inputs
                 .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
+        let gcd_frac_mm = r.scene_inputs.cooldown_frac(
+            "wiz.magic_missile.srd521",
+            r.last_time,
+            r.magic_missile_cd_dur,
+        );
+        let gcd_frac = gcd_frac_fb.max(gcd_frac_mm);
         let overlays_disabled = std::env::var("RA_OVERLAYS")
             .map(|v| v == "0")
             .unwrap_or(false);
