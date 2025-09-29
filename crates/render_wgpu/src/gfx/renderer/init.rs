@@ -892,7 +892,6 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_anim_start: None,
         pc_cast_time,
         pc_cast_fired: false,
-        firebolt_cd_until: 0.0,
         firebolt_cd_dur,
         gcd_until: 0.0,
         gcd_duration,

@@ -7,20 +7,19 @@
 use client_core::controller::PlayerController;
 use client_core::input::InputState;
 use collision_static::{Aabb, Capsule, StaticIndex};
+use std::collections::HashMap;
 use glam::Vec3;
 
 #[derive(Debug, Clone)]
 pub struct SceneInputs {
     controller: PlayerController,
     input: InputState,
+    ability: AbilityState,
 }
 
 impl SceneInputs {
     pub fn new(initial_pos: Vec3) -> Self {
-        Self {
-            controller: PlayerController::new(initial_pos),
-            input: InputState::default(),
-        }
+        Self { controller: PlayerController::new(initial_pos), input: InputState::default(), ability: AbilityState::default() }
     }
     pub fn apply_input(&mut self, input: &InputState) {
         self.input = *input;
@@ -74,4 +73,29 @@ impl SceneInputs {
             self.controller.pos = resolved;
         }
     }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AbilityState {
+    cooldown_end_s: HashMap<String, f32>,
+}
+
+impl AbilityState {
+    pub fn can_cast(&self, id: &str, now_s: f32) -> bool {
+        self.cooldown_end_s.get(id).copied().unwrap_or(0.0) <= now_s
+    }
+    pub fn start_cooldown(&mut self, id: &str, now_s: f32, cooldown_s: f32) {
+        let end = now_s + cooldown_s.max(0.0);
+        self.cooldown_end_s.insert(id.to_string(), end);
+    }
+    pub fn cooldown_frac(&self, id: &str, now_s: f32, cooldown_s: f32) -> f32 {
+        let end = self.cooldown_end_s.get(id).copied().unwrap_or(0.0);
+        if end <= now_s || cooldown_s <= 0.0 { 0.0 } else { ((end - now_s) / cooldown_s).clamp(0.0, 1.0) }
+    }
+}
+
+impl SceneInputs {
+    pub fn can_cast(&self, id: &str, now_s: f32) -> bool { self.ability.can_cast(id, now_s) }
+    pub fn start_cooldown(&mut self, id: &str, now_s: f32, cooldown_s: f32) { self.ability.start_cooldown(id, now_s, cooldown_s); }
+    pub fn cooldown_frac(&self, id: &str, now_s: f32, cooldown_s: f32) -> f32 { self.ability.cooldown_frac(id, now_s, cooldown_s) }
 }

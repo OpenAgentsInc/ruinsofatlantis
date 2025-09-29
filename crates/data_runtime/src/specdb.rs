@@ -3,9 +3,9 @@
 //! Provides in-memory indexes and simple normalization so callers don't need
 //! to guess file names or embed heuristics.
 
-use crate::{loader, spell::SpellSpec};
 use crate::class::ClassSpec;
 use crate::monster::MonsterSpec;
+use crate::{loader, spell::SpellSpec};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -45,9 +45,14 @@ impl SpecDb {
         }
         let classes_dir = root.join("data/classes");
         if classes_dir.is_dir() {
-            for ent in std::fs::read_dir(&classes_dir).unwrap_or_else(|_| std::fs::read_dir(".").unwrap()).flatten() {
+            for ent in std::fs::read_dir(&classes_dir)
+                .unwrap_or_else(|_| std::fs::read_dir(".").unwrap())
+                .flatten()
+            {
                 let path = ent.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("json") { continue; }
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
                 let rel = format!("classes/{}", path.file_name().unwrap().to_string_lossy());
                 if let Ok(spec) = loader::load_class_spec(rel) {
                     db.classes.insert(spec.id.clone(), spec);
@@ -56,9 +61,14 @@ impl SpecDb {
         }
         let monsters_dir = root.join("data/monsters");
         if monsters_dir.is_dir() {
-            for ent in std::fs::read_dir(&monsters_dir).unwrap_or_else(|_| std::fs::read_dir(".").unwrap()).flatten() {
+            for ent in std::fs::read_dir(&monsters_dir)
+                .unwrap_or_else(|_| std::fs::read_dir(".").unwrap())
+                .flatten()
+            {
                 let path = ent.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("json") { continue; }
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
                 let rel = format!("monsters/{}", path.file_name().unwrap().to_string_lossy());
                 if let Ok(spec) = loader::load_monster_spec(rel) {
                     db.monsters.insert(spec.id.clone(), spec);

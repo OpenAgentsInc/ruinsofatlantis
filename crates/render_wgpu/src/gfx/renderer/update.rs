@@ -144,8 +144,13 @@ impl Renderer {
                                     false,
                                     fb_col,
                                 );
-                                self.firebolt_cd_until =
-                                    self.last_time + self.firebolt_cd_dur.max(0.0);
+                                // Start cooldown via SceneInputs (single source of truth)
+                                let spell_id = "wiz.fire_bolt.srd521";
+                                self.scene_inputs.start_cooldown(
+                                    spell_id,
+                                    self.last_time,
+                                    self.firebolt_cd_dur,
+                                );
                             }
                             super::super::PcCast::MagicMissile => {
                                 self.spawn_magic_missile(spawn, dir_w, t);

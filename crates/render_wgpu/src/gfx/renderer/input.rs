@@ -32,7 +32,9 @@ impl Renderer {
                         if self.pc_alive =>
                     {
                         if pressed {
-                            if self.last_time >= self.firebolt_cd_until {
+                            // Gate by cooldown via client_runtime ability state
+                            let spell_id = "wiz.fire_bolt.srd521";
+                            if self.scene_inputs.can_cast(spell_id, self.last_time) {
                                 self.pc_cast_queued = true;
                                 self.pc_cast_kind = Some(super::super::PcCast::FireBolt);
                                 self.pc_cast_time = 0.0; // instant
@@ -40,7 +42,7 @@ impl Renderer {
                             } else {
                                 log::debug!(
                                     "Fire Bolt on cooldown: {:.0} ms remaining",
-                                    ((self.firebolt_cd_until - self.last_time) * 1000.0).max(0.0)
+                                    ((self.scene_inputs.cooldown_frac(spell_id, self.last_time, self.firebolt_cd_dur) * self.firebolt_cd_dur) * 1000.0).max(0.0)
                                 );
                             }
                         }

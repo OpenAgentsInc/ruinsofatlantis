@@ -286,8 +286,7 @@ pub struct Renderer {
     pc_anim_start: Option<f32>,
     pc_cast_time: f32,
     pc_cast_fired: bool,
-    // Simple Fire Bolt cooldown tracking (seconds)
-    firebolt_cd_until: f32,
+    // Fire Bolt cooldown duration (seconds); remaining tracked in SceneInputs
     firebolt_cd_dur: f32,
     // Deprecated GCD tracking (not used when cast-time only)
     #[allow(dead_code)]
