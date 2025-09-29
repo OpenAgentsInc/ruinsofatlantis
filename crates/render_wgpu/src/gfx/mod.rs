@@ -629,12 +629,12 @@ impl Renderer {
         let particle_pipeline =
             pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
-        // UI: nameplates + health bars
-        let nameplates = ui::Nameplates::new(&device, offscreen_fmt)?;
-        let nameplates_npc = ui::Nameplates::new(&device, offscreen_fmt)?;
-        let mut bars = ui::HealthBars::new(&device, offscreen_fmt)?;
-        let hud = ui::Hud::new(&device, config.format)?;
-        let damage = ui::DamageFloaters::new(&device, offscreen_fmt)?;
+        // UI: nameplates + health bars — build against active color format (swapchain if direct-present)
+        let nameplates = ui::Nameplates::new(&device, draw_fmt)?;
+        let nameplates_npc = ui::Nameplates::new(&device, draw_fmt)?;
+        let mut bars = ui::HealthBars::new(&device, draw_fmt)?;
+        let hud = ui::Hud::new(&device, draw_fmt)?;
+        let damage = ui::DamageFloaters::new(&device, draw_fmt)?;
 
         // --- Buffers & bind groups ---
         // Globals
