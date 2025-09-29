@@ -43,6 +43,7 @@ fn cargo(args: &[&str]) -> Result<()> {
 }
 
 fn ci() -> Result<()> {
+    warn_hooks();
     cargo(&["fmt", "--all"])?;
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
     wgsl_validate()?;
@@ -50,6 +51,28 @@ fn ci() -> Result<()> {
     cargo(&["test"])?;
     schema_check()?;
     Ok(())
+}
+
+fn warn_hooks() {
+    // Best-effort check: if git exists and hooksPath isn't set to .githooks, print a nudge.
+    let ok = std::process::Command::new("git")
+        .args(["config", "--get", "core.hooksPath"])
+        .output();
+    if let Ok(out) = ok {
+        if out.status.success() {
+            let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if val != ".githooks" {
+                eprintln!(
+                    "xtask: note: enable repo git hooks for pre-push checks: git config core.hooksPath .githooks (current: '{}')",
+                    val
+                );
+            }
+        } else {
+            eprintln!(
+                "xtask: note: couldn't read git hooksPath; you can enable pre-push checks via 'git config core.hooksPath .githooks'"
+            );
+        }
+    }
 }
 
 fn wgsl_validate() -> Result<()> {

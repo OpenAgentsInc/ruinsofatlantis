@@ -104,7 +104,7 @@ cargo xtask bake-zone --slug wizard_woods
 
 ### Git Hooks & Pre‑Push Policy
 - Enable repo hooks locally so pushes run the same checks as CI:
-  - `git config core.hooksPath .githooks`
+  - `./scripts/setup-git-hooks.sh` (preferred), or `git config core.hooksPath .githooks`
 - The Pre‑Push hook (`.githooks/pre-push`) runs the full workspace pipeline:
   - `cargo xtask ci` (fmt + clippy ‑D warnings + WGSL validation via Naga + cargo‑deny if installed + tests + schema checks)
   - It falls back to `cargo run -p xtask -- ci` if `cargo xtask` isn’t installed.
