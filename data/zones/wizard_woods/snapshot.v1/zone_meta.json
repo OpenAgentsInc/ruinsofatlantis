@@ -9,11 +9,11 @@
     "extent": 150.0,
     "seed": 1337,
     "heights_count": 16641,
-    "heights_fingerprint": 1870632624768390770
+    "heights_fingerprint": 5763220223995397141
   },
   "trees": {
-    "count": 350,
-    "fingerprint": 11777574399344449259
+    "count": 0,
+    "fingerprint": 13646096770106105413
   },
-  "content_fingerprint": 6850363702970006437
+  "content_fingerprint": 3835460697695254686
 }
