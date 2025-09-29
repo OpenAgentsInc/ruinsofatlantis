@@ -56,6 +56,12 @@ use types::{Globals, InstanceSkin, Model, ParticleInstance, VertexSkinned};
 use util::scale_to_max;
 
 use crate::server_ext::CollideProjectiles;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PcCast {
+    FireBolt,
+    MagicMissile,
+}
 use std::time::Instant;
 
 use wgpu::{
@@ -294,9 +300,13 @@ pub struct Renderer {
     input: client_core::input::InputState,
     cam_follow: camera_sys::FollowState,
     pc_cast_queued: bool,
+    pc_cast_kind: Option<PcCast>,
     pc_anim_start: Option<f32>,
     pc_cast_time: f32,
     pc_cast_fired: bool,
+    // Simple Fire Bolt cooldown tracking (seconds)
+    firebolt_cd_until: f32,
+    firebolt_cd_dur: f32,
     // Deprecated GCD tracking (not used when cast-time only)
     #[allow(dead_code)]
     gcd_until: f32,
@@ -1527,9 +1537,12 @@ impl Renderer {
                 current_look: scene_build.cam_target,
             },
             pc_cast_queued: false,
+            pc_cast_kind: Some(PcCast::FireBolt),
             pc_anim_start: None,
             pc_cast_time: 1.5,
             pc_cast_fired: false,
+            firebolt_cd_until: 0.0,
+            firebolt_cd_dur: 1.0,
             gcd_until: 0.0,
             gcd_duration: 1.5,
             cam_orbit_yaw: 0.0,
@@ -2554,8 +2567,12 @@ impl Renderer {
             } else {
                 0.0
             };
-            // No GCD overlay when using cast-time only
-            let gcd_frac = 0.0f32;
+            // Hotbar overlay (slot 1): show Fire Bolt cooldown fraction
+            let gcd_frac = if self.last_time < self.firebolt_cd_until && self.firebolt_cd_dur > 0.0 {
+                ((self.firebolt_cd_until - self.last_time) / self.firebolt_cd_dur).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
             // HUD (default on; set RA_OVERLAYS=0 to hide)
             let overlays_disabled = std::env::var("RA_OVERLAYS")
                 .map(|v| v == "0")
@@ -2570,6 +2587,14 @@ impl Renderer {
                     "Press R to respawn",
                 );
             } else if !overlays_disabled {
+                let cast_label = if cast_frac > 0.0 {
+                    match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
+                        PcCast::FireBolt => Some("Fire Bolt"),
+                        PcCast::MagicMissile => Some("Magic Missile"),
+                    }
+                } else {
+                    None
+                };
                 self.hud.build(
                     self.size.width,
                     self.size.height,
@@ -2577,6 +2602,7 @@ impl Renderer {
                     self.wizard_hp_max,
                     cast_frac,
                     gcd_frac,
+                    cast_label,
                 );
                 if self.hud_model.perf_enabled() {
                     let ms = dt * 1000.0;
@@ -3056,8 +3082,27 @@ impl Renderer {
                         if self.pc_alive =>
                     {
                         if pressed {
+                            if self.last_time >= self.firebolt_cd_until {
+                                self.pc_cast_queued = true;
+                                self.pc_cast_kind = Some(PcCast::FireBolt);
+                                self.pc_cast_time = 0.0; // instant
+                                log::debug!("PC cast queued: Fire Bolt");
+                            } else {
+                                log::debug!(
+                                    "Fire Bolt on cooldown: {:.0} ms remaining",
+                                    ((self.firebolt_cd_until - self.last_time) * 1000.0).max(0.0)
+                                );
+                            }
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::Digit2) | PhysicalKey::Code(KeyCode::Numpad2)
+                        if self.pc_alive =>
+                    {
+                        if pressed {
                             self.pc_cast_queued = true;
-                            log::debug!("PC cast queued: Fire Bolt");
+                            self.pc_cast_kind = Some(PcCast::MagicMissile);
+                            self.pc_cast_time = 1.0; // Magic Missile uses Action pacing
+                            log::debug!("PC cast queued: Magic Missile");
                         }
                     }
                     // Sky controls (pause/scrub/speed)
@@ -3339,8 +3384,21 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        log::debug!("PC Fire Bolt fired at t={:.2}", t);
-                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false);
+                        match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
+                            PcCast::FireBolt => {
+                                log::debug!("PC Fire Bolt fired at t={:.2}", t);
+                        // Bright orange for Fire Bolt
+                        let fb_col = [2.6, 0.7, 0.18];
+                        self.spawn_firebolt(spawn, dir_w, t, Some(self.pc_index), false, fb_col);
+                                // Begin 1.0s cooldown
+                                self.firebolt_cd_dur = 1.0;
+                                self.firebolt_cd_until = self.last_time + self.firebolt_cd_dur;
+                            }
+                            PcCast::MagicMissile => {
+                                log::debug!("PC Magic Missile fired at t={:.2}", t);
+                                self.spawn_magic_missile(spawn, dir_w, t);
+                            }
+                        }
                         self.pc_cast_fired = true;
                     }
                     // Immediately end cast animation and start cooldown window
@@ -3394,7 +3452,9 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20; // meters to shift toward center
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true);
+                        // Bright orange for Fire Bolt (NPC casts)
+                        let fb_col = [2.6, 0.7, 0.18];
+                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
                     }
                 }
                 self.wizard_last_phase[i] = phase;
@@ -3562,11 +3622,18 @@ impl Renderer {
         // Brighter firebolt sprites: larger head and boosted emissive color.
         // Keep additive blending; values >1.0 feed bloom nicely.
         for pr in &self.projectiles {
+            // Fade as the projectile nears its lifetime end (range cap or base life)
+            let mut head_fade = 1.0f32;
+            let fade_window = 0.15f32;
+            if pr.t_die > 0.0 {
+                let remain = (pr.t_die - t).max(0.0);
+                head_fade = (remain / fade_window).clamp(0.0, 1.0);
+            }
             // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
                 size: 0.18,
-                color: [2.6, 0.7, 0.18],
+                color: [pr.color[0] * head_fade, pr.color[1] * head_fade, pr.color[2] * head_fade],
                 _pad: 0.0,
             });
             // short trail segments behind
@@ -3574,11 +3641,11 @@ impl Renderer {
             for k in 1..=2 {
                 let t = k as f32 * 0.02;
                 let p = pr.pos - dir * (t * pr.vel.length());
-                let fade = 1.0 - (k as f32) * 0.35;
+                let fade = (1.0 - (k as f32) * 0.35) * head_fade;
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
                     size: 0.13,
-                    color: [2.0 * fade, 0.55 * fade, 0.16 * fade],
+                    color: [pr.color[0] * 0.8 * fade, pr.color[1] * 0.8 * fade, pr.color[2] * 0.8 * fade],
                     _pad: 0.0,
                 });
             }
@@ -3694,15 +3761,21 @@ impl Renderer {
         t: f32,
         owner: Option<usize>,
         snap_to_ground: bool,
+        color: [f32; 3],
     ) {
         let mut speed = 40.0;
-        // Extend projectile lifetime by 50% so paths travel farther.
-        let life = 1.2 * 1.5;
+        // Base lifetime for visuals; will be clamped by spec range below.
+        let base_life = 1.2 * 1.5;
+        // Compute range clamp from spell spec (default 120 ft)
+        let mut max_range_m = 120.0 * 0.3048;
         if let Some(spec) = &self.fire_bolt
             && let Some(p) = &spec.projectile
         {
             speed = p.speed_mps;
+            max_range_m = (spec.range_ft as f32) * 0.3048;
         }
+        let flight_time = if speed > 0.01 { max_range_m / speed } else { base_life };
+        let life = base_life.min(flight_time);
         // Ensure initial spawn is terrain-aware.
         // - PC: keep hand height but raise if below clearance (clamp above).
         // - NPC: snap onto terrain + clearance so bolts hug the ground like the PC's do.
@@ -3717,7 +3790,21 @@ impl Renderer {
             vel: dir * speed,
             t_die: t + life,
             owner_wizard: owner,
+            color,
         });
+    }
+
+    fn spawn_magic_missile(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
+        // For v1, just fire three forward darts similar to Fire Bolt visuals.
+        // Slight lateral offsets for readability.
+        let right = glam::vec3(dir.z, 0.0, -dir.x).normalize_or_zero();
+        let offsets = [-0.12f32, 0.0, 0.12f32];
+        // Light purple color for Magic Missile
+        let mm_col = [1.3, 0.7, 2.3];
+        for off in offsets {
+            let o = origin + right * off;
+            self.spawn_firebolt(o, dir, t, Some(self.pc_index), false, mm_col);
+        }
     }
 
     fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {

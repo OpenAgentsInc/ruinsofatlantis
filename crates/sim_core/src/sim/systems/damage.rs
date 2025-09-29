@@ -2,6 +2,34 @@
 
 use crate::sim::state::SimState;
 
+fn level_band(lvl: u8) -> &'static str {
+    if lvl <= 4 {
+        "1-4"
+    } else if lvl <= 10 {
+        "5-10"
+    } else if lvl <= 16 {
+        "11-16"
+    } else {
+        "17-20"
+    }
+}
+
+fn pick_dice_for_level(dmg: &data_runtime::spell::DamageSpec, lvl: u8) -> String {
+    if let Some(map) = &dmg.dice_by_level_band {
+        let key = level_band(lvl);
+        if let Some(s) = map.get(key) {
+            return s.clone();
+        }
+        // Fallback to highest available band if exact key is missing
+        for k in ["17-20", "11-16", "5-10", "1-4"] {
+            if let Some(s) = map.get(k) {
+                return s.clone();
+            }
+        }
+    }
+    "1d10".to_string()
+}
+
 pub fn run(state: &mut SimState) {
     let pending = std::mem::take(&mut state.pending_damage);
     for (actor_idx, ability_id, crit) in pending {
@@ -10,11 +38,8 @@ pub fn run(state: &mut SimState) {
         };
         let Some(dmg) = &spec.damage else { continue };
         // Copy fields we need before mutably borrowing state
-        let dice: String = dmg
-            .dice_by_level_band
-            .as_ref()
-            .and_then(|m| m.get("1-4").cloned())
-            .unwrap_or_else(|| "1d10".to_string());
+        let lvl = state.actors.get(actor_idx).map(|a| a.char_level).unwrap_or(1);
+        let dice: String = pick_dice_for_level(dmg, lvl);
         let dmg_type = dmg.damage_type.to_ascii_lowercase();
         let _ = spec;
         // Roll

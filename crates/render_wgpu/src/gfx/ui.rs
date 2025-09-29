@@ -1331,6 +1331,7 @@ impl Hud {
     }
 
     /// Build a minimal HUD for the wizard scene.
+    #[allow(clippy::too_many_arguments)] // UI layout builder: grouping these into a struct is overkill for the prototype
     pub fn build(
         &mut self,
         surface_w: u32,
@@ -1339,6 +1340,7 @@ impl Hud {
         pc_hp_max: i32,
         cast_frac: f32,
         gcd_frac: f32,
+        cast_label: Option<&str>,
     ) {
         self.bars_verts.clear();
         self.text_verts.clear();
@@ -1454,7 +1456,7 @@ impl Hud {
                 key,
                 [0.9, 0.9, 0.9, 0.95],
             );
-            // Ability text (slot 1 only for now)
+            // Ability text (slot 1 and 2 for now)
             if i == 0 {
                 self.push_text_line(
                     surface_w,
@@ -1463,6 +1465,15 @@ impl Hud {
                     y1 - 6.0,
                     "Fire Bolt",
                     [1.0, 0.9, 0.3, 0.95],
+                );
+            } else if i == 1 {
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    "Magic Missile",
+                    [0.8, 0.9, 1.0, 0.95],
                 );
             }
             // GCD overlay (if active): simple top-down fill
@@ -1521,14 +1532,17 @@ impl Hud {
                 [0.85, 0.75, 0.25, 1.0],
             );
             // label
-            self.push_text_line(
-                surface_w,
-                surface_h,
-                x0 + 6.0,
-                y0 - 4.0,
-                "Casting Fire Bolt",
-                [1.0, 1.0, 1.0, 0.9],
-            );
+            if let Some(label) = cast_label {
+                let text = format!("Casting {}", label);
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 6.0,
+                    y0 - 4.0,
+                    &text,
+                    [1.0, 1.0, 1.0, 0.9],
+                );
+            }
         }
 
         self.bars_vcount = self.bars_verts.len() as u32;

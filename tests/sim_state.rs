@@ -45,6 +45,7 @@ fn target_ac_and_allies() {
         action: ActionState::Idle,
         gcd: Default::default(),
         target: Some(1),
+        char_level: 1,
         spell_attack_bonus: 0,
         spell_save_dc: 10,
         statuses: vec![],
@@ -67,6 +68,7 @@ fn target_ac_and_allies() {
         action: ActionState::Idle,
         gcd: Default::default(),
         target: None,
+        char_level: 1,
         spell_attack_bonus: 0,
         spell_save_dc: 10,
         statuses: vec![],
@@ -86,6 +88,13 @@ fn roll_dice_str_parses() {
     let mut s = SimState::new(50, 123);
     let v = s.roll_dice_str("2d6");
     assert!((2..=12).contains(&v));
+}
+
+#[test]
+fn roll_dice_str_supports_ndm_plus_k() {
+    let mut s = SimState::new(50, 999);
+    let v = s.roll_dice_str("2d6+3");
+    assert!((5..=15).contains(&v));
 }
 
 #[test]

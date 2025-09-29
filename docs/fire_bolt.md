@@ -30,8 +30,9 @@ Identity & tags
 - `tags`: `["projectile","direct-damage","fire","ranged-spell-attack"]`
 
 Cast, queueing, cooldowns
-- `cast_time_s`: `1.0` (SRD “Action”; pick 1.0 s for real‑time pacing)
-- `gcd_s`: `1.0` (optional; set `0` if no GCD model)
+- `cast_time_s`: `0.0` (prototype: instant cast for forward‑shot gameplay feel)
+ - `gcd_s`: `1.0` (optional; set `0` if no GCD model)
+- `cooldown_s`: `1.0` (prototype: 1 second between instant casts)
 - `cooldown_s`: `0.0`
 - `resource_cost`: `none`
 - `can_move_while_casting`: `false` (tunable)
@@ -62,6 +63,9 @@ Projectile model (viz + travel time)
 - `collide_with`: `["first_target_hit"]`
 - `spawn_offset_m`: `{x:0.0,y:1.6,z:0.5}`
 - Impact time = `cast_end + flight_time`, snapped to server tick.
+- Renderer behavior (prototype): forward‑shot only (no explicit targeting yet). Projectiles are clamped to the SRD range (120 ft) and visually fade out as they approach the max range.
+
+Note: While Fire Bolt is an Action in SRD, our prototype maps it to an instant cast for responsiveness. Magic Missile retains a 1.0 s cast bar.
 
 Secondary effects
 - `ignite_on_flammable_object`: `true` (objects only; not worn/carried)
@@ -203,4 +207,3 @@ VFX/SFX (debug/viz stubs)
 2) Scaling bands: level 1 → 1d10; level 5 → 2d10; level 11 → 3d10; level 17 → 4d10.
 3) Ignition rule: object(flammable=true, worn=false) hit ⇒ `ObjectIgnited`; same object if worn=true ⇒ no ignition.
 4) Tick determinism: with `tick=50 ms`, `cast_time=1.0 s`, projectile 40 m/s at 30 m → impact exactly 1.75 s (after tick snapping). Same seed ⇒ identical outcomes.
-
