@@ -217,6 +217,21 @@ impl Renderer {
                     let m = self.zombie_models.get(idx).copied().unwrap_or(glam::Mat4::IDENTITY);
                     let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
                     self.damage.spawn(head.truncate(), h.damage);
+                    // Remove zombie visuals if fatal
+                    if h.fatal {
+                        self.zombie_ids.swap_remove(idx);
+                        self.zombie_models.swap_remove(idx);
+                        if (idx as u32) < self.zombie_count {
+                            self.zombie_instances_cpu.swap_remove(idx);
+                            self.zombie_count -= 1;
+                            // Recompute palette_base for contiguity
+                            for (i, inst) in self.zombie_instances_cpu.iter_mut().enumerate() {
+                                inst.palette_base = (i as u32) * self.zombie_joints;
+                            }
+                            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+                        }
+                    }
                 } else if let Some(n) = self.server.npcs.iter().find(|n| n.id == h.npc) {
                     let (hgt, _n) = terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
                     let pos = glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z);
