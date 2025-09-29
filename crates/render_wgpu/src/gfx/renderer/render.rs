@@ -244,41 +244,25 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.draw_calls += 1;
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) { log::error!("validation after ruins: {:?}", e); }
         }
-        // Skinned: wizards
-        if r.wizard_count > 0 {
+        // Skinned: wizards (use helper to ensure correct bind group order/index type)
+        if std::env::var("RA_DRAW_WIZARDS").map(|v| v != "0").unwrap_or(true) {
             log::debug!("draw: wizards x{}", r.wizard_count);
-            rp.set_pipeline(&r.wizard_pipeline);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.palettes_bg, &[]);
-            rp.set_bind_group(2, &r.wizard_mat_bg, &[]);
-            rp.set_vertex_buffer(0, r.wizard_vb.slice(..));
-            rp.set_vertex_buffer(1, r.wizard_instances.slice(..));
-            rp.set_index_buffer(r.wizard_ib.slice(..), wgpu::IndexFormat::Uint32);
-            rp.draw_indexed(0..r.wizard_index_count, 0, 0..r.wizard_count);
+            r.draw_wizards(&mut rp);
             r.draw_calls += 1;
+        } else {
+            log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
         // Skinned: zombies
-        if r.zombie_count > 0 {
+        if std::env::var("RA_DRAW_ZOMBIES").map(|v| v != "0").unwrap_or(true) {
             log::debug!("draw: zombies x{}", r.zombie_count);
-            rp.set_pipeline(&r.wizard_pipeline);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.zombie_palettes_bg, &[]);
-            rp.set_bind_group(2, &r.zombie_mat_bg, &[]);
-            rp.set_vertex_buffer(0, r.zombie_vb.slice(..));
-            rp.set_vertex_buffer(1, r.zombie_instances.slice(..));
-            rp.set_index_buffer(r.zombie_ib.slice(..), wgpu::IndexFormat::Uint32);
-            rp.draw_indexed(0..r.zombie_index_count, 0, 0..r.zombie_count);
+            r.draw_zombies(&mut rp);
             r.draw_calls += 1;
+        } else {
+            log::debug!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
         }
         // Particles + projectiles
-        if r.fx_count > 0 {
-            rp.set_pipeline(&r.particle_pipeline);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_vertex_buffer(0, r.quad_vb.slice(..));
-            rp.set_vertex_buffer(1, r.fx_instances.slice(..));
-            rp.draw(0..6, 0..r.fx_count);
-            r.draw_calls += 1;
-        }
+        r.draw_particles(&mut rp);
+        if r.fx_count > 0 { r.draw_calls += 1; }
         // Copy SceneColor into SceneRead when not direct-present
         if !r.direct_present {
             drop(rp);
