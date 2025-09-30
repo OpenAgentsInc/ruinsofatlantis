@@ -39,6 +39,7 @@ pub mod terrain;
 mod ui;
 mod util;
 mod zombies;
+mod deathknight;
 
 use data_runtime::spell::SpellSpec;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
@@ -158,6 +159,10 @@ pub struct Renderer {
     zombie_vb: wgpu::Buffer,
     zombie_ib: wgpu::Buffer,
     zombie_index_count: u32,
+    // Death Knight skinned geometry
+    dk_vb: wgpu::Buffer,
+    dk_ib: wgpu::Buffer,
+    dk_index_count: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -192,6 +197,10 @@ pub struct Renderer {
     zombie_instances: wgpu::Buffer,
     zombie_count: u32,
     zombie_instances_cpu: Vec<InstanceSkin>,
+    // Death Knight instances
+    dk_instances: wgpu::Buffer,
+    dk_count: u32,
+    dk_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
@@ -220,6 +229,13 @@ pub struct Renderer {
     zombie_prev_pos: Vec<glam::Vec3>,
     // Per-instance forward-axis offsets (authoring → world). Calibrated on movement.
     zombie_forward_offsets: Vec<f32>,
+    // Death Knight
+    dk_palettes_buf: wgpu::Buffer,
+    dk_palettes_bg: wgpu::BindGroup,
+    dk_joints: u32,
+    dk_models: Vec<glam::Mat4>,
+    dk_cpu: SkinnedMeshCPU,
+    dk_time_offset: Vec<f32>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -232,6 +248,10 @@ pub struct Renderer {
     _zombie_mat_buf: wgpu::Buffer,
     _zombie_tex_view: wgpu::TextureView,
     _zombie_sampler: wgpu::Sampler,
+    dk_mat_bg: wgpu::BindGroup,
+    _dk_mat_buf: wgpu::Buffer,
+    _dk_tex_view: wgpu::TextureView,
+    _dk_sampler: wgpu::Sampler,
 
     // Flags
     wire_enabled: bool,
@@ -2832,6 +2852,48 @@ impl Renderer {
             }
         }
         // No single bulk upload; we wrote per-instance segments above.
+    }
+
+    fn update_deathknight_palettes(&mut self, time_global: f32) {
+        if self.dk_count == 0 {
+            return;
+        }
+        let joints = self.dk_joints as usize;
+        // Choose an idle-like clip if present; fallback to any available clip.
+        let find_clip = |subs: &[&str],
+                         anims: &std::collections::HashMap<String, AnimClip>|
+         -> Option<String> {
+            let subsl: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
+            for name in anims.keys() {
+                let low = name.to_lowercase();
+                if subsl.iter().any(|s| low.contains(s)) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
+        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.dk_count as usize * joints);
+        for i in 0..(self.dk_count as usize) {
+            let lookup = find_clip(&["idle", "stand", "wait"], &self.dk_cpu.animations)
+                .or_else(|| self.dk_cpu.animations.keys().next().cloned())
+                .unwrap_or_else(|| "__static".to_string());
+            let t = time_global + self.dk_time_offset.get(i).copied().unwrap_or(0.0);
+            if lookup == "__static" {
+                // Use identity palette if no animation is available
+                for _ in 0..joints {
+                    mats.push(glam::Mat4::IDENTITY);
+                }
+            } else if let Some(clip) = self.dk_cpu.animations.get(&lookup) {
+                let palette = anim::sample_palette(&self.dk_cpu, clip, t);
+                mats.extend(palette);
+            }
+        }
+        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
+        for m in mats {
+            raw.push(m.to_cols_array());
+        }
+        self.queue
+            .write_buffer(&self.dk_palettes_buf, 0, bytemuck::cast_slice(&raw));
     }
 
     fn update_zombies_from_server(&mut self) {

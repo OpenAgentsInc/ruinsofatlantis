@@ -185,6 +185,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         r.update_zombies_from_server();
         r.update_zombie_palettes(t);
     }
+    // Death Knight palettes (single instance)
+    r.update_deathknight_palettes(t);
     // FX update (projectiles/particles)
     r.update_fx(t, dt);
     // Update dynamic lights from active projectiles (up to 16)
@@ -405,6 +407,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
+        // Skinned: Death Knight (boss)
+        if r.dk_count > 0 {
+            log::debug!("draw: deathknight x{}", r.dk_count);
+            r.draw_deathknight(&mut rp);
+            r.draw_calls += 1;
+        }
         // Skinned: zombies
         if std::env::var("RA_DRAW_ZOMBIES")
             .map(|v| v != "0")
@@ -483,6 +491,13 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
                 let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
                 bar_entries.push((head.truncate(), frac));
+            }
+        }
+        // Death Knight bar (show full for now; server hook to follow)
+        if r.dk_count > 0 {
+            if let Some(m) = r.dk_models.get(0).copied() {
+                let head = m * glam::Vec4::new(0.0, 2.3, 0.0, 1.0);
+                bar_entries.push((head.truncate(), 1.0));
             }
         }
         // Queue bars vertices and draw to the active target
@@ -564,6 +579,23 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 "Zombie",
             );
             r.nameplates_npc.draw(&mut encoder, labels_target);
+        }
+        // Death Knight nameplate
+        if r.dk_count > 0 {
+            if let Some(m) = r.dk_models.get(0).copied() {
+                let head = m * glam::Vec4::new(0.0, 2.6, 0.0, 1.0);
+                let pos = vec![head.truncate()];
+                r.nameplates_npc.queue_npc_labels(
+                    &r.device,
+                    &r.queue,
+                    r.config.width,
+                    r.config.height,
+                    view_proj,
+                    &pos,
+                    "Death Knight",
+                );
+                r.nameplates_npc.draw(&mut encoder, labels_target);
+            }
         }
     }
 

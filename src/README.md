@@ -96,7 +96,9 @@ Gameplay wiring (prototype)
   - scene.rs — Demo scene assembly (spawn world, build instance buffers, camera target). Wizards now spawn over generated terrain.
   - material.rs — Wizard material creation (base color texture + transform uniform).
   - fx.rs — FX resources (instances buffer, model bind group, quad VB) and integration helpers.
-  - draw.rs — Renderer draw methods for wizards and particles.
+  - zombies.rs — Skinned zombie assets/instances (server-driven ring).
+  - deathknight.rs — Skinned Death Knight boss (zombie-guy.glb), single oversized instance.
+  - draw.rs — Renderer draw methods for wizards, zombies, death knight, and particles.
   - ui.rs — On-screen UI overlays (nameplates/text/bars) rendered in screen space, plus a minimal HUD.
 
 ## Build & Dev Loop

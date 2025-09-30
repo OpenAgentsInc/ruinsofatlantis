@@ -678,6 +678,20 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let _zombie_tex_view = zmat.texture_view;
     let _zombie_sampler = zmat.sampler;
 
+    // Death Knight assets (skinned, single instance)
+    let dk_assets = super::super::deathknight::load_assets(&device)
+        .context("load deathknight assets")?;
+    let dk_cpu = dk_assets.cpu;
+    let dk_vb = dk_assets.vb;
+    let dk_ib = dk_assets.ib;
+    let dk_index_count = dk_assets.index_count;
+    let dk_joints = dk_cpu.joints_nodes.len() as u32;
+    let dk_mat = material::create_wizard_material(&device, &queue, &material_bgl, &dk_cpu);
+    let dk_mat_bg = dk_mat.bind_group;
+    let _dk_mat_buf = dk_mat.uniform_buf;
+    let _dk_tex_view = dk_mat.texture_view;
+    let _dk_sampler = dk_mat.sampler;
+
     // NPCs and server
     let npcs = npcs::build(&device, terrain_extent);
     let npc_vb = npcs.vb;
@@ -734,6 +748,25 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: zombie_palettes_buf.as_entire_binding(),
+        }],
+    });
+
+    // Death Knight single-instance buffers and palettes
+    let (dk_instances, dk_instances_cpu, dk_models, dk_count) =
+        super::super::deathknight::build_instances(&device, &terrain_cpu, dk_joints);
+    let total_dk_mats = dk_count as usize * dk_joints as usize;
+    let dk_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("deathknight-palettes"),
+        size: (total_dk_mats * 64) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let dk_palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("deathknight-palettes-bg"),
+        layout: &palettes_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: dk_palettes_buf.as_entire_binding(),
         }],
     });
 
@@ -816,6 +849,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_vb,
         wizard_ib,
         wizard_index_count,
+        dk_vb,
+        dk_ib,
+        dk_index_count,
         zombie_vb,
         zombie_ib,
         zombie_index_count,
@@ -840,6 +876,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         rocks_index_count,
         wizard_instances,
         wizard_count: wizard_instances_cpu.len() as u32,
+        dk_instances,
+        dk_count,
+        dk_instances_cpu,
         zombie_instances,
         zombie_count: zombie_instances_cpu.len() as u32,
         zombie_instances_cpu,
@@ -860,6 +899,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _wizard_mat_buf,
         _wizard_tex_view,
         _wizard_sampler,
+        dk_mat_bg,
+        _dk_mat_buf,
+        _dk_tex_view,
+        _dk_sampler,
         zombie_mat_bg,
         _zombie_mat_buf,
         _zombie_tex_view,
@@ -913,6 +956,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_hp_max: 100,
         pc_alive: true,
         wizards_hostile_to_pc: false,
+        dk_palettes_buf,
+        dk_palettes_bg,
+        dk_joints,
+        dk_models: dk_models.clone(),
+        dk_cpu,
+        dk_time_offset: (0..dk_count as usize).map(|_| 0.0f32).collect(),
         zombie_palettes_buf,
         zombie_palettes_bg,
         zombie_joints,
