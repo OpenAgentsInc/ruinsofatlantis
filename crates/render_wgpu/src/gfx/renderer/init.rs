@@ -174,12 +174,18 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
+    // Choose offscreen color format (wasm: Rgba8Unorm for broad compatibility)
+    #[cfg(target_arch = "wasm32")]
+    let offscreen_fmt = wgpu::TextureFormat::Rgba8Unorm;
+    #[cfg(not(target_arch = "wasm32"))]
+    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+
     let attachments = super::Attachments::create(
         &device,
         config.width,
         config.height,
         config.format,
-        wgpu::TextureFormat::Rgba16Float,
+        offscreen_fmt,
     );
     // Legacy fields: mirror attachments for existing struct layout
     let _depth = attachments.depth_view.clone();
@@ -196,12 +202,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
-    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
     // Allow direct-present path: on web, prefer offscreen + explicit present for stability
     #[cfg(target_arch = "wasm32")]
     let direct_present = false;
     #[cfg(not(target_arch = "wasm32"))]
-    let direct_present = std::env::var("RA_DIRECT_PRESENT").map(|v| v != "0").unwrap_or(true);
+    let direct_present = std::env::var("RA_DIRECT_PRESENT")
+        .map(|v| v != "0")
+        .unwrap_or(true);
     let draw_fmt = if direct_present {
         config.format
     } else {
@@ -217,11 +224,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let present_pipeline =
         pipeline::create_present_pipeline(&device, &globals_bgl, &present_bgl, config.format);
     let blit_scene_read_pipeline =
-        pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        pipeline::create_blit_pipeline(&device, &present_bgl, offscreen_fmt);
     // Bloom
     let bloom_bgl = pipeline::create_bloom_bgl(&device);
     let bloom_pipeline =
-        pipeline::create_bloom_pipeline(&device, &bloom_bgl, wgpu::TextureFormat::Rgba16Float);
+        pipeline::create_bloom_pipeline(&device, &bloom_bgl, offscreen_fmt);
     // Post AO pipeline
     let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
     let post_ao_pipeline =
@@ -234,13 +241,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &ssgi_globals_bgl,
         &ssgi_depth_bgl,
         &ssgi_scene_bgl,
-        wgpu::TextureFormat::Rgba16Float,
+        offscreen_fmt,
     );
     let ssr_pipeline = pipeline::create_ssr_pipeline(
         &device,
         &ssr_depth_bgl,
         &ssr_scene_bgl,
-        wgpu::TextureFormat::Rgba16Float,
+        offscreen_fmt,
     );
     let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
         &device,
