@@ -229,32 +229,29 @@ See Gap Audit below for details on remaining cleanup tasks.
 The following discrepancies were found when comparing the PDF’s table of contents to this Markdown conversion:
 
 - Missing sections (now added): Rules Glossary; Gameplay Toolbox (Travel Pace; Creating a Background; Curses and Magical Contagions; Environmental Effects; Fear and Mental Stress; Poison; Traps; Combat Encounters; Magic Items).
-- Monsters A–Z: present but inconsistent. Many filenames came from an early auto‑split and include partial headings (e.g., combined names). Will be regenerated from a fresh extract and normalized to one monster per file under 07-monsters/a-z/Letter/monster-slug.md with updated index. Aggregate text is available in 07-monsters/a-z/ALL.md.
-- Animals A–Z: partially present with placeholder/garbled filenames. Will be regenerated from a fresh extract and normalized to one animal per file under 08-animals/a-z/Letter/animal-slug.md with updated index. Aggregate text is available in 08-animals/a-z/ALL.md.
+- Monsters A–Z: initial normalization complete (one creature per file with per‑letter indexes). Remaining: refine edge cases where adjacent stat blocks were included; ensure one stat block per file and headings/CRs are correct.
+- Animals A–Z: initial normalization complete. Remaining: refine edge cases and validate each file’s stat block fields.
 - Cross‑links: numerous cross‑references to “Rules Glossary” were dangling. These now resolve via 09-rules-glossary/rules-glossary.md. Future work: link directly to per‑term anchors once the glossary is split per term.
-- Equipment/adventuring-gear.md: large file contains unrelated material from prior bulk extraction (snippets of spells/monsters). Needs pruning to just gear tables and descriptions.
+- Adventuring Gear: cleaned and re‑extracted directly from the PDF; review wide table formatting in Markdown viewers.
 
 ## Tools
 
-- Extract sections from the PDF (Rules Glossary, Gameplay Toolbox; aggregate Monsters/Animals):
+- Extract sections from the PDF (Rules Glossary, Gameplay Toolbox; aggregate Monsters/Animals; Adventuring Gear):
   - `python3 scripts/extract_srd_sections.py`
 - Experimental splitter for Monsters/Animals from the aggregate files (manual review recommended):
   - `python3 scripts/split_monsters_animals.py`
 
 ## Next Steps
 
-- Normalize Monsters A–Z
-  - Regenerate one creature per file from `07-monsters/a-z/ALL.md` with clean slugs (e.g., `A/aboleth.md`).
-  - Rebuild per‑letter `README.md` indexes and link from the main monsters index.
-  - Validate each file has required stat block lines (AC, HP, Speed, Size/Type) and remove extraction artifacts like stray section headers.
-- Normalize Animals A–Z
-  - Repeat the above using `08-animals/a-z/ALL.md`; fix placeholder/garbled filenames.
-- Clean Equipment
-  - Prune `05-equipment/adventuring-gear.md` back to gear tables and descriptions; re‑extract affected pages if needed to remove unrelated text.
-- Improve Cross‑Links
-  - Add anchors and cross‑links between classes, spells, conditions, and glossary terms (e.g., “Prone”, “Concentration”).
-  - Add “Source pages” metadata to file headers for easier verification against the PDF.
+- Monsters/Animals refinement pass
+  - Split any residual multi‑creature blocks at the next Size/Type line; ensure exactly one stat block per file.
+  - Validate required fields (AC, HP, Speed, Size/Type, Senses, Languages, CR) and trim stray section headers.
+  - Update top‑level indexes if creature filenames change; keep letter `README.md` files in sync.
+- Cross‑links and metadata
+  - Add anchors and links between rules (conditions, senses, actions) and references in classes/spells/monsters.
+  - Add “Source pages” metadata to headers to aid verification against the PDF.
 - Optional: Split Rules Glossary by term
-  - Convert the single glossary file into A–Z folders (one term per file) to allow deep linking directly to definitions.
-- Optional: Add basic link checks
-  - Add a simple CI/doc check (e.g., markdown link validation) to catch broken intra‑repo links as content evolves.
+  - Convert the single glossary file into A–Z folders (one term per file) for deep‑linking to definitions.
+- Optional: Docs hygiene
+  - Add a CI link checker and simple table/heading lints to catch regressions.
+  - Remove aggregate `ALL.md` files once per‑item files are fully validated.
