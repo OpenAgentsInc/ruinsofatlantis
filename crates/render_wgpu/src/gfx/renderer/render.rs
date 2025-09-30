@@ -237,6 +237,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     // Begin commands
+    #[cfg(not(target_arch = "wasm32"))]
     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder = r
         .device
@@ -315,6 +316,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             log::debug!("draw: terrain");
             if trace {
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
             }
             rp.set_pipeline(&r.pipeline);
@@ -324,6 +326,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
             r.draw_calls += 1;
+            #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after terrain: {:?}", e);
             }
@@ -332,6 +335,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.trees_count > 0 {
             log::debug!("draw: trees x{}", r.trees_count);
             if trace {
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
             }
             let inst_pipe = if r.wire_enabled {
@@ -347,6 +351,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.trees_index_count, 0, 0..r.trees_count);
             r.draw_calls += 1;
+            #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after trees: {:?}", e);
             }
@@ -355,6 +360,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.rocks_count > 0 {
             log::debug!("draw: rocks x{}", r.rocks_count);
             if trace {
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
             }
             let inst_pipe = if r.wire_enabled {
@@ -370,6 +376,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.rocks_index_count, 0, 0..r.rocks_count);
             r.draw_calls += 1;
+            #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after rocks: {:?}", e);
             }
@@ -551,6 +558,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     {
         log::debug!("submit: minimal");
         r.queue.submit(Some(encoder.finish()));
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
             log::error!("wgpu validation error (minimal mode): {:?}", e);
             return Ok(());
@@ -701,6 +709,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     // Submit
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
         log::error!("wgpu validation error (skipping frame): {:?}", e);
     } else {

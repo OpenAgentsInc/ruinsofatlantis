@@ -53,10 +53,10 @@ enum PcCast {
     MagicMissile,
     Fireball,
 }
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use rand::Rng as _;
 use wgpu::{SurfaceError, util::DeviceExt};
