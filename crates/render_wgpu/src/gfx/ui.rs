@@ -554,17 +554,16 @@ impl Nameplates {
                 });
 
                 let adv = scaled.h_advance(gid);
+                // Half-texel inset to avoid sampling into neighboring glyph cells
+                let u0 = (ox as f32 + 0.5) / (atlas_w as f32);
+                let v0 = (oy as f32 + 0.5) / (atlas_h as f32);
+                let u1 = ((ox as u32 + gw) as f32 - 0.5) / (atlas_w as f32);
+                let v1 = ((oy as u32 + gh) as f32 - 0.5) / (atlas_h as f32);
                 glyphs.insert(
                     ch,
                     GlyphInfo {
-                        uv_min: [
-                            (ox as f32) / (atlas_w as f32),
-                            (oy as f32) / (atlas_h as f32),
-                        ],
-                        uv_max: [
-                            ((ox as u32 + gw) as f32) / (atlas_w as f32),
-                            ((oy as u32 + gh) as f32) / (atlas_h as f32),
-                        ],
+                        uv_min: [u0, v0],
+                        uv_max: [u1, v1],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
                         advance: adv,
