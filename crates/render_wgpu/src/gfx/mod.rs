@@ -531,7 +531,12 @@ impl Renderer {
         });
         // Spawn new DK server NPC at the DK model position
         let dk_spawn_pos = {
-            let c = self.dk_models.first().copied().unwrap_or(glam::Mat4::IDENTITY).to_cols_array();
+            let c = self
+                .dk_models
+                .first()
+                .copied()
+                .unwrap_or(glam::Mat4::IDENTITY)
+                .to_cols_array();
             glam::vec3(c[12], c[13], c[14])
         };
         let dk_id = {

@@ -466,6 +466,21 @@ impl Renderer {
                     // If the player hit any wizard, all wizards become hostile to the player
                     if pr.owner_wizard == Some(self.pc_index) {
                         self.wizards_hostile_to_pc = true;
+                        // Ensure NPC wizards resume casting loop even if all monsters are dead
+                        // by switching them back to the PortalOpen loop.
+                        for i in 0..(self.wizard_count as usize) {
+                            if i == self.pc_index {
+                                continue;
+                            }
+                            if self.wizard_hp.get(i).copied().unwrap_or(0) <= 0 {
+                                continue;
+                            }
+                            if self.wizard_anim_index[i] != 0 {
+                                self.wizard_anim_index[i] = 0;
+                                // Reset last phase so they can fire promptly
+                                self.wizard_last_phase[i] = 0.0;
+                            }
+                        }
                     }
                     if fatal {
                         if j == self.pc_index {
