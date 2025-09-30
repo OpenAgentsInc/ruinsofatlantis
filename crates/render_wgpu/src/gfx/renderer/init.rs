@@ -202,9 +202,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
-    // Allow direct-present path: on web, prefer offscreen + explicit present for stability
+    // On web, draw directly to the swapchain to simplify the path.
     #[cfg(target_arch = "wasm32")]
-    let direct_present = false;
+    let direct_present = true;
     #[cfg(not(target_arch = "wasm32"))]
     let direct_present = std::env::var("RA_DIRECT_PRESENT")
         .map(|v| v != "0")
@@ -227,8 +227,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pipeline::create_blit_pipeline(&device, &present_bgl, offscreen_fmt);
     // Bloom
     let bloom_bgl = pipeline::create_bloom_bgl(&device);
-    let bloom_pipeline =
-        pipeline::create_bloom_pipeline(&device, &bloom_bgl, offscreen_fmt);
+    let bloom_pipeline = pipeline::create_bloom_pipeline(&device, &bloom_bgl, offscreen_fmt);
     // Post AO pipeline
     let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
     let post_ao_pipeline =
@@ -243,12 +242,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &ssgi_scene_bgl,
         offscreen_fmt,
     );
-    let ssr_pipeline = pipeline::create_ssr_pipeline(
-        &device,
-        &ssr_depth_bgl,
-        &ssr_scene_bgl,
-        offscreen_fmt,
-    );
+    let ssr_pipeline =
+        pipeline::create_ssr_pipeline(&device, &ssr_depth_bgl, &ssr_scene_bgl, offscreen_fmt);
     let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
         &device,
         &shader,
