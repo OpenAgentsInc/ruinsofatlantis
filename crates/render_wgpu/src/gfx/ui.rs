@@ -896,14 +896,14 @@ impl HealthBars {
             let r = 1.0 - t;
             let g = 1.0;
             let b = 0.0;
-            [r, g, b, 1.0]
+            [r, g, b, 0.75]
         } else {
             // red -> yellow
             let t = f / 0.5;
             let r = 1.0;
             let g = t;
             let b = 0.0;
-            [r, g, b, 1.0]
+            [r, g, b, 0.75]
         }
     }
 
