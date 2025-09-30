@@ -3,7 +3,7 @@
 use wgpu::SurfaceError;
 
 // Bring parent gfx modules/types into scope for the moved body.
-use crate::gfx::{camera_sys, terrain, types::Model};
+use crate::gfx::{camera_sys, terrain, types::{Model, Globals}};
 
 /// Full render implementation (moved from gfx/mod.rs).
 pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
@@ -21,6 +21,29 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("wasm-debug-sky"),
             });
+        // Update a minimal Globals UBO so terrain renders with a sane camera
+        let aspect = r.config.width.max(1) as f32 / r.config.height.max(1) as f32;
+        let eye = glam::vec3(0.0, 6.0, -10.0);
+        let look = glam::vec3(0.0, 0.5, 0.0);
+        let up = glam::Vec3::Y;
+        let view_m = glam::Mat4::look_at_rh(eye, look, up);
+        let fov_y = 60f32.to_radians();
+        let proj = glam::Mat4::perspective_rh(fov_y, aspect, 0.1, 1000.0);
+        let vp = proj * view_m;
+        let mut g = Globals {
+            view_proj: vp.to_cols_array_2d(),
+            cam_right_time: [1.0, 0.0, 0.0, 0.0],
+            cam_up_pad: [0.0, 1.0, 0.0, (fov_y * 0.5).tan()],
+            sun_dir_time: [r.sky.sun_dir.x, r.sky.sun_dir.y, r.sky.sun_dir.z, r.sky.day_frac],
+            sh_coeffs: [[0.0; 4]; 9],
+            fog_params: [0.6, 0.7, 0.8, 0.0035],
+            clip_params: [0.1, 1000.0, 1.0, 0.0],
+        };
+        if r.sky.sun_dir.y <= 0.0 {
+            g.fog_params = [0.01, 0.015, 0.02, 0.018];
+        }
+        r.queue.write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&g));
+
         // 1) Sky into offscreen
         let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wasm-debug-sky-pass"),
@@ -62,7 +85,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &r.attachments.depth_view,
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
                     stencil_ops: None,
                 }),
                 occlusion_query_set: None,
