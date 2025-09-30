@@ -79,6 +79,30 @@ impl Renderer {
                             }
                         }
                     }
+                    PhysicalKey::Code(KeyCode::Digit3) | PhysicalKey::Code(KeyCode::Numpad3)
+                        if self.pc_alive =>
+                    {
+                        if pressed {
+                            let spell_id = "wiz.fireball.srd521";
+                            if self.scene_inputs.can_cast(spell_id, self.last_time) {
+                                self.pc_cast_queued = true;
+                                self.pc_cast_kind = Some(super::super::PcCast::Fireball);
+                                self.pc_cast_time = self.fireball_cast_time.max(0.0);
+                                log::debug!("PC cast queued: Fireball");
+                            } else {
+                                log::debug!(
+                                    "Fireball on cooldown: {:.0} ms remaining",
+                                    ((self.scene_inputs.cooldown_frac(
+                                        spell_id,
+                                        self.last_time,
+                                        self.fireball_cd_dur,
+                                    ) * self.fireball_cd_dur)
+                                        * 1000.0)
+                                        .max(0.0)
+                                );
+                            }
+                        }
+                    }
                     // Sky controls (pause/scrub/speed)
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {

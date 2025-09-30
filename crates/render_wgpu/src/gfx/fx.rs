@@ -4,12 +4,25 @@ use crate::gfx::types::ParticleInstance;
 use wgpu::util::DeviceExt;
 
 #[derive(Clone, Copy, Debug)]
+pub enum ProjectileKind {
+    Normal,
+    MagicMissile,
+    /// Fireball projectile that explodes on hit/timeout.
+    /// radius: explosion radius in meters; damage: flat damage to apply (renderer-side proto)
+    Fireball {
+        radius: f32,
+        damage: i32,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Projectile {
     pub pos: glam::Vec3,
     pub vel: glam::Vec3,
     pub t_die: f32,
     pub owner_wizard: Option<usize>,
     pub color: [f32; 3],
+    pub kind: ProjectileKind,
 }
 
 #[allow(dead_code)]

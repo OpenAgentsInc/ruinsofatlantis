@@ -730,7 +730,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.last_time,
             r.magic_missile_cd_dur,
         );
-        let gcd_frac = gcd_frac_fb.max(gcd_frac_mm);
+        let gcd_frac_fb2 =
+            r.scene_inputs
+                .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
+        let gcd_frac = gcd_frac_fb.max(gcd_frac_mm).max(gcd_frac_fb2);
         let overlays_disabled = std::env::var("RA_OVERLAYS")
             .map(|v| v == "0")
             .unwrap_or(false);
@@ -747,6 +750,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                     super::super::PcCast::FireBolt => Some("Fire Bolt"),
                     super::super::PcCast::MagicMissile => Some("Magic Missile"),
+                    super::super::PcCast::Fireball => Some("Fireball"),
                 }
             } else {
                 None

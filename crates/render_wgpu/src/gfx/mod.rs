@@ -51,6 +51,7 @@ use types::InstanceSkin;
 enum PcCast {
     FireBolt,
     MagicMissile,
+    Fireball,
 }
 use std::time::Instant;
 
@@ -313,6 +314,8 @@ pub struct Renderer {
     // Ability timings cached from SpecDb
     magic_missile_cast_time: f32,
     magic_missile_cd_dur: f32,
+    fireball_cast_time: f32,
+    fireball_cd_dur: f32,
     pc_cast_fired: bool,
     // Fire Bolt cooldown duration (seconds); remaining tracked in SceneInputs
     firebolt_cd_dur: f32,
@@ -2531,6 +2534,7 @@ impl Renderer {
                     match self.pc_cast_kind.unwrap_or(PcCast::FireBolt) {
                         PcCast::FireBolt => Some("Fire Bolt"),
                         PcCast::MagicMissile => Some("Magic Missile"),
+                        PcCast::Fireball => Some("Fireball"),
                     }
                 } else {
                     None

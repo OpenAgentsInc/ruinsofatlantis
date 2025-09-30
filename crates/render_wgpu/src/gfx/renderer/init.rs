@@ -802,6 +802,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     } else {
         (1.0, 0.0)
     };
+    let (fb_cast_time, fb_cd_dur) = if let Some(fb) = specdb.get_spell("wiz.fireball.srd521") {
+        (fb.cast_time_s, fb.cooldown_s)
+    } else {
+        (1.0, 2.0)
+    };
 
     Ok(crate::gfx::Renderer {
         surface,
@@ -957,6 +962,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cast_time,
         magic_missile_cast_time: mm_cast_time,
         magic_missile_cd_dur: mm_cd_dur,
+        fireball_cast_time: fb_cast_time,
+        fireball_cd_dur: fb_cd_dur,
         pc_cast_fired: false,
         firebolt_cd_dur,
         cam_orbit_yaw: 0.0,
