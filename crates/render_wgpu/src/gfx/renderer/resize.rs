@@ -25,6 +25,10 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
     r.surface.configure(&r.device, &r.config);
     // Rebuild attachments in one place
     let sc_fmt = r.config.format;
+    // Match init: use Rgba8 on wasm, Rgba16F elsewhere
+    #[cfg(target_arch = "wasm32")]
+    let offscreen = wgpu::TextureFormat::Rgba8Unorm;
+    #[cfg(not(target_arch = "wasm32"))]
     let offscreen = wgpu::TextureFormat::Rgba16Float;
     r.attachments.swapchain_format = sc_fmt;
     r.attachments.offscreen_format = offscreen;
@@ -64,7 +68,7 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
             },
         ],
     });
@@ -78,7 +82,7 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
             },
         ],
     });
