@@ -674,7 +674,49 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     };
     r.damage.draw(&mut encoder, damage_target);
 
-    // Nameplates disabled (show health bars only)
+    // Nameplates (wizards first, then NPCs). Honor RA_OVERLAYS=0 to hide.
+    let draw_labels = std::env::var("RA_OVERLAYS").map(|v| v != "0").unwrap_or(true);
+    if draw_labels {
+        // Alive wizards only
+        let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
+        for (i, m) in r.wizard_models.iter().enumerate() {
+            if r.wizard_hp.get(i).copied().unwrap_or(0) > 0 {
+                wiz_alive.push(*m);
+            }
+        }
+        if !wiz_alive.is_empty() {
+            let target_view = if r.direct_present { &view } else { &r.attachments.scene_view };
+            r.nameplates.queue_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                &wiz_alive,
+            );
+            r.nameplates.draw(&mut encoder, target_view);
+        }
+        // NPC nameplates: skip dead
+        let mut npc_positions: Vec<glam::Vec3> = Vec::new();
+        for (idx, m) in r.zombie_models.iter().enumerate() {
+            if let Some(npc) = r.server.npcs.get(idx) { if !npc.alive { continue; } }
+            let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            npc_positions.push(head.truncate());
+        }
+        if !npc_positions.is_empty() {
+            let target_view = if r.direct_present { &view } else { &r.attachments.scene_view };
+            r.nameplates_npc.queue_npc_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                &npc_positions,
+                "Zombie",
+            );
+            r.nameplates_npc.draw(&mut encoder, target_view);
+        }
+    }
 
     log::debug!("end: main pass");
 

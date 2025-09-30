@@ -948,7 +948,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         enable_ssr: false,
         // Disable bloom on wasm to reduce pipeline churn while stabilizing
         #[cfg(target_arch = "wasm32")]
-        enable_bloom: false,
+        enable_bloom: true,
         #[cfg(not(target_arch = "wasm32"))]
         enable_bloom: true,
         static_index: None,
