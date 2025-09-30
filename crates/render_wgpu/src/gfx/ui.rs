@@ -112,14 +112,21 @@ impl DamageFloaters {
                     atlas = new_buf;
                     atlas_h = new_h;
                 }
-                let ox = cursor_x as i32 + bounds.min.x.floor() as i32;
-                let oy = cursor_y as i32 + bounds.min.y.floor() as i32;
+                // Shift draw origin right/down when glyph has negative min bounds
+                let off_x = (-bounds.min.x.floor() as i32).max(0);
+                let off_y = (-bounds.min.y.floor() as i32).max(0);
+                let ox = cursor_x as i32 + off_x;
+                let oy = cursor_y as i32 + off_y;
                 og.draw(|x, y, v| {
-                    let px = (ox + x as i32) as u32;
-                    let py = (oy + y as i32) as u32;
-                    if px < atlas_w && py < atlas_h {
-                        let idx = (py * atlas_w + px) as usize;
-                        atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                    let px_i = ox + x as i32;
+                    let py_i = oy + y as i32;
+                    if px_i >= 0 && py_i >= 0 {
+                        let px = px_i as u32;
+                        let py = py_i as u32;
+                        if px < atlas_w && py < atlas_h {
+                            let idx = (py * atlas_w + px) as usize;
+                            atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                        }
                     }
                 });
                 let adv = scaled.h_advance(gid);
@@ -127,12 +134,12 @@ impl DamageFloaters {
                     ch,
                     GlyphInfo {
                         uv_min: [
-                            (ox.max(0) as f32) / atlas_w as f32,
-                            (oy.max(0) as f32) / atlas_h as f32,
+                            (ox as f32) / atlas_w as f32,
+                            (oy as f32) / atlas_h as f32,
                         ],
                         uv_max: [
-                            ((ox.max(0) as u32 + gw) as f32) / atlas_w as f32,
-                            ((oy.max(0) as u32 + gh) as f32) / atlas_h as f32,
+                            ((ox as u32 + gw) as f32) / atlas_w as f32,
+                            ((oy as u32 + gh) as f32) / atlas_h as f32,
                         ],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
@@ -552,12 +559,12 @@ impl Nameplates {
                     ch,
                     GlyphInfo {
                         uv_min: [
-                            (ox.max(0) as f32) / (atlas_w as f32),
-                            (oy.max(0) as f32) / (atlas_h as f32),
+                            (ox as f32) / (atlas_w as f32),
+                            (oy as f32) / (atlas_h as f32),
                         ],
                         uv_max: [
-                            ((ox.max(0) as u32 + gw) as f32) / (atlas_w as f32),
-                            ((oy.max(0) as u32 + gh) as f32) / (atlas_h as f32),
+                            ((ox as u32 + gw) as f32) / (atlas_w as f32),
+                            ((oy as u32 + gh) as f32) / (atlas_h as f32),
                         ],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
@@ -1109,14 +1116,20 @@ impl Hud {
                     atlas = new_buf;
                     atlas_h = new_h;
                 }
-                let ox = cursor_x as i32 + bounds.min.x.floor() as i32;
-                let oy = cursor_y as i32 + bounds.min.y.floor() as i32;
+                let off_x = (-bounds.min.x.floor() as i32).max(0);
+                let off_y = (-bounds.min.y.floor() as i32).max(0);
+                let ox = cursor_x as i32 + off_x;
+                let oy = cursor_y as i32 + off_y;
                 og.draw(|x, y, v| {
-                    let px = (ox + x as i32) as u32;
-                    let py = (oy + y as i32) as u32;
-                    if px < atlas_w && py < atlas_h {
-                        let idx = (py * atlas_w + px) as usize;
-                        atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                    let px_i = ox + x as i32;
+                    let py_i = oy + y as i32;
+                    if px_i >= 0 && py_i >= 0 {
+                        let px = px_i as u32;
+                        let py = py_i as u32;
+                        if px < atlas_w && py < atlas_h {
+                            let idx = (py * atlas_w + px) as usize;
+                            atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                        }
                     }
                 });
                 let adv = scaled.h_advance(gid);
@@ -1124,12 +1137,12 @@ impl Hud {
                     ch,
                     GlyphInfo {
                         uv_min: [
-                            (ox.max(0) as f32) / (atlas_w as f32),
-                            (oy.max(0) as f32) / (atlas_h as f32),
+                            (ox as f32) / (atlas_w as f32),
+                            (oy as f32) / (atlas_h as f32),
                         ],
                         uv_max: [
-                            ((ox.max(0) as u32 + gw) as f32) / (atlas_w as f32),
-                            ((oy.max(0) as u32 + gh) as f32) / (atlas_h as f32),
+                            ((ox as u32 + gw) as f32) / (atlas_w as f32),
+                            ((oy as u32 + gh) as f32) / (atlas_h as f32),
                         ],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
