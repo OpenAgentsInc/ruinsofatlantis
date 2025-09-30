@@ -240,3 +240,21 @@ The following discrepancies were found when comparing the PDF’s table of conte
   - `python3 scripts/extract_srd_sections.py`
 - Experimental splitter for Monsters/Animals from the aggregate files (manual review recommended):
   - `python3 scripts/split_monsters_animals.py`
+
+## Next Steps
+
+- Normalize Monsters A–Z
+  - Regenerate one creature per file from `07-monsters/a-z/ALL.md` with clean slugs (e.g., `A/aboleth.md`).
+  - Rebuild per‑letter `README.md` indexes and link from the main monsters index.
+  - Validate each file has required stat block lines (AC, HP, Speed, Size/Type) and remove extraction artifacts like stray section headers.
+- Normalize Animals A–Z
+  - Repeat the above using `08-animals/a-z/ALL.md`; fix placeholder/garbled filenames.
+- Clean Equipment
+  - Prune `05-equipment/adventuring-gear.md` back to gear tables and descriptions; re‑extract affected pages if needed to remove unrelated text.
+- Improve Cross‑Links
+  - Add anchors and cross‑links between classes, spells, conditions, and glossary terms (e.g., “Prone”, “Concentration”).
+  - Add “Source pages” metadata to file headers for easier verification against the PDF.
+- Optional: Split Rules Glossary by term
+  - Convert the single glossary file into A–Z folders (one term per file) to allow deep linking directly to definitions.
+- Optional: Add basic link checks
+  - Add a simple CI/doc check (e.g., markdown link validation) to catch broken intra‑repo links as content evolves.
