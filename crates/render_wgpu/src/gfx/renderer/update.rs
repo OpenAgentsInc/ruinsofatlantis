@@ -257,7 +257,8 @@ impl Renderer {
                         let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
                         self.damage.spawn(head.truncate(), h.damage);
                     } else {
-                        self.damage.spawn(h.pos + glam::vec3(0.0, 1.2, 0.0), h.damage);
+                        self.damage
+                            .spawn(h.pos + glam::vec3(0.0, 1.2, 0.0), h.damage);
                     }
                     // If fatal, hide the DK instance and clear id
                     if h.fatal {

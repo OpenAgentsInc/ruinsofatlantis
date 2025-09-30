@@ -506,6 +506,45 @@ impl Renderer {
             }],
         });
 
+        // 3.5) Rebuild Death Knight instance and server entry at original spawn
+        let (dk_instances, dk_instances_cpu, dk_models, dk_count) =
+            deathknight::build_instances(&self.device, &self.terrain_cpu, self.dk_joints);
+        self.dk_instances = dk_instances;
+        self.dk_models = dk_models.clone();
+        self.dk_count = dk_count;
+        self.dk_instances_cpu = dk_instances_cpu;
+        // Recreate DK palette buffer sized for the current count (typically 1)
+        let total_dk_mats = self.dk_count as usize * self.dk_joints as usize;
+        self.dk_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("deathknight-palettes"),
+            size: (total_dk_mats * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.dk_palettes_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("deathknight-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: self.dk_palettes_buf.as_entire_binding(),
+            }],
+        });
+        // Spawn new DK server NPC at the DK model position
+        let dk_spawn_pos = {
+            let c = self.dk_models.first().copied().unwrap_or(glam::Mat4::IDENTITY).to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
+        let dk_id = {
+            let id = self.server.spawn_npc(dk_spawn_pos, 2.5, 200);
+            if let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == id) {
+                n.damage = 50;
+                n.speed = 4.0;
+            }
+            id
+        };
+        self.dk_id = Some(dk_id);
+        self.dk_prev_pos = dk_spawn_pos;
+
         // 4) Clear FX
         self.projectiles.clear();
         self.particles.clear();
