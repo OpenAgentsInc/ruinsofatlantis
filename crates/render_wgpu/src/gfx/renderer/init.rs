@@ -943,7 +943,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         terrain_model_bg: plane_model_bg,
         shard_model_bg,
         present_bg,
-        enable_post_ao: false,
+        enable_post_ao: true,
         enable_ssgi: false,
         enable_ssr: false,
         // Disable bloom on wasm to reduce pipeline churn while stabilizing
