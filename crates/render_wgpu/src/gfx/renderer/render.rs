@@ -3,9 +3,9 @@
 use wgpu::SurfaceError;
 
 // Bring parent gfx modules/types into scope for the moved body.
-use crate::gfx::{camera_sys, terrain, types::Model};
 #[cfg(target_arch = "wasm32")]
 use crate::gfx::types::Globals;
+use crate::gfx::{camera_sys, terrain, types::Model};
 
 /// Full render implementation (moved from gfx/mod.rs).
 pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
@@ -15,9 +15,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         .create_view(&wgpu::TextureViewDescriptor::default());
 
     // WASM debug path: draw SKY + TERRAIN into offscreen, then present to swapchain.
-    // This isolates pipeline/render-graph step-by-step.
+    // This isolates pipeline/render-graph step-by-step. Disabled by default now that
+    // the full render path is stable on web; re-enable locally by changing the
+    // `enable_wasm_debug` flag below if you need to bisect a regression.
     #[cfg(target_arch = "wasm32")]
-    {
+    if false {
         let mut encoder = r
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
