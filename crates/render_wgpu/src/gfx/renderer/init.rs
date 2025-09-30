@@ -197,10 +197,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
     let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
-    // Allow direct-present path: build main pipelines targeting swapchain format
-    let direct_present = std::env::var("RA_DIRECT_PRESENT")
-        .map(|v| v != "0")
-        .unwrap_or(true);
+    // Allow direct-present path: on web, prefer offscreen + explicit present for stability
+    #[cfg(target_arch = "wasm32")]
+    let direct_present = false;
+    #[cfg(not(target_arch = "wasm32"))]
+    let direct_present = std::env::var("RA_DIRECT_PRESENT").map(|v| v != "0").unwrap_or(true);
     let draw_fmt = if direct_present {
         config.format
     } else {
