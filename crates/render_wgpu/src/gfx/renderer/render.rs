@@ -838,82 +838,81 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
         log::error!("wgpu validation error (skipping frame): {:?}", e);
-    } else {
-        log::debug!("submit: normal path");
-        // HUD
-        let pc_hp = r
-            .wizard_hp
-            .get(r.pc_index)
-            .copied()
-            .unwrap_or(r.wizard_hp_max);
-        let cast_frac = if let Some(start) = r.pc_anim_start {
-            if r.wizard_anim_index[r.pc_index] == 0 {
-                let dur = r.pc_cast_time.max(0.0001);
-                ((t - start) / dur).clamp(0.0, 1.0)
-            } else {
-                0.0
-            }
+        return Ok(());
+    }
+
+    log::debug!("submit: normal path");
+    // HUD
+    let pc_hp = r
+        .wizard_hp
+        .get(r.pc_index)
+        .copied()
+        .unwrap_or(r.wizard_hp_max);
+    let cast_frac = if let Some(start) = r.pc_anim_start {
+        if r.wizard_anim_index[r.pc_index] == 0 {
+            let dur = r.pc_cast_time.max(0.0001);
+            ((t - start) / dur).clamp(0.0, 1.0)
         } else {
             0.0
-        };
-        // Hotbar overlays: per-slot cooldown fractions
-        let gcd_frac_fb =
-            r.scene_inputs
-                .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
-        let gcd_frac_mm = r.scene_inputs.cooldown_frac(
-            "wiz.magic_missile.srd521",
-            r.last_time,
-            r.magic_missile_cd_dur,
-        );
-        let gcd_frac_fb2 =
-            r.scene_inputs
-                .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
-        let cd1 = gcd_frac_fb;
-        let cd2 = gcd_frac_mm;
-        let cd3 = gcd_frac_fb2;
-        let overlays_disabled = std::env::var("RA_OVERLAYS")
-            .map(|v| v == "0")
-            .unwrap_or(false);
-        if !r.pc_alive {
-            r.hud.reset();
-            r.hud.death_overlay(
-                r.size.width,
-                r.size.height,
-                "You died.",
-                "Press R to respawn",
-            );
-        } else if !overlays_disabled {
-            let cast_label = if cast_frac > 0.0 {
-                match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
-                    super::super::PcCast::FireBolt => Some("Fire Bolt"),
-                    super::super::PcCast::MagicMissile => Some("Magic Missile"),
-                    super::super::PcCast::Fireball => Some("Fireball"),
-                }
-            } else {
-                None
-            };
-            r.hud.build(
-                r.size.width,
-                r.size.height,
-                pc_hp,
-                r.wizard_hp_max,
-                cast_frac,
-                cd1,
-                cd2,
-                cd3,
-                cast_label,
-            );
-            if r.hud_model.perf_enabled() {
-                let ms = dt * 1000.0;
-                let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
-                let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
-                r.hud.append_perf_text(r.size.width, r.size.height, &line);
-            }
         }
-        r.hud.queue(&r.device, &r.queue);
-        r.hud.draw(&mut encoder, &view);
-        r.queue.submit(Some(encoder.finish()));
-        frame.present();
+    } else {
+        0.0
+    };
+    // Hotbar overlays: per-slot cooldown fractions
+    let gcd_frac_fb = r
+        .scene_inputs
+        .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
+    let gcd_frac_mm = r
+        .scene_inputs
+        .cooldown_frac("wiz.magic_missile.srd521", r.last_time, r.magic_missile_cd_dur);
+    let gcd_frac_fb2 = r
+        .scene_inputs
+        .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
+    let cd1 = gcd_frac_fb;
+    let cd2 = gcd_frac_mm;
+    let cd3 = gcd_frac_fb2;
+    let overlays_disabled = std::env::var("RA_OVERLAYS")
+        .map(|v| v == "0")
+        .unwrap_or(false);
+    if !r.pc_alive {
+        r.hud.reset();
+        r.hud.death_overlay(
+            r.size.width,
+            r.size.height,
+            "You died.",
+            "Press R to respawn",
+        );
+    } else if !overlays_disabled {
+        let cast_label = if cast_frac > 0.0 {
+            match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
+                super::super::PcCast::FireBolt => Some("Fire Bolt"),
+                super::super::PcCast::MagicMissile => Some("Magic Missile"),
+                super::super::PcCast::Fireball => Some("Fireball"),
+            }
+        } else {
+            None
+        };
+        r.hud.build(
+            r.size.width,
+            r.size.height,
+            pc_hp,
+            r.wizard_hp_max,
+            cast_frac,
+            cd1,
+            cd2,
+            cd3,
+            cast_label,
+        );
+        if r.hud_model.perf_enabled() {
+            let ms = dt * 1000.0;
+            let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
+            let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
+            r.hud.append_perf_text(r.size.width, r.size.height, &line);
+        }
     }
+    r.hud.queue(&r.device, &r.queue);
+    r.hud.draw(&mut encoder, &view);
+    r.queue.submit(Some(encoder.finish()));
+    frame.present();
     Ok(())
 }
