@@ -4918,6 +4918,7 @@ dependencies = [
  "server_core",
  "sha2",
  "ux_hud",
+ "web-time",
  "wgpu 26.0.1",
  "winit",
 ]

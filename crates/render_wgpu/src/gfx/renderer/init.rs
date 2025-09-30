@@ -10,6 +10,10 @@ use data_runtime::{
 };
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
+// Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 use wgpu::{SurfaceTargetUnsafe, util::DeviceExt};
 use winit::dpi::PhysicalSize;
@@ -358,9 +362,16 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         slug: "wizard_woods".to_string(),
         display_name: "Wizard Woods".to_string(),
         plane: data_runtime::zone::ZonePlane::Material,
-        terrain: data_runtime::zone::TerrainSpec { size: 129, extent: 50.0, seed: 4242 },
+        terrain: data_runtime::zone::TerrainSpec {
+            size: 129,
+            extent: 50.0,
+            seed: 4242,
+        },
         weather: None,
-        vegetation: Some(data_runtime::zone::VegetationSpec { tree_count: 0, tree_seed: 0 }),
+        vegetation: Some(data_runtime::zone::VegetationSpec {
+            tree_count: 0,
+            tree_seed: 0,
+        }),
         start_time_frac: Some(0.48),
         start_paused: Some(false),
         start_time_scale: Some(1.0),
@@ -579,7 +590,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let ruins_gpu = ruins::build_ruins(&device).unwrap_or_else(|_| {
         // Fallback to a cube if GLTF fails (should not, as we embed ruins.gltf)
         let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
-        super::super::ruins::RuinsGpu { vb, ib, index_count, base_offset: 0.0, radius: 1.0 }
+        super::super::ruins::RuinsGpu {
+            vb,
+            ib,
+            index_count,
+            base_offset: 0.0,
+            radius: 1.0,
+        }
     });
     let ruins_base_offset = ruins_gpu.base_offset;
     let ruins_radius = ruins_gpu.radius;
@@ -776,7 +793,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             usage: wgpu::BufferUsages::VERTEX,
         });
         let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
-        super::super::rocks::RocksGpu { instances, count: 0, vb, ib, index_count }
+        super::super::rocks::RocksGpu {
+            instances,
+            count: 0,
+            vb,
+            ib,
+            index_count,
+        }
     };
     let rocks_instances = rocks_gpu.instances;
     let rocks_count = rocks_gpu.count;
