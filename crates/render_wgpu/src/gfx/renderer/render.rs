@@ -3,7 +3,9 @@
 use wgpu::SurfaceError;
 
 // Bring parent gfx modules/types into scope for the moved body.
-use crate::gfx::{camera_sys, terrain, types::{Model, Globals}};
+use crate::gfx::{camera_sys, terrain, types::Model};
+#[cfg(target_arch = "wasm32")]
+use crate::gfx::types::Globals;
 
 /// Full render implementation (moved from gfx/mod.rs).
 pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
@@ -34,7 +36,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             view_proj: vp.to_cols_array_2d(),
             cam_right_time: [1.0, 0.0, 0.0, 0.0],
             cam_up_pad: [0.0, 1.0, 0.0, (fov_y * 0.5).tan()],
-            sun_dir_time: [r.sky.sun_dir.x, r.sky.sun_dir.y, r.sky.sun_dir.z, r.sky.day_frac],
+            sun_dir_time: [
+                r.sky.sun_dir.x,
+                r.sky.sun_dir.y,
+                r.sky.sun_dir.z,
+                r.sky.day_frac,
+            ],
             sh_coeffs: [[0.0; 4]; 9],
             fog_params: [0.6, 0.7, 0.8, 0.0035],
             clip_params: [0.1, 1000.0, 1.0, 0.0],
@@ -42,7 +49,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.sky.sun_dir.y <= 0.0 {
             g.fog_params = [0.01, 0.015, 0.02, 0.018];
         }
-        r.queue.write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&g));
+        r.queue
+            .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&g));
 
         // 1) Sky into offscreen
         let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
