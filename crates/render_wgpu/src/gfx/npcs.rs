@@ -15,20 +15,24 @@ pub struct NpcGpu {
 
 pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
     let (vb, ib, index_count) = super::mesh::create_cube(device);
-    let server = server_core::ServerState::new();
-    // Disable default NPC zombie rings for the DK demo. Keep server empty; 
-    // zombies are introduced explicitly when needed by scenarios.
-    let near_count = 0usize;
-    let _near_radius = 15.0f32;
-    let mid1_count = 0usize;
-    let _mid1_radius = 30.0f32;
-    let mid2_count = 0usize;
-    let _mid2_radius = 45.0f32;
-    let mid3_count = 0usize;
-    let _mid3_radius = 60.0f32;
-    let far_count = 0usize;
+    let mut server = server_core::ServerState::new();
+    // Keep the close/mid zombie rings; drop the extreme far ring that caused
+    // distant floating health bars.
+    let near_count = 8usize; // was 10
+    let near_radius = 15.0f32;
+    let mid1_count = 12usize; // was 16
+    let mid1_radius = 30.0f32;
+    let mid2_count = 15usize; // was 20
+    let mid2_radius = 45.0f32;
+    let mid3_count = 18usize; // was 24
+    let mid3_radius = 60.0f32;
+    let far_count = 0usize; // remove far ring entirely
     let _far_radius = terrain_extent * 0.7;
-    // No ring spawns; leave server.npcs empty.
+    // Spawn rings (hp scales mildly with distance)
+    server.ring_spawn(near_count, near_radius, 20);
+    server.ring_spawn(mid1_count, mid1_radius, 25);
+    server.ring_spawn(mid2_count, mid2_radius, 30);
+    server.ring_spawn(mid3_count, mid3_radius, 35);
 
     let mut instances_cpu: Vec<super::types::Instance> = Vec::new();
     let mut models: Vec<glam::Mat4> = Vec::new();
