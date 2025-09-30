@@ -5,3 +5,4 @@
 - Stat Block Overview — docs/srd/07-monsters/stat-block-overview.md
 - Running a Monster — docs/srd/07-monsters/running-a-monster.md
 - Monsters A–Z — docs/srd/07-monsters/a-z/README.md
+  - Aggregate (all in one file) — docs/srd/07-monsters/a-z/ALL.md

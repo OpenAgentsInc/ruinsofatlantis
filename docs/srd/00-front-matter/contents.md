@@ -65,6 +65,22 @@ This is an adapted table of contents that mirrors the Markdown folder structure 
 - Animals (08-animals)
   - docs/srd/08-animals/README.md
 
+- Rules Glossary (09-rules-glossary)
+  - Overview — docs/srd/09-rules-glossary/README.md
+  - Full Glossary — docs/srd/09-rules-glossary/rules-glossary.md
+
+- Gameplay Toolbox (10-gameplay-toolbox)
+  - Overview — docs/srd/10-gameplay-toolbox/README.md
+  - Travel Pace — docs/srd/10-gameplay-toolbox/travel-pace.md
+  - Creating a Background — docs/srd/10-gameplay-toolbox/creating-a-background.md
+  - Curses and Magical Contagions — docs/srd/10-gameplay-toolbox/curses-and-magical-contagions.md
+  - Environmental Effects — docs/srd/10-gameplay-toolbox/environmental-effects.md
+  - Fear and Mental Stress — docs/srd/10-gameplay-toolbox/fear-and-mental-stress.md
+  - Poison — docs/srd/10-gameplay-toolbox/poison.md
+  - Traps — docs/srd/10-gameplay-toolbox/traps.md
+  - Combat Encounters — docs/srd/10-gameplay-toolbox/combat-encounters.md
+  - Magic Items — docs/srd/10-gameplay-toolbox/magic-items.md
+
 - Feats (04-feats)
   - Feats — docs/srd/04-feats/README.md
   - Origin — docs/srd/04-feats/origin/README.md

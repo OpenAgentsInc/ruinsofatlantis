@@ -1,7 +1,8 @@
 # Weasel
 
+Weasel
       Tiny Beast, Unaligned
-      AC 13                            Initiative +3 (13)
+      AC 13 		                   Initiative +3 (13)
       HP 1 (1d4 − 1)
       Speed 30 ft., Climb 30 ft.
                 MOD SAVE             MOD SAVE             MOD SAVE
@@ -15,4 +16,4 @@
 
       Actions
       Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 1 Piercing
-      damage.
+      damage .

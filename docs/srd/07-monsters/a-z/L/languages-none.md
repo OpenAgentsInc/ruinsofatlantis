@@ -1,8 +1,9 @@
 # Languages None
 
+Languages None
                                                                    Medium or Small Humanoid, Neutral
       CR 3 (XP 700; PB +2)
-                                                                   AC 17                   Initiative +7 (17)
+                                                                   AC 17		           Initiative +7 (17)
       Traits                                                       HP 84 (13d8 + 26)
       Ethereal Sight. The spider can see 60 feet into the Ethe-    Speed 30 ft.
       real Plane while on the Material Plane and vice versa.                 MOD SAVE             MOD SAVE            MOD SAVE

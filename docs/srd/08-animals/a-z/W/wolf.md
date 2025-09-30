@@ -1,8 +1,9 @@
 # Wolf
 
+Wolf
                                                                      Medium Beast, Unaligned
       Int 2 −4 −4          Wis 12 +1 +1          Cha 4 −3 −3
-                                                                     AC 12                            Initiative +2 (12)
+                                                                     AC 12 		                   Initiative +2 (12)
       Skills Perception +3                                           HP 11 (2d8 + 2)
       Senses Passive Perception 13                                   Speed 40 ft.
       Languages None                                                           MOD SAVE             MOD SAVE            MOD SAVE
@@ -20,7 +21,7 @@
       Warhorse                                                       the Incapacitated condition.
       Large Beast, Unaligned
                                                                      Actions
-      AC 11                             Initiative +1 (11)
+      AC 11 		                    Initiative +1 (11)
                                                                      Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2)
       HP 19 (3d10 + 3)
                                                                      Piercing damage. If the target is a Medium or smaller
