@@ -5,6 +5,7 @@ use crate::gfx::types::{InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 use crate::server_ext::CollideProjectiles;
 use ra_assets::types::AnimClip;
+use rand::Rng as _;
 
 impl Renderer {
     #[inline]
@@ -224,8 +225,52 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        let fb_col = [2.6, 0.7, 0.18];
-                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
+                        // Decide between Fire Bolt (default) and Fireball (occasional, far targets only)
+                        let min_fireball_dist = 10.0f32; // meters
+                        let mut target_dist = f32::INFINITY;
+                        if self.wizards_hostile_to_pc && self.pc_alive {
+                            if let Some(pm) = self.wizard_models.get(self.pc_index) {
+                                let c = pm.to_cols_array();
+                                let pc = glam::vec3(c[12], c[13], c[14]);
+                                let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                                target_dist = (pc - wpos).length();
+                            }
+                        } else {
+                            let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                            for n in &self.server.npcs {
+                                if !n.alive {
+                                    continue;
+                                }
+                                let d = glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
+                                if d < target_dist {
+                                    target_dist = d;
+                                }
+                            }
+                        }
+                        let mut use_fireball = false;
+                        if target_dist.is_finite()
+                            && target_dist >= min_fireball_dist
+                            && let Some(cnt) = self.wizard_fire_cycle_count.get_mut(i)
+                        {
+                            *cnt += 1;
+                            let next_at = self.wizard_fireball_next_at.get(i).copied().unwrap_or(4);
+                            if *cnt >= next_at {
+                                use_fireball = true;
+                                *cnt = 0;
+                                // roll next threshold 3..=5
+                                let mut r = rand::rng();
+                                let tnext: u32 = r.random_range(3..=5);
+                                if let Some(slot) = self.wizard_fireball_next_at.get_mut(i) {
+                                    *slot = tnext;
+                                }
+                            }
+                        }
+                        if use_fireball {
+                            self.spawn_fireball(spawn, dir_w, t, Some(i));
+                        } else {
+                            let fb_col = [2.6, 0.7, 0.18];
+                            self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
+                        }
                     }
                 }
                 self.wizard_last_phase[i] = phase;

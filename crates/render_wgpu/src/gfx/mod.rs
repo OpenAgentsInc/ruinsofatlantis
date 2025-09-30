@@ -55,6 +55,7 @@ enum PcCast {
 }
 use std::time::Instant;
 
+use rand::Rng as _;
 use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
@@ -343,6 +344,9 @@ pub struct Renderer {
     pc_alive: bool,
     // If true, non‑PC wizards will focus the player as their target
     wizards_hostile_to_pc: bool,
+    // NPC wizard casting rotation state
+    wizard_fire_cycle_count: Vec<u32>,
+    wizard_fireball_next_at: Vec<u32>,
 }
 
 impl Renderer {
@@ -432,6 +436,17 @@ impl Renderer {
         self.wizard_anim_index = scene_build.wizard_anim_index;
         self.wizard_time_offset = scene_build.wizard_time_offset;
         self.wizard_last_phase = vec![0.0; self.wizard_count as usize];
+        // Reset NPC wizard rotation state
+        self.wizard_fire_cycle_count = vec![0; self.wizard_count as usize];
+        self.wizard_fireball_next_at = {
+            let mut v = vec![0u32; self.wizard_count as usize];
+            for x in &mut v {
+                let mut r = rand::rng();
+                let t: u32 = r.random_range(3..=5);
+                *x = t;
+            }
+            v
+        };
 
         // 2) Reset player and camera
         let pc_initial_pos = {
