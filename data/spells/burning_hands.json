@@ -1,0 +1,42 @@
+{
+  "id": "wiz.burning_hands.srd521",
+  "name": "Burning Hands",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "evocation",
+  "level": 1,
+  "classes": ["wizard", "sorcerer"],
+  "tags": ["cone", "aoe", "fire"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 2.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "self-cone",
+  "requires_line_of_sight": true,
+  "range_ft": 0,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 60,
+
+  "attack": null,
+  "damage": {
+    "type": "fire",
+    "add_spell_mod_to_damage": false,
+    "dice_by_level_band": { "1-20": "3d6" }
+  },
+  "save": {
+    "kind": "dex",
+    "dc": null,
+    "on_fail": null
+  },
+  "projectile": null,
+
+  "secondary": {
+    "cone": { "angle_deg": 60.0, "length_m": 4.5 }
+  },
+  "events": ["CastStarted", "CastCompleted", "DamageApplied"],
+  "policy": { "role": "dps", "priority_index": 2 }
+}
+
