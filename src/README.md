@@ -7,7 +7,7 @@ Workspace crates (added for modularization)
 - crates/render_wgpu — Renderer crate. The full contents of the old `src/gfx/**` now live here under `crates/render_wgpu/src/gfx/**`. The root `src/gfx/mod.rs` is a thin re‑export of `render_wgpu::gfx`.
 - crates/sim_core — Rules/combat/sim crate (moved from `src/core/{rules,combat}` and `src/sim`). Re-exported under `crate::core::{rules,combat}` and `crate::sim` for compatibility.
 - crates/platform_winit — Platform loop crate. Root app calls `platform_winit::run()`.
-- crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; F1 toggles perf overlay, H toggles HUD).
+- crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; P toggles perf overlay, H toggles HUD).
 
 - Workspace crates (new)
 - shared/assets — Library crate with asset loaders for tools and renderer.
@@ -27,9 +27,9 @@ Workspace crates (added for modularization)
 - Space: toggle sky pause (also active when PC is dead)
 - [: scrub time backward a bit; ]: forward a bit
 - - / =: halve / double time scale
-- F1: toggle perf overlay (frametime, FPS, draw calls)
+- P: toggle perf overlay (frametime, FPS, draw calls)
 - H: hide/show HUD
-- F5: 5s automated orbit for screenshots
+- O: 5s automated orbit for screenshots
 
 CLI/Env toggles
 - `--no-vsync` (or `RA_NO_VSYNC=1`): prefer Immediate present mode if supported.

@@ -69,6 +69,14 @@ IMPORTANT: Keep `src/README.md` current
 - Always keep the repo compiling with tests green before handoff.
 - Always update GDD and `docs/systems/*.md` when design behavior changes.
 
+## Input & Keybinding Policy
+- Do not bind default gameplay or debug actions to function keys (F1–F12). Browsers and OSes often reserve these; they are unreliable on the web.
+- Prefer letters/digits and simple modifiers that work on desktop and in browsers. Current bindings:
+  - `P` toggles the perf overlay (was F1)
+  - `O` triggers a 5s automated orbit for screenshots (was F5)
+  - `H` toggles the HUD; `Space`, `[`/`]`, and `-`/`=` control time‑of‑day
+- If you add new inputs, choose keys that won’t clash with common browser shortcuts (e.g., avoid `Ctrl+L`, `Cmd+F`, etc.). Document changes in `src/README.md`.
+
 ## Ownership Map
 - `crates/render_wgpu/**` → Graphics owners
 - `crates/sim_core/**` → Gameplay/systems owners
