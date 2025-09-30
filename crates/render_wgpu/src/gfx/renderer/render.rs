@@ -12,30 +12,55 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
 
-    // WASM debug path: clear the swapchain to a vivid color and present immediately.
-    // This isolates swapchain/present issues from pipeline/render-graph issues in browsers.
+    // WASM debug path: draw SKY ONLY into offscreen, then present to swapchain.
+    // This isolates pipeline/render-graph step-by-step.
     #[cfg(target_arch = "wasm32")]
     {
         let mut encoder = r
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("wasm-debug-clear") });
-        {
-            let _rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("wasm-debug-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.05, g: 0.0, b: 0.15, a: 1.0 }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-        }
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("wasm-debug-sky") });
+        // 1) Sky into offscreen
+        let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("wasm-debug-sky-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &r.attachments.scene_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.02, g: 0.02, b: 0.04, a: 1.0 }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        sky.set_pipeline(&r.sky_pipeline);
+        sky.set_bind_group(0, &r.globals_bg, &[]);
+        sky.set_bind_group(1, &r.sky_bg, &[]);
+        sky.draw(0..3, 0..1);
+        drop(sky);
+        // 2) Present offscreen -> swapchain
+        let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("wasm-debug-present-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        present.set_pipeline(&r.present_pipeline);
+        present.set_bind_group(0, &r.globals_bg, &[]);
+        present.set_bind_group(1, &r.present_bg, &[]);
+        present.draw(0..3, 0..1);
+        drop(present);
         r.queue.submit(Some(encoder.finish()));
         frame.present();
         return Ok(());
