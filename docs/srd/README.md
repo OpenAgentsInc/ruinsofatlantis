@@ -111,12 +111,16 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
 
 - Playing the Game: complete.
 - Classes: all base classes added (with spell lists/subclasses per SRD scope).
-- Spells: complete.
+- Spells: complete (one spell per file, letter indexes present).
 - Feats: complete (Origin, General, Fighting Style, Epic Boon).
-- Equipment: complete (tables and descriptions transcribed).
+- Equipment: mostly complete. Note: adventuring-gear.md needs cleanup to remove stray, out‑of‑scope text from earlier bulk extraction.
 - Character Creation: complete (including Trinkets table).
-- Monsters: complete (A–Z stat blocks transcribed).
-- Animals: complete (A–Z stat blocks transcribed).
+- Rules Glossary: ADDED in 09-rules-glossary/ (full text extracted; further per‑term splits welcome later).
+- Gameplay Toolbox: ADDED in 10-gameplay-toolbox/ (topics split into individual files).
+- Monsters: IN PROGRESS. Stat block overview and guidance complete; A–Z content will be normalized from a fresh extract. Some existing files under 07-monsters/a-z contain extraction artifacts and interim names.
+- Animals: IN PROGRESS. A–Z content extracted; filenames and structure will be normalized from a fresh extract. README updated.
+
+See Gap Audit below for details on remaining cleanup tasks.
 
 ## Index
 
@@ -203,8 +207,32 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
     - X — docs/srd/07-monsters/a-z/X/README.md
     - Y — docs/srd/07-monsters/a-z/Y/README.md
     - Z — docs/srd/07-monsters/a-z/Z/README.md
- - Animals
+- Animals
   - docs/srd/08-animals/README.md
+- Rules Glossary
+  - docs/srd/09-rules-glossary/README.md
+  - docs/srd/09-rules-glossary/rules-glossary.md
+- Gameplay Toolbox
+  - docs/srd/10-gameplay-toolbox/README.md
+  - docs/srd/10-gameplay-toolbox/travel-pace.md
+  - docs/srd/10-gameplay-toolbox/creating-a-background.md
+  - docs/srd/10-gameplay-toolbox/curses-and-magical-contagions.md
+  - docs/srd/10-gameplay-toolbox/environmental-effects.md
+  - docs/srd/10-gameplay-toolbox/fear-and-mental-stress.md
+  - docs/srd/10-gameplay-toolbox/poison.md
+  - docs/srd/10-gameplay-toolbox/traps.md
+  - docs/srd/10-gameplay-toolbox/combat-encounters.md
+  - docs/srd/10-gameplay-toolbox/magic-items.md
+
+## Gap Audit
+
+The following discrepancies were found when comparing the PDF’s table of contents to this Markdown conversion:
+
+- Missing sections (now added): Rules Glossary; Gameplay Toolbox (Travel Pace; Creating a Background; Curses and Magical Contagions; Environmental Effects; Fear and Mental Stress; Poison; Traps; Combat Encounters; Magic Items).
+- Monsters A–Z: present but inconsistent. Many filenames came from an early auto‑split and include partial headings (e.g., combined names). Will be regenerated from a fresh extract and normalized to one monster per file under 07-monsters/a-z/<Letter>/<monster-slug>.md with updated index.
+- Animals A–Z: partially present with placeholder/garbled filenames. Will be regenerated from a fresh extract and normalized to one animal per file under 08-animals/a-z/<Letter>/<animal-slug>.md with updated index.
+- Cross‑links: numerous cross‑references to “Rules Glossary” were dangling. These now resolve via 09-rules-glossary/rules-glossary.md. Future work: link directly to per‑term anchors once the glossary is split per term.
+- Equipment/adventuring-gear.md: large file contains unrelated material from prior bulk extraction (snippets of spells/monsters). Needs pruning to just gear tables and descriptions.
 - Spells
   - docs/srd/03-spells/README.md
   - docs/srd/03-spells/gaining-spells.md
