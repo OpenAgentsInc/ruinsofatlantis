@@ -5,6 +5,7 @@ use crate::gfx::types::{InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 use crate::server_ext::CollideProjectiles;
 use ra_assets::types::AnimClip;
+use rand::Rng as _;
 
 impl Renderer {
     #[inline]
@@ -162,6 +163,15 @@ impl Renderer {
                                     self.magic_missile_cd_dur,
                                 );
                             }
+                            super::super::PcCast::Fireball => {
+                                self.spawn_fireball(spawn, dir_w, t, Some(self.pc_index));
+                                let spell_id = "wiz.fireball.srd521";
+                                self.scene_inputs.start_cooldown(
+                                    spell_id,
+                                    self.last_time,
+                                    self.fireball_cd_dur,
+                                );
+                            }
                         }
                         self.pc_cast_fired = true;
                     }
@@ -215,8 +225,52 @@ impl Renderer {
                             .normalize_or_zero();
                         let lateral = 0.20;
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        let fb_col = [2.6, 0.7, 0.18];
-                        self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
+                        // Decide between Fire Bolt (default) and Fireball (occasional, far targets only)
+                        let min_fireball_dist = 10.0f32; // meters
+                        let mut target_dist = f32::INFINITY;
+                        if self.wizards_hostile_to_pc && self.pc_alive {
+                            if let Some(pm) = self.wizard_models.get(self.pc_index) {
+                                let c = pm.to_cols_array();
+                                let pc = glam::vec3(c[12], c[13], c[14]);
+                                let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                                target_dist = (pc - wpos).length();
+                            }
+                        } else {
+                            let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                            for n in &self.server.npcs {
+                                if !n.alive {
+                                    continue;
+                                }
+                                let d = glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
+                                if d < target_dist {
+                                    target_dist = d;
+                                }
+                            }
+                        }
+                        let mut use_fireball = false;
+                        if target_dist.is_finite()
+                            && target_dist >= min_fireball_dist
+                            && let Some(cnt) = self.wizard_fire_cycle_count.get_mut(i)
+                        {
+                            *cnt += 1;
+                            let next_at = self.wizard_fireball_next_at.get(i).copied().unwrap_or(4);
+                            if *cnt >= next_at {
+                                use_fireball = true;
+                                *cnt = 0;
+                                // roll next threshold 3..=5
+                                let mut r = rand::rng();
+                                let tnext: u32 = r.random_range(3..=5);
+                                if let Some(slot) = self.wizard_fireball_next_at.get_mut(i) {
+                                    *slot = tnext;
+                                }
+                            }
+                        }
+                        if use_fireball {
+                            self.spawn_fireball(spawn, dir_w, t, Some(i));
+                        } else {
+                            let fb_col = [2.6, 0.7, 0.18];
+                            self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
+                        }
                     }
                 }
                 self.wizard_last_phase[i] = phase;
@@ -229,7 +283,35 @@ impl Renderer {
             p.pos += p.vel * dt;
             p.pos = gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
-        // 2.5) Server-side collision vs NPCs
+        // 2.5) Fireball collisions (custom AoE explode on hit)
+        if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
+            let mut i = 0usize;
+            while i < self.projectiles.len() {
+                let pr = self.projectiles[i];
+                if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } = pr.kind {
+                    let p0 = pr.pos - pr.vel * dt;
+                    let p1 = pr.pos;
+                    let mut exploded = false;
+                    // collide against any alive NPC cylinder in XZ
+                    for n in &self.server.npcs {
+                        if !n.alive {
+                            continue;
+                        }
+                        if segment_hits_circle_xz(p0, p1, n.pos, n.radius) {
+                            exploded = true;
+                            break;
+                        }
+                    }
+                    if exploded {
+                        self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
+                        self.projectiles.swap_remove(i);
+                        continue;
+                    }
+                }
+                i += 1;
+            }
+        }
+        // 2.55) Server-side collision vs NPCs (normal single-hit projectiles)
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
             let hits = self
@@ -308,6 +390,13 @@ impl Renderer {
             let kill = t >= self.projectiles[i].t_die;
             if kill {
                 let hit = self.projectiles[i].pos;
+                // If Fireball, explode on timeout at current position
+                if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } =
+                    self.projectiles[i].kind
+                {
+                    let owner = self.projectiles[i].owner_wizard;
+                    self.explode_fireball_at(owner, hit, radius, damage);
+                }
                 // small flare + compact burst
                 burst.push(Particle {
                     pos: hit,
@@ -371,14 +460,19 @@ impl Renderer {
                 let remain = (pr.t_die - t).max(0.0);
                 head_fade = (remain / fade_window).clamp(0.0, 1.0);
             }
+            // Make Fireball visuals bigger and brighter
+            let (head_size, trail_size, bright_mul) = match pr.kind {
+                crate::gfx::fx::ProjectileKind::Fireball { .. } => (0.36, 0.26, 2.0),
+                _ => (0.18, 0.13, 1.0),
+            };
             // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
-                size: 0.18,
+                size: head_size,
                 color: [
-                    pr.color[0] * head_fade,
-                    pr.color[1] * head_fade,
-                    pr.color[2] * head_fade,
+                    pr.color[0] * bright_mul * head_fade,
+                    pr.color[1] * bright_mul * head_fade,
+                    pr.color[2] * bright_mul * head_fade,
                 ],
                 _pad: 0.0,
             });
@@ -390,11 +484,11 @@ impl Renderer {
                 let fade = (1.0 - (k as f32) * 0.35) * head_fade;
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
-                    size: 0.13,
+                    size: trail_size,
                     color: [
-                        pr.color[0] * 0.8 * fade,
-                        pr.color[1] * 0.8 * fade,
-                        pr.color[2] * 0.8 * fade,
+                        pr.color[0] * 0.8 * bright_mul * fade,
+                        pr.color[1] * 0.8 * bright_mul * fade,
+                        pr.color[2] * 0.8 * bright_mul * fade,
                     ],
                     _pad: 0.0,
                 });
@@ -552,6 +646,7 @@ impl Renderer {
             t_die: t + life,
             owner_wizard: owner,
             color,
+            kind: crate::gfx::fx::ProjectileKind::Normal,
         });
     }
 
@@ -570,6 +665,191 @@ impl Renderer {
         self.spawn_firebolt(origin, base_dir, t, Some(self.pc_index), false, mm_col);
         self.spawn_firebolt(origin, left_dir, t, Some(self.pc_index), false, mm_col);
         self.spawn_firebolt(origin, right_dir, t, Some(self.pc_index), false, mm_col);
+    }
+
+    pub(crate) fn spawn_fireball(
+        &mut self,
+        origin: glam::Vec3,
+        dir: glam::Vec3,
+        t: f32,
+        owner: Option<usize>,
+    ) {
+        let speed = 28.0f32; // slower, chunky orb
+        let base_life = 2.0f32; // seconds max
+        // Fireball SRD: 150 ft range. Use that for flight clamp if we later aim.
+        let max_range_m = 150.0f32 * 0.3048;
+        let flight_time = max_range_m / speed;
+        let life = base_life.min(flight_time);
+        let origin = gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15);
+        self.projectiles.push(gfx::fx::Projectile {
+            pos: origin,
+            vel: dir.normalize_or_zero() * speed,
+            t_die: t + life,
+            owner_wizard: owner,
+            color: [2.2, 0.7, 0.2],
+            kind: crate::gfx::fx::ProjectileKind::Fireball {
+                radius: 6.0,
+                damage: 28, // avg 8d6; prototype without saves
+            },
+        });
+    }
+
+    fn explode_fireball_at(
+        &mut self,
+        owner: Option<usize>,
+        center: glam::Vec3,
+        radius: f32,
+        damage: i32,
+    ) {
+        // Visual explosion burst
+        for _ in 0..42 {
+            let a = rand_unit() * std::f32::consts::TAU;
+            let r = 6.0 + rand_unit() * 2.0;
+            self.particles.push(Particle {
+                pos: center,
+                vel: glam::vec3(a.cos() * r, 3.0 + rand_unit() * 2.0, a.sin() * r),
+                age: 0.0,
+                life: 0.28,
+                size: 0.05,
+                color: [2.2, 1.0, 0.3],
+            });
+        }
+        // Damage NPCs in radius
+        let r2 = radius * radius;
+        // Handle DK first for despawn behavior
+        if let Some(dk_id) = self.dk_id
+            && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == dk_id)
+            && n.alive
+        {
+            let dx = n.pos.x - center.x;
+            let dz = n.pos.z - center.z;
+            if dx * dx + dz * dz <= r2 {
+                let before = n.hp;
+                n.hp = (n.hp - damage).max(0);
+                let fatal = n.hp == 0;
+                if fatal {
+                    n.alive = false;
+                    self.dk_count = 0;
+                    self.dk_id = None;
+                }
+                let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                self.damage
+                    .spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+                let _ = before; // reserved for future events
+            }
+        }
+        // Generic NPCs + zombies
+        let mut k = 0usize;
+        while k < self.server.npcs.len() {
+            let id = self.server.npcs[k].id;
+            if !self.server.npcs[k].alive {
+                k += 1;
+                continue;
+            }
+            let dx = self.server.npcs[k].pos.x - center.x;
+            let dz = self.server.npcs[k].pos.z - center.z;
+            if dx * dx + dz * dz <= r2 {
+                let before = self.server.npcs[k].hp;
+                self.server.npcs[k].hp = (self.server.npcs[k].hp - damage).max(0);
+                let fatal = self.server.npcs[k].hp == 0;
+                if fatal {
+                    self.server.npcs[k].alive = false;
+                }
+                // UI floater
+                if let Some(idx) = self.zombie_ids.iter().position(|nid| *nid == id) {
+                    // Spawn above zombie head using its model
+                    let m = self
+                        .zombie_models
+                        .get(idx)
+                        .copied()
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                    self.damage.spawn(head.truncate(), damage);
+                    if fatal {
+                        self.zombie_ids.swap_remove(idx);
+                        self.zombie_models.swap_remove(idx);
+                        if (idx as u32) < self.zombie_count {
+                            self.zombie_instances_cpu.swap_remove(idx);
+                            self.zombie_count -= 1;
+                            for (i, inst) in self.zombie_instances_cpu.iter_mut().enumerate() {
+                                inst.palette_base = (i as u32) * self.zombie_joints;
+                            }
+                            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+                        }
+                    }
+                } else {
+                    let (hgt, _n) = crate::gfx::terrain::height_at(
+                        &self.terrain_cpu,
+                        self.server.npcs[k].pos.x,
+                        self.server.npcs[k].pos.z,
+                    );
+                    self.damage.spawn(
+                        glam::vec3(
+                            self.server.npcs[k].pos.x,
+                            hgt + self.server.npcs[k].radius + 0.9,
+                            self.server.npcs[k].pos.z,
+                        ),
+                        damage,
+                    );
+                }
+                let _ = before;
+            }
+            k += 1;
+        }
+        // Damage wizards (including PC) in radius; trigger aggro if player-owned explosion hits any wizard
+        let mut hit_any_wizard = false;
+        let mut to_remove: Vec<usize> = Vec::new();
+        for j in 0..(self.wizard_count as usize) {
+            let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
+            if hp <= 0 {
+                continue;
+            }
+            let c = self.wizard_models[j].to_cols_array();
+            let pos = glam::vec3(c[12], c[13], c[14]);
+            let dx = pos.x - center.x;
+            let dz = pos.z - center.z;
+            if dx * dx + dz * dz <= r2 {
+                let before = self.wizard_hp[j];
+                let after = (before - damage).max(0);
+                self.wizard_hp[j] = after;
+                hit_any_wizard = hit_any_wizard || owner == Some(self.pc_index);
+                let head = pos + glam::vec3(0.0, 1.7, 0.0);
+                self.damage.spawn(head, damage);
+                if after == 0 {
+                    if j == self.pc_index {
+                        self.kill_pc();
+                    } else {
+                        to_remove.push(j);
+                    }
+                }
+            }
+        }
+        // Remove dead wizards after the loop (descending indices to preserve validity)
+        if !to_remove.is_empty() {
+            to_remove.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in to_remove {
+                if idx < self.wizard_count as usize {
+                    self.remove_wizard_at(idx);
+                }
+            }
+        }
+        if hit_any_wizard {
+            self.wizards_hostile_to_pc = true;
+            // Ensure NPC wizards resume casting loop even if all monsters are dead
+            for i in 0..(self.wizard_count as usize) {
+                if i == self.pc_index {
+                    continue;
+                }
+                if self.wizard_hp.get(i).copied().unwrap_or(0) <= 0 {
+                    continue;
+                }
+                if self.wizard_anim_index[i] != 0 {
+                    self.wizard_anim_index[i] = 0;
+                    self.wizard_last_phase[i] = 0.0;
+                }
+            }
+        }
     }
 
     pub(crate) fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {

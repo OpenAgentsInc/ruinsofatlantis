@@ -1,0 +1,51 @@
+{
+  "id": "wiz.fireball.srd521",
+  "name": "Fireball",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "evocation",
+  "level": 3,
+  "classes": ["wizard", "sorcerer"],
+  "tags": ["projectile", "aoe", "fire"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 2.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "point-ground",
+  "requires_line_of_sight": true,
+  "range_ft": 150,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 180,
+
+  "attack": null,
+  "save": null,
+
+  "damage": {
+    "type": "fire",
+    "add_spell_mod_to_damage": false,
+    "dice_by_level_band": { "1-20": "8d6" }
+  },
+
+  "projectile": {
+    "enabled": true,
+    "speed_mps": 28.0,
+    "radius_m": 0.2,
+    "gravity": 0.0,
+    "collide_with": ["ground", "first_target_hit"],
+    "spawn_offset_m": { "x": 0.0, "y": 1.6, "z": 0.5 }
+  },
+
+  "secondary": {
+    "aoe": { "shape": "sphere", "radius_m": 6.0, "dice": "8d6", "half_on_success": true, "save": "dex" }
+  },
+
+  "events": ["CastStarted", "CastCompleted", "ProjectileSpawned", "Explosion", "DamageApplied"],
+  "metrics": null,
+  "policy": { "role": "dps", "priority_index": 1 },
+  "vfx": { "projectile": "fireball_orb", "impact": "fireball_explosion" },
+  "sfx": { "cast": "fireball_cast", "impact": "fireball_boom" }
+}
+

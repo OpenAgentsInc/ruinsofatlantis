@@ -721,7 +721,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             0.0
         };
-        // Hotbar overlay (slot 1): show cooldown fraction (max across active tracked spells)
+        // Hotbar overlays: per-slot cooldown fractions
         let gcd_frac_fb =
             r.scene_inputs
                 .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
@@ -730,7 +730,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.last_time,
             r.magic_missile_cd_dur,
         );
-        let gcd_frac = gcd_frac_fb.max(gcd_frac_mm);
+        let gcd_frac_fb2 =
+            r.scene_inputs
+                .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
+        let cd1 = gcd_frac_fb;
+        let cd2 = gcd_frac_mm;
+        let cd3 = gcd_frac_fb2;
         let overlays_disabled = std::env::var("RA_OVERLAYS")
             .map(|v| v == "0")
             .unwrap_or(false);
@@ -747,6 +752,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                     super::super::PcCast::FireBolt => Some("Fire Bolt"),
                     super::super::PcCast::MagicMissile => Some("Magic Missile"),
+                    super::super::PcCast::Fireball => Some("Fireball"),
                 }
             } else {
                 None
@@ -757,7 +763,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 pc_hp,
                 r.wizard_hp_max,
                 cast_frac,
-                gcd_frac,
+                cd1,
+                cd2,
+                cd3,
                 cast_label,
             );
             if r.hud_model.perf_enabled() {

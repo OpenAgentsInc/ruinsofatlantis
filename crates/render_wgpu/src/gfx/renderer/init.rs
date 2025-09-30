@@ -9,6 +9,7 @@ use data_runtime::{
     zone::{ZoneManifest, load_zone_manifest},
 };
 use ra_assets::skinning::load_gltf_skinned;
+use rand::Rng as _;
 use std::time::Instant;
 use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt};
 use winit::dpi::PhysicalSize;
@@ -802,6 +803,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     } else {
         (1.0, 0.0)
     };
+    let (fb_cast_time, fb_cd_dur) = if let Some(fb) = specdb.get_spell("wiz.fireball.srd521") {
+        (fb.cast_time_s, fb.cooldown_s)
+    } else {
+        (1.0, 2.0)
+    };
 
     Ok(crate::gfx::Renderer {
         surface,
@@ -957,6 +963,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cast_time,
         magic_missile_cast_time: mm_cast_time,
         magic_missile_cd_dur: mm_cd_dur,
+        fireball_cast_time: fb_cast_time,
+        fireball_cd_dur: fb_cd_dur,
         pc_cast_fired: false,
         firebolt_cd_dur,
         cam_orbit_yaw: 0.0,
@@ -972,6 +980,17 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_hp_max: 100,
         pc_alive: true,
         wizards_hostile_to_pc: false,
+        wizard_fire_cycle_count: vec![0; scene_build.wizard_count as usize],
+        wizard_fireball_next_at: {
+            let mut v = vec![0u32; scene_build.wizard_count as usize];
+            // randomize thresholds 3..=5 for NPC wizards; PC index ignored at use-site
+            for x in &mut v {
+                let mut r = rand::rng();
+                let t: u32 = r.random_range(3..=5);
+                *x = t;
+            }
+            v
+        },
         dk_palettes_buf,
         dk_palettes_bg,
         dk_joints,

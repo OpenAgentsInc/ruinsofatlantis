@@ -1377,7 +1377,9 @@ impl Hud {
         pc_hp: i32,
         pc_hp_max: i32,
         cast_frac: f32,
-        gcd_frac: f32,
+        cd1_frac: f32,
+        cd2_frac: f32,
+        cd3_frac: f32,
         cast_label: Option<&str>,
     ) {
         self.bars_verts.clear();
@@ -1494,7 +1496,7 @@ impl Hud {
                 key,
                 [0.9, 0.9, 0.9, 0.95],
             );
-            // Ability text (slot 1 and 2 for now)
+            // Ability text (slots 1-3)
             if i == 0 {
                 self.push_text_line(
                     surface_w,
@@ -1513,10 +1515,28 @@ impl Hud {
                     "Magic Missile",
                     [0.8, 0.9, 1.0, 0.95],
                 );
+            } else if i == 2 {
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    "Fireball",
+                    [1.0, 0.7, 0.2, 0.95],
+                );
             }
-            // GCD overlay (if active): simple top-down fill
-            if i == 0 && gcd_frac > 0.0 {
-                let overlay_h = slot_px * gcd_frac.clamp(0.0, 1.0);
+            // Cooldown overlays per slot (top-down fill)
+            let frac = if i == 0 {
+                cd1_frac
+            } else if i == 1 {
+                cd2_frac
+            } else if i == 2 {
+                cd3_frac
+            } else {
+                0.0
+            };
+            if frac > 0.0 {
+                let overlay_h = slot_px * frac.clamp(0.0, 1.0);
                 self.push_rect(
                     surface_w,
                     surface_h,
