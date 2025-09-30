@@ -763,9 +763,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         let radius = 2.5f32; // generous cylinder radius for 5x scale
         let hp = 200i32;
         let id = server.spawn_npc(dk_spawn_pos, radius, hp);
-        // Scale Death Knight damage 10x over a zombie (5 → 50)
+        // Scale Death Knight damage 10x over a zombie (5 → 50) and double speed
         if let Some(n) = server.npcs.iter_mut().find(|n| n.id == id) {
             n.damage = 50;
+            n.speed = 4.0;
         }
         id
     };

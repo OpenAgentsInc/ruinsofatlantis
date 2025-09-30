@@ -67,7 +67,7 @@ pub fn build_instances(
     // Sample terrain height under desired spot
     let (h, _n) = crate::gfx::terrain::height_at(terrain_cpu, 0.0, radius);
     let pos = glam::vec3(0.0, h, radius);
-    let scale = glam::Vec3::splat(5.0); // 5x wizard size
+    let scale = glam::Vec3::splat(2.5); // 2.5x wizard size (50% smaller than before)
     let m = glam::Mat4::from_scale_rotation_translation(scale, glam::Quat::IDENTITY, pos);
     let mut instances_cpu: Vec<InstanceSkin> = Vec::new();
     let models: Vec<glam::Mat4> = vec![m];

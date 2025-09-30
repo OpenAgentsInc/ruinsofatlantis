@@ -2964,7 +2964,7 @@ impl Renderer {
         let (h, _n) = terrain::height_at(&self.terrain_cpu, npc.pos.x, npc.pos.z);
         let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
         let new_m = glam::Mat4::from_scale_rotation_translation(
-            glam::Vec3::splat(5.0),
+            glam::Vec3::splat(2.5),
             glam::Quat::from_rotation_y(yaw),
             pos,
         );

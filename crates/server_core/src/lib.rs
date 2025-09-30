@@ -17,6 +17,8 @@ pub struct Npc {
     pub attack_anim: f32,
     /// Damage dealt per melee hit
     pub damage: i32,
+    /// Movement speed in m/s
+    pub speed: f32,
 }
 
 impl Npc {
@@ -31,6 +33,7 @@ impl Npc {
             attack_cooldown: 0.0,
             attack_anim: 0.0,
             damage: 5, // default zombie hit
+            speed: 2.0, // default zombie speed
         }
     }
 }
@@ -76,7 +79,6 @@ impl ServerState {
         if wizards.is_empty() {
             return Vec::new();
         }
-        let speed = 2.0f32;
         let wizard_r = 0.7f32;
         let melee_pad = 0.35f32;
         let attack_cd = 1.5f32;
@@ -106,7 +108,7 @@ impl ServerState {
             let dist = to.length();
             let contact = n.radius + wizard_r + melee_pad;
             if dist > contact + 0.02 {
-                let step = (speed * dt).min(dist - contact);
+                let step = (n.speed * dt).min(dist - contact);
                 if step > 1e-4 {
                     n.pos += to.normalize() * step;
                 }
