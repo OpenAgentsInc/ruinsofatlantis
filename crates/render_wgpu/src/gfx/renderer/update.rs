@@ -172,6 +172,37 @@ impl Renderer {
                                     self.fireball_cd_dur,
                                 );
                             }
+                            super::super::PcCast::BurningHands => {
+                                // Apply a 60° cone 4.5m in front of the PC
+                                let pc_m = inst;
+                                let pc_pos =
+                                    (pc_m * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                                let forward = (pc_m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
+                                    .truncate()
+                                    .normalize_or_zero();
+                                self.apply_cone_damage(pc_pos, forward, 60.0, 4.5, 11);
+                                // Start cooldown
+                                let spell_id = "wiz.burning_hands.srd521";
+                                self.scene_inputs.start_cooldown(
+                                    spell_id,
+                                    self.last_time,
+                                    self.burning_hands_cd_dur,
+                                );
+                            }
+                            super::super::PcCast::Thunderwave => {
+                                // Apply a 4.5m cube (approximate with square in XZ) centered on PC with 3m knockback
+                                let pc_m = inst;
+                                let pc_pos =
+                                    (pc_m * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                                self.apply_cube_damage_and_knockback(pc_pos, 4.5, 9, 3.0);
+                                // Start cooldown
+                                let spell_id = "wiz.thunderwave.srd521";
+                                self.scene_inputs.start_cooldown(
+                                    spell_id,
+                                    self.last_time,
+                                    self.thunderwave_cd_dur,
+                                );
+                            }
                         }
                         self.pc_cast_fired = true;
                     }
@@ -847,6 +878,228 @@ impl Renderer {
                 if self.wizard_anim_index[i] != 0 {
                     self.wizard_anim_index[i] = 0;
                     self.wizard_last_phase[i] = 0.0;
+                }
+            }
+        }
+    }
+
+    fn apply_cone_damage(
+        &mut self,
+        origin: glam::Vec3,
+        forward: glam::Vec3,
+        angle_deg: f32,
+        length_m: f32,
+        damage: i32,
+    ) {
+        let f = {
+            let mut v = forward;
+            let l2 = v.length_squared();
+            if l2 <= 1e-6 {
+                glam::Vec3::Z
+            } else {
+                v.y = 0.0;
+                v.normalize_or_zero()
+            }
+        };
+        let cos_half = (0.5f32 * angle_deg.to_radians()).cos();
+        // Visual burst
+        for _ in 0..28 {
+            let a = rand_unit() * 0.5 * angle_deg.to_radians();
+            let yaw = glam::Quat::from_rotation_y(a);
+            let dir = (yaw * f).normalize_or_zero();
+            self.particles.push(Particle {
+                pos: origin + glam::vec3(0.0, 1.2, 0.0),
+                vel: dir * (6.0 + rand_unit().abs() * 2.0) + glam::vec3(0.0, 2.0, 0.0),
+                age: 0.0,
+                life: 0.22,
+                size: 0.03,
+                color: [2.0, 0.8, 0.25],
+            });
+        }
+        let half = length_m.max(0.0);
+        // DK first
+        if let Some(dk_id) = self.dk_id
+            && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == dk_id)
+            && n.alive
+        {
+            let to = glam::vec3(n.pos.x - origin.x, 0.0, n.pos.z - origin.z);
+            let d = to.length();
+            if d <= half {
+                let ok = {
+                    let dir = to.normalize_or_zero();
+                    dir.dot(f) >= cos_half
+                };
+                if ok {
+                    n.hp = (n.hp - damage).max(0);
+                    let fatal = n.hp == 0;
+                    if fatal {
+                        n.alive = false;
+                        self.dk_count = 0;
+                        self.dk_id = None;
+                    }
+                    let (hgt, _n) =
+                        crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    self.damage
+                        .spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+                }
+            }
+        }
+        // NPCs
+        for n in &mut self.server.npcs {
+            if !n.alive {
+                continue;
+            }
+            let to = glam::vec3(n.pos.x - origin.x, 0.0, n.pos.z - origin.z);
+            let d = to.length();
+            if d <= half {
+                let ok = {
+                    let dir = to.normalize_or_zero();
+                    dir.dot(f) >= cos_half
+                };
+                if ok {
+                    n.hp = (n.hp - damage).max(0);
+                    if n.hp == 0 {
+                        n.alive = false;
+                    }
+                    let (hgt, _n) =
+                        crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    self.damage
+                        .spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+                }
+            }
+        }
+        // Wizards (including PC)
+        let mut to_remove: Vec<usize> = Vec::new();
+        for j in 0..(self.wizard_count as usize) {
+            if self.wizard_hp.get(j).copied().unwrap_or(0) <= 0 {
+                continue;
+            }
+            let c = self.wizard_models[j].to_cols_array();
+            let p = glam::vec3(c[12], c[13], c[14]);
+            let to = glam::vec3(p.x - origin.x, 0.0, p.z - origin.z);
+            let d = to.length();
+            if d <= half {
+                let ok = {
+                    let dir = to.normalize_or_zero();
+                    dir.dot(f) >= cos_half
+                };
+                if ok {
+                    let before = self.wizard_hp[j];
+                    let after = (before - damage).max(0);
+                    self.wizard_hp[j] = after;
+                    self.damage.spawn(p + glam::vec3(0.0, 1.7, 0.0), damage);
+                    if after == 0 {
+                        if j == self.pc_index {
+                            self.kill_pc();
+                        } else {
+                            to_remove.push(j);
+                        }
+                    }
+                }
+            }
+        }
+        if !to_remove.is_empty() {
+            to_remove.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in to_remove {
+                if idx < self.wizard_count as usize {
+                    self.remove_wizard_at(idx);
+                }
+            }
+        }
+    }
+
+    fn apply_cube_damage_and_knockback(
+        &mut self,
+        center: glam::Vec3,
+        size_m: f32,
+        damage: i32,
+        knockback_m: f32,
+    ) {
+        let half = (size_m * 0.5).max(0.0);
+        // particle ring
+        for k in 0..24 {
+            let a = (k as f32) / 24.0 * std::f32::consts::TAU;
+            self.particles.push(Particle {
+                pos: center + glam::vec3(0.0, 1.0, 0.0),
+                vel: glam::vec3(a.cos(), 0.2, a.sin()) * 5.0,
+                age: 0.0,
+                life: 0.18,
+                size: 0.03,
+                color: [0.7, 0.9, 1.6],
+            });
+        }
+        // DK first
+        if let Some(dk_id) = self.dk_id
+            && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == dk_id)
+            && n.alive
+        {
+            let dx = n.pos.x - center.x;
+            let dz = n.pos.z - center.z;
+            if dx.abs() <= half && dz.abs() <= half {
+                n.hp = (n.hp - damage).max(0);
+                let fatal = n.hp == 0;
+                if fatal {
+                    n.alive = false;
+                    self.dk_count = 0;
+                    self.dk_id = None;
+                }
+                let dir = glam::vec3(dx, 0.0, dz).normalize_or_zero();
+                n.pos.x += dir.x * knockback_m;
+                n.pos.z += dir.z * knockback_m;
+                let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                self.damage
+                    .spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+            }
+        }
+        // Generic NPCs
+        for n in &mut self.server.npcs {
+            if !n.alive {
+                continue;
+            }
+            let dx = n.pos.x - center.x;
+            let dz = n.pos.z - center.z;
+            if dx.abs() <= half && dz.abs() <= half {
+                n.hp = (n.hp - damage).max(0);
+                if n.hp == 0 {
+                    n.alive = false;
+                }
+                let dir = glam::vec3(dx, 0.0, dz).normalize_or_zero();
+                n.pos.x += dir.x * knockback_m;
+                n.pos.z += dir.z * knockback_m;
+                let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                self.damage
+                    .spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+            }
+        }
+        // Wizards with square check
+        let mut to_remove: Vec<usize> = Vec::new();
+        for j in 0..(self.wizard_count as usize) {
+            if self.wizard_hp.get(j).copied().unwrap_or(0) <= 0 {
+                continue;
+            }
+            let c = self.wizard_models[j].to_cols_array();
+            let p = glam::vec3(c[12], c[13], c[14]);
+            let dx = p.x - center.x;
+            let dz = p.z - center.z;
+            if dx.abs() <= half && dz.abs() <= half {
+                let before = self.wizard_hp[j];
+                let after = (before - damage).max(0);
+                self.wizard_hp[j] = after;
+                self.damage.spawn(p + glam::vec3(0.0, 1.7, 0.0), damage);
+                if after == 0 {
+                    if j == self.pc_index {
+                        self.kill_pc();
+                    } else {
+                        to_remove.push(j);
+                    }
+                }
+            }
+        }
+        if !to_remove.is_empty() {
+            to_remove.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in to_remove {
+                if idx < self.wizard_count as usize {
+                    self.remove_wizard_at(idx);
                 }
             }
         }

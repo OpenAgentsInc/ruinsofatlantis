@@ -52,6 +52,8 @@ enum PcCast {
     FireBolt,
     MagicMissile,
     Fireball,
+    BurningHands,
+    Thunderwave,
 }
 use std::time::Instant;
 
@@ -317,6 +319,10 @@ pub struct Renderer {
     magic_missile_cd_dur: f32,
     fireball_cast_time: f32,
     fireball_cd_dur: f32,
+    burning_hands_cast_time: f32,
+    burning_hands_cd_dur: f32,
+    thunderwave_cast_time: f32,
+    thunderwave_cd_dur: f32,
     pc_cast_fired: bool,
     // Fire Bolt cooldown duration (seconds); remaining tracked in SceneInputs
     firebolt_cd_dur: f32,
@@ -2550,17 +2556,49 @@ impl Renderer {
                         PcCast::FireBolt => Some("Fire Bolt"),
                         PcCast::MagicMissile => Some("Magic Missile"),
                         PcCast::Fireball => Some("Fireball"),
+                        PcCast::BurningHands => Some("Burning Hands"),
+                        PcCast::Thunderwave => Some("Thunderwave"),
                     }
                 } else {
                     None
                 };
+                // Legacy overlay path: compute per-slot CDs
+                let cd1 = self.scene_inputs.cooldown_frac(
+                    "wiz.fire_bolt.srd521",
+                    self.last_time,
+                    self.firebolt_cd_dur,
+                );
+                let cd2 = self.scene_inputs.cooldown_frac(
+                    "wiz.magic_missile.srd521",
+                    self.last_time,
+                    self.magic_missile_cd_dur,
+                );
+                let cd3 = self.scene_inputs.cooldown_frac(
+                    "wiz.fireball.srd521",
+                    self.last_time,
+                    self.fireball_cd_dur,
+                );
+                let cd4 = self.scene_inputs.cooldown_frac(
+                    "wiz.burning_hands.srd521",
+                    self.last_time,
+                    self.burning_hands_cd_dur,
+                );
+                let cd5 = self.scene_inputs.cooldown_frac(
+                    "wiz.thunderwave.srd521",
+                    self.last_time,
+                    self.thunderwave_cd_dur,
+                );
                 self.hud.build(
                     self.size.width,
                     self.size.height,
                     pc_hp,
                     self.wizard_hp_max,
                     cast_frac,
-                    gcd_frac,
+                    cd1,
+                    cd2,
+                    cd3,
+                    cd4,
+                    cd5,
                     cast_label,
                 );
                 if self.hud_model.perf_enabled() {

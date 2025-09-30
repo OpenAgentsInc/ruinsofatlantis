@@ -1380,6 +1380,8 @@ impl Hud {
         cd1_frac: f32,
         cd2_frac: f32,
         cd3_frac: f32,
+        cd4_frac: f32,
+        cd5_frac: f32,
         cast_label: Option<&str>,
     ) {
         self.bars_verts.clear();
@@ -1526,14 +1528,13 @@ impl Hud {
                 );
             }
             // Cooldown overlays per slot (top-down fill)
-            let frac = if i == 0 {
-                cd1_frac
-            } else if i == 1 {
-                cd2_frac
-            } else if i == 2 {
-                cd3_frac
-            } else {
-                0.0
+            let frac = match i {
+                0 => cd1_frac,
+                1 => cd2_frac,
+                2 => cd3_frac,
+                3 => cd4_frac,
+                4 => cd5_frac,
+                _ => 0.0,
             };
             if frac > 0.0 {
                 let overlay_h = slot_px * frac.clamp(0.0, 1.0);
@@ -1545,6 +1546,26 @@ impl Hud {
                     x1,
                     y0 + overlay_h,
                     [0.0, 0.0, 0.0, 0.45],
+                );
+            }
+            // Ability labels for 4 and 5
+            if i == 3 {
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    "Burning Hands",
+                    [1.0, 0.8, 0.5, 0.95],
+                );
+            } else if i == 4 {
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    "Thunderwave",
+                    [0.8, 0.9, 1.0, 0.95],
                 );
             }
             x += slot_px + gap;

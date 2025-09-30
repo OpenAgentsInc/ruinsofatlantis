@@ -103,6 +103,54 @@ impl Renderer {
                             }
                         }
                     }
+                    PhysicalKey::Code(KeyCode::Digit4) | PhysicalKey::Code(KeyCode::Numpad4)
+                        if self.pc_alive =>
+                    {
+                        if pressed {
+                            let spell_id = "wiz.burning_hands.srd521";
+                            if self.scene_inputs.can_cast(spell_id, self.last_time) {
+                                self.pc_cast_queued = true;
+                                self.pc_cast_kind = Some(super::super::PcCast::BurningHands);
+                                self.pc_cast_time = self.burning_hands_cast_time.max(0.0);
+                                log::debug!("PC cast queued: Burning Hands");
+                            } else {
+                                log::debug!(
+                                    "Burning Hands on cooldown: {:.0} ms remaining",
+                                    ((self.scene_inputs.cooldown_frac(
+                                        spell_id,
+                                        self.last_time,
+                                        self.burning_hands_cd_dur,
+                                    ) * self.burning_hands_cd_dur)
+                                        * 1000.0)
+                                        .max(0.0)
+                                );
+                            }
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::Digit5) | PhysicalKey::Code(KeyCode::Numpad5)
+                        if self.pc_alive =>
+                    {
+                        if pressed {
+                            let spell_id = "wiz.thunderwave.srd521";
+                            if self.scene_inputs.can_cast(spell_id, self.last_time) {
+                                self.pc_cast_queued = true;
+                                self.pc_cast_kind = Some(super::super::PcCast::Thunderwave);
+                                self.pc_cast_time = self.thunderwave_cast_time.max(0.0);
+                                log::debug!("PC cast queued: Thunderwave");
+                            } else {
+                                log::debug!(
+                                    "Thunderwave on cooldown: {:.0} ms remaining",
+                                    ((self.scene_inputs.cooldown_frac(
+                                        spell_id,
+                                        self.last_time,
+                                        self.thunderwave_cd_dur,
+                                    ) * self.thunderwave_cd_dur)
+                                        * 1000.0)
+                                        .max(0.0)
+                                );
+                            }
+                        }
+                    }
                     // Sky controls (pause/scrub/speed)
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {

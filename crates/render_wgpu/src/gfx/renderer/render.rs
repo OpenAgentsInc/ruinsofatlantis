@@ -736,6 +736,16 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         let cd1 = gcd_frac_fb;
         let cd2 = gcd_frac_mm;
         let cd3 = gcd_frac_fb2;
+        let cd4 = r.scene_inputs.cooldown_frac(
+            "wiz.burning_hands.srd521",
+            r.last_time,
+            r.burning_hands_cd_dur,
+        );
+        let cd5 = r.scene_inputs.cooldown_frac(
+            "wiz.thunderwave.srd521",
+            r.last_time,
+            r.thunderwave_cd_dur,
+        );
         let overlays_disabled = std::env::var("RA_OVERLAYS")
             .map(|v| v == "0")
             .unwrap_or(false);
@@ -753,6 +763,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     super::super::PcCast::FireBolt => Some("Fire Bolt"),
                     super::super::PcCast::MagicMissile => Some("Magic Missile"),
                     super::super::PcCast::Fireball => Some("Fireball"),
+                    super::super::PcCast::BurningHands => Some("Burning Hands"),
+                    super::super::PcCast::Thunderwave => Some("Thunderwave"),
                 }
             } else {
                 None
@@ -766,6 +778,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 cd1,
                 cd2,
                 cd3,
+                cd4,
+                cd5,
                 cast_label,
             );
             if r.hud_model.perf_enabled() {

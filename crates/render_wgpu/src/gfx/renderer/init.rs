@@ -808,6 +808,16 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     } else {
         (1.0, 2.0)
     };
+    let (bh_cast_time, bh_cd_dur) = if let Some(bh) = specdb.get_spell("wiz.burning_hands.srd521") {
+        (bh.cast_time_s, bh.cooldown_s)
+    } else {
+        (1.0, 2.0)
+    };
+    let (tw_cast_time, tw_cd_dur) = if let Some(tw) = specdb.get_spell("wiz.thunderwave.srd521") {
+        (tw.cast_time_s, tw.cooldown_s)
+    } else {
+        (1.0, 2.0)
+    };
 
     Ok(crate::gfx::Renderer {
         surface,
@@ -965,6 +975,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         magic_missile_cd_dur: mm_cd_dur,
         fireball_cast_time: fb_cast_time,
         fireball_cd_dur: fb_cd_dur,
+        burning_hands_cast_time: bh_cast_time,
+        burning_hands_cd_dur: bh_cd_dur,
+        thunderwave_cast_time: tw_cast_time,
+        thunderwave_cd_dur: tw_cd_dur,
         pc_cast_fired: false,
         firebolt_cd_dur,
         cam_orbit_yaw: 0.0,
