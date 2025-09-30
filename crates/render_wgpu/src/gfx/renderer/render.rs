@@ -859,15 +859,17 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         0.0
     };
     // Hotbar overlays: per-slot cooldown fractions
-    let gcd_frac_fb = r
-        .scene_inputs
-        .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
-    let gcd_frac_mm = r
-        .scene_inputs
-        .cooldown_frac("wiz.magic_missile.srd521", r.last_time, r.magic_missile_cd_dur);
-    let gcd_frac_fb2 = r
-        .scene_inputs
-        .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
+    let gcd_frac_fb =
+        r.scene_inputs
+            .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
+    let gcd_frac_mm = r.scene_inputs.cooldown_frac(
+        "wiz.magic_missile.srd521",
+        r.last_time,
+        r.magic_missile_cd_dur,
+    );
+    let gcd_frac_fb2 =
+        r.scene_inputs
+            .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
     let cd1 = gcd_frac_fb;
     let cd2 = gcd_frac_mm;
     let cd3 = gcd_frac_fb2;

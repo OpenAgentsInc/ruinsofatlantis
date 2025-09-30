@@ -301,7 +301,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let nameplates = ui::Nameplates::new(&device, draw_fmt)?;
     let nameplates_npc = ui::Nameplates::new(&device, draw_fmt)?;
     let mut bars = ui::HealthBars::new(&device, draw_fmt)?;
-    let hud = ui::Hud::new(&device, draw_fmt)?;
+    // HUD is drawn after present directly to the swapchain; build it against the
+    // swapchain format to avoid attachment mismatches when offscreen is RGBA8.
+    let hud = ui::Hud::new(&device, config.format)?;
     let damage = ui::DamageFloaters::new(&device, draw_fmt)?;
 
     // --- Buffers & bind groups ---
