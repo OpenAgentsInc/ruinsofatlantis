@@ -540,7 +540,7 @@ impl Renderer {
             glam::vec3(c[12], c[13], c[14])
         };
         let dk_id = {
-            let id = self.server.spawn_npc(dk_spawn_pos, 2.5, 200);
+            let id = self.server.spawn_npc(dk_spawn_pos, 2.5, 1000);
             if let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == id) {
                 n.damage = 50;
                 n.speed = 4.0;

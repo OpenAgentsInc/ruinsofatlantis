@@ -133,10 +133,7 @@ impl DamageFloaters {
                 glyphs.insert(
                     ch,
                     GlyphInfo {
-                        uv_min: [
-                            (ox as f32) / atlas_w as f32,
-                            (oy as f32) / atlas_h as f32,
-                        ],
+                        uv_min: [(ox as f32) / atlas_w as f32, (oy as f32) / atlas_h as f32],
                         uv_max: [
                             ((ox as u32 + gw) as f32) / atlas_w as f32,
                             ((oy as u32 + gh) as f32) / atlas_h as f32,
