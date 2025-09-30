@@ -184,7 +184,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         r.update_zombies_from_server();
         r.update_zombie_palettes(t);
+        r.update_deathknight_from_server();
     }
+    // Death Knight palettes (single instance)
+    r.update_deathknight_palettes(t);
     // FX update (projectiles/particles)
     r.update_fx(t, dt);
     // Update dynamic lights from active projectiles (up to 16)
@@ -405,6 +408,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
+        // Skinned: Death Knight (boss)
+        if r.dk_count > 0 {
+            log::debug!("draw: deathknight x{}", r.dk_count);
+            r.draw_deathknight(&mut rp);
+            r.draw_calls += 1;
+        }
         // Skinned: zombies
         if std::env::var("RA_DRAW_ZOMBIES")
             .map(|v| v != "0")
@@ -485,6 +494,20 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 bar_entries.push((head.truncate(), frac));
             }
         }
+        // Death Knight health bar (use server HP; lower vertical offset)
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
+            let frac = if let Some(id) = r.dk_id
+                && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
+            {
+                (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
+            } else {
+                1.0
+            };
+            let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            bar_entries.push((head.truncate(), frac));
+        }
         // Queue bars vertices and draw to the active target
         r.bars.queue_entries(
             &r.device,
@@ -518,54 +541,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     };
     r.damage.draw(&mut encoder, damage_target);
 
-    // Nameplates: wizards and NPCs (honor RA_OVERLAYS)
-    if !overlays_disabled {
-        // alive wizards only
-        let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
-        for (i, m) in r.wizard_models.iter().enumerate() {
-            if r.wizard_hp.get(i).copied().unwrap_or(0) > 0 {
-                wiz_alive.push(*m);
-            }
-        }
-        let labels_target = if r.direct_present {
-            &view
-        } else {
-            &r.attachments.scene_view
-        };
-        r.nameplates.queue_labels(
-            &r.device,
-            &r.queue,
-            r.config.width,
-            r.config.height,
-            view_proj,
-            &wiz_alive,
-        );
-        r.nameplates.draw(&mut encoder, labels_target);
-
-        // NPC nameplates (e.g., "Zombie")
-        let mut npc_positions: Vec<glam::Vec3> = Vec::new();
-        for (idx, m) in r.zombie_models.iter().enumerate() {
-            if let Some(npc) = r.server.npcs.get(idx)
-                && !npc.alive
-            {
-                continue;
-            }
-            let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-            npc_positions.push(head.truncate());
-        }
-        if !npc_positions.is_empty() {
-            r.nameplates_npc.queue_npc_labels(
-                &r.device,
-                &r.queue,
-                r.config.width,
-                r.config.height,
-                view_proj,
-                &npc_positions,
-                "Zombie",
-            );
-            r.nameplates_npc.draw(&mut encoder, labels_target);
-        }
-    }
+    // Nameplates disabled (show health bars only)
 
     log::debug!("end: main pass");
 

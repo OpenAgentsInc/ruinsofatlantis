@@ -26,6 +26,7 @@ mod types;
 pub use types::Vertex;
 mod anim;
 mod camera_sys;
+mod deathknight;
 mod draw;
 mod foliage;
 pub mod fx;
@@ -158,6 +159,10 @@ pub struct Renderer {
     zombie_vb: wgpu::Buffer,
     zombie_ib: wgpu::Buffer,
     zombie_index_count: u32,
+    // Death Knight skinned geometry
+    dk_vb: wgpu::Buffer,
+    dk_ib: wgpu::Buffer,
+    dk_index_count: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -192,6 +197,11 @@ pub struct Renderer {
     zombie_instances: wgpu::Buffer,
     zombie_count: u32,
     zombie_instances_cpu: Vec<InstanceSkin>,
+    // Death Knight instances
+    dk_instances: wgpu::Buffer,
+    dk_count: u32,
+    #[allow(dead_code)]
+    dk_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
 
@@ -220,6 +230,15 @@ pub struct Renderer {
     zombie_prev_pos: Vec<glam::Vec3>,
     // Per-instance forward-axis offsets (authoring → world). Calibrated on movement.
     zombie_forward_offsets: Vec<f32>,
+    // Death Knight
+    dk_palettes_buf: wgpu::Buffer,
+    dk_palettes_bg: wgpu::BindGroup,
+    dk_joints: u32,
+    dk_models: Vec<glam::Mat4>,
+    dk_cpu: SkinnedMeshCPU,
+    dk_time_offset: Vec<f32>,
+    dk_id: Option<server_core::NpcId>,
+    dk_prev_pos: glam::Vec3,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -232,6 +251,10 @@ pub struct Renderer {
     _zombie_mat_buf: wgpu::Buffer,
     _zombie_tex_view: wgpu::TextureView,
     _zombie_sampler: wgpu::Sampler,
+    dk_mat_bg: wgpu::BindGroup,
+    _dk_mat_buf: wgpu::Buffer,
+    _dk_tex_view: wgpu::TextureView,
+    _dk_sampler: wgpu::Sampler,
 
     // Flags
     wire_enabled: bool,
@@ -269,7 +292,9 @@ pub struct Renderer {
     // Camera focus (we orbit around a close wizard)
 
     // UI overlay
+    #[allow(dead_code)]
     nameplates: ui::Nameplates,
+    #[allow(dead_code)]
     nameplates_npc: ui::Nameplates,
     bars: ui::HealthBars,
     damage: ui::DamageFloaters,
@@ -482,6 +507,50 @@ impl Renderer {
                 resource: self.zombie_palettes_buf.as_entire_binding(),
             }],
         });
+
+        // 3.5) Rebuild Death Knight instance and server entry at original spawn
+        let (dk_instances, dk_instances_cpu, dk_models, dk_count) =
+            deathknight::build_instances(&self.device, &self.terrain_cpu, self.dk_joints);
+        self.dk_instances = dk_instances;
+        self.dk_models = dk_models.clone();
+        self.dk_count = dk_count;
+        self.dk_instances_cpu = dk_instances_cpu;
+        // Recreate DK palette buffer sized for the current count (typically 1)
+        let total_dk_mats = self.dk_count as usize * self.dk_joints as usize;
+        self.dk_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("deathknight-palettes"),
+            size: (total_dk_mats * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.dk_palettes_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("deathknight-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: self.dk_palettes_buf.as_entire_binding(),
+            }],
+        });
+        // Spawn new DK server NPC at the DK model position
+        let dk_spawn_pos = {
+            let c = self
+                .dk_models
+                .first()
+                .copied()
+                .unwrap_or(glam::Mat4::IDENTITY)
+                .to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
+        let dk_id = {
+            let id = self.server.spawn_npc(dk_spawn_pos, 2.5, 1000);
+            if let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == id) {
+                n.damage = 50;
+                n.speed = 4.0;
+            }
+            id
+        };
+        self.dk_id = Some(dk_id);
+        self.dk_prev_pos = dk_spawn_pos;
 
         // 4) Clear FX
         self.projectiles.clear();
@@ -2832,6 +2901,126 @@ impl Renderer {
             }
         }
         // No single bulk upload; we wrote per-instance segments above.
+    }
+
+    fn update_deathknight_palettes(&mut self, time_global: f32) {
+        if self.dk_count == 0 {
+            return;
+        }
+        let joints = self.dk_joints as usize;
+        // Choose an idle-like clip if present; fallback to any available clip.
+        let find_clip = |subs: &[&str],
+                         anims: &std::collections::HashMap<String, AnimClip>|
+         -> Option<String> {
+            let subsl: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
+            for name in anims.keys() {
+                let low = name.to_lowercase();
+                if subsl.iter().any(|s| low.contains(s)) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
+        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.dk_count as usize * joints);
+        // Determine movement from model position vs last frame
+        let current_pos = if let Some(m) = self.dk_models.first().copied() {
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        } else {
+            glam::Vec3::ZERO
+        };
+        let moving = (current_pos - self.dk_prev_pos).length_squared() > 1e-4;
+        let attack_now = if let Some(id) = self.dk_id
+            && let Some(n) = self.server.npcs.iter().find(|n| n.id == id)
+        {
+            n.attack_anim > 0.0
+        } else {
+            false
+        };
+        for i in 0..(self.dk_count as usize) {
+            let lookup = if attack_now {
+                find_clip(
+                    &["attack", "slash", "hit", "swing"],
+                    &self.dk_cpu.animations,
+                )
+            } else if moving {
+                find_clip(&["walk", "run"], &self.dk_cpu.animations)
+            } else {
+                find_clip(&["idle", "stand", "wait"], &self.dk_cpu.animations)
+            }
+            .or_else(|| self.dk_cpu.animations.keys().next().cloned())
+            .unwrap_or_else(|| "__static".to_string());
+            let t = time_global + self.dk_time_offset.get(i).copied().unwrap_or(0.0);
+            if lookup == "__static" {
+                for _ in 0..joints {
+                    mats.push(glam::Mat4::IDENTITY);
+                }
+            } else if let Some(clip) = self.dk_cpu.animations.get(&lookup) {
+                let palette = anim::sample_palette(&self.dk_cpu, clip, t);
+                mats.extend(palette);
+            }
+        }
+        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
+        for m in mats {
+            raw.push(m.to_cols_array());
+        }
+        self.queue
+            .write_buffer(&self.dk_palettes_buf, 0, bytemuck::cast_slice(&raw));
+        // Update previous position for next-frame movement detection
+        self.dk_prev_pos = current_pos;
+    }
+
+    fn update_deathknight_from_server(&mut self) {
+        if self.dk_count == 0 {
+            return;
+        }
+        let id = if let Some(id) = self.dk_id {
+            id
+        } else {
+            return;
+        };
+        let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id == id) {
+            n
+        } else {
+            return;
+        };
+        // Face nearest wizard
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
+        let mut best_d2 = f32::INFINITY;
+        let mut face_to: Option<glam::Vec3> = None;
+        for w in &wiz_pos {
+            let dx = w.x - npc.pos.x;
+            let dz = w.z - npc.pos.z;
+            let d2 = dx * dx + dz * dz;
+            if d2 < best_d2 {
+                best_d2 = d2;
+                face_to = Some(*w);
+            }
+        }
+        let yaw = if let Some(tgt) = face_to {
+            (tgt.x - npc.pos.x).atan2(tgt.z - npc.pos.z)
+        } else {
+            0.0
+        };
+        // Stick to terrain height
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, npc.pos.x, npc.pos.z);
+        let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
+        let new_m = glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::splat(2.5),
+            glam::Quat::from_rotation_y(yaw),
+            pos,
+        );
+        self.dk_models[0] = new_m;
+        // Upload instance
+        if let Some(inst) = self.dk_instances_cpu.get_mut(0) {
+            inst.model = new_m.to_cols_array_2d();
+            let bytes: &[u8] = bytemuck::bytes_of(inst);
+            self.queue.write_buffer(&self.dk_instances, 0, bytes);
+        }
     }
 
     fn update_zombies_from_server(&mut self) {

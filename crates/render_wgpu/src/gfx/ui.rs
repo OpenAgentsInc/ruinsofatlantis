@@ -76,7 +76,9 @@ impl DamageFloaters {
 
         // Build atlas for ASCII digits and symbols we may show
         let atlas_w: u32 = 512;
-        let mut atlas_h: u32 = 128;
+        // Make the atlas tall enough up front to avoid later growth,
+        // which can invalidate normalized UVs computed earlier.
+        let mut atlas_h: u32 = 512;
         let mut atlas = vec![0u8; (atlas_w * atlas_h) as usize];
         let mut cursor_x: u32 = 1;
         let mut cursor_y: u32 = 1;
@@ -112,27 +114,31 @@ impl DamageFloaters {
                     atlas = new_buf;
                     atlas_h = new_h;
                 }
-                let ox = cursor_x as i32 + bounds.min.x.floor() as i32;
-                let oy = cursor_y as i32 + bounds.min.y.floor() as i32;
+                // Shift draw origin right/down when glyph has negative min bounds
+                let off_x = (-bounds.min.x.floor() as i32).max(0);
+                let off_y = (-bounds.min.y.floor() as i32).max(0);
+                let ox = cursor_x as i32 + off_x;
+                let oy = cursor_y as i32 + off_y;
                 og.draw(|x, y, v| {
-                    let px = (ox + x as i32) as u32;
-                    let py = (oy + y as i32) as u32;
-                    if px < atlas_w && py < atlas_h {
-                        let idx = (py * atlas_w + px) as usize;
-                        atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                    let px_i = ox + x as i32;
+                    let py_i = oy + y as i32;
+                    if px_i >= 0 && py_i >= 0 {
+                        let px = px_i as u32;
+                        let py = py_i as u32;
+                        if px < atlas_w && py < atlas_h {
+                            let idx = (py * atlas_w + px) as usize;
+                            atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                        }
                     }
                 });
                 let adv = scaled.h_advance(gid);
                 glyphs.insert(
                     ch,
                     GlyphInfo {
-                        uv_min: [
-                            (ox.max(0) as f32) / atlas_w as f32,
-                            (oy.max(0) as f32) / atlas_h as f32,
-                        ],
+                        uv_min: [(ox as f32) / atlas_w as f32, (oy as f32) / atlas_h as f32],
                         uv_max: [
-                            ((ox.max(0) as u32 + gw) as f32) / atlas_w as f32,
-                            ((oy.max(0) as u32 + gh) as f32) / atlas_h as f32,
+                            ((ox as u32 + gw) as f32) / atlas_w as f32,
+                            ((oy as u32 + gh) as f32) / atlas_h as f32,
                         ],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
@@ -452,6 +458,7 @@ mod floater_tests {
     }
 }
 
+#[allow(dead_code)]
 pub struct Nameplates {
     // Font + metrics
     font: FontArc,
@@ -476,6 +483,7 @@ pub struct Nameplates {
     vcap_bytes: u64,
 }
 
+#[allow(dead_code)]
 impl Nameplates {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
         // Load a font (embedded from assets/fonts at compile time)
@@ -548,17 +556,16 @@ impl Nameplates {
                 });
 
                 let adv = scaled.h_advance(gid);
+                // Half-texel inset to avoid sampling into neighboring glyph cells
+                let u0 = (ox as f32 + 0.5) / (atlas_w as f32);
+                let v0 = (oy as f32 + 0.5) / (atlas_h as f32);
+                let u1 = ((ox as u32 + gw) as f32 - 0.5) / (atlas_w as f32);
+                let v1 = ((oy as u32 + gh) as f32 - 0.5) / (atlas_h as f32);
                 glyphs.insert(
                     ch,
                     GlyphInfo {
-                        uv_min: [
-                            (ox.max(0) as f32) / (atlas_w as f32),
-                            (oy.max(0) as f32) / (atlas_h as f32),
-                        ],
-                        uv_max: [
-                            ((ox.max(0) as u32 + gw) as f32) / (atlas_w as f32),
-                            ((oy.max(0) as u32 + gh) as f32) / (atlas_h as f32),
-                        ],
+                        uv_min: [u0, v0],
+                        uv_max: [u1, v1],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
                         advance: adv,
@@ -703,7 +710,7 @@ impl Nameplates {
         let mut verts: Vec<TextVertex> = Vec::new();
         let w = surface_w as f32;
         let h = surface_h as f32;
-        let ascent = self.ascent;
+        let _ascent = self.ascent;
 
         // Precompute names
         let labels: Vec<String> = (0..wizard_models.len())
@@ -734,15 +741,13 @@ impl Nameplates {
             let mut prev: Option<ab_glyph::GlyphId> = None;
             let mut width = 0.0f32;
             for ch in text.chars() {
-                let gi = match self.glyphs.get(&ch) {
-                    Some(g) => g,
-                    None => continue,
-                };
-                if let Some(pg) = prev {
-                    width += scaled.kern(pg, gi.id);
+                if let Some(gi) = self.glyphs.get(&ch) {
+                    if let Some(pg) = prev {
+                        width += scaled.kern(pg, gi.id);
+                    }
+                    width += gi.advance;
+                    prev = Some(gi.id);
                 }
-                width += gi.advance;
-                prev = Some(gi.id);
             }
             cx -= width * 0.5; // center horizontally
 
@@ -758,10 +763,11 @@ impl Nameplates {
                     pen_x += scaled.kern(pg, gi.id);
                 }
 
-                let x = cx + pen_x + gi.bounds_min[0];
-                let y = baseline_y - ascent + gi.bounds_min[1];
+                // Place glyphs using advance + size; ignore negative bearings to avoid truncation.
                 let w_px = gi.size[0];
                 let h_px = gi.size[1];
+                let x = cx + pen_x;
+                let y = baseline_y - h_px; // top-left
 
                 let p0 = Self::ndc_from_px(x, y, w, h);
                 let p1 = Self::ndc_from_px(x + w_px, y, w, h);
@@ -890,14 +896,14 @@ impl HealthBars {
             let r = 1.0 - t;
             let g = 1.0;
             let b = 0.0;
-            [r, g, b, 1.0]
+            [r, g, b, 0.75]
         } else {
             // red -> yellow
             let t = f / 0.5;
             let r = 1.0;
             let g = t;
             let b = 0.0;
-            [r, g, b, 1.0]
+            [r, g, b, 0.75]
         }
     }
 
@@ -1109,14 +1115,20 @@ impl Hud {
                     atlas = new_buf;
                     atlas_h = new_h;
                 }
-                let ox = cursor_x as i32 + bounds.min.x.floor() as i32;
-                let oy = cursor_y as i32 + bounds.min.y.floor() as i32;
+                let off_x = (-bounds.min.x.floor() as i32).max(0);
+                let off_y = (-bounds.min.y.floor() as i32).max(0);
+                let ox = cursor_x as i32 + off_x;
+                let oy = cursor_y as i32 + off_y;
                 og.draw(|x, y, v| {
-                    let px = (ox + x as i32) as u32;
-                    let py = (oy + y as i32) as u32;
-                    if px < atlas_w && py < atlas_h {
-                        let idx = (py * atlas_w + px) as usize;
-                        atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                    let px_i = ox + x as i32;
+                    let py_i = oy + y as i32;
+                    if px_i >= 0 && py_i >= 0 {
+                        let px = px_i as u32;
+                        let py = py_i as u32;
+                        if px < atlas_w && py < atlas_h {
+                            let idx = (py * atlas_w + px) as usize;
+                            atlas[idx] = atlas[idx].max((v * 255.0) as u8);
+                        }
                     }
                 });
                 let adv = scaled.h_advance(gid);
@@ -1124,12 +1136,12 @@ impl Hud {
                     ch,
                     GlyphInfo {
                         uv_min: [
-                            (ox.max(0) as f32) / (atlas_w as f32),
-                            (oy.max(0) as f32) / (atlas_h as f32),
+                            (ox as f32) / (atlas_w as f32),
+                            (oy as f32) / (atlas_h as f32),
                         ],
                         uv_max: [
-                            ((ox.max(0) as u32 + gw) as f32) / (atlas_w as f32),
-                            ((oy.max(0) as u32 + gh) as f32) / (atlas_h as f32),
+                            ((ox as u32 + gw) as f32) / (atlas_w as f32),
+                            ((oy as u32 + gh) as f32) / (atlas_h as f32),
                         ],
                         bounds_min: [bounds.min.x, bounds.min.y],
                         size: [gw as f32, gh as f32],
@@ -1794,6 +1806,7 @@ mod hud_tests {
     }
 }
 
+#[allow(dead_code)]
 impl Nameplates {
     pub fn upload_atlas(&self, queue: &wgpu::Queue) {
         queue.write_texture(
@@ -1820,6 +1833,7 @@ impl Nameplates {
 
 impl Nameplates {
     #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code)]
     pub fn queue_npc_labels(
         &mut self,
         device: &wgpu::Device,
@@ -1870,10 +1884,11 @@ impl Nameplates {
                 if let Some(pg) = prev {
                     pen_x += scaled.kern(pg, gi.id);
                 }
-                let x = cx + pen_x + gi.bounds_min[0];
-                let y = baseline_y - self.ascent + gi.bounds_min[1];
+                // Place top-left without using negative bearings to avoid truncation
                 let w_px = gi.size[0];
                 let h_px = gi.size[1];
+                let x = cx + pen_x;
+                let y = baseline_y - h_px;
                 let p0 = Self::ndc_from_px(x, y, w, h);
                 let p1 = Self::ndc_from_px(x + w_px, y, w, h);
                 let p2 = Self::ndc_from_px(x + w_px, y + h_px, w, h);

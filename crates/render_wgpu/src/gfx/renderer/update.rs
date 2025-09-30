@@ -250,7 +250,22 @@ impl Renderer {
                     });
                 }
                 // Damage floater above NPC head (terrain/instance-aware)
-                if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                // 1) Death Knight (handle first so we can despawn on fatal)
+                if self.dk_id.is_some() && self.dk_id.unwrap() == h.npc {
+                    // Spawn damage near DK head using its model matrix if present
+                    if let Some(m) = self.dk_models.first().copied() {
+                        let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                        self.damage.spawn(head.truncate(), h.damage);
+                    } else {
+                        self.damage
+                            .spawn(h.pos + glam::vec3(0.0, 1.2, 0.0), h.damage);
+                    }
+                    // If fatal, hide the DK instance and clear id
+                    if h.fatal {
+                        self.dk_count = 0;
+                        self.dk_id = None;
+                    }
+                } else if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
                     let m = self
                         .zombie_models
                         .get(idx)
@@ -451,6 +466,21 @@ impl Renderer {
                     // If the player hit any wizard, all wizards become hostile to the player
                     if pr.owner_wizard == Some(self.pc_index) {
                         self.wizards_hostile_to_pc = true;
+                        // Ensure NPC wizards resume casting loop even if all monsters are dead
+                        // by switching them back to the PortalOpen loop.
+                        for i in 0..(self.wizard_count as usize) {
+                            if i == self.pc_index {
+                                continue;
+                            }
+                            if self.wizard_hp.get(i).copied().unwrap_or(0) <= 0 {
+                                continue;
+                            }
+                            if self.wizard_anim_index[i] != 0 {
+                                self.wizard_anim_index[i] = 0;
+                                // Reset last phase so they can fire promptly
+                                self.wizard_last_phase[i] = 0.0;
+                            }
+                        }
                     }
                     if fatal {
                         if j == self.pc_index {
