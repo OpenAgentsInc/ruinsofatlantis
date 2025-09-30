@@ -32,7 +32,7 @@ impl Npc {
             alive: true,
             attack_cooldown: 0.0,
             attack_anim: 0.0,
-            damage: 5, // default zombie hit
+            damage: 5,  // default zombie hit
             speed: 2.0, // default zombie speed
         }
     }

@@ -250,7 +250,21 @@ impl Renderer {
                     });
                 }
                 // Damage floater above NPC head (terrain/instance-aware)
-                if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                // 1) Death Knight (handle first so we can despawn on fatal)
+                if self.dk_id.is_some() && self.dk_id.unwrap() == h.npc {
+                    // Spawn damage near DK head using its model matrix if present
+                    if let Some(m) = self.dk_models.first().copied() {
+                        let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                        self.damage.spawn(head.truncate(), h.damage);
+                    } else {
+                        self.damage.spawn(h.pos + glam::vec3(0.0, 1.2, 0.0), h.damage);
+                    }
+                    // If fatal, hide the DK instance and clear id
+                    if h.fatal {
+                        self.dk_count = 0;
+                        self.dk_id = None;
+                    }
+                } else if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
                     let m = self
                         .zombie_models
                         .get(idx)
@@ -277,12 +291,6 @@ impl Renderer {
                     let (hgt, _n) = terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
                     let pos = glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z);
                     self.damage.spawn(pos, h.damage);
-                } else if self.dk_id.is_some() && self.dk_id.unwrap() == h.npc {
-                    // Death Knight got hit; if fatal, hide its instance
-                    if h.fatal {
-                        self.dk_count = 0;
-                        self.dk_id = None;
-                    }
                 } else {
                     self.damage
                         .spawn(h.pos + glam::vec3(0.0, 0.9, 0.0), h.damage);
