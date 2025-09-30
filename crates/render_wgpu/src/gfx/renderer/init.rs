@@ -174,9 +174,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
-    // Choose offscreen color format (wasm: Rgba8Unorm for broad compatibility)
+    // Choose offscreen color format
+    // Web: prefer Rgba16Float to match desktop tonemapping/look now that
+    // WebGPU implementations widely support it.
     #[cfg(target_arch = "wasm32")]
-    let offscreen_fmt = wgpu::TextureFormat::Rgba8Unorm;
+    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
     #[cfg(not(target_arch = "wasm32"))]
     let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
 
@@ -360,26 +362,29 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     });
 
     // Sky uniforms and zone setup
-    // On wasm, avoid std::fs and synthesize a minimal zone manifest.
+    // On wasm, avoid std::fs and synthesize the zone manifest to mirror desktop.
     #[cfg(target_arch = "wasm32")]
     let zone: ZoneManifest = ZoneManifest {
-        zone_id: 1,
+        zone_id: 1001,
         slug: "wizard_woods".to_string(),
         display_name: "Wizard Woods".to_string(),
         plane: data_runtime::zone::ZonePlane::Material,
         terrain: data_runtime::zone::TerrainSpec {
             size: 129,
-            extent: 50.0,
-            seed: 4242,
+            extent: 150.0,
+            seed: 1337,
         },
-        weather: None,
+        weather: Some(data_runtime::zone::WeatherSpec {
+            turbidity: 3.0,
+            ground_albedo: [0.10, 0.10, 0.10],
+        }),
         vegetation: Some(data_runtime::zone::VegetationSpec {
             tree_count: 0,
-            tree_seed: 0,
+            tree_seed: 20250926,
         }),
-        start_time_frac: Some(0.48),
-        start_paused: Some(false),
-        start_time_scale: Some(1.0),
+        start_time_frac: Some(0.95),
+        start_paused: Some(true),
+        start_time_scale: Some(6.0),
     };
     #[cfg(not(target_arch = "wasm32"))]
     let zone: ZoneManifest =
@@ -944,8 +949,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         shard_model_bg,
         present_bg,
         enable_post_ao: true,
-        enable_ssgi: false,
-        enable_ssr: false,
+        enable_ssgi: true,
+        enable_ssr: true,
         // Disable bloom on wasm to reduce pipeline churn while stabilizing
         #[cfg(target_arch = "wasm32")]
         enable_bloom: true,
