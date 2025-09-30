@@ -11,9 +11,31 @@ use crate::types::{AnimClip, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, V
 use crate::util::prepare_gltf_path;
 
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
-    let prepared = prepare_gltf_path(path)?;
-    let (doc, buffers, images) = gltf::import(&prepared)
-        .with_context(|| format!("import skinned glTF: {}", prepared.display()))?;
+    // On wasm, avoid std::fs by importing embedded asset bytes for known paths.
+    #[cfg(target_arch = "wasm32")]
+    let (doc, buffers, images) = {
+        let p = path.to_string_lossy();
+        if p.contains("assets/models/wizard.gltf") {
+            let bytes: &'static [u8] = include_bytes!("../../../assets/models/wizard.gltf");
+            gltf::import_slice(bytes).context("import skinned glTF (wizard.gltf slice)")?
+        } else if p.contains("assets/models/zombie.glb") {
+            let bytes: &'static [u8] = include_bytes!("../../../assets/models/zombie.glb");
+            gltf::import_slice(bytes).context("import skinned glTF (zombie.glb slice)")?
+        } else if p.contains("assets/models/zombie-guy.glb") {
+            let bytes: &'static [u8] = include_bytes!("../../../assets/models/zombie-guy.glb");
+            gltf::import_slice(bytes).context("import skinned glTF (zombie-guy.glb slice)")?
+        } else {
+            // Fallback: try slice import if the caller embedded bytes elsewhere.
+            // As a last resort, this will fail early rather than attempting std::fs.
+            anyhow::bail!("wasm: unsupported skinned glTF path: {}", p);
+        }
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let (doc, buffers, images) = {
+        let prepared = prepare_gltf_path(path)?;
+        gltf::import(&prepared)
+            .with_context(|| format!("import skinned glTF: {}", prepared.display()))?
+    };
 
     // Parent map and base TRS
     let node_count = doc.nodes().len();

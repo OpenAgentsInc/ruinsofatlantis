@@ -351,6 +351,21 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     });
 
     // Sky uniforms and zone setup
+    // On wasm, avoid std::fs and synthesize a minimal zone manifest.
+    #[cfg(target_arch = "wasm32")]
+    let zone: ZoneManifest = ZoneManifest {
+        zone_id: 1,
+        slug: "wizard_woods".to_string(),
+        display_name: "Wizard Woods".to_string(),
+        plane: data_runtime::zone::ZonePlane::Material,
+        terrain: data_runtime::zone::TerrainSpec { size: 129, extent: 50.0, seed: 4242 },
+        weather: None,
+        vegetation: Some(data_runtime::zone::VegetationSpec { tree_count: 0, tree_seed: 0 }),
+        start_time_frac: Some(0.48),
+        start_paused: Some(false),
+        start_time_scale: Some(1.0),
+    };
+    #[cfg(not(target_arch = "wasm32"))]
     let zone: ZoneManifest =
         load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
     log::info!(
@@ -558,7 +573,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let ZoneManifest { slug, .. } = zone.clone();
 
     // Ruins mesh + metrics
+    #[cfg(not(target_arch = "wasm32"))]
     let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
+    #[cfg(target_arch = "wasm32")]
+    let ruins_gpu = ruins::build_ruins(&device).unwrap_or_else(|_| {
+        // Fallback to a cube if GLTF fails (should not, as we embed ruins.gltf)
+        let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
+        super::super::ruins::RuinsGpu { vb, ib, index_count, base_offset: 0.0, radius: 1.0 }
+    });
     let ruins_base_offset = ruins_gpu.base_offset;
     let ruins_radius = ruins_gpu.radius;
     let (ruins_vb, ruins_ib, ruins_index_count) =
@@ -733,6 +755,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         .vegetation
         .as_ref()
         .map(|v| (v.tree_count as usize, v.tree_seed));
+    // On wasm, tree GLTF uses external .bin; skip trees by setting count=0 above.
     let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &slug, veg)
         .context("build trees (instances + mesh) for zone")?;
     let trees_instances = trees_gpu.instances;
@@ -741,8 +764,20 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
 
     // Rocks
+    #[cfg(not(target_arch = "wasm32"))]
     let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
         .context("build rocks (instances + mesh) for zone")?;
+    #[cfg(target_arch = "wasm32")]
+    let rocks_gpu = {
+        // Build zero rock instances; still upload a small cube mesh for bindings.
+        let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("rocks-instances-empty"),
+            contents: &[],
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
+        super::super::rocks::RocksGpu { instances, count: 0, vb, ib, index_count }
+    };
     let rocks_instances = rocks_gpu.instances;
     let rocks_count = rocks_gpu.count;
     let (rocks_vb, rocks_ib, rocks_index_count) =

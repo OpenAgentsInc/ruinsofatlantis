@@ -11,16 +11,31 @@ use crate::types::{CpuMesh, Vertex};
 
 /// Load a `.gltf` file from disk and merge all primitives into a single mesh.
 pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
-    let source_path: PathBuf = path.to_path_buf();
-    let import_res = gltf::import(&source_path);
-    let (doc, buffers, _images) = match import_res {
-        Ok(ok) => ok,
-        Err(e) => {
-            // Try the JSON/Draco fallback path (handles extensionsRequired + no bufferViews)
-            if let Ok(mesh) = try_load_gltf_draco_json(path) {
-                return Ok(mesh);
+    #[cfg(target_arch = "wasm32")]
+    let (doc, buffers, _images) = {
+        let p = path.to_string_lossy();
+        if p.contains("assets/models/ruins.gltf") {
+            let bytes: &'static [u8] = include_bytes!("../../../assets/models/ruins.gltf");
+            gltf::import_slice(bytes).context("import glTF (ruins.gltf slice)")?
+        } else if p.contains("assets/models/rock.glb") {
+            let bytes: &'static [u8] = include_bytes!("../../../assets/models/rock.glb");
+            gltf::import_slice(bytes).context("import glTF (rock.glb slice)")?
+        } else {
+            anyhow::bail!("wasm: unsupported static glTF path: {}", p);
+        }
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let (doc, buffers, _images) = {
+        let source_path: PathBuf = path.to_path_buf();
+        match gltf::import(&source_path) {
+            Ok(ok) => ok,
+            Err(e) => {
+                // Try the JSON/Draco fallback path (handles extensionsRequired + no bufferViews)
+                if let Ok(mesh) = try_load_gltf_draco_json(path) {
+                    return Ok(mesh);
+                }
+                return Err(anyhow!("failed to import glTF: {}", source_path.display()).context(e));
             }
-            return Err(anyhow!("failed to import glTF: {}", source_path.display()).context(e));
         }
     };
 
