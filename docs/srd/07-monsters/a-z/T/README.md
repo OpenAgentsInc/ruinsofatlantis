@@ -1,5 +1,3 @@
-# T
+# T Monsters
 
-- [Tough](tough.md)
-- [Treant](treant.md)
-- [Troll](troll.md)
+- Tough — docs/srd/07-monsters/a-z/T/tough.md

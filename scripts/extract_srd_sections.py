@@ -179,7 +179,24 @@ def main() -> None:
 """ + sanitize(ani_seg),
         encoding="utf-8",
     )
-    print("Extracted: Rules Glossary and Gameplay Toolbox")
+    # Rebuild Adventuring Gear from the PDF dump
+    def write_adventuring_gear_from_dump():
+        text = TXT_ALL.read_text(encoding="utf-8", errors="ignore")
+        # Use the actual section header with table columns to avoid the ToC entry
+        m_start = re.search(r"^\s*Adventuring Gear\s+Item\s+.*Cost\s*$", text, flags=re.M)
+        if not m_start:
+            return
+        tail = text[m_start.start():]
+        m_end = re.search(r"^\s*Mounts and Vehicles\b", tail, flags=re.M)
+        if not m_end:
+            return
+        seg = tail[: m_end.start()]
+        seg = sanitize(seg)
+        out = SRD_DIR / "05-equipment" / "adventuring-gear.md"
+        out.write_text("# Adventuring Gear\n\n" + seg, encoding="utf-8")
+
+    write_adventuring_gear_from_dump()
+    print("Extracted: Rules Glossary, Gameplay Toolbox, Monsters/Animals aggregates, and Adventuring Gear")
 
 
 if __name__ == "__main__":

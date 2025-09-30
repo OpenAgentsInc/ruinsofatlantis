@@ -1,5 +1,3 @@
-# E
+# E Animals
 
-- [Eagle](eagle.md)
-- [Elephant](elephant.md)
-- [Elk](elk.md)
+- Elk — docs/srd/08-animals/a-z/E/elk.md

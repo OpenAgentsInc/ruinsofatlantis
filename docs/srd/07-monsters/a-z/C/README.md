@@ -1,10 +1,5 @@
-# C
+# C Monsters
 
-- [Chain Devil](chain-devil.md)
-- [Chimera](chimera.md)
-- [Clay Golem](clay-golem.md)
-- [Cloud Giant](cloud-giant.md)
-- [Conjure Infernal Chain The Devil Conjures A Fiery](conjure-infernal-chain-the-devil-conjures-a-fiery.md)
-- [Crawling Claw](crawling-claw.md)
-- [Cultist Fanatic](cultist-fanatic.md)
-- [Cultist](cultist.md)
+- Chain Devil — docs/srd/07-monsters/a-z/C/chain-devil.md
+- Chimera — docs/srd/07-monsters/a-z/C/chimera.md
+- Cultist — docs/srd/07-monsters/a-z/C/cultist.md

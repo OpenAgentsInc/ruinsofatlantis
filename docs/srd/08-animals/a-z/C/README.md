@@ -1,5 +1,4 @@
-# C
+# C Animals
 
-- [Camel](camel.md)
-- [Crab](crab.md)
-- [Crocodile](crocodile.md)
+- Camel — docs/srd/08-animals/a-z/C/camel.md
+- Crab — docs/srd/08-animals/a-z/C/crab.md

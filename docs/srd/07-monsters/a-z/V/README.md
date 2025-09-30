@@ -1,5 +1,3 @@
-# V
+# V Monsters
 
-- [Vampire](vampire.md)
-- [Violet Fungus](violet-fungus.md)
-- [Vulnerabilities Thunder](vulnerabilities-thunder.md)
+- Violet Fungus — docs/srd/07-monsters/a-z/V/violet-fungus.md

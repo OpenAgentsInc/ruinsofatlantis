@@ -1,24 +1,7 @@
-# A
+# A Monsters
 
-- [Aboleth](aboleth.md)
-- [Adult Black Dragon](adult-black-dragon.md)
-- [Adult Copper Dragon](adult-copper-dragon.md)
-- [Adult Green Dragon](adult-green-dragon.md)
-- [Adult White Dragon](adult-white-dragon.md)
-- [Ancient Blue Dragon](ancient-blue-dragon.md)
-- [Ancient Brass Dragon](ancient-brass-dragon.md)
-- [Ancient Bronze Dragon](ancient-bronze-dragon.md)
-- [Ancient Copper Dragon](ancient-copper-dragon.md)
-- [Ancient Gold Dragon](ancient-gold-dragon.md)
-- [Ancient Red Dragon](ancient-red-dragon.md)
-- [Ancient Silver Dragon](ancient-silver-dragon.md)
-- [Ancient White Dragon](ancient-white-dragon.md)
-- [Animated Armor](animated-armor.md)
-- [Animated Rug Of Smothering](animated-rug-of-smothering.md)
-- [Ankheg](ankheg.md)
-- [Ankylosaurus](ankylosaurus.md)
-- [Archmage](archmage.md)
-- [Assassin](assassin.md)
-- [Awakened Shrub](awakened-shrub.md)
-- [Axe Beak](axe-beak.md)
-- [Azer Sentinel](azer-sentinel.md)
+- Adult Black Dragon — docs/srd/07-monsters/a-z/A/adult-black-dragon.md
+- Adult Green Dragon — docs/srd/07-monsters/a-z/A/adult-green-dragon.md
+- Adult White Dragon — docs/srd/07-monsters/a-z/A/adult-white-dragon.md
+- Awakened Shrub — docs/srd/07-monsters/a-z/A/awakened-shrub.md
+- Axe Beak — docs/srd/07-monsters/a-z/A/axe-beak.md

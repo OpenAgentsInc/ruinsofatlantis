@@ -1,5 +1,3 @@
-# L
+# L Monsters
 
-- [Lamia](lamia.md)
-- [Lemure](lemure.md)
-- [Lich](lich.md)
+- Languages None — docs/srd/07-monsters/a-z/L/languages-none.md

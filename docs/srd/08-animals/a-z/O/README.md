@@ -1,3 +1,3 @@
-# O
+# O Animals
 
-- [Owl](owl.md)
+- Owl — docs/srd/08-animals/a-z/O/owl.md

@@ -1,23 +1,3 @@
-# S
+# S Monsters
 
-- [Sahuagin Warrior](sahuagin-warrior.md)
-- [Scout](scout.md)
-- [Sea Hag](sea-hag.md)
-- [Shambling Mound](shambling-mound.md)
-- [Shrieker Fungus](shrieker-fungus.md)
-- [Siege Monster The Kraken Deals Double Damage To Ob](siege-monster-the-kraken-deals-double-damage-to-ob.md)
-- [Silver Dragon Wyrmling](silver-dragon-wyrmling.md)
-- [Slashing Damage](slashing-damage.md)
-- [Specter](specter.md)
-- [Sphinx Of Valor](sphinx-of-valor.md)
-- [Spirit Naga](spirit-naga.md)
-- [Sprite](sprite.md)
-- [Steam Mephit](steam-mephit.md)
-- [Stirge](stirge.md)
-- [Stone Giant](stone-giant.md)
-- [Succubus](succubus.md)
-- [Swarm Of Bats](swarm-of-bats.md)
-- [Swarm Of Crawling Claws](swarm-of-crawling-claws.md)
-- [Swarm Of Piranhas](swarm-of-piranhas.md)
-- [Swarm Of Rats](swarm-of-rats.md)
-- [Swarm Of Venomous Snakes](swarm-of-venomous-snakes.md)
+- Stirge — docs/srd/07-monsters/a-z/S/stirge.md

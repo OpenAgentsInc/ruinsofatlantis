@@ -1,3 +1,3 @@
-# F
+# F Animals
 
-- [Frog](frog.md)
+- Frog — docs/srd/08-animals/a-z/F/frog.md

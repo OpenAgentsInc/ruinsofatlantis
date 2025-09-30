@@ -1,16 +1,3 @@
-# G
+# G Monsters
 
-- [Ghast](ghast.md)
-- [Ghoul](ghoul.md)
-- [Giant Elk](giant-elk.md)
-- [Glabrezu](glabrezu.md)
-- [Gladiator](gladiator.md)
-- [Goblin Minion](goblin-minion.md)
-- [Goblin Warrior](goblin-warrior.md)
-- [Goblins](goblins.md)
-- [Gorgon](gorgon.md)
-- [Gray Ooze](gray-ooze.md)
-- [Green Hag](green-hag.md)
-- [Grimlock](grimlock.md)
-- [Guardian Naga](guardian-naga.md)
-- [Guiding Bolt Level 2 Version](guiding-bolt-level-2-version.md)
+- Guardian Naga — docs/srd/07-monsters/a-z/G/guardian-naga.md

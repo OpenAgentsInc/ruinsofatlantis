@@ -1,16 +1,4 @@
-# M
+# M Monsters
 
-- [Mage](mage.md)
-- [Magic Resistance The Archmage Has Advantage On](magic-resistance-the-archmage-has-advantage-on.md)
-- [Magic Resistance The Golem Has Advantage On Saving](magic-resistance-the-golem-has-advantage-on-saving.md)
-- [Magic Resistance The Solar Has Advantage On Saving](magic-resistance-the-solar-has-advantage-on-saving.md)
-- [Manticore](manticore.md)
-- [Merfolk Skirmisher](merfolk-skirmisher.md)
-- [Minotaur Of Baphomet](minotaur-of-baphomet.md)
-- [Minotaur Skeleton](minotaur-skeleton.md)
-- [Multiattack The Armor Makes Two Slam Attacks](multiattack-the-armor-makes-two-slam-attacks.md)
-- [Multiattack The Dragon Makes Three Rend Attacks It](multiattack-the-dragon-makes-three-rend-attacks-it.md)
-- [Multiattack The Dragon Makes Three Rend Attacks It](multiattack-the-dragon-makes-three-rend-attacks-it.md)
-- [Multiattack The Dryad Makes One Vine Lash Or](multiattack-the-dryad-makes-one-vine-lash-or.md)
-- [Multiattack The Elephant Makes Two Gore Attacks](multiattack-the-elephant-makes-two-gore-attacks.md)
-- [Multiattack The Glabrezu Makes Two Pincer Attacks](multiattack-the-glabrezu-makes-two-pincer-attacks.md)
+- MOD SAVE              MOD SAVE             MOD SAVE — docs/srd/07-monsters/a-z/M/mod-save-mod-save-mod-save.md
+- MOD SAVE             MOD SAVE           MOD SAVE — docs/srd/07-monsters/a-z/M/mod-save-mod-save-mod-save.md

@@ -23,6 +23,18 @@ def slugify(name: str) -> str:
 
 
 SIZE_RE = re.compile(r"^(Tiny|Small|Medium|Large|Huge|Gargantuan)\b.*?,", re.M)
+STOPWORDS = {
+    "Actions",
+    "Traits",
+    "Bonus Actions",
+    "Legendary Actions",
+    "Reactions",
+    "Lair Actions",
+    "Regional Effects",
+    "Monsters A–Z",
+    "Monsters A-Z",
+    "Awakened Plants",
+}
 
 
 def split_creatures(agg_path: Path, out_dir: Path) -> int:
@@ -38,7 +50,11 @@ def split_creatures(agg_path: Path, out_dir: Path) -> int:
             i += 1
             continue
         # Candidate name line: moderately short, title-ish
-        if 2 < len(line) < 60 and re.match(r"^[A-Z][A-Za-z0-9’ ()\-]+$", line):
+        if (
+            2 < len(line) < 60
+            and re.match(r"^[A-Z][A-Za-z0-9’ ()\-]+$", line)
+            and line not in STOPWORDS
+        ):
             # Peek ahead to find next non-empty line
             j = i + 1
             while j < len(lines) and not lines[j].strip():
@@ -53,6 +69,7 @@ def split_creatures(agg_path: Path, out_dir: Path) -> int:
 
     # Slice content for each creature
     count = 0
+    written: list[tuple[str, Path]] = []
     for idx, (start_i, name) in enumerate(starts):
         end_i = starts[idx + 1][0] if idx + 1 < len(starts) else len(lines)
         block = "\n".join(lines[start_i:end_i]).strip()
@@ -68,6 +85,33 @@ def split_creatures(agg_path: Path, out_dir: Path) -> int:
             block = f"# {name}\n\n" + block
         out.write_text(block + "\n", encoding="utf-8")
         count += 1
+        written.append((name, out))
+
+    # Remove obvious STOPWORD artifacts if present
+    for sw in STOPWORDS:
+        sw_slug = slugify(sw)
+        for letter_dir in out_dir.iterdir():
+            if not letter_dir.is_dir():
+                continue
+            p = letter_dir / f"{sw_slug}.md"
+            if p.exists():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+
+    # Build per-letter README indexes from written items
+    by_letter: dict[str, list[tuple[str, Path]]] = {}
+    for name, p in written:
+        by_letter.setdefault(name[0].upper(), []).append((name, p))
+    for letter, items in by_letter.items():
+        items.sort(key=lambda kv: kv[0])
+        readme = out_dir / letter / "README.md"
+        lines_out = [f"# {letter} Monsters" if '07-monsters' in str(out_dir) else f"# {letter} Animals", ""]
+        for nm, path in items:
+            rel = path.relative_to(out_dir)
+            lines_out.append(f"- {nm} — docs/srd/{'07-monsters' if '07-monsters' in str(out_dir) else '08-animals'}/a-z/{rel.as_posix()}")
+        readme.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
     return count
 
 

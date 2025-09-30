@@ -1,6 +1,3 @@
-# B
+# B Animals
 
-- [Baboon](baboon.md)
-- [Badger](badger.md)
-- [Boar](boar.md)
-- [Brown Bear](brown-bear.md)
+- Badger — docs/srd/08-animals/a-z/B/badger.md
