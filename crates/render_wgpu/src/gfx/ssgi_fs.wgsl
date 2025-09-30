@@ -36,10 +36,12 @@ fn linearize_depth(d: f32, znear: f32, zfar: f32) -> f32 {
 fn fs_ssgi(in: VsOut) -> @location(0) vec4<f32> {
   let znear = globals.clip.x; let zfar = globals.clip.y;
   let d0 = textureSample(depth_tex, samp, in.uv);
-  if (d0 >= 1.0) { return vec4<f32>(0.0); }
+  // Keep control flow uniform: don't early-return; mask the result instead.
+  let alive0 = select(1.0, 0.0, d0 >= 1.0);
   let z0 = linearize_depth(d0, znear, zfar);
   let texSize = vec2<f32>(textureDimensions(scene_tex));
   let px = 1.0 / texSize;
+  let eps = vec2<f32>(0.5) / texSize;
   // 8-tap disk
   let taps = array<vec2<f32>, 8>(
     vec2<f32>(1.0, 0.0), vec2<f32>(-1.0, 0.0), vec2<f32>(0.0, 1.0), vec2<f32>(0.0, -1.0),
@@ -48,21 +50,23 @@ fn fs_ssgi(in: VsOut) -> @location(0) vec4<f32> {
   var acc = vec3<f32>(0.0);
   var wsum = 0.0;
   for (var i = 0u; i < 8u; i++) {
-    let uv = in.uv + taps[i] * px * 2.0;
-    // Avoid sampling outside valid range to prevent mirrored/clamped artifacts
-    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) { continue; }
+    let uv_raw = in.uv + taps[i] * px * 2.0;
+    let outside = any(uv_raw < vec2<f32>(0.0)) || any(uv_raw > vec2<f32>(1.0));
+    let uv = clamp(uv_raw, eps, vec2<f32>(1.0) - eps);
     let di = textureSample(depth_tex, samp, uv);
-    if (di >= 1.0) { continue; }
+    let alive_i = select(1.0, 0.0, di >= 1.0);
     let zi = linearize_depth(di, znear, zfar);
     // Prefer samples at similar or slightly farther depth (avoid foreground bleeding)
     let dz = zi - z0;
     let w = clamp(1.0 - abs(dz) * 20.0, 0.0, 1.0);
     let ci = textureSample(scene_tex, scene_samp, uv).rgb;
-    acc += ci * w;
-    wsum += w;
+    let m_inside = select(1.0, 0.0, outside);
+    let m = m_inside * alive_i;
+    acc += ci * w * m;
+    wsum += w * m;
   }
   if (wsum > 0.0) { acc /= wsum; }
   // Small gain to avoid over-brightening; acts like subtle bounce
   let gain = 0.08;
-  return vec4<f32>(acc * gain, 1.0);
+  return vec4<f32>(acc * gain * alive0, 1.0);
 }

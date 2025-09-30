@@ -11,7 +11,7 @@ use data_runtime::{
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
 use std::time::Instant;
-use wgpu::{util::DeviceExt, SurfaceTargetUnsafe};
+use wgpu::{SurfaceTargetUnsafe, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -54,11 +54,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         let mut picked: Option<(wgpu::Surface<'static>, wgpu::Adapter)> = None;
         for &bmask in candidates {
             // Leak the Instance to extend its lifetime to 'static so the Surface can be 'static too.
-            let inst: &'static wgpu::Instance = Box::leak(Box::new(wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                backends: bmask,
-                flags: wgpu::InstanceFlags::empty(),
-                ..Default::default()
-            })));
+            let inst: &'static wgpu::Instance =
+                Box::leak(Box::new(wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                    backends: bmask,
+                    flags: wgpu::InstanceFlags::empty(),
+                    ..Default::default()
+                })));
             // Surface creation per-target
             #[cfg(target_arch = "wasm32")]
             let surf: wgpu::Surface<'static> = {

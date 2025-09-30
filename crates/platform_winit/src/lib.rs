@@ -124,7 +124,9 @@ impl ApplicationHandler for App {
                 });
             }
         }
-        if let Some(win) = &self.window { win.request_redraw(); }
+        if let Some(win) = &self.window {
+            win.request_redraw();
+        }
     }
 }
 
