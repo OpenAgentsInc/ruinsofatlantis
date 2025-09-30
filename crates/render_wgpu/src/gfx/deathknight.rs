@@ -63,7 +63,7 @@ pub fn build_instances(
     terrain_cpu: &crate::gfx::terrain::TerrainCPU,
     _joints: u32,
 ) -> (wgpu::Buffer, Vec<InstanceSkin>, Vec<glam::Mat4>, u32) {
-    let radius = 135.0f32; // 25% closer than 180m
+    let radius = 114.75f32; // 15% closer than 135m
     // Sample terrain height under desired spot
     let (h, _n) = crate::gfx::terrain::height_at(terrain_cpu, 0.0, radius);
     let pos = glam::vec3(0.0, h, radius);
