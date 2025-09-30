@@ -1,0 +1,26 @@
+# S Spells
+
+- Scrying — docs/srd/03-spells/spell-descriptions/S/scrying.md
+- Scorching Ray — docs/srd/03-spells/spell-descriptions/S/scorching-ray.md
+- See Invisibility — docs/srd/03-spells/spell-descriptions/S/see-invisibility.md
+- Seeming — docs/srd/03-spells/spell-descriptions/S/seeming.md
+- Sending — docs/srd/03-spells/spell-descriptions/S/sending.md
+- Shapechange — docs/srd/03-spells/spell-descriptions/S/shapechange.md
+- Shield — docs/srd/03-spells/spell-descriptions/S/shield.md
+- Shillelagh — docs/srd/03-spells/spell-descriptions/S/shillelagh.md
+- Shocking Grasp — docs/srd/03-spells/spell-descriptions/S/shocking-grasp.md
+- Silence — docs/srd/03-spells/spell-descriptions/S/silence.md
+- Silent Image — docs/srd/03-spells/spell-descriptions/S/silent-image.md
+- Speak with Animals — docs/srd/03-spells/spell-descriptions/S/speak-with-animals.md
+- Speak with Dead — docs/srd/03-spells/spell-descriptions/S/speak-with-dead.md
+- Speak with Plants — docs/srd/03-spells/spell-descriptions/S/speak-with-plants.md
+- Spider Climb — docs/srd/03-spells/spell-descriptions/S/spider-climb.md
+- Spike Growth — docs/srd/03-spells/spell-descriptions/S/spike-growth.md
+- Spirit Guardians — docs/srd/03-spells/spell-descriptions/S/spirit-guardians.md
+- Sleep — docs/srd/03-spells/spell-descriptions/S/sleep.md
+- Spiritual Weapon — docs/srd/03-spells/spell-descriptions/S/spiritual-weapon.md
+- Stone Shape — docs/srd/03-spells/spell-descriptions/S/stone-shape.md
+- Stoneskin — docs/srd/03-spells/spell-descriptions/S/stoneskin.md
+- Storm of Vengeance — docs/srd/03-spells/spell-descriptions/S/storm-of-vengeance.md
+- Suggestion — docs/srd/03-spells/spell-descriptions/S/suggestion.md
+- Symbol — docs/srd/03-spells/spell-descriptions/S/symbol.md

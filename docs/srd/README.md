@@ -99,3 +99,45 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
   - docs/srd/01-playing-the-game/actions.md
   - docs/srd/01-playing-the-game/social-interaction.md
   - docs/srd/01-playing-the-game/exploration.md
+  - docs/srd/01-playing-the-game/combat.md
+- Classes
+  - docs/srd/02-classes/README.md
+  - docs/srd/02-classes/barbarian.md
+  - docs/srd/02-classes/bard.md
+  - docs/srd/02-classes/cleric.md
+  - docs/srd/02-classes/druid.md
+  - docs/srd/02-classes/fighter.md
+  - docs/srd/02-classes/monk.md
+  - docs/srd/02-classes/paladin.md
+  - docs/srd/02-classes/ranger.md
+  - docs/srd/02-classes/rogue.md
+  - docs/srd/02-classes/sorcerer.md
+  - docs/srd/02-classes/warlock.md
+  - docs/srd/02-classes/wizard.md
+- Spells
+  - docs/srd/03-spells/README.md
+  - docs/srd/03-spells/gaining-spells.md
+  - docs/srd/03-spells/casting-spells.md
+  - docs/srd/03-spells/spell-descriptions/README.md
+    - A — docs/srd/03-spells/spell-descriptions/A/README.md
+    - B — docs/srd/03-spells/spell-descriptions/B/README.md
+    - C — docs/srd/03-spells/spell-descriptions/C/README.md
+    - D — docs/srd/03-spells/spell-descriptions/D/README.md
+    - E — docs/srd/03-spells/spell-descriptions/E/README.md
+    - F — docs/srd/03-spells/spell-descriptions/F/README.md
+    - G — docs/srd/03-spells/spell-descriptions/G/README.md
+    - H — docs/srd/03-spells/spell-descriptions/H/README.md
+    - I — docs/srd/03-spells/spell-descriptions/I/README.md
+    - J — docs/srd/03-spells/spell-descriptions/J/README.md
+    - K — docs/srd/03-spells/spell-descriptions/K/README.md
+    - L — docs/srd/03-spells/spell-descriptions/L/README.md
+    - M — docs/srd/03-spells/spell-descriptions/M/README.md
+    - N — docs/srd/03-spells/spell-descriptions/N/README.md
+    - P — docs/srd/03-spells/spell-descriptions/P/README.md
+    - R — docs/srd/03-spells/spell-descriptions/R/README.md
+    - S — docs/srd/03-spells/spell-descriptions/S/README.md
+    - T — docs/srd/03-spells/spell-descriptions/T/README.md
+    - U — docs/srd/03-spells/spell-descriptions/U/README.md
+    - V — docs/srd/03-spells/spell-descriptions/V/README.md
+    - W — docs/srd/03-spells/spell-descriptions/W/README.md
+    - Z — docs/srd/03-spells/spell-descriptions/Z/README.md
