@@ -2893,7 +2893,10 @@ impl Renderer {
         };
         for i in 0..(self.dk_count as usize) {
             let lookup = if attack_now {
-                find_clip(&["attack", "slash", "hit", "swing"], &self.dk_cpu.animations)
+                find_clip(
+                    &["attack", "slash", "hit", "swing"],
+                    &self.dk_cpu.animations,
+                )
             } else if moving {
                 find_clip(&["walk", "run"], &self.dk_cpu.animations)
             } else {

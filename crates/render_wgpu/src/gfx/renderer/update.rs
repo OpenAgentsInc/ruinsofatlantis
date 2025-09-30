@@ -277,6 +277,12 @@ impl Renderer {
                     let (hgt, _n) = terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
                     let pos = glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z);
                     self.damage.spawn(pos, h.damage);
+                } else if self.dk_id.is_some() && self.dk_id.unwrap() == h.npc {
+                    // Death Knight got hit; if fatal, hide its instance
+                    if h.fatal {
+                        self.dk_count = 0;
+                        self.dk_id = None;
+                    }
                 } else {
                     self.damage
                         .spawn(h.pos + glam::vec3(0.0, 0.9, 0.0), h.damage);
