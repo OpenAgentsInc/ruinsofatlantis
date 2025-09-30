@@ -749,6 +749,7 @@ impl Renderer {
         }
         // Damage wizards (including PC) in radius; trigger aggro if player-owned explosion hits any wizard
         let mut hit_any_wizard = false;
+        let mut to_remove: Vec<usize> = Vec::new();
         for j in 0..(self.wizard_count as usize) {
             let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
             if hp <= 0 {
@@ -769,8 +770,17 @@ impl Renderer {
                     if j == self.pc_index {
                         self.kill_pc();
                     } else {
-                        self.remove_wizard_at(j);
+                        to_remove.push(j);
                     }
+                }
+            }
+        }
+        // Remove dead wizards after the loop (descending indices to preserve validity)
+        if !to_remove.is_empty() {
+            to_remove.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in to_remove {
+                if idx < self.wizard_count as usize {
+                    self.remove_wizard_at(idx);
                 }
             }
         }
