@@ -63,7 +63,7 @@ pub fn build_instances(
     terrain_cpu: &crate::gfx::terrain::TerrainCPU,
     _joints: u32,
 ) -> (wgpu::Buffer, Vec<InstanceSkin>, Vec<glam::Mat4>, u32) {
-    let radius = 18.0f32; // outside the wizard ring (~7.5)
+    let radius = 35.0f32; // start well outside the wizard ring so he walks in
     // Sample terrain height under desired spot
     let (h, _n) = crate::gfx::terrain::height_at(terrain_cpu, 0.0, radius);
     let pos = glam::vec3(0.0, h, radius);

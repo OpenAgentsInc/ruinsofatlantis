@@ -34,6 +34,11 @@ impl SceneInputs {
     pub fn yaw(&self) -> f32 {
         self.controller.yaw
     }
+    /// Explicitly set the controller yaw. Used by mouse-look so renderer and
+    /// controller remain in sync when the player drags to rotate.
+    pub fn set_yaw(&mut self, yaw: f32) {
+        self.controller.yaw = yaw;
+    }
 
     /// Advance the client controller and resolve against static colliders (capsule slide).
     /// The Y component is left untouched; caller may project to terrain height separately.

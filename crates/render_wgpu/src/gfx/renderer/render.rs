@@ -495,12 +495,16 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Death Knight health bar (use server HP; lower vertical offset)
-        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied() {
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
             let frac = if let Some(id) = r.dk_id
                 && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
             {
                 (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
-            } else { 1.0 };
+            } else {
+                1.0
+            };
             let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             bar_entries.push((head.truncate(), frac));
         }
@@ -585,7 +589,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.nameplates_npc.draw(&mut encoder, labels_target);
         }
         // Death Knight nameplate (lower spacing)
-        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied() {
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
             let head = m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
             let pos = vec![head.truncate()];
             r.nameplates_npc.queue_npc_labels(

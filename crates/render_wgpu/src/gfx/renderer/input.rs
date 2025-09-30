@@ -184,6 +184,8 @@ impl Renderer {
                     // Fully sync player facing with mouse drag; keep camera behind the player
                     let yaw_delta = dx as f32 * sens;
                     self.player.yaw = wrap_angle(self.player.yaw - yaw_delta);
+                    // Propagate to controller so SceneInputs yaw stays in sync
+                    self.scene_inputs.set_yaw(self.player.yaw);
                     self.cam_orbit_yaw = 0.0;
                     // Invert pitch control (mouse up pitches camera down, and vice versa)
                     self.cam_orbit_pitch =

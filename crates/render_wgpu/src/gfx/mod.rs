@@ -2902,8 +2902,16 @@ impl Renderer {
         if self.dk_count == 0 {
             return;
         }
-        let id = if let Some(id) = self.dk_id { id } else { return };
-        let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id == id) { n } else { return };
+        let id = if let Some(id) = self.dk_id {
+            id
+        } else {
+            return;
+        };
+        let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id == id) {
+            n
+        } else {
+            return;
+        };
         // Face nearest wizard
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
         for m in &self.wizard_models {
