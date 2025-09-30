@@ -11,7 +11,7 @@ use data_runtime::{
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
 use std::time::Instant;
-use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt};
+use wgpu::{util::DeviceExt, SurfaceTargetUnsafe};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -49,24 +49,44 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &[wgpu::Backends::PRIMARY, wgpu::Backends::GL]
     };
 
-    // Create a surface per candidate instance and try to get an adapter
-    let raw_display = window.display_handle()?.as_raw();
-    let raw_window = window.window_handle()?.as_raw();
-    let (_instance, surface, adapter) = {
-        let mut picked: Option<(wgpu::Instance, wgpu::Surface<'static>, wgpu::Adapter)> = None;
+    // Create an instance/surface pair and obtain an adapter
+    let (surface, adapter) = {
+        let mut picked: Option<(wgpu::Surface<'static>, wgpu::Adapter)> = None;
         for &bmask in candidates {
-            let inst = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            // Leak the Instance to extend its lifetime to 'static so the Surface can be 'static too.
+            let inst: &'static wgpu::Instance = Box::leak(Box::new(wgpu::Instance::new(&wgpu::InstanceDescriptor {
                 backends: bmask,
                 flags: wgpu::InstanceFlags::empty(),
                 ..Default::default()
-            });
-            let surf = unsafe {
-                inst.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle: raw_display,
-                    raw_window_handle: raw_window,
-                })
-            }
-            .context("create wgpu surface (unsafe)")?;
+            })));
+            // Surface creation per-target
+            #[cfg(target_arch = "wasm32")]
+            let surf: wgpu::Surface<'static> = {
+                use winit::platform::web::WindowExtWebSys;
+                let canvas = window
+                    .canvas()
+                    .expect("winit web: canvas not available on window");
+                // Safe creation path; result has a scoped lifetime. We transmute to 'static
+                // because the canvas is attached to the DOM for the lifetime of the page.
+                let s = inst
+                    .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+                    .context("create wgpu surface (web canvas)")?;
+                unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(s) }
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            let surf = {
+                use wgpu::rwh::{HasDisplayHandle, HasWindowHandle};
+                let raw_display = window.display_handle()?.as_raw();
+                let raw_window = window.window_handle()?.as_raw();
+                unsafe {
+                    inst.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle: raw_display,
+                        raw_window_handle: raw_window,
+                    })
+                }
+                .context("create wgpu surface (unsafe)")?
+            };
+
             match inst
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     compatible_surface: Some(&surf),
@@ -76,7 +96,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 .await
             {
                 Ok(a) => {
-                    picked = Some((inst, surf, a));
+                    picked = Some((surf, a));
                     break;
                 }
                 Err(_) => {
