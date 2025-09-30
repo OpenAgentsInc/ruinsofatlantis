@@ -50,9 +50,38 @@ See `NOTICE` at the repository root for the canonical attribution statement. Do 
   - `gaining-spells.md`
   - `casting-spells.md`
   - `spell-descriptions/README.md`
-  - `spell-descriptions/A.md`
+  - `spell-descriptions/{A,B,C,...}/README.md` (per-letter indexes)
+  
+- `04-feats/`
+  - `README.md`
+  - `origin/` (e.g., Alert, Magic Initiate)
+  - `general/` (e.g., Ability Score Improvement, Grappler)
+  - `fighting-style/` (e.g., Archery, Defense)
+  - `epic-boon/` (e.g., Boon of Combat Prowess)
 
-Names use a numeric prefix to preserve SRD order and kebab‑case file names for stable links.
+- `05-equipment/`
+  - `README.md`
+  - `coins.md`, `weapons.md`, `weapon-properties.md`, `weapon-mastery-properties.md`
+  - `armor-and-shields.md`, `tools.md`, `adventuring-gear.md`
+  - `mounts-and-vehicles.md`, `lifestyle-expenses.md`, `food-drink-and-lodging.md`
+  - `hirelings.md`, `spellcasting-services.md`, `magic-items.md`
+  - `crafting-nonmagical-items.md`, `brewing-potions-of-healing.md`, `scribing-spell-scrolls.md`
+
+- `06-character-creation/`
+  - `README.md`
+  - `choose-a-character-sheet.md`
+  - `create-your-character.md`
+  - `step-1-choose-class.md`
+  - `step-2-determine-origin.md`
+  - `step-3-ability-scores.md`
+  - `step-4-alignment.md`
+  - `step-5-details.md`
+  - `level-advancement.md`
+  - `starting-at-higher-levels.md`
+  - `multiclassing.md`
+  - `trinkets.md`
+
+Names use a numeric prefix for stable links. Some numbers deviate from the SRD’s print order to minimize churn; see `00-front-matter/contents.md` for the canonical hierarchy.
 
 ## Conversion Process
 
@@ -80,9 +109,12 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
 
 ## Status
 
-- Section 1 (Playing the Game): complete.
-- Section 2 (Classes): Barbarian, Bard (incl. spell list), Cleric (incl. spell list), Druid (incl. spell list), Fighter, Monk, Paladin (incl. spell list), Ranger (incl. spell list), Rogue, Sorcerer (incl. subclass), Warlock (incl. subclass and spell list).
-- Section 3 (Spells): Gaining/Casting Spells and “A” spell descriptions converted. Continuing alphabetically.
+- Playing the Game: complete.
+- Classes: all base classes added (with spell lists/subclasses per SRD scope).
+- Spells: Gaining/Casting Spells plus A–W and Z letter indexes and many spells added; continuing to fill gaps and finalize any missing entries.
+- Feats: complete (Origin, General, Fighting Style, Epic Boon).
+- Equipment: core rules, tools, services, and pricing added; tables are being finalized from the PDF where applicable.
+- Character Creation: core steps, Level Advancement, Starting at Higher Levels, Multiclassing added; adding the full 1d100 Trinkets table next.
 
 ## Index
 
@@ -114,6 +146,37 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
   - docs/srd/02-classes/sorcerer.md
   - docs/srd/02-classes/warlock.md
   - docs/srd/02-classes/wizard.md
+- Feats
+  - docs/srd/04-feats/README.md
+  - docs/srd/04-feats/origin/README.md
+  - docs/srd/04-feats/general/README.md
+  - docs/srd/04-feats/fighting-style/README.md
+  - docs/srd/04-feats/epic-boon/README.md
+- Equipment
+  - docs/srd/05-equipment/README.md
+  - docs/srd/05-equipment/coins.md
+  - docs/srd/05-equipment/weapons.md
+  - docs/srd/05-equipment/weapon-properties.md
+  - docs/srd/05-equipment/weapon-mastery-properties.md
+  - docs/srd/05-equipment/armor-and-shields.md
+  - docs/srd/05-equipment/tools.md
+  - docs/srd/05-equipment/adventuring-gear.md
+  - docs/srd/05-equipment/mounts-and-vehicles.md
+  - docs/srd/05-equipment/lifestyle-expenses.md
+  - docs/srd/05-equipment/food-drink-and-lodging.md
+  - docs/srd/05-equipment/hirelings.md
+  - docs/srd/05-equipment/spellcasting-services.md
+  - docs/srd/05-equipment/magic-items.md
+  - docs/srd/05-equipment/crafting-nonmagical-items.md
+  - docs/srd/05-equipment/brewing-potions-of-healing.md
+  - docs/srd/05-equipment/scribing-spell-scrolls.md
+ - Monsters
+  - docs/srd/07-monsters/README.md
+  - docs/srd/07-monsters/stat-block-overview.md
+  - docs/srd/07-monsters/running-a-monster.md
+ - docs/srd/07-monsters/a-z/README.md
+ - Animals
+  - docs/srd/08-animals/README.md
 - Spells
   - docs/srd/03-spells/README.md
   - docs/srd/03-spells/gaining-spells.md
@@ -141,3 +204,16 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
     - V — docs/srd/03-spells/spell-descriptions/V/README.md
     - W — docs/srd/03-spells/spell-descriptions/W/README.md
     - Z — docs/srd/03-spells/spell-descriptions/Z/README.md
+ - Character Creation
+  - docs/srd/06-character-creation/README.md
+  - docs/srd/06-character-creation/choose-a-character-sheet.md
+  - docs/srd/06-character-creation/create-your-character.md
+  - docs/srd/06-character-creation/step-1-choose-class.md
+  - docs/srd/06-character-creation/step-2-determine-origin.md
+  - docs/srd/06-character-creation/step-3-ability-scores.md
+  - docs/srd/06-character-creation/step-4-alignment.md
+  - docs/srd/06-character-creation/step-5-details.md
+  - docs/srd/06-character-creation/level-advancement.md
+  - docs/srd/06-character-creation/starting-at-higher-levels.md
+  - docs/srd/06-character-creation/multiclassing.md
+  - docs/srd/06-character-creation/trinkets.md
