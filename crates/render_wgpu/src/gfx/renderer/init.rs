@@ -396,7 +396,19 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             resource: sky_buf.as_entire_binding(),
         }],
     });
-    // Post AO + samplers
+    // Samplers used across post/present passes
+    // Non-filtering sampler for depth sampling (required by WebGPU when not using comparison)
+    let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("point-sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+    // Filtering sampler for color textures
     let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("post-ao-sampler"),
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -417,20 +429,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&post_sampler),
+                // Non-filtering sampler for depth sampling
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
             },
         ],
     });
-    let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("point-sampler"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Nearest,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
-    });
+    // point_sampler already created above
     let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ssgi-globals-bg"),
         layout: &ssgi_globals_bgl,
@@ -489,7 +493,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&post_sampler),
+                // Non-filtering sampler for depth sampling
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
             },
         ],
     });
