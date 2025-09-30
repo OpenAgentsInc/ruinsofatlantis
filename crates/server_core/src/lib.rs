@@ -15,6 +15,8 @@ pub struct Npc {
     pub alive: bool,
     pub attack_cooldown: f32,
     pub attack_anim: f32,
+    /// Damage dealt per melee hit
+    pub damage: i32,
 }
 
 impl Npc {
@@ -28,6 +30,7 @@ impl Npc {
             alive: true,
             attack_cooldown: 0.0,
             attack_anim: 0.0,
+            damage: 5, // default zombie hit
         }
     }
 }
@@ -78,7 +81,6 @@ impl ServerState {
         let melee_pad = 0.35f32;
         let attack_cd = 1.5f32;
         let attack_anim_time = 0.8f32;
-        let damage = 5i32;
         let mut hits = Vec::new();
         let mut chosen: Vec<Option<usize>> = vec![None; self.npcs.len()];
         for (idx, n) in self.npcs.iter_mut().enumerate() {
@@ -121,7 +123,7 @@ impl ServerState {
                 let dist = to.length();
                 let contact = n.radius + wizard_r + melee_pad;
                 if dist <= contact + 0.05 && n.attack_cooldown <= 0.0 {
-                    hits.push((best_i, damage));
+                    hits.push((best_i, n.damage));
                     n.attack_cooldown = attack_cd;
                     n.attack_anim = attack_anim_time;
                 }

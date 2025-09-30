@@ -238,6 +238,7 @@ pub struct Renderer {
     dk_cpu: SkinnedMeshCPU,
     dk_time_offset: Vec<f32>,
     dk_id: Option<server_core::NpcId>,
+    dk_prev_pos: glam::Vec3,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -2875,13 +2876,33 @@ impl Renderer {
             None
         };
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.dk_count as usize * joints);
+        // Determine movement from model position vs last frame
+        let current_pos = if let Some(m) = self.dk_models.first().copied() {
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        } else {
+            glam::Vec3::ZERO
+        };
+        let moving = (current_pos - self.dk_prev_pos).length_squared() > 1e-4;
+        let attack_now = if let Some(id) = self.dk_id
+            && let Some(n) = self.server.npcs.iter().find(|n| n.id == id)
+        {
+            n.attack_anim > 0.0
+        } else {
+            false
+        };
         for i in 0..(self.dk_count as usize) {
-            let lookup = find_clip(&["idle", "stand", "wait"], &self.dk_cpu.animations)
-                .or_else(|| self.dk_cpu.animations.keys().next().cloned())
-                .unwrap_or_else(|| "__static".to_string());
+            let lookup = if attack_now {
+                find_clip(&["attack", "slash", "hit", "swing"], &self.dk_cpu.animations)
+            } else if moving {
+                find_clip(&["walk", "run"], &self.dk_cpu.animations)
+            } else {
+                find_clip(&["idle", "stand", "wait"], &self.dk_cpu.animations)
+            }
+            .or_else(|| self.dk_cpu.animations.keys().next().cloned())
+            .unwrap_or_else(|| "__static".to_string());
             let t = time_global + self.dk_time_offset.get(i).copied().unwrap_or(0.0);
             if lookup == "__static" {
-                // Use identity palette if no animation is available
                 for _ in 0..joints {
                     mats.push(glam::Mat4::IDENTITY);
                 }
@@ -2896,6 +2917,8 @@ impl Renderer {
         }
         self.queue
             .write_buffer(&self.dk_palettes_buf, 0, bytemuck::cast_slice(&raw));
+        // Update previous position for next-frame movement detection
+        self.dk_prev_pos = current_pos;
     }
 
     fn update_deathknight_from_server(&mut self) {

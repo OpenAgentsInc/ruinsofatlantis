@@ -762,7 +762,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let dk_id = {
         let radius = 2.5f32; // generous cylinder radius for 5x scale
         let hp = 200i32;
-        server.spawn_npc(dk_spawn_pos, radius, hp)
+        let id = server.spawn_npc(dk_spawn_pos, radius, hp);
+        // Scale Death Knight damage 10x over a zombie (5 → 50)
+        if let Some(n) = server.npcs.iter_mut().find(|n| n.id == id) {
+            n.damage = 50;
+        }
+        id
     };
     let total_dk_mats = dk_count as usize * dk_joints as usize;
     let dk_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -990,5 +995,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             })
             .collect(),
         zombie_forward_offsets: vec![zombie_forward_offset; zombie_count as usize],
+        dk_prev_pos: dk_models
+            .first()
+            .map(|m| {
+                let c = m.to_cols_array();
+                glam::vec3(c[12], c[13], c[14])
+            })
+            .unwrap_or(glam::Vec3::ZERO),
     })
 }
