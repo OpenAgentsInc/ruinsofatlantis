@@ -76,7 +76,9 @@ impl DamageFloaters {
 
         // Build atlas for ASCII digits and symbols we may show
         let atlas_w: u32 = 512;
-        let mut atlas_h: u32 = 128;
+        // Make the atlas tall enough up front to avoid later growth,
+        // which can invalidate normalized UVs computed earlier.
+        let mut atlas_h: u32 = 512;
         let mut atlas = vec![0u8; (atlas_w * atlas_h) as usize];
         let mut cursor_x: u32 = 1;
         let mut cursor_y: u32 = 1;
