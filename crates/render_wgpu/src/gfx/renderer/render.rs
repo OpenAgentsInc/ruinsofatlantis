@@ -604,7 +604,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.nameplates_npc.draw(&mut encoder, labels_target);
         }
         // Death Knight nameplate (lower spacing): only when near the player
-        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied() {
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
             let head = m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
             let wp = head.truncate();
             let dx = wp.x - pc_pos.x;
