@@ -565,8 +565,18 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         );
         r.nameplates.draw(&mut encoder, labels_target);
 
-        // NPC nameplates (e.g., "Zombie")
+        // NPC nameplates (e.g., "Zombie"): only show when very close to the player
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
+        let pc_pos = {
+            let c = r
+                .wizard_models
+                .get(r.pc_index)
+                .copied()
+                .unwrap_or(glam::Mat4::IDENTITY)
+                .to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
+        let name_dist2 = 10.0f32 * 10.0f32; // 10 meters
         for (idx, m) in r.zombie_models.iter().enumerate() {
             if let Some(npc) = r.server.npcs.get(idx)
                 && !npc.alive
@@ -574,7 +584,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 continue;
             }
             let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-            npc_positions.push(head.truncate());
+            let wp = head.truncate();
+            let dx = wp.x - pc_pos.x;
+            let dz = wp.z - pc_pos.z;
+            if dx * dx + dz * dz <= name_dist2 {
+                npc_positions.push(wp);
+            }
         }
         if !npc_positions.is_empty() {
             r.nameplates_npc.queue_npc_labels(
@@ -588,22 +603,25 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             );
             r.nameplates_npc.draw(&mut encoder, labels_target);
         }
-        // Death Knight nameplate (lower spacing)
-        if r.dk_count > 0
-            && let Some(m) = r.dk_models.first().copied()
-        {
+        // Death Knight nameplate (lower spacing): only when near the player
+        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied() {
             let head = m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
-            let pos = vec![head.truncate()];
-            r.nameplates_npc.queue_npc_labels(
-                &r.device,
-                &r.queue,
-                r.config.width,
-                r.config.height,
-                view_proj,
-                &pos,
-                "Death Knight",
-            );
-            r.nameplates_npc.draw(&mut encoder, labels_target);
+            let wp = head.truncate();
+            let dx = wp.x - pc_pos.x;
+            let dz = wp.z - pc_pos.z;
+            if dx * dx + dz * dz <= name_dist2 {
+                let pos = vec![wp];
+                r.nameplates_npc.queue_npc_labels(
+                    &r.device,
+                    &r.queue,
+                    r.config.width,
+                    r.config.height,
+                    view_proj,
+                    &pos,
+                    "Death Knight",
+                );
+                r.nameplates_npc.draw(&mut encoder, labels_target);
+            }
         }
     }
 
