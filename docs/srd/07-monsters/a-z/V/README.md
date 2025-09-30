@@ -1,4 +1,4 @@
-# V Monsters
+# V
 
-This index lists SRD monsters beginning with “V”. Add one file per monster in this folder.
-
+- [Violet Fungus](violet-fungus.md)
+- [Vulnerabilities Thunder](vulnerabilities-thunder.md)

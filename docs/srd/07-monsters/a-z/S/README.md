@@ -1,4 +1,19 @@
-# S Monsters
+# S
 
-This index lists SRD monsters beginning with “S”. Add one file per monster in this folder.
-
+- [Scout](scout.md)
+- [Senses Passive Perception 10](senses-passive-perception-10.md)
+- [Senses Passive Perception 13](senses-passive-perception-13.md)
+- [Senses Passive Perception 14](senses-passive-perception-14.md)
+- [Senses Passive Perception 15 Archelon](senses-passive-perception-15-archelon.md)
+- [Siege Monster The Kraken Deals Double Damage To Ob](siege-monster-the-kraken-deals-double-damage-to-ob.md)
+- [Slashing Damage](slashing-damage.md)
+- [Speed 15 Ft](speed-15-ft.md)
+- [Spellcasting](spellcasting.md)
+- [Sprite Bonus Actions](sprite-bonus-actions.md)
+- [Steam Mephit Actions](steam-mephit-actions.md)
+- [Stirge](stirge.md)
+- [Stone Giant Traits](stone-giant-traits.md)
+- [Swarm Of Bats Swarm Is Bloodied](swarm-of-bats-swarm-is-bloodied.md)
+- [Swarm Of Piranhas Actions](swarm-of-piranhas-actions.md)
+- [Swarm Of Rats Swarm Is Bloodied](swarm-of-rats-swarm-is-bloodied.md)
+- [Swarm Of Venomous Snakes](swarm-of-venomous-snakes.md)

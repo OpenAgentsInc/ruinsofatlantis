@@ -1,4 +1,7 @@
-# C Monsters
+# C
 
-This index lists SRD monsters beginning with “C”. Add one file per monster in this folder.
-
+- [Chain Devil](chain-devil.md)
+- [Chimera](chimera.md)
+- [Conjure Infernal Chain The Devil Conjures A Fiery Chuul](conjure-infernal-chain-the-devil-conjures-a-fiery-chuul.md)
+- [Cultist Fanatic](cultist-fanatic.md)
+- [Cultist](cultist.md)

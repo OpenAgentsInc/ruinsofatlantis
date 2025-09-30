@@ -1,4 +1,5 @@
-# I Monsters
+# I
 
-This index lists SRD monsters beginning with “I”. Add one file per monster in this folder.
-
+- [Incubus](incubus.md)
+- [Iron Golem Immunities Frightened](iron-golem-immunities-frightened.md)
+- [Iron Scent The Rust Monster Can Pinpoint The Location](iron-scent-the-rust-monster-can-pinpoint-the-location.md)

@@ -1,4 +1,4 @@
-# T Monsters
+# T
 
-This index lists SRD monsters beginning with “T”. Add one file per monster in this folder.
-
+- [Tough](tough.md)
+- [Traits Young Green Dragon](traits-young-green-dragon.md)

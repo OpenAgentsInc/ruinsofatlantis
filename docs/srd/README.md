@@ -111,12 +111,12 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
 
 - Playing the Game: complete.
 - Classes: all base classes added (with spell lists/subclasses per SRD scope).
-- Spells: complete.
+- Spells: complete (spell descriptions A–Z largely present; verify any edge letters without SRD entries).
 - Feats: complete (Origin, General, Fighting Style, Epic Boon).
-- Equipment: complete (tables and descriptions transcribed).
-- Character Creation: complete (including Trinkets table).
-- Monsters: complete (A–Z stat blocks transcribed).
-- Animals: complete (A–Z stat blocks transcribed).
+- Equipment: core tables added (Weapons, Armor, Ammunition); Adventuring Gear and Mounts/Vehicles included (raw table dump pending cleanup).
+- Character Creation: core steps complete; Trinkets table in progress.
+- Monsters: in progress (A–Z extraction drafted; needs cleanup and verification).
+- Animals: in progress (Beasts routed to Animals; needs cleanup and verification).
 
 ## Index
 

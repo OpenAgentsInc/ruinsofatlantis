@@ -1,4 +1,6 @@
-# B Monsters
+# B
 
-This index lists SRD monsters beginning with “B”. Add one file per monster in this folder.
-
+- [Barbed Devil Actions](barbed-devil-actions.md)
+- [Bearded Devil](bearded-devil.md)
+- [Bone Devil](bone-devil.md)
+- [Brass Dragon Wyrmling Half Damage](brass-dragon-wyrmling-half-damage.md)

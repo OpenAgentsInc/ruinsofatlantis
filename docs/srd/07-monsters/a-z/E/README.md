@@ -1,4 +1,3 @@
-# E Monsters
+# E
 
-This index lists SRD monsters beginning with “E”. Add one file per monster in this folder.
-
+- [Emanation Originating From The Salamander Takes 7](emanation-originating-from-the-salamander-takes-7.md)
