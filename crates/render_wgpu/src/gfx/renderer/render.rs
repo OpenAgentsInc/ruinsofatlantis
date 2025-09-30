@@ -494,11 +494,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Death Knight bar (show full for now; server hook to follow)
-        if r.dk_count > 0 {
-            if let Some(m) = r.dk_models.get(0).copied() {
-                let head = m * glam::Vec4::new(0.0, 2.3, 0.0, 1.0);
-                bar_entries.push((head.truncate(), 1.0));
-            }
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
+            let head = m * glam::Vec4::new(0.0, 2.3, 0.0, 1.0);
+            bar_entries.push((head.truncate(), 1.0));
         }
         // Queue bars vertices and draw to the active target
         r.bars.queue_entries(
@@ -581,21 +581,21 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.nameplates_npc.draw(&mut encoder, labels_target);
         }
         // Death Knight nameplate
-        if r.dk_count > 0 {
-            if let Some(m) = r.dk_models.get(0).copied() {
-                let head = m * glam::Vec4::new(0.0, 2.6, 0.0, 1.0);
-                let pos = vec![head.truncate()];
-                r.nameplates_npc.queue_npc_labels(
-                    &r.device,
-                    &r.queue,
-                    r.config.width,
-                    r.config.height,
-                    view_proj,
-                    &pos,
-                    "Death Knight",
-                );
-                r.nameplates_npc.draw(&mut encoder, labels_target);
-            }
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
+            let head = m * glam::Vec4::new(0.0, 2.6, 0.0, 1.0);
+            let pos = vec![head.truncate()];
+            r.nameplates_npc.queue_npc_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                &pos,
+                "Death Knight",
+            );
+            r.nameplates_npc.draw(&mut encoder, labels_target);
         }
     }
 

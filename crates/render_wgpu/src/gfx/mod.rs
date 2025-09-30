@@ -26,6 +26,7 @@ mod types;
 pub use types::Vertex;
 mod anim;
 mod camera_sys;
+mod deathknight;
 mod draw;
 mod foliage;
 pub mod fx;
@@ -39,7 +40,6 @@ pub mod terrain;
 mod ui;
 mod util;
 mod zombies;
-mod deathknight;
 
 use data_runtime::spell::SpellSpec;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
@@ -200,6 +200,7 @@ pub struct Renderer {
     // Death Knight instances
     dk_instances: wgpu::Buffer,
     dk_count: u32,
+    #[allow(dead_code)]
     dk_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,

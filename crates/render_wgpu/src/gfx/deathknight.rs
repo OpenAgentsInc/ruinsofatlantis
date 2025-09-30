@@ -61,7 +61,7 @@ pub fn load_assets(device: &wgpu::Device) -> Result<DeathKnightAssets> {
 pub fn build_instances(
     device: &wgpu::Device,
     terrain_cpu: &crate::gfx::terrain::TerrainCPU,
-    joints: u32,
+    _joints: u32,
 ) -> (wgpu::Buffer, Vec<InstanceSkin>, Vec<glam::Mat4>, u32) {
     let radius = 18.0f32; // outside the wizard ring (~7.5)
     // Sample terrain height under desired spot
@@ -70,13 +70,12 @@ pub fn build_instances(
     let scale = glam::Vec3::splat(5.0); // 5x wizard size
     let m = glam::Mat4::from_scale_rotation_translation(scale, glam::Quat::IDENTITY, pos);
     let mut instances_cpu: Vec<InstanceSkin> = Vec::new();
-    let mut models: Vec<glam::Mat4> = Vec::new();
-    models.push(m);
+    let models: Vec<glam::Mat4> = vec![m];
     instances_cpu.push(InstanceSkin {
         model: m.to_cols_array_2d(),
         color: [1.0, 1.0, 1.0],
         selected: 0.0,
-        palette_base: 0 * joints, // single instance
+        palette_base: 0, // single instance at base 0
         _pad_inst: [0; 3],
     });
     let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -87,24 +86,11 @@ pub fn build_instances(
     (instances, instances_cpu, models, 1)
 }
 
-/// Determine the authored forward offset from the model's root node (if present).
-pub fn forward_offset(cpu: &ra_assets::types::SkinnedMeshCPU) -> f32 {
-    if let Some(root_ix) = cpu.root_node {
-        let r = cpu
-            .base_r
-            .get(root_ix)
-            .copied()
-            .unwrap_or(glam::Quat::IDENTITY);
-        let f = r * glam::Vec3::Z; // authoring forward
-        f32::atan2(f.x, f.z) + std::f32::consts::PI
-    } else {
-        0.0
-    }
-}
+// If forward offset becomes necessary (e.g., for facing alignment),
+// we can add a helper similar to zombies::forward_offset.
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let ws = here.join("../../").join(rel);
     if ws.exists() { ws } else { here.join(rel) }
 }
-

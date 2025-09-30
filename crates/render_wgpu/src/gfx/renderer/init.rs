@@ -679,8 +679,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let _zombie_sampler = zmat.sampler;
 
     // Death Knight assets (skinned, single instance)
-    let dk_assets = super::super::deathknight::load_assets(&device)
-        .context("load deathknight assets")?;
+    let dk_assets =
+        super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
     let dk_cpu = dk_assets.cpu;
     let dk_vb = dk_assets.vb;
     let dk_ib = dk_assets.ib;
