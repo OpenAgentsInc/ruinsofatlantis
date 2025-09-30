@@ -184,6 +184,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         r.update_zombies_from_server();
         r.update_zombie_palettes(t);
+        r.update_deathknight_from_server();
     }
     // Death Knight palettes (single instance)
     r.update_deathknight_palettes(t);
@@ -493,12 +494,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-        // Death Knight bar (show full for now; server hook to follow)
-        if r.dk_count > 0
-            && let Some(m) = r.dk_models.first().copied()
-        {
-            let head = m * glam::Vec4::new(0.0, 2.3, 0.0, 1.0);
-            bar_entries.push((head.truncate(), 1.0));
+        // Death Knight health bar (use server HP; lower vertical offset)
+        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied() {
+            let frac = if let Some(id) = r.dk_id
+                && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
+            {
+                (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
+            } else { 1.0 };
+            let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            bar_entries.push((head.truncate(), frac));
         }
         // Queue bars vertices and draw to the active target
         r.bars.queue_entries(
@@ -580,11 +584,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             );
             r.nameplates_npc.draw(&mut encoder, labels_target);
         }
-        // Death Knight nameplate
-        if r.dk_count > 0
-            && let Some(m) = r.dk_models.first().copied()
-        {
-            let head = m * glam::Vec4::new(0.0, 2.6, 0.0, 1.0);
+        // Death Knight nameplate (lower spacing)
+        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied() {
+            let head = m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
             let pos = vec![head.truncate()];
             r.nameplates_npc.queue_npc_labels(
                 &r.device,

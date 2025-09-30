@@ -237,6 +237,7 @@ pub struct Renderer {
     dk_models: Vec<glam::Mat4>,
     dk_cpu: SkinnedMeshCPU,
     dk_time_offset: Vec<f32>,
+    dk_id: Option<server_core::NpcId>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -2895,6 +2896,51 @@ impl Renderer {
         }
         self.queue
             .write_buffer(&self.dk_palettes_buf, 0, bytemuck::cast_slice(&raw));
+    }
+
+    fn update_deathknight_from_server(&mut self) {
+        if self.dk_count == 0 {
+            return;
+        }
+        let id = if let Some(id) = self.dk_id { id } else { return };
+        let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id == id) { n } else { return };
+        // Face nearest wizard
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
+        let mut best_d2 = f32::INFINITY;
+        let mut face_to: Option<glam::Vec3> = None;
+        for w in &wiz_pos {
+            let dx = w.x - npc.pos.x;
+            let dz = w.z - npc.pos.z;
+            let d2 = dx * dx + dz * dz;
+            if d2 < best_d2 {
+                best_d2 = d2;
+                face_to = Some(*w);
+            }
+        }
+        let yaw = if let Some(tgt) = face_to {
+            (tgt.x - npc.pos.x).atan2(tgt.z - npc.pos.z)
+        } else {
+            0.0
+        };
+        // Stick to terrain height
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, npc.pos.x, npc.pos.z);
+        let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
+        let new_m = glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::splat(5.0),
+            glam::Quat::from_rotation_y(yaw),
+            pos,
+        );
+        self.dk_models[0] = new_m;
+        // Upload instance
+        if let Some(inst) = self.dk_instances_cpu.get_mut(0) {
+            inst.model = new_m.to_cols_array_2d();
+            let bytes: &[u8] = bytemuck::bytes_of(inst);
+            self.queue.write_buffer(&self.dk_instances, 0, bytes);
+        }
     }
 
     fn update_zombies_from_server(&mut self) {

@@ -699,7 +699,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let npc_index_count = npcs.index_count;
     let npc_instances = npcs.instances;
     let npc_models = npcs.models;
-    let server = npcs.server;
+    let mut server = npcs.server;
 
     // Vegetation
     let veg = zone
@@ -754,6 +754,16 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Death Knight single-instance buffers and palettes
     let (dk_instances, dk_instances_cpu, dk_models, dk_count) =
         super::super::deathknight::build_instances(&device, &terrain_cpu, dk_joints);
+    // Spawn Death Knight into the server so spells collide and AI runs
+    let dk_spawn_pos = {
+        let c = dk_models[0].to_cols_array();
+        glam::vec3(c[12], c[13], c[14])
+    };
+    let dk_id = {
+        let radius = 2.5f32; // generous cylinder radius for 5x scale
+        let hp = 200i32;
+        server.spawn_npc(dk_spawn_pos, radius, hp)
+    };
     let total_dk_mats = dk_count as usize * dk_joints as usize;
     let dk_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("deathknight-palettes"),
@@ -962,6 +972,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         dk_models: dk_models.clone(),
         dk_cpu,
         dk_time_offset: (0..dk_count as usize).map(|_| 0.0f32).collect(),
+        dk_id: Some(dk_id),
         zombie_palettes_buf,
         zombie_palettes_bg,
         zombie_joints,
