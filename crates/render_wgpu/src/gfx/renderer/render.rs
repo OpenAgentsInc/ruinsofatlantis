@@ -675,7 +675,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.damage.draw(&mut encoder, damage_target);
 
     // Nameplates (wizards first, then NPCs). Honor RA_OVERLAYS=0 to hide.
-    let draw_labels = std::env::var("RA_OVERLAYS").map(|v| v != "0").unwrap_or(true);
+    let draw_labels = std::env::var("RA_OVERLAYS")
+        .map(|v| v != "0")
+        .unwrap_or(true);
     if draw_labels {
         // Alive wizards only
         let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
@@ -685,7 +687,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         if !wiz_alive.is_empty() {
-            let target_view = if r.direct_present { &view } else { &r.attachments.scene_view };
+            let target_view = if r.direct_present {
+                &view
+            } else {
+                &r.attachments.scene_view
+            };
             r.nameplates.queue_labels(
                 &r.device,
                 &r.queue,
@@ -699,12 +705,20 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // NPC nameplates: skip dead
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
         for (idx, m) in r.zombie_models.iter().enumerate() {
-            if let Some(npc) = r.server.npcs.get(idx) { if !npc.alive { continue; } }
+            if let Some(npc) = r.server.npcs.get(idx)
+                && !npc.alive
+            {
+                continue;
+            }
             let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             npc_positions.push(head.truncate());
         }
         if !npc_positions.is_empty() {
-            let target_view = if r.direct_present { &view } else { &r.attachments.scene_view };
+            let target_view = if r.direct_present {
+                &view
+            } else {
+                &r.attachments.scene_view
+            };
             r.nameplates_npc.queue_npc_labels(
                 &r.device,
                 &r.queue,
