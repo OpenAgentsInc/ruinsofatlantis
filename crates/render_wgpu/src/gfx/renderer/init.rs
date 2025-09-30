@@ -202,9 +202,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
-    // On web, draw directly to the swapchain to simplify the path.
+    // On web, prefer offscreen + explicit present for predictable composition.
     #[cfg(target_arch = "wasm32")]
-    let direct_present = true;
+    let direct_present = false;
     #[cfg(not(target_arch = "wasm32"))]
     let direct_present = std::env::var("RA_DIRECT_PRESENT")
         .map(|v| v != "0")
@@ -944,6 +944,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         enable_post_ao: false,
         enable_ssgi: false,
         enable_ssr: false,
+        // Disable bloom on wasm to reduce pipeline churn while stabilizing
+        #[cfg(target_arch = "wasm32")]
+        enable_bloom: false,
+        #[cfg(not(target_arch = "wasm32"))]
         enable_bloom: true,
         static_index: None,
         frame_counter: 0,
