@@ -707,7 +707,7 @@ impl Nameplates {
         let mut verts: Vec<TextVertex> = Vec::new();
         let w = surface_w as f32;
         let h = surface_h as f32;
-        let ascent = self.ascent;
+        let _ascent = self.ascent;
 
         // Precompute names
         let labels: Vec<String> = (0..wizard_models.len())
@@ -738,15 +738,13 @@ impl Nameplates {
             let mut prev: Option<ab_glyph::GlyphId> = None;
             let mut width = 0.0f32;
             for ch in text.chars() {
-                let gi = match self.glyphs.get(&ch) {
-                    Some(g) => g,
-                    None => continue,
-                };
-                if let Some(pg) = prev {
-                    width += scaled.kern(pg, gi.id);
+                if let Some(gi) = self.glyphs.get(&ch) {
+                    if let Some(pg) = prev {
+                        width += scaled.kern(pg, gi.id);
+                    }
+                    width += gi.advance;
+                    prev = Some(gi.id);
                 }
-                width += gi.advance;
-                prev = Some(gi.id);
             }
             cx -= width * 0.5; // center horizontally
 
@@ -762,10 +760,11 @@ impl Nameplates {
                     pen_x += scaled.kern(pg, gi.id);
                 }
 
-                let x = cx + pen_x + gi.bounds_min[0];
-                let y = baseline_y - ascent + gi.bounds_min[1];
+                // Place glyphs using advance + size; ignore negative bearings to avoid truncation.
                 let w_px = gi.size[0];
                 let h_px = gi.size[1];
+                let x = cx + pen_x;
+                let y = baseline_y - h_px; // top-left
 
                 let p0 = Self::ndc_from_px(x, y, w, h);
                 let p1 = Self::ndc_from_px(x + w_px, y, w, h);
@@ -1880,10 +1879,11 @@ impl Nameplates {
                 if let Some(pg) = prev {
                     pen_x += scaled.kern(pg, gi.id);
                 }
-                let x = cx + pen_x + gi.bounds_min[0];
-                let y = baseline_y - self.ascent + gi.bounds_min[1];
+                // Place top-left without using negative bearings to avoid truncation
                 let w_px = gi.size[0];
                 let h_px = gi.size[1];
+                let x = cx + pen_x;
+                let y = baseline_y - h_px;
                 let p0 = Self::ndc_from_px(x, y, w, h);
                 let p1 = Self::ndc_from_px(x + w_px, y, w, h);
                 let p2 = Self::ndc_from_px(x + w_px, y + h_px, w, h);
