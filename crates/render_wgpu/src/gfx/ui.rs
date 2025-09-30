@@ -458,6 +458,7 @@ mod floater_tests {
     }
 }
 
+#[allow(dead_code)]
 pub struct Nameplates {
     // Font + metrics
     font: FontArc,
@@ -482,6 +483,7 @@ pub struct Nameplates {
     vcap_bytes: u64,
 }
 
+#[allow(dead_code)]
 impl Nameplates {
     pub fn new(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> anyhow::Result<Self> {
         // Load a font (embedded from assets/fonts at compile time)
@@ -1804,6 +1806,7 @@ mod hud_tests {
     }
 }
 
+#[allow(dead_code)]
 impl Nameplates {
     pub fn upload_atlas(&self, queue: &wgpu::Queue) {
         queue.write_texture(
@@ -1830,6 +1833,7 @@ impl Nameplates {
 
 impl Nameplates {
     #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code)]
     pub fn queue_npc_labels(
         &mut self,
         device: &wgpu::Device,

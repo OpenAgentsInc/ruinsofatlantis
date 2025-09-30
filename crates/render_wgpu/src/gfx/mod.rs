@@ -292,7 +292,9 @@ pub struct Renderer {
     // Camera focus (we orbit around a close wizard)
 
     // UI overlay
+    #[allow(dead_code)]
     nameplates: ui::Nameplates,
+    #[allow(dead_code)]
     nameplates_npc: ui::Nameplates,
     bars: ui::HealthBars,
     damage: ui::DamageFloaters,
