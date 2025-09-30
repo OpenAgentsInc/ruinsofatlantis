@@ -1,0 +1,43 @@
+{
+  "id": "wiz.thunderwave.srd521",
+  "name": "Thunderwave",
+  "version": "1.0.0",
+  "source": "SRD 5.2.1",
+  "school": "evocation",
+  "level": 1,
+  "classes": ["wizard", "sorcerer"],
+  "tags": ["aoe", "thunder"],
+
+  "cast_time_s": 1.0,
+  "gcd_s": 1.0,
+  "cooldown_s": 2.0,
+  "resource_cost": null,
+  "can_move_while_casting": false,
+
+  "targeting": "self",
+  "requires_line_of_sight": true,
+  "range_ft": 0,
+  "minimum_range_ft": 0,
+  "firing_arc_deg": 360,
+
+  "attack": null,
+  "damage": {
+    "type": "thunder",
+    "add_spell_mod_to_damage": false,
+    "dice_by_level_band": { "1-20": "2d8" }
+  },
+  "save": {
+    "kind": "con",
+    "dc": null,
+    "on_fail": null
+  },
+  "projectile": null,
+
+  "secondary": {
+    "area": { "shape": "cube", "size_m": 4.5 },
+    "knockback": { "meters": 3.0, "on_fail_only": true }
+  },
+  "events": ["CastStarted", "CastCompleted", "DamageApplied"],
+  "policy": { "role": "control", "priority_index": 3 }
+}
+
