@@ -350,6 +350,8 @@ pub struct Renderer {
     pc_alive: bool,
     // If true, non‑PC wizards will focus the player as their target
     wizards_hostile_to_pc: bool,
+    // Short-lived light pulses (explosions, shocks)
+    light_pulses: Vec<LightPulse>,
     // NPC wizard casting rotation state
     wizard_fire_cycle_count: Vec<u32>,
     wizard_fireball_next_at: Vec<u32>,
@@ -1897,7 +1899,7 @@ impl Renderer {
         }
         // FX update (projectiles/particles)
         self.update_fx(t, dt);
-        // Update dynamic lights from active projectiles (up to 16)
+        // Update dynamic lights from active projectiles and short-lived pulses (up to 16)
         {
             #[repr(C)]
             #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -1914,6 +1916,17 @@ impl Renderer {
                 color: [[0.0; 4]; 16],
             };
             let mut n = 0usize;
+            // Keep only live pulses and add them first
+            self.light_pulses
+                .retain(|lp| self.last_time < lp.t_die && lp.radius > 0.01);
+            for lp in &self.light_pulses {
+                if n >= 16 {
+                    break;
+                }
+                raw.pos_radius[n] = [lp.pos.x, lp.pos.y, lp.pos.z, lp.radius];
+                raw.color[n] = [lp.color[0], lp.color[1], lp.color[2], 0.0];
+                n += 1;
+            }
             let maxr = 10.0f32;
             for p in &self.projectiles {
                 if n >= 16 {
@@ -3260,4 +3273,12 @@ impl Renderer {
             }
         }
     } */
+}
+#[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
+pub(crate) struct LightPulse {
+    pub pos: glam::Vec3,
+    pub radius: f32,
+    pub color: [f32; 3],
+    pub t_die: f32,
 }

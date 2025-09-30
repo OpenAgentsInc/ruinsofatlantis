@@ -50,7 +50,7 @@ See `NOTICE` at the repository root for the canonical attribution statement. Do 
   - `gaining-spells.md`
   - `casting-spells.md`
   - `spell-descriptions/README.md`
-  - `spell-descriptions/A.md`
+  - `spell-descriptions/A/README.md`
 
 Names use a numeric prefix to preserve SRD order and kebab‑case file names for stable links.
 
@@ -81,8 +81,8 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
 ## Status
 
 - Section 1 (Playing the Game): complete.
-- Section 2 (Classes): Barbarian, Bard (incl. spell list), Cleric (incl. spell list), Druid (incl. spell list), Fighter, Monk, Paladin (incl. spell list), Ranger (incl. spell list), Rogue, Sorcerer (incl. subclass), Warlock (incl. subclass and spell list).
-- Section 3 (Spells): Gaining/Casting Spells and “A” spell descriptions converted. Continuing alphabetically.
+- Section 2 (Classes): complete.
+- Section 3 (Spells): complete — one file per spell and letter indices.
 
 ## Index
 
@@ -91,11 +91,31 @@ Names use a numeric prefix to preserve SRD order and kebab‑case file names for
   - docs/srd/00-front-matter/contents.md
 - Playing the Game
   - docs/srd/01-playing-the-game/README.md
-  - docs/srd/01-playing-the-game/rhythm-of-play.md
-  - docs/srd/01-playing-the-game/six-abilities.md
+  - docs/srd/01-playing-the-game/actions.md
+  - docs/srd/01-playing-the-game/combat.md
   - docs/srd/01-playing-the-game/d20-tests.md
+  - docs/srd/01-playing-the-game/exploration.md
   - docs/srd/01-playing-the-game/heroic-inspiration.md
   - docs/srd/01-playing-the-game/proficiency.md
-  - docs/srd/01-playing-the-game/actions.md
+  - docs/srd/01-playing-the-game/rhythm-of-play.md
+  - docs/srd/01-playing-the-game/six-abilities.md
   - docs/srd/01-playing-the-game/social-interaction.md
-  - docs/srd/01-playing-the-game/exploration.md
+- Classes
+  - docs/srd/02-classes/README.md
+  - docs/srd/02-classes/barbarian.md
+  - docs/srd/02-classes/bard.md
+  - docs/srd/02-classes/cleric.md
+  - docs/srd/02-classes/druid.md
+  - docs/srd/02-classes/fighter.md
+  - docs/srd/02-classes/monk.md
+  - docs/srd/02-classes/paladin.md
+  - docs/srd/02-classes/ranger.md
+  - docs/srd/02-classes/rogue.md
+  - docs/srd/02-classes/sorcerer.md
+  - docs/srd/02-classes/warlock.md
+  - docs/srd/02-classes/wizard.md
+- Spells
+  - docs/srd/03-spells/README.md
+  - docs/srd/03-spells/gaining-spells.md
+  - docs/srd/03-spells/casting-spells.md
+  - docs/srd/03-spells/spell-descriptions/README.md

@@ -1,5 +1,6 @@
 //! CPU-side update helpers extracted from gfx/mod.rs
 
+use crate::gfx::LightPulse;
 use crate::gfx::Renderer;
 use crate::gfx::types::{InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
@@ -733,18 +734,25 @@ impl Renderer {
         damage: i32,
     ) {
         // Visual explosion burst
-        for _ in 0..42 {
+        for _ in 0..72 {
             let a = rand_unit() * std::f32::consts::TAU;
-            let r = 6.0 + rand_unit() * 2.0;
+            let r = 7.5 + rand_unit() * 2.5;
             self.particles.push(Particle {
                 pos: center,
-                vel: glam::vec3(a.cos() * r, 3.0 + rand_unit() * 2.0, a.sin() * r),
+                vel: glam::vec3(a.cos() * r, 3.6 + rand_unit() * 2.2, a.sin() * r),
                 age: 0.0,
-                life: 0.28,
-                size: 0.05,
+                life: 0.34,
+                size: 0.06,
                 color: [2.2, 1.0, 0.3],
             });
         }
+        // Light pulse for explosion
+        self.light_pulses.push(LightPulse {
+            pos: center + glam::vec3(0.0, 0.8, 0.0),
+            radius: radius * 1.5,
+            color: [2.2, 1.0, 0.3],
+            t_die: self.last_time + 0.22,
+        });
         // Damage NPCs in radius
         let r2 = radius * radius;
         // Handle DK first for despawn behavior
@@ -903,19 +911,39 @@ impl Renderer {
         };
         let cos_half = (0.5f32 * angle_deg.to_radians()).cos();
         // Visual burst
-        for _ in 0..28 {
+        for _ in 0..48 {
             let a = rand_unit() * 0.5 * angle_deg.to_radians();
             let yaw = glam::Quat::from_rotation_y(a);
             let dir = (yaw * f).normalize_or_zero();
             self.particles.push(Particle {
                 pos: origin + glam::vec3(0.0, 1.2, 0.0),
-                vel: dir * (6.0 + rand_unit().abs() * 2.0) + glam::vec3(0.0, 2.0, 0.0),
+                vel: dir * (6.0 + rand_unit().abs() * 2.0) + glam::vec3(0.0, 2.2, 0.0),
                 age: 0.0,
-                life: 0.22,
-                size: 0.03,
+                life: 0.28,
+                size: 0.04,
                 color: [2.0, 0.8, 0.25],
             });
         }
+        // ground ring at cone tip
+        let tip = origin + f * length_m;
+        for k in 0..36 {
+            let a = (k as f32) / 36.0 * std::f32::consts::TAU;
+            self.particles.push(Particle {
+                pos: tip + glam::vec3(0.0, 0.2, 0.0),
+                vel: glam::vec3(a.cos(), 0.18, a.sin()) * 3.5,
+                age: 0.0,
+                life: 0.20,
+                size: 0.028,
+                color: [2.2, 0.9, 0.3],
+            });
+        }
+        // Light pulse for burning hands
+        self.light_pulses.push(LightPulse {
+            pos: origin + glam::vec3(0.0, 1.0, 0.0),
+            radius: length_m,
+            color: [2.0, 0.9, 0.4],
+            t_die: self.last_time + 0.15,
+        });
         let half = length_m.max(0.0);
         // DK first
         if let Some(dk_id) = self.dk_id
@@ -1017,17 +1045,24 @@ impl Renderer {
     ) {
         let half = (size_m * 0.5).max(0.0);
         // particle ring
-        for k in 0..24 {
-            let a = (k as f32) / 24.0 * std::f32::consts::TAU;
+        for k in 0..48 {
+            let a = (k as f32) / 48.0 * std::f32::consts::TAU;
             self.particles.push(Particle {
                 pos: center + glam::vec3(0.0, 1.0, 0.0),
-                vel: glam::vec3(a.cos(), 0.2, a.sin()) * 5.0,
+                vel: glam::vec3(a.cos(), 0.2, a.sin()) * 6.5,
                 age: 0.0,
-                life: 0.18,
-                size: 0.03,
-                color: [0.7, 0.9, 1.6],
+                life: 0.22,
+                size: 0.04,
+                color: [0.7, 0.95, 2.0],
             });
         }
+        // Light pulse for shock
+        self.light_pulses.push(LightPulse {
+            pos: center + glam::vec3(0.0, 0.6, 0.0),
+            radius: size_m * 0.9,
+            color: [0.6, 0.95, 2.0],
+            t_die: self.last_time + 0.16,
+        });
         // DK first
         if let Some(dk_id) = self.dk_id
             && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == dk_id)

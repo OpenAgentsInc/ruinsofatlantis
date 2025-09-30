@@ -994,6 +994,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_hp_max: 100,
         pc_alive: true,
         wizards_hostile_to_pc: false,
+        light_pulses: Vec::new(),
         wizard_fire_cycle_count: vec![0; scene_build.wizard_count as usize],
         wizard_fireball_next_at: {
             let mut v = vec![0u32; scene_build.wizard_count as usize];

@@ -5,4 +5,3 @@
 - docs/srd/03-spells/gaining-spells.md
 - docs/srd/03-spells/casting-spells.md
 - docs/srd/03-spells/spell-descriptions/README.md
-- docs/srd/03-spells/spell-descriptions/A.md

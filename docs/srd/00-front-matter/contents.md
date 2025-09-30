@@ -33,4 +33,3 @@ This is an adapted table of contents that mirrors the Markdown folder structure 
   - Gaining Spells — docs/srd/03-spells/gaining-spells.md
   - Casting Spells — docs/srd/03-spells/casting-spells.md
   - Spell Descriptions — docs/srd/03-spells/spell-descriptions/README.md
-    - A — docs/srd/03-spells/spell-descriptions/A.md
