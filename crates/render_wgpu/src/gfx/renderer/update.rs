@@ -460,14 +460,19 @@ impl Renderer {
                 let remain = (pr.t_die - t).max(0.0);
                 head_fade = (remain / fade_window).clamp(0.0, 1.0);
             }
+            // Make Fireball visuals bigger and brighter
+            let (head_size, trail_size, bright_mul) = match pr.kind {
+                crate::gfx::fx::ProjectileKind::Fireball { .. } => (0.36, 0.26, 2.0),
+                _ => (0.18, 0.13, 1.0),
+            };
             // head
             inst.push(ParticleInstance {
                 pos: [pr.pos.x, pr.pos.y, pr.pos.z],
-                size: 0.18,
+                size: head_size,
                 color: [
-                    pr.color[0] * head_fade,
-                    pr.color[1] * head_fade,
-                    pr.color[2] * head_fade,
+                    pr.color[0] * bright_mul * head_fade,
+                    pr.color[1] * bright_mul * head_fade,
+                    pr.color[2] * bright_mul * head_fade,
                 ],
                 _pad: 0.0,
             });
@@ -479,11 +484,11 @@ impl Renderer {
                 let fade = (1.0 - (k as f32) * 0.35) * head_fade;
                 inst.push(ParticleInstance {
                     pos: [p.x, p.y, p.z],
-                    size: 0.13,
+                    size: trail_size,
                     color: [
-                        pr.color[0] * 0.8 * fade,
-                        pr.color[1] * 0.8 * fade,
-                        pr.color[2] * 0.8 * fade,
+                        pr.color[0] * 0.8 * bright_mul * fade,
+                        pr.color[1] * 0.8 * bright_mul * fade,
+                        pr.color[2] * 0.8 * bright_mul * fade,
                     ],
                     _pad: 0.0,
                 });
