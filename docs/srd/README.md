@@ -111,12 +111,12 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
 
 - Playing the Game: complete.
 - Classes: all base classes added (with spell lists/subclasses per SRD scope).
-- Spells: Gaining/Casting Spells plus per-letter indexes (A–W, Z) and most spells added; continuing to fill any gaps and normalize formatting.
+- Spells: complete.
 - Feats: complete (Origin, General, Fighting Style, Epic Boon).
-- Equipment: core rules, tools, services, and pricing added; tables are being finalized from the PDF where applicable.
-- Character Creation: core steps, Level Advancement, Starting at Higher Levels, Multiclassing added; trinkets rolling table in progress.
-- Monsters: section scaffolded with A–Z index; transcription of stat blocks underway.
-- Animals: section scaffolded; stat blocks pending transcription.
+- Equipment: complete (tables and descriptions transcribed).
+- Character Creation: complete (including Trinkets table).
+- Monsters: complete (A–Z stat blocks transcribed).
+- Animals: complete (A–Z stat blocks transcribed).
 
 ## Index
 
