@@ -1,4 +1,4 @@
 # T
 
-- [Tiger Languages None](tiger-languages-none.md)
+- [Tiger](tiger.md)
 - [Triceratops](triceratops.md)

@@ -1,7 +1,10 @@
 # H
 
-- [Half Dragon Slashing Damage](half-dragon-slashing-damage.md)
-- [Hill Giant Hobgoblin Warrior](hill-giant-hobgoblin-warrior.md)
+- [Half Dragon](half-dragon.md)
+- [Harpy](harpy.md)
+- [Hezrou](hezrou.md)
+- [Hill Giant](hill-giant.md)
 - [Hill Giant](hill-giant.md)
 - [Hobgoblin Captain](hobgoblin-captain.md)
-- [Hydra Traits](hydra-traits.md)
+- [Homunculus](homunculus.md)
+- [Hydra](hydra.md)

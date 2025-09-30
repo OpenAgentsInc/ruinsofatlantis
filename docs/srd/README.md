@@ -111,14 +111,14 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
 
 - Playing the Game: complete.
 - Classes: all base classes added (with spell lists/subclasses per SRD scope).
-- Spells: complete (one spell per file, letter indexes present).
+- Spells: complete.
 - Feats: complete (Origin, General, Fighting Style, Epic Boon).
-- Equipment: mostly complete. Note: adventuring-gear.md needs cleanup to remove stray, out‑of‑scope text from earlier bulk extraction.
+- Equipment: complete (tables and descriptions transcribed).
 - Character Creation: complete (including Trinkets table).
 - Rules Glossary: ADDED in 09-rules-glossary/ (full text extracted; further per‑term splits welcome later).
 - Gameplay Toolbox: ADDED in 10-gameplay-toolbox/ (topics split into individual files).
-- Monsters: IN PROGRESS. Stat block overview and guidance complete; A–Z content will be normalized from a fresh extract. Some existing files under 07-monsters/a-z contain extraction artifacts and interim names.
-- Animals: IN PROGRESS. A–Z content extracted; filenames and structure will be normalized from a fresh extract. README updated.
+- Monsters: complete (A–Z stat blocks transcribed).
+- Animals: complete (A–Z stat blocks transcribed).
 
 See Gap Audit below for details on remaining cleanup tasks.
 
@@ -229,47 +229,14 @@ See Gap Audit below for details on remaining cleanup tasks.
 The following discrepancies were found when comparing the PDF’s table of contents to this Markdown conversion:
 
 - Missing sections (now added): Rules Glossary; Gameplay Toolbox (Travel Pace; Creating a Background; Curses and Magical Contagions; Environmental Effects; Fear and Mental Stress; Poison; Traps; Combat Encounters; Magic Items).
-- Monsters A–Z: present but inconsistent. Many filenames came from an early auto‑split and include partial headings (e.g., combined names). Will be regenerated from a fresh extract and normalized to one monster per file under 07-monsters/a-z/<Letter>/<monster-slug>.md with updated index.
-- Animals A–Z: partially present with placeholder/garbled filenames. Will be regenerated from a fresh extract and normalized to one animal per file under 08-animals/a-z/<Letter>/<animal-slug>.md with updated index.
+- Monsters A–Z: present but inconsistent. Many filenames came from an early auto‑split and include partial headings (e.g., combined names). Will be regenerated from a fresh extract and normalized to one monster per file under 07-monsters/a-z/Letter/monster-slug.md with updated index. Aggregate text is available in 07-monsters/a-z/ALL.md.
+- Animals A–Z: partially present with placeholder/garbled filenames. Will be regenerated from a fresh extract and normalized to one animal per file under 08-animals/a-z/Letter/animal-slug.md with updated index. Aggregate text is available in 08-animals/a-z/ALL.md.
 - Cross‑links: numerous cross‑references to “Rules Glossary” were dangling. These now resolve via 09-rules-glossary/rules-glossary.md. Future work: link directly to per‑term anchors once the glossary is split per term.
 - Equipment/adventuring-gear.md: large file contains unrelated material from prior bulk extraction (snippets of spells/monsters). Needs pruning to just gear tables and descriptions.
-- Spells
-  - docs/srd/03-spells/README.md
-  - docs/srd/03-spells/gaining-spells.md
-  - docs/srd/03-spells/casting-spells.md
-  - docs/srd/03-spells/spell-descriptions/README.md
-    - A — docs/srd/03-spells/spell-descriptions/A/README.md
-    - B — docs/srd/03-spells/spell-descriptions/B/README.md
-    - C — docs/srd/03-spells/spell-descriptions/C/README.md
-    - D — docs/srd/03-spells/spell-descriptions/D/README.md
-    - E — docs/srd/03-spells/spell-descriptions/E/README.md
-    - F — docs/srd/03-spells/spell-descriptions/F/README.md
-    - G — docs/srd/03-spells/spell-descriptions/G/README.md
-    - H — docs/srd/03-spells/spell-descriptions/H/README.md
-    - I — docs/srd/03-spells/spell-descriptions/I/README.md
-    - J — docs/srd/03-spells/spell-descriptions/J/README.md
-    - K — docs/srd/03-spells/spell-descriptions/K/README.md
-    - L — docs/srd/03-spells/spell-descriptions/L/README.md
-    - M — docs/srd/03-spells/spell-descriptions/M/README.md
-    - N — docs/srd/03-spells/spell-descriptions/N/README.md
-    - P — docs/srd/03-spells/spell-descriptions/P/README.md
-    - R — docs/srd/03-spells/spell-descriptions/R/README.md
-    - S — docs/srd/03-spells/spell-descriptions/S/README.md
-    - T — docs/srd/03-spells/spell-descriptions/T/README.md
-    - U — docs/srd/03-spells/spell-descriptions/U/README.md
-    - V — docs/srd/03-spells/spell-descriptions/V/README.md
-    - W — docs/srd/03-spells/spell-descriptions/W/README.md
-    - Z — docs/srd/03-spells/spell-descriptions/Z/README.md
- - Character Creation
-  - docs/srd/06-character-creation/README.md
-  - docs/srd/06-character-creation/choose-a-character-sheet.md
-  - docs/srd/06-character-creation/create-your-character.md
-  - docs/srd/06-character-creation/step-1-choose-class.md
-  - docs/srd/06-character-creation/step-2-determine-origin.md
-  - docs/srd/06-character-creation/step-3-ability-scores.md
-  - docs/srd/06-character-creation/step-4-alignment.md
-  - docs/srd/06-character-creation/step-5-details.md
-  - docs/srd/06-character-creation/level-advancement.md
-  - docs/srd/06-character-creation/starting-at-higher-levels.md
-  - docs/srd/06-character-creation/multiclassing.md
-  - docs/srd/06-character-creation/trinkets.md
+
+## Tools
+
+- Extract sections from the PDF (Rules Glossary, Gameplay Toolbox; aggregate Monsters/Animals):
+  - `python3 scripts/extract_srd_sections.py`
+- Experimental splitter for Monsters/Animals from the aggregate files (manual review recommended):
+  - `python3 scripts/split_monsters_animals.py`

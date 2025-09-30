@@ -1,4 +1,4 @@
 # R
 
-- [Rhinoceros Traits](rhinoceros-traits.md)
+- [Rhinoceros](rhinoceros.md)
 - [Riding Horse](riding-horse.md)

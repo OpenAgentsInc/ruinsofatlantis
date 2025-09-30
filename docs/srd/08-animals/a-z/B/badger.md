@@ -1,9 +1,8 @@
 # Badger
 
-Badger
       Tiny Beast, Unaligned                                          Blood Hawk
-      AC 11 		                   Initiative +0 (10)                  Small Beast, Unaligned
-      HP 5 (1d4 + 3)                                                 AC 12 		                    Initiative +2 (12)
+      AC 11                            Initiative +0 (10)                  Small Beast, Unaligned
+      HP 5 (1d4 + 3)                                                 AC 12                             Initiative +2 (12)
       Speed 20 ft., Burrow 5 ft.                                     HP 7 (2d6)
                 MOD SAVE             MOD SAVE            MOD SAVE    Speed 10 ft., Fly 60 ft.
       Str 10 +0 +0         Dex 11 +0 +0         Con 16 +3 +3                   MOD SAVE              MOD SAVE          MOD SAVE
@@ -14,6 +13,10 @@ Badger
       Senses Darkvision 30 ft.; Passive Perception 13                Senses Passive Perception 16
       Languages None                                                 Languages None
       CR 0 (XP 10; PB +2)                                            CR 1/8 (XP 25; PB +2)
+
+
+
+
 
       Traits                                                       Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3)
                                                                    Slashing damage. If the target is a Large or smaller crea-

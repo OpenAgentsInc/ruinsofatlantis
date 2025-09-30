@@ -24,9 +24,3 @@
       the hit, the target takes an extra 5 (2d4) Bludgeoning         Bite, and if the frog dies, the swallowed target is no lon-
       damage and has the Prone condition.                            ger Restrained and can escape from the corpse using 5
                                                                      feet of movement, exiting with the Prone condition.
-      Giant Fire Beetle                                                At the end of the frog’s next turn, the swallowed target
-      Small Beast, Unaligned                                         takes 5 (2d4) Acid damage. If that damage doesn’t kill it,
-                                                                     the frog disgorges it, causing it to exit Prone.
-      AC 13                Initiative +0 (10)
-      HP 4 (1d6 + 1)
-      Speed 30 ft., Climb 30 ft.

@@ -1,4 +1,6 @@
 # P
 
-- [Polar Bear Actions](polar-bear-actions.md)
-- [Pteranodon Languages None](pteranodon-languages-none.md)
+- [Panther](panther.md)
+- [Polar Bear](polar-bear.md)
+- [Pony](pony.md)
+- [Pteranodon](pteranodon.md)

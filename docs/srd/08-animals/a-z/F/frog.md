@@ -1,9 +1,8 @@
 # Frog
 
-Frog
                                                                   Tiny Beast, Unaligned
       Gore. Melee Attack Roll: +8, reach 5 ft. Hit: 15 (2d8
-      + 6) Piercing damage. If the target is a Huge or smaller    AC 11 		                  Initiative +1 (11)
+      + 6) Piercing damage. If the target is a Huge or smaller    AC 11                           Initiative +1 (11)
       creature and the elephant moved 20+ feet straight to-       HP 1 (1d4 − 1)
       ward it immediately before the hit, the target has the      Speed 20 ft., Swim 20 ft.
       Prone condition.                                                      MOD SAVE              MOD SAVE          MOD SAVE
@@ -15,7 +14,10 @@ Frog
                                                                   Languages None
                                                                   CR 0 (XP 10; PB +2)
 
+
+
       Traits                                                       Actions
       Amphibious. The frog can breathe air and water.              Bite. Melee Attack Roll: +3, reach 5 ft. Hit: 6 (2d4 + 1)
       Standing Leap. The frog’s Long Jump is up to 10 feet         Piercing damage.
-      and its High Jump is up to 5 feet with or without a running start.
+      and its High Jump is up to 5 feet with or without a run-
+      ning start.

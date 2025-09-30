@@ -1,3 +1,3 @@
 # A
 
-- [Allosaurus Languages None](allosaurus-languages-none.md)
+- [Allosaurus](allosaurus.md)

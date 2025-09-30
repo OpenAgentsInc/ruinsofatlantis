@@ -1,4 +1,5 @@
 # L
 
 - [Lamia](lamia.md)
-- [Languages None](languages-none.md)
+- [Lemure](lemure.md)
+- [Lich](lich.md)

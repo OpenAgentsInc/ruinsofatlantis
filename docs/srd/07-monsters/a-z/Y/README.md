@@ -1,6 +1,9 @@
 # Y
 
 - [Young Black Dragon](young-black-dragon.md)
-- [Young Copper Dragon Ceed Instead](young-copper-dragon-ceed-instead.md)
+- [Young Brass Dragon](young-brass-dragon.md)
+- [Young Bronze Dragon](young-bronze-dragon.md)
+- [Young Copper Dragon](young-copper-dragon.md)
 - [Young Gold Dragon](young-gold-dragon.md)
-- [Young White Dragon Actions](young-white-dragon-actions.md)
+- [Young Silver Dragon](young-silver-dragon.md)
+- [Young White Dragon](young-white-dragon.md)

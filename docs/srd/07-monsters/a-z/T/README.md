@@ -1,4 +1,5 @@
 # T
 
 - [Tough](tough.md)
-- [Traits Young Green Dragon](traits-young-green-dragon.md)
+- [Treant](treant.md)
+- [Troll](troll.md)

@@ -46,22 +46,3 @@
 
       Gray Ooze                                                     Skills Perception +4, Stealth +3
                                                                     Immunities Poison; Poisoned
-      Gray Ooze                                                     Senses Blindsight 10 ft., Darkvision 60 ft.;
-      Medium Ooze, Unaligned                                          Passive Perception 14
-                                                                    Languages Draconic
-      AC 9                             Initiative −2 (13)
-                                                                    CR 2 (XP 450; PB +2)
-      HP 22 (3d8 + 9)
-      Speed 10 ft., Climb 10 ft.                                    Traits
-                MOD SAVE             MOD SAVE            MOD SAVE
-                                                                    Amphibious. The dragon can breathe air and water.
-      Str 12 +1 +1         Dex 6 −2 −2          Con 16 +3 +3
-      Int 1 −5 −5          Wis 6 −2 −2          Cha 2 −4 −4         Actions
-      Skills Stealth +2
-                                                                    Multiattack. The dragon makes two Rend attacks.
-      Resistances Acid, Cold, Fire                                  Rend. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (1d10
-      Immunities Blinded, Charmed, Deafened, Exhaustion,            + 2) Slashing damage plus 3 (1d6) Poison damage.
-        Frightened, Grappled, Prone, Restrained                     Poison Breath (Recharge 5–6). Constitution Saving
-      Senses Blindsight 60 ft.; Passive Perception 8                Throw: DC 11, each creature in a 15-foot Cone. Failure:
-      Languages None                                                21 (6d6) Poison damage. Success: Half damage.
-      CR 1/2 (XP 100; PB +2)
