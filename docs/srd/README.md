@@ -111,10 +111,12 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
 
 - Playing the Game: complete.
 - Classes: all base classes added (with spell lists/subclasses per SRD scope).
-- Spells: Gaining/Casting Spells plus A–W and Z letter indexes and many spells added; continuing to fill gaps and finalize any missing entries.
+- Spells: Gaining/Casting Spells plus per-letter indexes (A–W, Z) and most spells added; continuing to fill any gaps and normalize formatting.
 - Feats: complete (Origin, General, Fighting Style, Epic Boon).
 - Equipment: core rules, tools, services, and pricing added; tables are being finalized from the PDF where applicable.
-- Character Creation: core steps, Level Advancement, Starting at Higher Levels, Multiclassing added; adding the full 1d100 Trinkets table next.
+- Character Creation: core steps, Level Advancement, Starting at Higher Levels, Multiclassing added; trinkets rolling table in progress.
+- Monsters: section scaffolded with A–Z index; transcription of stat blocks underway.
+- Animals: section scaffolded; stat blocks pending transcription.
 
 ## Index
 
@@ -174,7 +176,33 @@ Names use a numeric prefix for stable links. Some numbers deviate from the SRD�
   - docs/srd/07-monsters/README.md
   - docs/srd/07-monsters/stat-block-overview.md
   - docs/srd/07-monsters/running-a-monster.md
- - docs/srd/07-monsters/a-z/README.md
+  - docs/srd/07-monsters/a-z/README.md
+    - A — docs/srd/07-monsters/a-z/A/README.md
+    - B — docs/srd/07-monsters/a-z/B/README.md
+    - C — docs/srd/07-monsters/a-z/C/README.md
+    - D — docs/srd/07-monsters/a-z/D/README.md
+    - E — docs/srd/07-monsters/a-z/E/README.md
+    - F — docs/srd/07-monsters/a-z/F/README.md
+    - G — docs/srd/07-monsters/a-z/G/README.md
+    - H — docs/srd/07-monsters/a-z/H/README.md
+    - I — docs/srd/07-monsters/a-z/I/README.md
+    - J — docs/srd/07-monsters/a-z/J/README.md
+    - K — docs/srd/07-monsters/a-z/K/README.md
+    - L — docs/srd/07-monsters/a-z/L/README.md
+    - M — docs/srd/07-monsters/a-z/M/README.md
+    - N — docs/srd/07-monsters/a-z/N/README.md
+    - O — docs/srd/07-monsters/a-z/O/README.md
+    - P — docs/srd/07-monsters/a-z/P/README.md
+    - Q — docs/srd/07-monsters/a-z/Q/README.md
+    - R — docs/srd/07-monsters/a-z/R/README.md
+    - S — docs/srd/07-monsters/a-z/S/README.md
+    - T — docs/srd/07-monsters/a-z/T/README.md
+    - U — docs/srd/07-monsters/a-z/U/README.md
+    - V — docs/srd/07-monsters/a-z/V/README.md
+    - W — docs/srd/07-monsters/a-z/W/README.md
+    - X — docs/srd/07-monsters/a-z/X/README.md
+    - Y — docs/srd/07-monsters/a-z/Y/README.md
+    - Z — docs/srd/07-monsters/a-z/Z/README.md
  - Animals
   - docs/srd/08-animals/README.md
 - Spells
