@@ -407,12 +407,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.02,
-                        g: 0.02,
-                        b: 0.04,
-                        a: 1.0,
-                    }),
+                    // Bright clear to confirm offscreen writes are visible when sampled.
+                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.30, g: 0.00, b: 0.30, a: 1.0 }),
                     store: wgpu::StoreOp::Store,
                 },
             })],

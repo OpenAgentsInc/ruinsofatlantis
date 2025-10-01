@@ -60,39 +60,9 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   let sz = vec2<f32>(textureDimensions(scene_tex));
   let eps = vec2<f32>(0.5) / sz;
   let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
-  // Use non‑filtering sampling for WebGPU portability (Rgba16F is non‑filterable).
+  // DEBUG SIMPLIFICATION: sample the scene color directly and sRGB-encode.
+  // Fog/tonemap/grade disabled to isolate sampling path.
   var col = textureSampleLevel(scene_tex, samp_color, uv, 0.0).rgb;
-  // Fog (exponential) based on linearized depth
-  // Important: do NOT fog sky pixels (where no geometry was drawn and depth==1)
-  // Sample depth without filtering as well (LOD level must be integer for depth)
-  let depth = textureSampleLevel(depth_tex, samp_depth, uv, 0u);
-  let density = globals.fog.a;
-  if (density > 0.0 && depth < 0.9999) {
-    let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
-    let f = 1.0 - exp(-density * zlin);
-    col = mix(col, globals.fog.rgb, clamp(f, 0.0, 1.0));
-  }
-  // Tonemap in linear
-  var mapped = tonemap_aces_approx(col);
-  // Exposure: darker at night based on sun elevation
-  let elev = globals.sunDirTime.y;
-  let nf = smoothstep(0.0, 0.2, -elev);
-  // Night attenuation: keep much brighter on web for parity with desktop
-  mapped *= mix(1.0, 0.70, nf);
-  // Optional lightweight color grade (teal/orange) — subtle
-  // This is intentionally conservative so it doesn’t override art direction,
-  // but provides a little extra separation for the first‑playable demo.
-  let luma = dot(mapped, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let mids = smoothstep(0.2, 0.7, luma);
-  let shadows = 1.0 - smoothstep(0.05, 0.3, luma);
-  let grade_strength = 0.08;
-  // push mids slightly warmer, shadows slightly teal
-  mapped = mix(mapped, vec3<f32>(mapped.r * 1.04, mapped.g * 1.01, mapped.b * 0.96), mids * grade_strength);
-  mapped = mix(mapped, vec3<f32>(mapped.r * 0.98, mapped.g * 1.02, mapped.b * 1.04), shadows * grade_strength);
-
-  // Final output: sRGB encode before writing to the swapchain. This path is
-  // used when the swapchain format is not sRGB (e.g., WebGPU BGRA8Unorm), so
-  // we perform the correct transfer here to match desktop visuals.
-  let out_rgb = linear_to_srgb(clamp(mapped, vec3<f32>(0.0), vec3<f32>(1.0)));
+  let out_rgb = linear_to_srgb(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)));
   return vec4<f32>(out_rgb, 1.0);
 }

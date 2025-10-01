@@ -217,24 +217,28 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
-    // Web: force direct-present for stability while we investigate
-    // black output in the offscreen → present chain on some stacks.
-    // This bypasses present.wgsl and draws directly to the swapchain.
+    // Web: prefer offscreen → present when the swapchain is not sRGB so we can
+    // apply tonemap + linear→sRGB encode in `present.wgsl`. Direct-presenting
+    // to a non‑sRGB swapchain produces an image that looks far too dark.
     #[cfg(target_arch = "wasm32")]
-    let mut direct_present = true;
+    let mut direct_present = false;
     #[cfg(not(target_arch = "wasm32"))]
     let direct_present = std::env::var("RA_DIRECT_PRESENT")
         .map(|v| v != "0")
         .unwrap_or(true);
-    // If swapchain format is not sRGB and we planned to direct-present, switch
-    // to offscreen so present.wgsl can handle tonemap/gamma correctly.
-    // (Temporarily disabled) If you want gamma-correct present on a non‑sRGB
-    // swapchain, re‑enable this block and the present path once stable.
+    // If swapchain format is sRGB we can safely direct-present; otherwise keep
+    // offscreen so present.wgsl can sRGB-encode for correct brightness.
     #[cfg(target_arch = "wasm32")]
     {
-        if !config.format.is_srgb() {
+        if config.format.is_srgb() {
+            direct_present = true;
             log::warn!(
-                "swapchain {:?} is not sRGB; forcing direct-present on web",
+                "swapchain {:?} is sRGB; enabling direct-present on web",
+                config.format
+            );
+        } else {
+            log::warn!(
+                "swapchain {:?} is not sRGB; using offscreen+present for gamma-correct output",
                 config.format
             );
         }
