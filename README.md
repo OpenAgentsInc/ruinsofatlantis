@@ -4,7 +4,8 @@ An MMORPG built from scratch in Rust
 
 - [Game Design Document](GDD.md)
 
-<img width="2544" height="1379" alt="wiz1" src="https://github.com/user-attachments/assets/e5f96cc1-d244-4909-a720-94acce00338a" />
+<img width="3120" height="1212" alt="cover3" src="https://github.com/user-attachments/assets/3aef554c-cd99-4d66-80c1-0f2c145af32b" />
+
 
 ## Play The Alpha / Build From Source (Public Game Repo)
 
