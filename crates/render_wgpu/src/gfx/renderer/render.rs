@@ -253,7 +253,6 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     r.queue
         .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&globals));
-    // (no per-frame info logs)
     r.queue
         .write_buffer(&r.sky_buf, 0, bytemuck::bytes_of(&r.sky.sky_uniform));
 
@@ -408,7 +407,6 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         sky.set_bind_group(1, &r.sky_bg, &[]);
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
-        // no info log
     }
     // Main pass with depth
     log::debug!("pass: main");
@@ -455,7 +453,6 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
             r.draw_calls += 1;
-            // no info log
             #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after terrain: {:?}", e);

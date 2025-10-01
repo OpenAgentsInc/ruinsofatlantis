@@ -50,6 +50,7 @@ Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic
 - Add inline comments for non‑obvious math, layout decisions, and API quirks (e.g., WGSL/std140 padding, wgpu limits).
 - Prefer doc comments (`///`) on public types/functions so `cargo doc` is useful.
 - Do not add meta comments like "(unused helper removed)" or "(logs removed)". If code is unused, delete it; keep comments focused on behavior and intent, not change notes.
+- When removing logging or debug prints, do not leave placeholder comments (e.g., "no info log" or similar). Remove quietly unless there’s a behavioral reason to document.
 
 IMPORTANT: Keep `src/README.md` current
 - Whenever you add, move, or significantly change files under `src/`, immediately update `src/README.md` to reflect the real file/folder hierarchy and module responsibilities.
