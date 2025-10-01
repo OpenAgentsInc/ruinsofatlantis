@@ -46,7 +46,8 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                // Must match NonFiltering sampler type in the BGL for WebGPU
+                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
