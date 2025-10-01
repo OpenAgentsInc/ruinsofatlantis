@@ -766,6 +766,25 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             );
             r.nameplates_npc.draw(&mut encoder, target_view);
         }
+
+        // Death Knight nameplate (single instance)
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
+            let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            let pos = head.truncate();
+            let target_view = if r.direct_present { &view } else { &r.attachments.scene_view };
+            r.nameplates_npc.queue_npc_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                std::slice::from_ref(&pos),
+                "Death Knight",
+            );
+            r.nameplates_npc.draw(&mut encoder, target_view);
+        }
     }
 
     log::debug!("end: main pass");
