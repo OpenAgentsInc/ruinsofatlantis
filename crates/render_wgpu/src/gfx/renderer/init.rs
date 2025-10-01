@@ -183,11 +183,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         present_mode
     );
     // Choose offscreen color format
-    // Web: use Rgba8Unorm for maximum portability. Some WebGPU stacks
-    // report Rgba16Float as sampleable but return zeros when sampling it
-    // in a later pass. Using Rgba8Unorm avoids the black‑present issue.
+    // Web: use Rgba16Float for HDR offscreen. We sample it with a
+    // NonFiltering sampler in the present pass for portability.
     #[cfg(target_arch = "wasm32")]
-    let offscreen_fmt = wgpu::TextureFormat::Rgba8Unorm;
+    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
     #[cfg(not(target_arch = "wasm32"))]
     let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
 
