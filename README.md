@@ -52,3 +52,6 @@ Notes
 - A simple standalone viewer exists:
   - `cargo run -p model-viewer -- assets/models/wizard.gltf`
 - Current keybinds: `P` (perf), `O` (orbit), `H` (HUD), `Space`/`[`/`]` and `-`/`=` control time‑of‑day.
+
+Versioned WASM Releases
+- We publish immutable, versioned WASM bundles as GitHub Release assets. See docs: `docs/wasm-deployment.md:14`.
