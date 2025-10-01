@@ -13,19 +13,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
-    // Log the first few frames unconditionally to help diagnose black output.
-    let log_frame = r.frame_counter < 5;
-    if log_frame {
-        log::info!(
-            "frame={} size={}x{} direct_present={} sun_dir={:?} day={:.3}",
-            r.frame_counter,
-            r.config.width,
-            r.config.height,
-            r.direct_present,
-            r.sky.sun_dir,
-            r.sky.day_frac
-        );
-    }
+    // Optional tracing left to RA_TRACE (no default info spam)
 
     // WASM debug path: draw SKY + TERRAIN into offscreen, then present to swapchain.
     // This isolates pipeline/render-graph step-by-step. Disabled by default now that
@@ -265,23 +253,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     r.queue
         .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&globals));
-    if log_frame {
-        let f = globals.fog_params;
-        log::info!(
-            "globals: fog=rgba({:.3},{:.3},{:.3},{:.4}) clip=({:.2},{:.2})",
-            f[0],
-            f[1],
-            f[2],
-            f[3],
-            globals.clip_params[0],
-            globals.clip_params[1]
-        );
-        log::info!(
-            "camera: tan_half_fov={:.3} aspect={:.3}",
-            globals.cam_up_pad[3],
-            globals.clip_params[2]
-        );
-    }
+    // (no per-frame info logs)
     r.queue
         .write_buffer(&r.sky_buf, 0, bytemuck::bytes_of(&r.sky.sky_uniform));
 
@@ -436,9 +408,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         sky.set_bind_group(1, &r.sky_bg, &[]);
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
-        if log_frame {
-            log::info!("pass sky ok");
-        }
+        // no info log
     }
     // Main pass with depth
     log::debug!("pass: main");
@@ -485,9 +455,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
             r.draw_calls += 1;
-            if log_frame {
-                log::info!("draw terrain indices={}", r.terrain_index_count);
-            }
+            // no info log
             #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after terrain: {:?}", e);
