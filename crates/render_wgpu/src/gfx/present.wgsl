@@ -64,8 +64,8 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   var col = textureSampleLevel(scene_tex, samp_color, uv, 0.0).rgb;
   // Fog (exponential) based on linearized depth
   // Important: do NOT fog sky pixels (where no geometry was drawn and depth==1)
-  // Sample depth without filtering as well
-  let depth = textureSampleLevel(depth_tex, samp_depth, uv, 0.0);
+  // Sample depth without filtering as well (LOD level must be integer for depth)
+  let depth = textureSampleLevel(depth_tex, samp_depth, uv, 0u);
   let density = globals.fog.a;
   if (density > 0.0 && depth < 0.9999) {
     let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
