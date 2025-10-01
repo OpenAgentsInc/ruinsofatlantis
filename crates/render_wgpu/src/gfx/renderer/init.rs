@@ -829,27 +829,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (trees_vb, trees_ib, trees_index_count) =
         (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
 
-    // Rocks
-    #[cfg(not(target_arch = "wasm32"))]
+    // Rocks: enable full mesh + instances on Web too (we embed rock.glb bytes in ra_assets).
     let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
         .context("build rocks (instances + mesh) for zone")?;
-    #[cfg(target_arch = "wasm32")]
-    let rocks_gpu = {
-        // Build zero rock instances; still upload a small cube mesh for bindings.
-        let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rocks-instances-empty"),
-            contents: &[],
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
-        super::super::rocks::RocksGpu {
-            instances,
-            count: 0,
-            vb,
-            ib,
-            index_count,
-        }
-    };
     let rocks_instances = rocks_gpu.instances;
     let rocks_count = rocks_gpu.count;
     let (rocks_vb, rocks_ib, rocks_index_count) =

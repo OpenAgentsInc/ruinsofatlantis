@@ -62,45 +62,45 @@ pub fn build_demo_scene(
     );
     // Inner ring removed (except center PC). We keep a single large ring below.
     // Place a set of ruins around the wizard circle
-    // Ruins placement range. On Web, place a few showcase ruins closer so
-    // they are visible without moving the camera. Desktop keeps the wide
-    // backdrop placement by default. You can also force near placement on
-    // desktop by setting RA_RUINS_NEAR=1.
-    let ruins_near = if cfg!(target_arch = "wasm32") {
-        true
-    } else {
-        std::env::var("RA_RUINS_NEAR").map(|v| v == "1").unwrap_or(false)
-    };
+    // Ruins placement policy: by default, keep ruins in the distance so they
+    // frame the scene without cluttering gameplay space. On desktop you can
+    // opt into a few closer showcase pieces with `RA_RUINS_NEAR=1`.
+    let ruins_near = std::env::var("RA_RUINS_NEAR")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     let place_range = if ruins_near { 25.0 } else { plane_extent * 0.9 };
     // A few backdrop ruins placed far away for depth
     // The ruins model origin is roughly centered; raise Y so it rests on ground.
     let ruins_y = ruins_base_offset; // base offset aligns model min Y to ground with small embed
-    let ruins_positions = [
-        glam::vec3(-place_range * 0.9, ruins_y, -place_range * 0.7),
-        glam::vec3(place_range * 0.85, ruins_y, -place_range * 0.2),
-        glam::vec3(-place_range * 0.2, ruins_y, place_range * 0.95),
-    ];
-    for pos in ruins_positions {
-        let mut p = pos;
-        let mut tilt = glam::Quat::IDENTITY;
-        if let Some(t) = terrain {
-            let (h, n) = height_min_under(t, p.x, p.z, ruins_radius);
-            p.y = h + ruins_y;
-            tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
+    if ruins_near {
+        let ruins_positions = [
+            glam::vec3(-place_range * 0.9, ruins_y, -place_range * 0.7),
+            glam::vec3(place_range * 0.85, ruins_y, -place_range * 0.2),
+            glam::vec3(-place_range * 0.2, ruins_y, place_range * 0.95),
+        ];
+        for pos in ruins_positions {
+            let mut p = pos;
+            let mut tilt = glam::Quat::IDENTITY;
+            if let Some(t) = terrain {
+                let (h, n) = height_min_under(t, p.x, p.z, ruins_radius);
+                p.y = h + ruins_y;
+                tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
+            }
+            let yaw = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
+            let rotation = tilt * yaw;
+            world.spawn(
+                Transform {
+                    translation: p,
+                    rotation,
+                    scale: glam::Vec3::splat(1.0),
+                },
+                RenderKind::Ruins,
+            );
         }
-        let yaw = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-        let rotation = tilt * yaw;
-        world.spawn(
-            Transform {
-                translation: p,
-                rotation,
-                scale: glam::Vec3::splat(1.0),
-            },
-            RenderKind::Ruins,
-        );
     }
     // Additional distant ruins distributed on a wide ring for background depth
-    let far_count = 8usize;
+    // Fewer distant pieces keep the silhouette without overwhelming the scene.
+    let far_count = 6usize;
     for i in 0..far_count {
         let base_a = (i as f32) / (far_count as f32) * std::f32::consts::TAU;
         let a = base_a + rng.random::<f32>() * 0.2 - 0.1; // jitter
