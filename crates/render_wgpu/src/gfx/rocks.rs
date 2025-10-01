@@ -41,12 +41,7 @@ pub fn build_rocks(
     let rock_path = asset_path("assets/models/rock.glb");
     let (vb, ib, index_count) = match load_gltf_mesh(&rock_path) {
         Ok(cpu) => {
-            log::info!(
-                "rocks mesh loaded: {} (vtx={}, idx={})",
-                rock_path.display(),
-                cpu.vertices.len(),
-                cpu.indices.len()
-            );
+            log::info!("rocks mesh loaded (vtx={}, idx={})", cpu.vertices.len(), cpu.indices.len());
             let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("rocks-vb"),
                 contents: bytemuck::cast_slice(&cpu.vertices),
@@ -60,11 +55,7 @@ pub fn build_rocks(
             (vb, ib, cpu.indices.len() as u32)
         }
         Err(e) => {
-            log::warn!(
-                "failed to load rock mesh ({}): {}; falling back to cube",
-                rock_path.display(),
-                e
-            );
+            log::warn!("failed to load rock mesh; falling back to cube: {}", e);
             super::mesh::create_cube(device)
         }
     };
