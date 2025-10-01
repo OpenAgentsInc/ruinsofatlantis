@@ -16,6 +16,6 @@ fn vs_blit(@builtin(vertex_index) vid: u32) -> VsOut {
 
 @fragment
 fn fs_blit(in: VsOut) -> @location(0) vec4<f32> {
-  return textureSample(scene_tex, samp, in.uv);
+  // Non‑filtering sample for portability with Rgba16F on WebGPU
+  return textureSampleLevel(scene_tex, samp, in.uv, 0.0);
 }
-

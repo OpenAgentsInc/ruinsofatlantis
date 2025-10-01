@@ -60,10 +60,12 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   let sz = vec2<f32>(textureDimensions(scene_tex));
   let eps = vec2<f32>(0.5) / sz;
   let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
-  var col = textureSample(scene_tex, samp_color, uv).rgb;
+  // Use non‑filtering sampling for WebGPU portability (Rgba16F is non‑filterable).
+  var col = textureSampleLevel(scene_tex, samp_color, uv, 0.0).rgb;
   // Fog (exponential) based on linearized depth
   // Important: do NOT fog sky pixels (where no geometry was drawn and depth==1)
-  let depth = textureSample(depth_tex, samp_depth, uv);
+  // Sample depth without filtering as well
+  let depth = textureSampleLevel(depth_tex, samp_depth, uv, 0.0);
   let density = globals.fog.a;
   if (density > 0.0 && depth < 0.9999) {
     let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
