@@ -111,6 +111,33 @@ cargo xtask build-packs
 cargo xtask bake-zone --slug wizard_woods
 ```
 
+### Web/WASM One‑Command Deploy
+- Script: `scripts/deploy_wasm_to_site.sh`
+- Purpose: Build the WASM bundle and deploy it into the sibling Laravel site repo, update the Blade loader to the new hashed filenames, commit, push, and open a PR.
+- Requirements:
+  - Rust wasm target installed: `rustup target add wasm32-unknown-unknown` (the script checks)
+  - Trunk installed: `cargo install trunk` (the script checks)
+  - GitHub CLI `gh` authenticated for PR creation
+  - Local site repo at `SITE_REPO` (default: `/Users/christopherdavid/code/ruinsofatlantis.com`)
+- Default usage (from repo root):
+  - `RUN_CI=1 scripts/deploy_wasm_to_site.sh`
+    - Runs `cargo xtask ci`, builds with `trunk build --release`, rsyncs `assets/` and `packs/`, copies hashed `ruinsofatlantis-*.js` and `*_bg.wasm`, updates `resources/views/play.blade.php`, creates branch `wasm/deploy-<timestamp>`, commits, pushes, and opens a PR.
+- Environment variables:
+  - `SITE_REPO=/path/to/ruinsofatlantis.com` — override default site repo path
+  - `PUBLIC_SUBDIR=wasm` — place JS/WASM under `public/wasm/` and update Blade paths accordingly (default is public root)
+  - `RUN_CI=1` — run `cargo xtask ci` before building; set to `0` to skip
+  - `NO_PR=1` — skip creating a PR (still branches/commits/pushes)
+- Safety & behavior:
+  - The script creates a fresh deploy branch before copying artifacts and stashes any local site changes to avoid conflicts; it restores the stash onto the new branch if present.
+  - It removes old hashed JS/WASM at the target path so only the latest artifacts remain.
+  - It updates Blade by rewriting the `const modPath = '...';` and `const wasmPath = '...';` lines to the current hashed filenames.
+  - Do not hand‑edit the hashed JS/WASM files in the site repo; treat them as build artifacts only. If you see conflict markers (`<<<<<<<`), discard and re‑run the script.
+- After running:
+  - Review the PR the script prints, then squash‑merge. If multiple deploy PRs exist, merge the newest and close older ones.
+- Notes:
+  - This is a manual, local deploy flow (do not run on CI).
+  - You can run with `bash scripts/deploy_wasm_to_site.sh` if the script isn’t executable.
+
 ### Git Hooks & Pre‑Push Policy
 - Enable repo hooks locally so pushes run the same checks as CI:
   - `./scripts/setup-git-hooks.sh` (preferred), or `git config core.hooksPath .githooks`
