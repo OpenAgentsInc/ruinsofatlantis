@@ -28,6 +28,25 @@ impl ApplicationHandler for App {
                         .with_maximized(true),
                 )
                 .expect("create window");
+            // Attach canvas on web builds so it's visible.
+            #[cfg(target_arch = "wasm32")]
+            {
+                use winit::platform::web::WindowExtWebSys;
+                if let Some(canvas) = window.canvas() {
+                    let _ = web_sys::window()
+                        .and_then(|w| w.document())
+                        .and_then(|d| d.body())
+                        .map(|body| {
+                            // Avoid duplicate attachments on hot-reload.
+                            if canvas.parent_element().is_none() {
+                                let _ = body.append_child(&canvas);
+                            }
+                        });
+                }
+            }
+
+            // Initialize Renderer: native blocks; web spawns async.
+            #[cfg(not(target_arch = "wasm32"))]
             let state = match pollster::block_on(Renderer::new(&window)) {
                 Ok(s) => s,
                 Err(e) => {
@@ -36,8 +55,28 @@ impl ApplicationHandler for App {
                     return;
                 }
             };
-            self.window = Some(window);
-            self.state = Some(state);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                self.window = Some(window);
+                self.state = Some(state);
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                use wasm_bindgen_futures::spawn_local;
+                // Defer the renderer construction asynchronously.
+                // We'll pick it up in about_to_wait.
+                spawn_local(async move {
+                    if let Ok(state) = Renderer::new(&window).await {
+                        RENDERER_CELL.with(|cell| {
+                            *cell.borrow_mut() = Some((window, state));
+                        });
+                    } else {
+                        // log is already set up by wasm main
+                        log::error!("Renderer init failed (wasm)");
+                    }
+                });
+            }
         }
     }
 
@@ -73,10 +112,28 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // If the async init finished, move Renderer into self.
+            if self.window.is_none() || self.state.is_none() {
+                RENDERER_CELL.with(|cell| {
+                    if let Some((win, state)) = cell.borrow_mut().take() {
+                        self.window = Some(win);
+                        self.state = Some(state);
+                    }
+                });
+            }
+        }
         if let Some(win) = &self.window {
             win.request_redraw();
         }
     }
+}
+
+// Thread-local handoff for async renderer initialization on wasm.
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static RENDERER_CELL: std::cell::RefCell<Option<(Window, Renderer)>> = std::cell::RefCell::new(None);
 }
 
 fn is_headless() -> bool {

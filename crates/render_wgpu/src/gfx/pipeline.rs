@@ -583,14 +583,17 @@ pub fn create_present_bgl(device: &wgpu::Device) -> BindGroupLayout {
                 ty: wgpu::BindingType::Texture {
                     multisampled: false,
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    // Allow binding HDR offscreen formats that are not filterable on WebGPU
+                    // (e.g., Rgba16Float). Sampling uses a non‑filtering sampler.
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 },
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                // Use a NonFiltering sampler so we can sample non‑filterable formats.
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
             // Depth texture for fog (sampled as depth)
@@ -811,7 +814,8 @@ pub fn create_post_ao_bgl(device: &wgpu::Device) -> BindGroupLayout {
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                // Depth textures must not use a filtering sampler with textureSample.
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
         ],
@@ -914,7 +918,8 @@ pub fn create_ssgi_bgl(
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                // Non-filtering sampler when sampling depth without comparison.
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
         ],

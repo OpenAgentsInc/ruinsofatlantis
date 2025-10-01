@@ -4,7 +4,7 @@
 //! The scene builder handles placement of ruins instances; this module focuses
 //! on mesh upload and basic metrics needed for terrain alignment/tilt.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ra_assets::gltf::load_gltf_mesh;
 use wgpu::util::DeviceExt;
 
@@ -18,8 +18,60 @@ pub struct RuinsGpu {
 
 pub fn build_ruins(device: &wgpu::Device) -> Result<RuinsGpu> {
     let path = asset_path("assets/models/ruins.gltf");
-    let ruins_cpu =
-        load_gltf_mesh(&path).with_context(|| format!("load ruins: {}", path.display()))?;
+    let ruins_cpu = match load_gltf_mesh(&path) {
+        Ok(m) => {
+            log::info!(
+                "ruins mesh loaded: {} (vtx={}, idx={})",
+                path.display(),
+                m.vertices.len(),
+                m.indices.len()
+            );
+            m
+        }
+        Err(e) => {
+            log::warn!(
+                "ruins mesh load FAILED ({}): {}; falling back to cube",
+                path.display(),
+                e
+            );
+            // On wasm, attempt to use rock.glb as a visible placeholder mesh
+            // (better than cubes) so ruins are clearly present.
+            #[cfg(target_arch = "wasm32")]
+            {
+                let rock_path = asset_path("assets/models/rock.glb");
+                if let Ok(cpu) = load_gltf_mesh(&rock_path) {
+                    log::info!(
+                        "ruins fallback: using rock.glb (vtx={}, idx={})",
+                        cpu.vertices.len(),
+                        cpu.indices.len()
+                    );
+                    cpu
+                } else {
+                    // Build a small placeholder cube so the pipeline/bindings remain valid.
+                    let (vb, ib, index_count) = super::mesh::create_cube(device);
+                    return Ok(RuinsGpu {
+                        vb,
+                        ib,
+                        index_count,
+                        base_offset: 0.0,
+                        radius: 1.0,
+                    });
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Build a small placeholder cube so the pipeline/bindings remain valid.
+                let (vb, ib, index_count) = super::mesh::create_cube(device);
+                return Ok(RuinsGpu {
+                    vb,
+                    ib,
+                    index_count,
+                    base_offset: 0.0,
+                    radius: 1.0,
+                });
+            }
+        }
+    };
 
     // Compute base offset so min Y sits slightly below ground, plus a horizontal radius.
     let mut min_y = f32::INFINITY;

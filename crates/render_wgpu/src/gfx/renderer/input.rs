@@ -132,7 +132,8 @@ impl Renderer {
                             log::info!("time_scale: {:.2}", self.sky.time_scale);
                         }
                     }
-                    PhysicalKey::Code(KeyCode::F1) => {
+                    // Perf overlay toggle: avoid function keys in browsers/OS.
+                    PhysicalKey::Code(KeyCode::KeyP) => {
                         if pressed {
                             self.hud_model.toggle_perf();
                             log::info!(
@@ -158,7 +159,8 @@ impl Renderer {
                             );
                         }
                     }
-                    PhysicalKey::Code(KeyCode::F5) => {
+                    // 5s automated orbit capture (screenshots)
+                    PhysicalKey::Code(KeyCode::KeyO) => {
                         if pressed {
                             // Start a 5-second smooth orbit capture
                             self.screenshot_start = Some(self.last_time);

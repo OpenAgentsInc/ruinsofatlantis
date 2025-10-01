@@ -121,15 +121,16 @@ impl SkyStateCPU {
         // sky radiance and ambient. Use a smooth ramp near the horizon and keep
         // a tiny floor to avoid pure black banding.
         let sun_y = self.sun_dir.y;
-        let ramp = sun_y.max(0.0).powf(3.0); // strong falloff toward night
-        let night_floor = 0.015; // minimal residual radiance
+        // Slightly gentler night ramp so the sky remains readable on web
+        let ramp = sun_y.max(0.0).powf(2.2);
+        let night_floor = 0.08; // minimal residual radiance (was 0.015)
         radiances[0] = radiances[0] * ramp + night_floor;
         radiances[1] = radiances[1] * ramp + night_floor;
         radiances[2] = radiances[2] * ramp + night_floor;
         self.sky_uniform = pack_hw_uniform(params, radiances, self.sun_dir, self.day_frac);
         // Project to SH (irradiance) for ambient, then scale similarly
         self.sh9_rgb = project_irradiance_sh9(self.sun_dir, &self.weather);
-        let amb_scale = ramp * 1.0 + (0.04); // small ambient floor at night
+        let amb_scale = ramp * 1.0 + (0.12); // stronger ambient floor at night for readability
         for i in 0..9 {
             self.sh9_rgb[i][0] *= amb_scale;
             self.sh9_rgb[i][1] *= amb_scale;

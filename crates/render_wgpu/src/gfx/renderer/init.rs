@@ -4,14 +4,19 @@
 //! - `new_renderer` remains a thin wrapper used by `gfx::Renderer::new`.
 
 use anyhow::Context;
-use data_runtime::{
-    loader as data_loader,
-    zone::{ZoneManifest, load_zone_manifest},
-};
+#[cfg(not(target_arch = "wasm32"))]
+use data_runtime::zone::load_zone_manifest;
+use data_runtime::{loader as data_loader, zone::ZoneManifest};
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
+// Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle, util::DeviceExt};
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+use wgpu::SurfaceTargetUnsafe;
+use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -49,24 +54,45 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &[wgpu::Backends::PRIMARY, wgpu::Backends::GL]
     };
 
-    // Create a surface per candidate instance and try to get an adapter
-    let raw_display = window.display_handle()?.as_raw();
-    let raw_window = window.window_handle()?.as_raw();
-    let (_instance, surface, adapter) = {
-        let mut picked: Option<(wgpu::Instance, wgpu::Surface<'static>, wgpu::Adapter)> = None;
+    // Create an instance/surface pair and obtain an adapter
+    let (surface, adapter) = {
+        let mut picked: Option<(wgpu::Surface<'static>, wgpu::Adapter)> = None;
         for &bmask in candidates {
-            let inst = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                backends: bmask,
-                flags: wgpu::InstanceFlags::empty(),
-                ..Default::default()
-            });
-            let surf = unsafe {
-                inst.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle: raw_display,
-                    raw_window_handle: raw_window,
-                })
-            }
-            .context("create wgpu surface (unsafe)")?;
+            // Leak the Instance to extend its lifetime to 'static so the Surface can be 'static too.
+            let inst: &'static wgpu::Instance =
+                Box::leak(Box::new(wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                    backends: bmask,
+                    flags: wgpu::InstanceFlags::empty(),
+                    ..Default::default()
+                })));
+            // Surface creation per-target
+            #[cfg(target_arch = "wasm32")]
+            let surf: wgpu::Surface<'static> = {
+                use winit::platform::web::WindowExtWebSys;
+                let canvas = window
+                    .canvas()
+                    .expect("winit web: canvas not available on window");
+                // Safe creation path; result has a scoped lifetime. We transmute to 'static
+                // because the canvas is attached to the DOM for the lifetime of the page.
+                let s = inst
+                    .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+                    .context("create wgpu surface (web canvas)")?;
+                unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(s) }
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            let surf = {
+                use wgpu::rwh::{HasDisplayHandle, HasWindowHandle};
+                let raw_display = window.display_handle()?.as_raw();
+                let raw_window = window.window_handle()?.as_raw();
+                unsafe {
+                    inst.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle: raw_display,
+                        raw_window_handle: raw_window,
+                    })
+                }
+                .context("create wgpu surface (unsafe)")?
+            };
+
             match inst
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     compatible_surface: Some(&surf),
@@ -76,7 +102,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 .await
             {
                 Ok(a) => {
-                    picked = Some((inst, surf, a));
+                    picked = Some((surf, a));
                     break;
                 }
                 Err(_) => {
@@ -149,12 +175,33 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
+    log::info!(
+        "swapchain configured: fmt={:?} srgb={} size={}x{} present={:?}",
+        config.format,
+        config.format.is_srgb(),
+        config.width,
+        config.height,
+        present_mode
+    );
+    // Choose offscreen color format
+    // Web: use Rgba16Float for HDR offscreen. We sample it with a
+    // NonFiltering sampler in the present pass for portability.
+    #[cfg(target_arch = "wasm32")]
+    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+    #[cfg(not(target_arch = "wasm32"))]
+    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+
     let attachments = super::Attachments::create(
         &device,
         config.width,
         config.height,
         config.format,
-        wgpu::TextureFormat::Rgba16Float,
+        offscreen_fmt,
+    );
+    log::info!(
+        "attachments: swapchain={:?} offscreen={:?}",
+        config.format,
+        offscreen_fmt
     );
     // Legacy fields: mirror attachments for existing struct layout
     let _depth = attachments.depth_view.clone();
@@ -171,16 +218,43 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
-    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
-    // Allow direct-present path: build main pipelines targeting swapchain format
+    // Web: prefer offscreen → present when the swapchain is not sRGB so we can
+    // apply tonemap + linear→sRGB encode in `present.wgsl`. Direct-presenting
+    // to a non‑sRGB swapchain produces an image that looks far too dark.
+    #[cfg(target_arch = "wasm32")]
+    let mut direct_present = false;
+    #[cfg(not(target_arch = "wasm32"))]
     let direct_present = std::env::var("RA_DIRECT_PRESENT")
         .map(|v| v != "0")
         .unwrap_or(true);
+    // If swapchain format is sRGB we can safely direct-present; otherwise keep
+    // offscreen so present.wgsl can sRGB-encode for correct brightness.
+    #[cfg(target_arch = "wasm32")]
+    {
+        if config.format.is_srgb() {
+            direct_present = true;
+            log::warn!(
+                "swapchain {:?} is sRGB; enabling direct-present on web",
+                config.format
+            );
+        } else {
+            log::warn!(
+                "swapchain {:?} is not sRGB; using offscreen+present for gamma-correct output",
+                config.format
+            );
+        }
+    }
+
     let draw_fmt = if direct_present {
         config.format
     } else {
         offscreen_fmt
     };
+    log::info!(
+        "render path: direct_present={} draw_fmt={:?}",
+        direct_present,
+        draw_fmt
+    );
     let (pipeline, inst_pipeline, wire_pipeline) =
         pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
     // Sky background
@@ -191,11 +265,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let present_pipeline =
         pipeline::create_present_pipeline(&device, &globals_bgl, &present_bgl, config.format);
     let blit_scene_read_pipeline =
-        pipeline::create_blit_pipeline(&device, &present_bgl, wgpu::TextureFormat::Rgba16Float);
+        pipeline::create_blit_pipeline(&device, &present_bgl, offscreen_fmt);
     // Bloom
     let bloom_bgl = pipeline::create_bloom_bgl(&device);
-    let bloom_pipeline =
-        pipeline::create_bloom_pipeline(&device, &bloom_bgl, wgpu::TextureFormat::Rgba16Float);
+    let bloom_pipeline = pipeline::create_bloom_pipeline(&device, &bloom_bgl, offscreen_fmt);
     // Post AO pipeline
     let post_ao_bgl = pipeline::create_post_ao_bgl(&device);
     let post_ao_pipeline =
@@ -208,14 +281,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &ssgi_globals_bgl,
         &ssgi_depth_bgl,
         &ssgi_scene_bgl,
-        wgpu::TextureFormat::Rgba16Float,
+        offscreen_fmt,
     );
-    let ssr_pipeline = pipeline::create_ssr_pipeline(
-        &device,
-        &ssr_depth_bgl,
-        &ssr_scene_bgl,
-        wgpu::TextureFormat::Rgba16Float,
-    );
+    let ssr_pipeline =
+        pipeline::create_ssr_pipeline(&device, &ssr_depth_bgl, &ssr_scene_bgl, offscreen_fmt);
     let (wizard_pipeline, _wizard_wire_pipeline_unused) = pipeline::create_wizard_pipelines(
         &device,
         &shader,
@@ -273,7 +342,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let nameplates = ui::Nameplates::new(&device, draw_fmt)?;
     let nameplates_npc = ui::Nameplates::new(&device, draw_fmt)?;
     let mut bars = ui::HealthBars::new(&device, draw_fmt)?;
-    let hud = ui::Hud::new(&device, draw_fmt)?;
+    // HUD is drawn after present directly to the swapchain; build it against the
+    // swapchain format to avoid attachment mismatches when offscreen is RGBA8.
+    let hud = ui::Hud::new(&device, config.format)?;
     let damage = ui::DamageFloaters::new(&device, draw_fmt)?;
 
     // --- Buffers & bind groups ---
@@ -330,6 +401,31 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     });
 
     // Sky uniforms and zone setup
+    // On wasm, avoid std::fs and synthesize the zone manifest to mirror desktop.
+    #[cfg(target_arch = "wasm32")]
+    let zone: ZoneManifest = ZoneManifest {
+        zone_id: 1001,
+        slug: "wizard_woods".to_string(),
+        display_name: "Wizard Woods".to_string(),
+        plane: data_runtime::zone::ZonePlane::Material,
+        terrain: data_runtime::zone::TerrainSpec {
+            size: 129,
+            extent: 150.0,
+            seed: 1337,
+        },
+        weather: Some(data_runtime::zone::WeatherSpec {
+            turbidity: 3.0,
+            ground_albedo: [0.10, 0.10, 0.10],
+        }),
+        vegetation: Some(data_runtime::zone::VegetationSpec {
+            tree_count: 0,
+            tree_seed: 20250926,
+        }),
+        start_time_frac: Some(0.95),
+        start_paused: Some(true),
+        start_time_scale: Some(6.0),
+    };
+    #[cfg(not(target_arch = "wasm32"))]
     let zone: ZoneManifest =
         load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
     log::info!(
@@ -375,7 +471,19 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             resource: sky_buf.as_entire_binding(),
         }],
     });
-    // Post AO + samplers
+    // Samplers used across post/present passes
+    // Non-filtering sampler for depth sampling (required by WebGPU when not using comparison)
+    let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("point-sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+    // Filtering sampler for color textures
     let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("post-ao-sampler"),
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -396,20 +504,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&post_sampler),
+                // Non-filtering sampler for depth sampling
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
             },
         ],
     });
-    let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("point-sampler"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Nearest,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
-    });
+    // point_sampler already created above
     let ssgi_globals_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ssgi-globals-bg"),
         layout: &ssgi_globals_bgl,
@@ -446,7 +546,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&post_sampler),
+                // Non‑filtering sampler to support non‑filterable HDR formats on Web
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
@@ -468,7 +569,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&post_sampler),
+                // Non-filtering sampler for depth sampling
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
             },
         ],
     });
@@ -532,7 +634,20 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let ZoneManifest { slug, .. } = zone.clone();
 
     // Ruins mesh + metrics
+    #[cfg(not(target_arch = "wasm32"))]
     let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
+    #[cfg(target_arch = "wasm32")]
+    let ruins_gpu = ruins::build_ruins(&device).unwrap_or_else(|_| {
+        // Fallback to a cube if GLTF fails (should not, as we embed ruins.gltf)
+        let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
+        super::super::ruins::RuinsGpu {
+            vb,
+            ib,
+            index_count,
+            base_offset: 0.0,
+            radius: 1.0,
+        }
+    });
     let ruins_base_offset = ruins_gpu.base_offset;
     let ruins_radius = ruins_gpu.radius;
     let (ruins_vb, ruins_ib, ruins_index_count) =
@@ -707,6 +822,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         .vegetation
         .as_ref()
         .map(|v| (v.tree_count as usize, v.tree_seed));
+    // On wasm, tree GLTF uses external .bin; skip trees by setting count=0 above.
     let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &slug, veg)
         .context("build trees (instances + mesh) for zone")?;
     let trees_instances = trees_gpu.instances;
@@ -714,7 +830,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (trees_vb, trees_ib, trees_index_count) =
         (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
 
-    // Rocks
+    // Rocks: enable full mesh + instances on Web too (we embed rock.glb bytes in ra_assets).
     let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
         .context("build rocks (instances + mesh) for zone")?;
     let rocks_instances = rocks_gpu.instances;
@@ -854,9 +970,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         terrain_model_bg: plane_model_bg,
         shard_model_bg,
         present_bg,
+        // With direct-present on web, disable post passes that rely on
+        // offscreen SceneColor/SceneRead for now to match desktop visuals.
         enable_post_ao: false,
         enable_ssgi: false,
         enable_ssr: false,
+        // Disable bloom on wasm to reduce pipeline churn while stabilizing
+        #[cfg(target_arch = "wasm32")]
+        enable_bloom: false,
+        #[cfg(not(target_arch = "wasm32"))]
         enable_bloom: true,
         static_index: None,
         frame_counter: 0,

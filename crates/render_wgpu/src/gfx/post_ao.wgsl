@@ -40,20 +40,24 @@ fn fs_ao(in: VsOut) -> @location(0) vec4<f32> {
   // Sample a small cross pattern using actual texture size
   let texSize = vec2<f32>(textureDimensions(depth_tex));
   let px = 1.0 / texSize;
+  let eps = vec2<f32>(0.5) / texSize;
   var occ = 0.0;
   let taps = array<vec2<f32>, 8>(
     vec2<f32>(1.0, 0.0), vec2<f32>(-1.0, 0.0), vec2<f32>(0.0, 1.0), vec2<f32>(0.0, -1.0),
     vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, -1.0), vec2<f32>(-1.0, -1.0)
   );
   for (var i = 0u; i < 8u; i++) {
-    let uv = in.uv + taps[i] * px * 2.0;
-    // Prevent clamped sampling near edges (causes mirrored outlines)
-    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) { continue; }
+    let uv_raw = in.uv + taps[i] * px * 2.0;
+    let outside = any(uv_raw < vec2<f32>(0.0)) || any(uv_raw > vec2<f32>(1.0));
+    // Sample using clamped coordinates to keep control flow uniform
+    let uv = clamp(uv_raw, eps, vec2<f32>(1.0) - eps);
     let dn = textureSample(depth_tex, samp, uv);
     let zn = linearize_depth(dn, znear, zfar);
     // If neighbor is closer (smaller z), it occludes this pixel
     let delta = zn - zlin;
-    occ += select(0.0, 1.0, delta < -0.005);
+    let contrib = select(0.0, 1.0, delta < -0.005);
+    let m_inside = select(1.0, 0.0, outside);
+    occ += contrib * m_inside;
   }
   occ = clamp(occ / 8.0, 0.0, 1.0);
   let strength = 0.4; // mild

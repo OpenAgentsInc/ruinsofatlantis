@@ -44,36 +44,25 @@ fn tonemap_aces_approx(x: vec3<f32>) -> vec3<f32> {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+// Convert linear RGB to sRGB for presentation to a non‑sRGB swapchain.
+// Web swapchains commonly expose UNORM (non‑sRGB) formats; without this
+// encode, the scene appears much darker (nearly black at night).
+fn linear_to_srgb(x: vec3<f32>) -> vec3<f32> {
+  let lo = 12.92 * x;
+  let hi = 1.055 * pow(x, vec3<f32>(1.0/2.4)) - 0.055;
+  let cutoff = vec3<f32>(0.0031308);
+  return select(hi, lo, x <= cutoff);
+}
+
 @fragment
 fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   // Clamp UV to avoid sampling exactly at 0/1 edges (prevents mirrored/clamped artifacts)
   let sz = vec2<f32>(textureDimensions(scene_tex));
   let eps = vec2<f32>(0.5) / sz;
   let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
-  var col = textureSample(scene_tex, samp_color, uv).rgb;
-  // Fog (exponential) based on linearized depth
-  let depth = textureSample(depth_tex, samp_depth, uv);
-  let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
-  let density = globals.fog.a;
-  if (density > 0.0) {
-    let f = 1.0 - exp(-density * zlin);
-    col = mix(col, globals.fog.rgb, clamp(f, 0.0, 1.0));
-  }
-  // Tonemap in linear
-  var mapped = tonemap_aces_approx(col);
-  // Exposure: darker at night based on sun elevation
-  let elev = globals.sunDirTime.y;
-  let nf = smoothstep(0.0, 0.2, -elev);
-  mapped *= mix(1.0, 0.45, nf);
-  // Optional lightweight color grade (teal/orange) — subtle
-  // This is intentionally conservative so it doesn’t override art direction,
-  // but provides a little extra separation for the first‑playable demo.
-  let luma = dot(mapped, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let mids = smoothstep(0.2, 0.7, luma);
-  let shadows = 1.0 - smoothstep(0.05, 0.3, luma);
-  let grade_strength = 0.08;
-  // push mids slightly warmer, shadows slightly teal
-  mapped = mix(mapped, vec3<f32>(mapped.r * 1.04, mapped.g * 1.01, mapped.b * 0.96), mids * grade_strength);
-  mapped = mix(mapped, vec3<f32>(mapped.r * 0.98, mapped.g * 1.02, mapped.b * 1.04), shadows * grade_strength);
-  return vec4<f32>(mapped, 1.0);
+  // Minimal present: sample SceneColor (NonFiltering) and sRGB-encode.
+  // This is the exact path that restored color on Web.
+  var col = textureSampleLevel(scene_tex, samp_color, uv, 0.0).rgb;
+  let out_rgb = linear_to_srgb(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)));
+  return vec4<f32>(out_rgb, 1.0);
 }

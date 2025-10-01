@@ -3,6 +3,8 @@
 use wgpu::SurfaceError;
 
 // Bring parent gfx modules/types into scope for the moved body.
+#[cfg(target_arch = "wasm32")]
+use crate::gfx::types::Globals;
 use crate::gfx::{camera_sys, terrain, types::Model};
 
 /// Full render implementation (moved from gfx/mod.rs).
@@ -11,6 +13,131 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
+    // Optional tracing left to RA_TRACE (no default info spam)
+
+    // WASM debug path: draw SKY + TERRAIN into offscreen, then present to swapchain.
+    // This isolates pipeline/render-graph step-by-step. Disabled by default now that
+    // the full render path is stable on web; re-enable locally by changing the
+    // `enable_wasm_debug` flag below if you need to bisect a regression.
+    #[cfg(target_arch = "wasm32")]
+    if false {
+        let mut encoder = r
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("wasm-debug-sky"),
+            });
+        // Update a minimal Globals UBO so terrain renders with a sane camera
+        let aspect = r.config.width.max(1) as f32 / r.config.height.max(1) as f32;
+        let eye = glam::vec3(0.0, 6.0, -10.0);
+        let look = glam::vec3(0.0, 0.5, 0.0);
+        let up = glam::Vec3::Y;
+        let view_m = glam::Mat4::look_at_rh(eye, look, up);
+        let fov_y = 60f32.to_radians();
+        let proj = glam::Mat4::perspective_rh(fov_y, aspect, 0.1, 1000.0);
+        let vp = proj * view_m;
+        let mut g = Globals {
+            view_proj: vp.to_cols_array_2d(),
+            cam_right_time: [1.0, 0.0, 0.0, 0.0],
+            cam_up_pad: [0.0, 1.0, 0.0, (fov_y * 0.5).tan()],
+            sun_dir_time: [
+                r.sky.sun_dir.x,
+                r.sky.sun_dir.y,
+                r.sky.sun_dir.z,
+                r.sky.day_frac,
+            ],
+            sh_coeffs: [[0.0; 4]; 9],
+            fog_params: [0.6, 0.7, 0.8, 0.0035],
+            clip_params: [0.1, 1000.0, 1.0, 0.0],
+        };
+        if r.sky.sun_dir.y <= 0.0 {
+            g.fog_params = [0.01, 0.015, 0.02, 0.018];
+        }
+        r.queue
+            .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&g));
+
+        // 1) Sky into offscreen
+        let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("wasm-debug-sky-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &r.attachments.scene_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.02,
+                        g: 0.02,
+                        b: 0.04,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        sky.set_pipeline(&r.sky_pipeline);
+        sky.set_bind_group(0, &r.globals_bg, &[]);
+        sky.set_bind_group(1, &r.sky_bg, &[]);
+        sky.draw(0..3, 0..1);
+        drop(sky);
+        // 2) Main terrain into offscreen with depth
+        {
+            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("wasm-debug-main-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &r.attachments.scene_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &r.attachments.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            rp.set_pipeline(&r.pipeline);
+            rp.set_bind_group(0, &r.globals_bg, &[]);
+            rp.set_bind_group(1, &r.terrain_model_bg, &[]);
+            rp.set_vertex_buffer(0, r.terrain_vb.slice(..));
+            rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+            rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
+            drop(rp);
+        }
+        // 3) Present offscreen -> swapchain
+        let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("wasm-debug-present-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        present.set_pipeline(&r.present_pipeline);
+        present.set_bind_group(0, &r.globals_bg, &[]);
+        present.set_bind_group(1, &r.present_bg, &[]);
+        present.draw(0..3, 0..1);
+        drop(present);
+        r.queue.submit(Some(encoder.finish()));
+        frame.present();
+        return Ok(());
+    }
 
     // Time and dt
     let t = r.start.elapsed().as_secs_f32();
@@ -237,6 +364,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     // Begin commands
+    #[cfg(not(target_arch = "wasm32"))]
     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder = r
         .device
@@ -315,6 +443,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             log::debug!("draw: terrain");
             if trace {
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
             }
             rp.set_pipeline(&r.pipeline);
@@ -324,6 +453,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
             r.draw_calls += 1;
+            #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after terrain: {:?}", e);
             }
@@ -332,6 +462,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.trees_count > 0 {
             log::debug!("draw: trees x{}", r.trees_count);
             if trace {
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
             }
             let inst_pipe = if r.wire_enabled {
@@ -347,6 +478,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.trees_index_count, 0, 0..r.trees_count);
             r.draw_calls += 1;
+            #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after trees: {:?}", e);
             }
@@ -355,6 +487,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.rocks_count > 0 {
             log::debug!("draw: rocks x{}", r.rocks_count);
             if trace {
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
             }
             let inst_pipe = if r.wire_enabled {
@@ -370,6 +503,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.rocks_index_count, 0, 0..r.rocks_count);
             r.draw_calls += 1;
+            #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after rocks: {:?}", e);
             }
@@ -541,7 +675,86 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     };
     r.damage.draw(&mut encoder, damage_target);
 
-    // Nameplates disabled (show health bars only)
+    // Nameplates disabled by default. Set RA_NAMEPLATES=1 to enable.
+    let draw_labels = std::env::var("RA_NAMEPLATES")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if draw_labels {
+        // Alive wizards only
+        let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
+        for (i, m) in r.wizard_models.iter().enumerate() {
+            if r.wizard_hp.get(i).copied().unwrap_or(0) > 0 {
+                wiz_alive.push(*m);
+            }
+        }
+        if !wiz_alive.is_empty() {
+            let target_view = if r.direct_present {
+                &view
+            } else {
+                &r.attachments.scene_view
+            };
+            r.nameplates.queue_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                &wiz_alive,
+            );
+            r.nameplates.draw(&mut encoder, target_view);
+        }
+        // NPC nameplates: skip dead
+        let mut npc_positions: Vec<glam::Vec3> = Vec::new();
+        for (idx, m) in r.zombie_models.iter().enumerate() {
+            if let Some(npc) = r.server.npcs.get(idx)
+                && !npc.alive
+            {
+                continue;
+            }
+            let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            npc_positions.push(head.truncate());
+        }
+        if !npc_positions.is_empty() {
+            let target_view = if r.direct_present {
+                &view
+            } else {
+                &r.attachments.scene_view
+            };
+            r.nameplates_npc.queue_npc_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                &npc_positions,
+                "Zombie",
+            );
+            r.nameplates_npc.draw(&mut encoder, target_view);
+        }
+
+        // Death Knight nameplate (single instance)
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
+        {
+            let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+            let pos = head.truncate();
+            let target_view = if r.direct_present {
+                &view
+            } else {
+                &r.attachments.scene_view
+            };
+            r.nameplates_npc.queue_npc_labels(
+                &r.device,
+                &r.queue,
+                r.config.width,
+                r.config.height,
+                view_proj,
+                std::slice::from_ref(&pos),
+                "Death Knight",
+            );
+            r.nameplates_npc.draw(&mut encoder, target_view);
+        }
+    }
 
     log::debug!("end: main pass");
 
@@ -551,6 +764,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     {
         log::debug!("submit: minimal");
         r.queue.submit(Some(encoder.finish()));
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
             log::error!("wgpu validation error (minimal mode): {:?}", e);
             return Ok(());
@@ -701,84 +915,86 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     // Submit
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
         log::error!("wgpu validation error (skipping frame): {:?}", e);
-    } else {
-        log::debug!("submit: normal path");
-        // HUD
-        let pc_hp = r
-            .wizard_hp
-            .get(r.pc_index)
-            .copied()
-            .unwrap_or(r.wizard_hp_max);
-        let cast_frac = if let Some(start) = r.pc_anim_start {
-            if r.wizard_anim_index[r.pc_index] == 0 {
-                let dur = r.pc_cast_time.max(0.0001);
-                ((t - start) / dur).clamp(0.0, 1.0)
-            } else {
-                0.0
-            }
+        return Ok(());
+    }
+
+    log::debug!("submit: normal path");
+    // HUD
+    let pc_hp = r
+        .wizard_hp
+        .get(r.pc_index)
+        .copied()
+        .unwrap_or(r.wizard_hp_max);
+    let cast_frac = if let Some(start) = r.pc_anim_start {
+        if r.wizard_anim_index[r.pc_index] == 0 {
+            let dur = r.pc_cast_time.max(0.0001);
+            ((t - start) / dur).clamp(0.0, 1.0)
         } else {
             0.0
-        };
-        // Hotbar overlays: per-slot cooldown fractions
-        let gcd_frac_fb =
-            r.scene_inputs
-                .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
-        let gcd_frac_mm = r.scene_inputs.cooldown_frac(
-            "wiz.magic_missile.srd521",
-            r.last_time,
-            r.magic_missile_cd_dur,
-        );
-        let gcd_frac_fb2 =
-            r.scene_inputs
-                .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
-        let cd1 = gcd_frac_fb;
-        let cd2 = gcd_frac_mm;
-        let cd3 = gcd_frac_fb2;
-        let overlays_disabled = std::env::var("RA_OVERLAYS")
-            .map(|v| v == "0")
-            .unwrap_or(false);
-        if !r.pc_alive {
-            r.hud.reset();
-            r.hud.death_overlay(
-                r.size.width,
-                r.size.height,
-                "You died.",
-                "Press R to respawn",
-            );
-        } else if !overlays_disabled {
-            let cast_label = if cast_frac > 0.0 {
-                match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
-                    super::super::PcCast::FireBolt => Some("Fire Bolt"),
-                    super::super::PcCast::MagicMissile => Some("Magic Missile"),
-                    super::super::PcCast::Fireball => Some("Fireball"),
-                }
-            } else {
-                None
-            };
-            r.hud.build(
-                r.size.width,
-                r.size.height,
-                pc_hp,
-                r.wizard_hp_max,
-                cast_frac,
-                cd1,
-                cd2,
-                cd3,
-                cast_label,
-            );
-            if r.hud_model.perf_enabled() {
-                let ms = dt * 1000.0;
-                let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
-                let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
-                r.hud.append_perf_text(r.size.width, r.size.height, &line);
-            }
         }
-        r.hud.queue(&r.device, &r.queue);
-        r.hud.draw(&mut encoder, &view);
-        r.queue.submit(Some(encoder.finish()));
-        frame.present();
+    } else {
+        0.0
+    };
+    // Hotbar overlays: per-slot cooldown fractions
+    let gcd_frac_fb =
+        r.scene_inputs
+            .cooldown_frac("wiz.fire_bolt.srd521", r.last_time, r.firebolt_cd_dur);
+    let gcd_frac_mm = r.scene_inputs.cooldown_frac(
+        "wiz.magic_missile.srd521",
+        r.last_time,
+        r.magic_missile_cd_dur,
+    );
+    let gcd_frac_fb2 =
+        r.scene_inputs
+            .cooldown_frac("wiz.fireball.srd521", r.last_time, r.fireball_cd_dur);
+    let cd1 = gcd_frac_fb;
+    let cd2 = gcd_frac_mm;
+    let cd3 = gcd_frac_fb2;
+    let overlays_disabled = std::env::var("RA_OVERLAYS")
+        .map(|v| v == "0")
+        .unwrap_or(false);
+    if !r.pc_alive {
+        r.hud.reset();
+        r.hud.death_overlay(
+            r.size.width,
+            r.size.height,
+            "You died.",
+            "Press R to respawn",
+        );
+    } else if !overlays_disabled {
+        let cast_label = if cast_frac > 0.0 {
+            match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
+                super::super::PcCast::FireBolt => Some("Fire Bolt"),
+                super::super::PcCast::MagicMissile => Some("Magic Missile"),
+                super::super::PcCast::Fireball => Some("Fireball"),
+            }
+        } else {
+            None
+        };
+        r.hud.build(
+            r.size.width,
+            r.size.height,
+            pc_hp,
+            r.wizard_hp_max,
+            cast_frac,
+            cd1,
+            cd2,
+            cd3,
+            cast_label,
+        );
+        if r.hud_model.perf_enabled() {
+            let ms = dt * 1000.0;
+            let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
+            let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
+            r.hud.append_perf_text(r.size.width, r.size.height, &line);
+        }
     }
+    r.hud.queue(&r.device, &r.queue);
+    r.hud.draw(&mut encoder, &view);
+    r.queue.submit(Some(encoder.finish()));
+    frame.present();
     Ok(())
 }

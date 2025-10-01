@@ -1,0 +1,6 @@
+[build]
+target = "index.html"
+release = true
+
+[watch]
+ignore = ["target", "packs"]

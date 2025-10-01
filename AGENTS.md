@@ -50,6 +50,7 @@ Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic
 - Add inline comments for non‑obvious math, layout decisions, and API quirks (e.g., WGSL/std140 padding, wgpu limits).
 - Prefer doc comments (`///`) on public types/functions so `cargo doc` is useful.
 - Do not add meta comments like "(unused helper removed)" or "(logs removed)". If code is unused, delete it; keep comments focused on behavior and intent, not change notes.
+- When removing logging or debug prints, do not leave placeholder comments (e.g., "no info log" or similar). Remove quietly unless there’s a behavioral reason to document.
 
 IMPORTANT: Keep `src/README.md` current
 - Whenever you add, move, or significantly change files under `src/`, immediately update `src/README.md` to reflect the real file/folder hierarchy and module responsibilities.
@@ -68,6 +69,14 @@ IMPORTANT: Keep `src/README.md` current
 - Never add binary assets outside LFS. Track large binaries via git‑lfs.
 - Always keep the repo compiling with tests green before handoff.
 - Always update GDD and `docs/systems/*.md` when design behavior changes.
+
+## Input & Keybinding Policy
+- Do not bind default gameplay or debug actions to function keys (F1–F12). Browsers and OSes often reserve these; they are unreliable on the web.
+- Prefer letters/digits and simple modifiers that work on desktop and in browsers. Current bindings:
+  - `P` toggles the perf overlay (was F1)
+  - `O` triggers a 5s automated orbit for screenshots (was F5)
+  - `H` toggles the HUD; `Space`, `[`/`]`, and `-`/`=` control time‑of‑day
+- If you add new inputs, choose keys that won’t clash with common browser shortcuts (e.g., avoid `Ctrl+L`, `Cmd+F`, etc.). Document changes in `src/README.md`.
 
 ## Ownership Map
 - `crates/render_wgpu/**` → Graphics owners

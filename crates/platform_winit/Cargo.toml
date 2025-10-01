@@ -5,8 +5,13 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
+futures-util = "0.3"
 log = "0.4"
 pollster = "0.4"
 render_wgpu = { path = "../render_wgpu" }
 wgpu = "26"
 winit = "0.30"
+
+[target.wasm32-unknown-unknown.dependencies]
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Document", "Window", "HtmlCanvasElement", "Element"] }

@@ -25,6 +25,10 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
     r.surface.configure(&r.device, &r.config);
     // Rebuild attachments in one place
     let sc_fmt = r.config.format;
+    // Match init: use Rgba16F on wasm as well
+    #[cfg(target_arch = "wasm32")]
+    let offscreen = wgpu::TextureFormat::Rgba16Float;
+    #[cfg(not(target_arch = "wasm32"))]
     let offscreen = wgpu::TextureFormat::Rgba16Float;
     r.attachments.swapchain_format = sc_fmt;
     r.attachments.offscreen_format = offscreen;
@@ -42,7 +46,8 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                // Must match NonFiltering sampler type in the BGL for WebGPU
+                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
@@ -64,7 +69,7 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
             },
         ],
     });
@@ -78,7 +83,7 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
             },
         ],
     });

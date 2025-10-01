@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ruins of Atlantis — Wizard Scene</title>
+    <link data-trunk rel="copy-dir" href="assets" />
+    <link data-trunk rel="copy-dir" href="packs" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; }
+      canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+      .warn { color: #fff; font-family: monospace; padding: 1rem; }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <p class="warn">JavaScript is required to run the WebGPU demo.</p>
+    </noscript>
+    <script>
+      if (!('gpu' in navigator)) {
+        document.body.innerHTML = '<p class="warn">This browser does not support WebGPU. Use Chrome 113+, Edge 113+, or recent Safari with WebGPU enabled.</p>';
+      }
+    </script>
+  </body>
+  </html>
+
