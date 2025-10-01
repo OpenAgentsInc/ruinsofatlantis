@@ -537,7 +537,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&post_sampler),
+                // Non‑filtering sampler to support non‑filterable HDR formats on Web
+                resource: wgpu::BindingResource::Sampler(&point_sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
