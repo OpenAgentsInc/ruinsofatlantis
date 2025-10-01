@@ -62,7 +62,16 @@ pub fn build_demo_scene(
     );
     // Inner ring removed (except center PC). We keep a single large ring below.
     // Place a set of ruins around the wizard circle
-    let place_range = plane_extent * 0.9;
+    // Ruins placement range. On Web, place a few showcase ruins closer so
+    // they are visible without moving the camera. Desktop keeps the wide
+    // backdrop placement by default. You can also force near placement on
+    // desktop by setting RA_RUINS_NEAR=1.
+    let ruins_near = if cfg!(target_arch = "wasm32") {
+        true
+    } else {
+        std::env::var("RA_RUINS_NEAR").map(|v| v == "1").unwrap_or(false)
+    };
+    let place_range = if ruins_near { 25.0 } else { plane_extent * 0.9 };
     // A few backdrop ruins placed far away for depth
     // The ruins model origin is roughly centered; raise Y so it rests on ground.
     let ruins_y = ruins_base_offset; // base offset aligns model min Y to ground with small embed

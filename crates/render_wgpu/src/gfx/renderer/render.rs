@@ -18,7 +18,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     if log_frame {
         log::info!(
             "frame={} size={}x{} direct_present={} sun_dir={:?} day={:.3}",
-            r.frame_counter, r.config.width, r.config.height, r.direct_present, r.sky.sun_dir, r.sky.day_frac
+            r.frame_counter,
+            r.config.width,
+            r.config.height,
+            r.direct_present,
+            r.sky.sun_dir,
+            r.sky.day_frac
         );
     }
 
@@ -264,11 +269,17 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         let f = globals.fog_params;
         log::info!(
             "globals: fog=rgba({:.3},{:.3},{:.3},{:.4}) clip=({:.2},{:.2})",
-            f[0], f[1], f[2], f[3], globals.clip_params[0], globals.clip_params[1]
+            f[0],
+            f[1],
+            f[2],
+            f[3],
+            globals.clip_params[0],
+            globals.clip_params[1]
         );
         log::info!(
             "camera: tan_half_fov={:.3} aspect={:.3}",
-            globals.cam_up_pad[3], globals.clip_params[2]
+            globals.cam_up_pad[3],
+            globals.clip_params[2]
         );
     }
     r.queue
@@ -407,8 +418,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    // Bright clear to confirm offscreen writes are visible when sampled.
-                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.30, g: 0.00, b: 0.30, a: 1.0 }),
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.02,
+                        g: 0.02,
+                        b: 0.04,
+                        a: 1.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -421,7 +436,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         sky.set_bind_group(1, &r.sky_bg, &[]);
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
-        if log_frame { log::info!("pass sky ok"); }
+        if log_frame {
+            log::info!("pass sky ok");
+        }
     }
     // Main pass with depth
     log::debug!("pass: main");
@@ -468,7 +485,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
             r.draw_calls += 1;
-            if log_frame { log::info!("draw terrain indices={}", r.terrain_index_count); }
+            if log_frame {
+                log::info!("draw terrain indices={}", r.terrain_index_count);
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after terrain: {:?}", e);
