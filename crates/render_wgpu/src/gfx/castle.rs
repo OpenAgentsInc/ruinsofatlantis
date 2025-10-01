@@ -3,8 +3,8 @@
 //! rendering. Scene placement is handled in `scene.rs` so we keep this module
 //! focused on mesh upload and basic metrics.
 
-use anyhow::Result;
 use crate::gfx::types::Vertex;
+use anyhow::Result;
 use wgpu::util::DeviceExt;
 
 pub struct CastleGpu {
@@ -23,7 +23,13 @@ pub fn build_castle(device: &wgpu::Device) -> Result<CastleGpu> {
         Err(e) => {
             log::warn!("castle mesh import FAILED; falling back to cube: {}", e);
             let (vb, ib, index_count) = super::mesh::create_cube(device);
-            return Ok(CastleGpu { vb, ib, index_count, base_offset: 0.0, radius: 1.0 });
+            return Ok(CastleGpu {
+                vb,
+                ib,
+                index_count,
+                base_offset: 0.0,
+                radius: 1.0,
+            });
         }
     };
     // Merge all mesh primitives into one static VB/IB (handles multi‑material splits)
@@ -34,7 +40,10 @@ pub fn build_castle(device: &wgpu::Device) -> Result<CastleGpu> {
         for prim in mesh.primitives() {
             // Only triangles are supported in this simple path; skip others
             if prim.mode() != gltf::mesh::Mode::Triangles {
-                log::warn!("castle.glb: skipping primitive with non-triangle mode: {:?}", prim.mode());
+                log::warn!(
+                    "castle.glb: skipping primitive with non-triangle mode: {:?}",
+                    prim.mode()
+                );
                 continue;
             }
             let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
@@ -70,7 +79,13 @@ pub fn build_castle(device: &wgpu::Device) -> Result<CastleGpu> {
     if !any {
         log::warn!("castle.glb: no triangle primitives; using cube fallback");
         let (vb, ib, index_count) = super::mesh::create_cube(device);
-        return Ok(CastleGpu { vb, ib, index_count, base_offset: 0.0, radius: 1.0 });
+        return Ok(CastleGpu {
+            vb,
+            ib,
+            index_count,
+            base_offset: 0.0,
+            radius: 1.0,
+        });
     }
 
     // Compute metrics
@@ -108,7 +123,13 @@ pub fn build_castle(device: &wgpu::Device) -> Result<CastleGpu> {
         indices_u32.len(),
         radius
     );
-    Ok(CastleGpu { vb, ib, index_count: indices_u32.len() as u32, base_offset, radius })
+    Ok(CastleGpu {
+        vb,
+        ib,
+        index_count: indices_u32.len() as u32,
+        base_offset,
+        radius,
+    })
 }
 
 fn asset_path(rel: &str) -> std::path::PathBuf {

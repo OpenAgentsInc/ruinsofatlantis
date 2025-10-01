@@ -26,6 +26,7 @@ mod types;
 pub use types::Vertex;
 mod anim;
 mod camera_sys;
+mod castle;
 mod deathknight;
 mod draw;
 mod foliage;
@@ -34,7 +35,6 @@ mod material;
 mod npcs;
 mod rocks;
 mod ruins;
-mod castle;
 mod scene;
 mod sky;
 pub mod terrain;
@@ -416,7 +416,7 @@ impl Renderer {
             Some(&self.terrain_cpu),
             ruins_base_offset,
             ruins_radius,
-            0.4f32, // castle_base_offset (approx; only used if no terrain)
+            0.4f32,  // castle_base_offset (approx; only used if no terrain)
             10.0f32, // castle_radius (approx radius for height sampling)
         );
         // Snap to terrain heights again

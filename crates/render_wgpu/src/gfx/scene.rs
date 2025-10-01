@@ -32,6 +32,11 @@ pub struct SceneBuild {
     pub pc_index: usize,
 }
 
+/// Build the demo scene (wizards, ruins, castle) and instance buffers.
+///
+/// Note: This constructor is parameter-heavy for clarity across callers; grouping
+/// these into a config struct adds ceremony with little gain here.
+#[allow(clippy::too_many_arguments)]
 pub fn build_demo_scene(
     device: &wgpu::Device,
     skinned_cpu: &SkinnedMeshCPU,
@@ -318,6 +323,11 @@ mod tests {
         let q = tilt_toward_normal(glam::Vec3::Y, 10.0_f32.to_radians());
         let axis = q.axis().unwrap_or(glam::Vec3::Y);
         let angle = q.angle_between(glam::Quat::IDENTITY).abs();
-        assert!(angle <= 1e-4, "tilt should be ~0 for up normal, got axis={:?} angle={}", axis, angle);
+        assert!(
+            angle <= 1e-4,
+            "tilt should be ~0 for up normal, got axis={:?} angle={}",
+            axis,
+            angle
+        );
     }
 }

@@ -154,9 +154,24 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             .iter()
             .copied()
             .find(|f| *f == wgpu::TextureFormat::Rgba8UnormSrgb)
-            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Rgba8Unorm))
-            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Bgra8UnormSrgb))
-            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Bgra8Unorm))
+            .or_else(|| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|f| *f == wgpu::TextureFormat::Rgba8Unorm)
+            })
+            .or_else(|| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|f| *f == wgpu::TextureFormat::Bgra8UnormSrgb)
+            })
+            .or_else(|| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|f| *f == wgpu::TextureFormat::Bgra8Unorm)
+            })
             .unwrap_or(caps.formats[0])
     };
     #[cfg(not(target_arch = "wasm32"))]

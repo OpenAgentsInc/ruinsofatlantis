@@ -563,7 +563,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             && r.castle_count > 0
         {
             log::debug!("draw: castle x{}", r.castle_count);
-            if trace { r.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+            if trace {
+                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            }
             let inst_pipe = if r.wire_enabled {
                 r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
             } else {
