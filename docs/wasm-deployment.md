@@ -17,6 +17,12 @@ Outcome: the “wizard scene” renders in a browser tab with pointer/keyboard i
 - Assets: pre-decompress any Draco models; ship `assets/` and baked `packs/`.
 - Hosting: any static host (GitHub Pages, Netlify, Cloudflare) works.
 
+Current web build defaults (repo specifics)
+- Present path: writes linear SceneColor to an offscreen HDR texture, then tonemaps and sRGB‑encodes into a non‑sRGB swapchain (WebGPU UNORM). Direct‑present is disabled on web when the swapchain isn’t sRGB to avoid the classic “all black” output.
+- Models: ruins are pre‑decompressed for wasm (`assets/models/ruins.decompressed.gltf`) and embedded; no runtime Draco decode in the browser.
+- UI: health bars are on; nameplates are off by default on all targets. You can enable them by setting `RA_NAMEPLATES=1` at runtime (desktop). Browsers don’t have process env; the default is off.
+- Ruins placement: distant by default to frame the scene without clutter; set `RA_RUINS_NEAR=1` on desktop to spawn a few near showcase pieces.
+
 ## What’s in the Repo Now (relevant parts)
 
 - Entry point uses `env_logger` and synchronous init: `src/main.rs:1`.
@@ -132,6 +138,9 @@ Draco note: we do not decode Draco at runtime. Ensure any Draco-compressed GLTFs
 cargo run -p gltf-decompress -- assets/models/ruins.gltf assets/models/ruins.decompressed.gltf
 ```
 
+Repo specifics
+- On wasm we embed and import `assets/models/ruins.decompressed.gltf` directly (no HTTP fetch, no Draco), and keep `rock.glb` embedded as well. If you add new models for the web build that were Draco‑compressed, run the command above and embed the `.decompressed.gltf` instead of the original.
+
 ## 5) DOM Canvas Wiring (Web)
 
 `winit 0.30` can target web. Two small items help stability:
@@ -197,6 +206,56 @@ The output lives in `dist/`. You can host the `dist/` directory on any static ho
 
 Base path note: when deploying under a subpath (e.g., GitHub Pages `/ruinsofatlantis/`), build with `trunk build --release --public-url /ruinsofatlantis/` so asset URLs resolve.
 
+### Integrating into existing sites (Laravel / React / Inertia / Vite)
+
+You don’t need to adopt Trunk for your whole site — you can treat the wasm app as a static bundle and include it.
+
+Option A — Use Trunk to produce `dist/` and copy artifacts:
+- `trunk build --release [--public-url /subpath/]`
+- Copy `dist/*` into your app’s public folder (e.g., `public/wasm/`). This will include:
+  - `index.html` (if you used our template)
+  - One or more fingerprinted JS files (e.g., `ruinsofatlantis-<hash>.js`)
+  - A `.wasm` file (e.g., `ruinsofatlantis-<hash>_bg.wasm`)
+  - `assets/` and `packs/` (copied via `<link data-trunk rel="copy-dir" ...>`)
+
+To embed on a page you control (Blade/React component):
+- Add a container `<div id="wasm-app"></div>` or a full page route.
+- Add a module script that dynamically imports the generated JS and initializes the module. Example Blade snippet:
+
+```blade
+@php($base = asset('wasm'))
+<link rel="preload" href="{{ $base }}/ruinsofatlantis-xxxx.js" as="script" crossorigin>
+<script type="module">
+  import init from '{{ $base }}/ruinsofatlantis-xxxx.js';
+  init(); // the module attaches to the canvas created by winit
+</script>
+```
+
+Notes
+- The filenames are fingerprinted; update the `xxxx` when you redeploy.
+- Keep the `.wasm`, `.js`, `assets/`, and `packs/` in the same relative folder so runtime fetches resolve.
+- If your app sits under `/app`, ensure paths line up; with Trunk, use `--public-url /app/wasm/`.
+
+Option B — Manual wasm‑bindgen (Vite/React)
+- Build wasm: `cargo build --release --target wasm32-unknown-unknown`
+- Run wasm‑bindgen for web output into `public/wasm/`.
+- In React, import the generated JS in an effect:
+
+```ts
+useEffect(() => {
+  (async () => {
+    const init = (await import('/wasm/ruinsofatlantis.js')).default;
+    await init();
+  })();
+}, []);
+```
+
+Ensure `/wasm/ruinsofatlantis_bg.wasm`, `/wasm/assets/*`, and `/wasm/packs/*` are served statically.
+
+Caching tips
+- The hashed filenames from Trunk are cache‑friendly. Set long `Cache-Control` on `.js`/`.wasm` and version by redeploying.
+- Keep `assets/` and `packs/` cacheable; bump content to invalidate.
+
 ## 7) Alternative: Manual wasm-bindgen Flow
 
 If you prefer to avoid Trunk:
@@ -244,6 +303,9 @@ This repo compiles and runs natively today. To run in browsers, make these concr
 - RNG support on web
   - Ensure `getrandom/js` is enabled so `rand` seeds correctly under wasm.
 
+- Present/gamma correctness on web (repo fixed)
+  - Non‑sRGB swapchains are common in browsers (`BGRA8Unorm`). We avoid direct‑present in that case and sRGB‑encode in the present pass to prevent a dark/black image. If you rework the render path, keep this invariant or ensure the swapchain is sRGB.
+
 - Pointer lock and input niceties
   - For right-drag orbit input, on web you may need to explicitly request pointer lock (via `winit` web extension traits) on mouse-down and exit on mouse-up.
 
@@ -286,6 +348,7 @@ Smoke test:
 
 - Panic on wasm due to `std::env` or `std::fs`:
   - Confirm logging/panic hooks are active for web and that all runtime file reads are removed or replaced by HTTP/embedding.
+  - Environment variables in browsers are not available. Our UI toggles default to safe values on web (e.g., nameplates off). If you need runtime toggles in browsers, add URL query params or JS configuration rather than `std::env`.
 
 - No NPC movement / randomness appears frozen:
   - Ensure `getrandom/js` is enabled so `rand` works on wasm.
@@ -297,4 +360,3 @@ Appendix: Why Trunk?
 - It wraps the wasm-bindgen step, copies assets, live-reloads, and is the most friction-free path for a winit + wgpu app targeting the web.
 
 Security note: do not embed secrets; use relative HTTP assets; static hosting is sufficient.
-
