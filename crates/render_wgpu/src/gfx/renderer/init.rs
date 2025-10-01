@@ -183,10 +183,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         present_mode
     );
     // Choose offscreen color format
-    // Web: prefer Rgba16Float to match desktop tonemapping/look now that
-    // WebGPU implementations widely support it.
+    // Web: use Rgba8Unorm for maximum portability. Some WebGPU stacks
+    // report Rgba16Float as sampleable but return zeros when sampling it
+    // in a later pass. Using Rgba8Unorm avoids the black‑present issue.
     #[cfg(target_arch = "wasm32")]
-    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+    let offscreen_fmt = wgpu::TextureFormat::Rgba8Unorm;
     #[cfg(not(target_arch = "wasm32"))]
     let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
 
