@@ -212,7 +212,7 @@ pub fn build_demo_scene(
         contents: bytemuck::cast_slice(&ruin_instances),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
-    log::info!(
+    log::debug!(
         "spawned {} wizards and {} ruins",
         wiz_instances.len(),
         ruin_instances.len()

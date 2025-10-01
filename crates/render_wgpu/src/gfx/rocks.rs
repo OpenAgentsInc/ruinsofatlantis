@@ -41,7 +41,7 @@ pub fn build_rocks(
     let rock_path = asset_path("assets/models/rock.glb");
     let (vb, ib, index_count) = match load_gltf_mesh(&rock_path) {
         Ok(cpu) => {
-            log::info!(
+            log::debug!(
                 "rocks mesh loaded (vtx={}, idx={})",
                 cpu.vertices.len(),
                 cpu.indices.len()

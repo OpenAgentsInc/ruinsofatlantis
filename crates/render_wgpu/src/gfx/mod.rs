@@ -696,7 +696,7 @@ impl Renderer {
             req_features |= wgpu::Features::POLYGON_MODE_LINE;
         }
         let info = adapter.get_info();
-        log::info!("Adapter: {:?} ({:?})", info.name, info.backend);
+        log::debug!("Adapter: {:?} ({:?})", info.name, info.backend);
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("wgpu-device"),
@@ -915,7 +915,7 @@ impl Renderer {
         // Load Zone manifest for the wizard demo scene
         let zone: ZoneManifest =
             load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
-        log::info!(
+        log::debug!(
             "Zone '{}' (id={}, plane={:?})",
             zone.display_name,
             zone.zone_id,
@@ -941,7 +941,7 @@ impl Renderer {
         if let Some(scale) = zone.start_time_scale {
             sky_state.time_scale = scale.clamp(0.01, 1000.0);
         }
-        log::info!(
+        log::debug!(
             "Start TOD: day_frac={:.3} paused={} sun_elev={:.3}",
             sky_state.day_frac,
             sky_state.paused,

@@ -35,7 +35,7 @@ pub fn build_trees(
     if let Some((count, _)) = vegetation
         && count == 0
     {
-        log::info!("trees disabled by manifest (count=0)");
+        log::debug!("trees disabled by manifest (count=0)");
         let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("trees-instances"),
             contents: &[],

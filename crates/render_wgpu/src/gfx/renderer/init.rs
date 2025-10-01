@@ -154,9 +154,24 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             .iter()
             .copied()
             .find(|f| *f == wgpu::TextureFormat::Rgba8UnormSrgb)
-            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Rgba8Unorm))
-            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Bgra8UnormSrgb))
-            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Bgra8Unorm))
+            .or_else(|| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|f| *f == wgpu::TextureFormat::Rgba8Unorm)
+            })
+            .or_else(|| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|f| *f == wgpu::TextureFormat::Bgra8UnormSrgb)
+            })
+            .or_else(|| {
+                formats
+                    .iter()
+                    .copied()
+                    .find(|f| *f == wgpu::TextureFormat::Bgra8Unorm)
+            })
             .unwrap_or(caps.formats[0])
     };
     #[cfg(not(target_arch = "wasm32"))]
@@ -445,7 +460,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     #[cfg(not(target_arch = "wasm32"))]
     let zone: ZoneManifest =
         load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
-    log::info!(
+    log::debug!(
         "Zone '{}' (id={}, plane={:?})",
         zone.display_name,
         zone.zone_id,
@@ -469,7 +484,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     if let Some(scale) = zone.start_time_scale {
         sky_state.time_scale = scale.clamp(0.01, 1000.0);
     }
-    log::info!(
+    log::debug!(
         "Start TOD: day_frac={:.3} paused={} sun_elev={:.3}",
         sky_state.day_frac,
         sky_state.paused,

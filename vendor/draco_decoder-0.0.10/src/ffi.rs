@@ -40,7 +40,9 @@ pub async fn decode_mesh_native(data: &[u8], config: &MeshDecodeConfig) -> Optio
         return None;
     }
     out_buf.truncate(written);
-    println!("decode_mesh_native took {:?}", start.elapsed());
+    if std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false) {
+        eprintln!("decode_mesh_native took {:?}", start.elapsed());
+    }
 
     Some(out_buf)
 }

@@ -55,7 +55,7 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
 
-    log::info!(
+    log::debug!(
         "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
         server.npcs.len(),
         near_count,

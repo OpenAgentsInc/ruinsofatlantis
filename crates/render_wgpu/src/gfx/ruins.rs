@@ -19,14 +19,7 @@ pub struct RuinsGpu {
 pub fn build_ruins(device: &wgpu::Device) -> Result<RuinsGpu> {
     let path = asset_path("assets/models/ruins.gltf");
     let ruins_cpu = match load_gltf_mesh(&path) {
-        Ok(m) => {
-            log::info!(
-                "ruins mesh loaded (vtx={}, idx={})",
-                m.vertices.len(),
-                m.indices.len()
-            );
-            m
-        }
+        Ok(m) => m,
         Err(e) => {
             log::warn!("ruins mesh load FAILED; falling back to cube: {}", e);
             // On wasm, attempt to use rock.glb as a visible placeholder mesh

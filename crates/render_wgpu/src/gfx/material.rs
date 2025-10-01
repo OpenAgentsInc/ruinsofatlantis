@@ -46,7 +46,7 @@ pub fn create_wizard_material(
     });
 
     let (bg, view, sampler) = if let Some(tex) = &skinned_cpu.base_color_texture {
-        log::info!(
+        log::debug!(
             "wizard albedo: {}x{} (srgb={})",
             tex.width,
             tex.height,
@@ -112,7 +112,7 @@ pub fn create_wizard_material(
         });
         (bg, view, sampler)
     } else {
-        log::warn!("wizard albedo: NONE; using 1x1 fallback");
+        log::debug!("wizard albedo missing; using 1x1 fallback");
         let size3 = wgpu::Extent3d {
             width: 1,
             height: 1,
