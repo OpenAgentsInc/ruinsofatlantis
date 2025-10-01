@@ -42,8 +42,7 @@ pub fn build_rocks(
     let (vb, ib, index_count) = match load_gltf_mesh(&rock_path) {
         Ok(cpu) => {
             log::info!(
-                "rocks mesh loaded: {} (vtx={}, idx={})",
-                rock_path.display(),
+                "rocks mesh loaded (vtx={}, idx={})",
                 cpu.vertices.len(),
                 cpu.indices.len()
             );
@@ -60,11 +59,7 @@ pub fn build_rocks(
             (vb, ib, cpu.indices.len() as u32)
         }
         Err(e) => {
-            log::warn!(
-                "failed to load rock mesh ({}): {}; falling back to cube",
-                rock_path.display(),
-                e
-            );
+            log::warn!("failed to load rock mesh; falling back to cube: {}", e);
             super::mesh::create_cube(device)
         }
     };

@@ -225,6 +225,7 @@ Rule: If a PR changes GPU cost by ≥0.5 ms, include a perf note + capture.
 - Commit style: `<area>: <imperative summary>` (e.g., `server: add login flow`).
 - Include what/why in body; link issues (e.g., `#123`).
 - PRs must: describe changes, include screenshots for UI, update design docs (`GDD.md`), update `NOTICE` when SRD content is added, and pass build/fmt/clippy/tests.
+- PR text hygiene: Use real newlines in PR descriptions and check rendering. Do not paste literal `\n` sequences. When using `gh` CLI, pass a proper multiline body (e.g., with a heredoc or `$'...'` quoting). Preview the PR body before submitting.
 
 ## SRD, Licensing, and Attribution
 - SRD 5.2.1 content is CC‑BY‑4.0. Include the exact attribution in `NOTICE` and keep GDD’s SRD section accurate.
