@@ -41,7 +41,11 @@ pub fn build_rocks(
     let rock_path = asset_path("assets/models/rock.glb");
     let (vb, ib, index_count) = match load_gltf_mesh(&rock_path) {
         Ok(cpu) => {
-            log::info!("rocks mesh loaded (vtx={}, idx={})", cpu.vertices.len(), cpu.indices.len());
+            log::info!(
+                "rocks mesh loaded (vtx={}, idx={})",
+                cpu.vertices.len(),
+                cpu.indices.len()
+            );
             let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("rocks-vb"),
                 contents: bytemuck::cast_slice(&cpu.vertices),

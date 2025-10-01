@@ -20,7 +20,11 @@ pub fn build_ruins(device: &wgpu::Device) -> Result<RuinsGpu> {
     let path = asset_path("assets/models/ruins.gltf");
     let ruins_cpu = match load_gltf_mesh(&path) {
         Ok(m) => {
-            log::info!("ruins mesh loaded (vtx={}, idx={})", m.vertices.len(), m.indices.len());
+            log::info!(
+                "ruins mesh loaded (vtx={}, idx={})",
+                m.vertices.len(),
+                m.indices.len()
+            );
             m
         }
         Err(e) => {
@@ -31,7 +35,11 @@ pub fn build_ruins(device: &wgpu::Device) -> Result<RuinsGpu> {
             {
                 let rock_path = asset_path("assets/models/rock.glb");
                 if let Ok(cpu) = load_gltf_mesh(&rock_path) {
-                    log::info!("ruins fallback: using rock.glb (vtx={}, idx={})", cpu.vertices.len(), cpu.indices.len());
+                    log::info!(
+                        "ruins fallback: using rock.glb (vtx={}, idx={})",
+                        cpu.vertices.len(),
+                        cpu.indices.len()
+                    );
                     cpu
                 } else {
                     // Build a small placeholder cube so the pipeline/bindings remain valid.
