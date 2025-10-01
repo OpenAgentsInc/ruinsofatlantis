@@ -670,6 +670,26 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (ruins_vb, ruins_ib, ruins_index_count) =
         (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
+    // Castle mesh + metrics
+    #[cfg(not(target_arch = "wasm32"))]
+    let castle_gpu = super::super::castle::build_castle(&device).context("build castle mesh")?;
+    #[cfg(target_arch = "wasm32")]
+    let castle_gpu = super::super::castle::build_castle(&device).unwrap_or_else(|_| {
+        // Fallback to a cube if GLB fails. On web we still draw a small placeholder.
+        let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
+        super::super::castle::CastleGpu {
+            vb,
+            ib,
+            index_count,
+            base_offset: 0.0,
+            radius: 1.0,
+        }
+    });
+    let castle_base_offset = castle_gpu.base_offset;
+    let castle_radius = castle_gpu.radius;
+    let (castle_vb, castle_ib, castle_index_count) =
+        (castle_gpu.vb, castle_gpu.ib, castle_gpu.index_count);
+
     // Load wizard GLTF, possibly merging UVs from simple loader for robustness
     let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
         .context("load skinned wizard.gltf")?;
@@ -736,6 +756,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         Some(&terrain_cpu),
         ruins_base_offset,
         ruins_radius,
+        castle_base_offset,
+        castle_radius,
     );
     // Snap initial wizard ring onto terrain height
     let mut wizard_models = scene_build.wizard_models.clone();
@@ -1019,6 +1041,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ruins_vb,
         ruins_ib,
         ruins_index_count,
+        castle_vb,
+        castle_ib,
+        castle_index_count,
         npc_vb,
         npc_ib,
         npc_index_count,
@@ -1045,6 +1070,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         zombie_instances_cpu,
         ruins_instances: scene_build.ruins_instances,
         ruins_count: scene_build.ruins_count,
+        castle_instances: scene_build.castle_instances,
+        castle_count: scene_build.castle_count,
         fx_instances,
         _fx_capacity: fx_capacity,
         fx_count,

@@ -19,6 +19,8 @@ pub struct SceneBuild {
     pub wizard_count: u32,
     pub ruins_instances: wgpu::Buffer,
     pub ruins_count: u32,
+    pub castle_instances: wgpu::Buffer,
+    pub castle_count: u32,
     pub joints_per_wizard: u32,
     pub wizard_anim_index: Vec<usize>,
     pub wizard_time_offset: Vec<f32>,
@@ -37,6 +39,8 @@ pub fn build_demo_scene(
     terrain: Option<&TerrainCPU>,
     ruins_base_offset: f32,
     ruins_radius: f32,
+    castle_base_offset: f32,
+    castle_radius: f32,
 ) -> SceneBuild {
     // Build a tiny ECS world and spawn entities
     let mut world = World::new();
@@ -123,6 +127,29 @@ pub fn build_demo_scene(
         );
     }
 
+    // TEMP: place the castle directly in front of the player so it's clearly visible.
+    // Set it just outside the wizard ring (7.5m) at z ~ 12m.
+    let mut castle_pos = glam::vec3(0.0, 0.0, 12.0);
+    let mut castle_tilt = glam::Quat::IDENTITY;
+    if let Some(t) = terrain {
+        let (h, n) = height_min_under(t, castle_pos.x, castle_pos.z, castle_radius);
+        castle_pos.y = h + castle_base_offset;
+        castle_tilt = tilt_toward_normal(n, 6.0_f32.to_radians());
+    } else {
+        castle_pos.y = castle_base_offset;
+    }
+    // Face toward the origin (player)
+    let face_player = glam::Quat::from_rotation_y(std::f32::consts::PI);
+    let castle_rot = castle_tilt * face_player;
+    world.spawn(
+        Transform {
+            translation: castle_pos,
+            rotation: castle_rot,
+            scale: glam::Vec3::splat(8.0), // clearer while debugging placement up close
+        },
+        RenderKind::Castle,
+    );
+
     // Add one outward-facing ring of wizards
     let outer_ring_radius = 7.5f32; // wider circle for better spacing
     for i in 0..ring_count {
@@ -155,6 +182,7 @@ pub fn build_demo_scene(
     let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
     let mut wizard_models: Vec<glam::Mat4> = Vec::new();
     let mut ruin_instances: Vec<Instance> = Vec::new();
+    let mut castle_inst_vec: Vec<Instance> = Vec::new();
     let mut cam_target = glam::Vec3::ZERO;
     let mut has_cam_target = false;
     for (i, kind) in world.kinds.iter().enumerate() {
@@ -179,6 +207,11 @@ pub fn build_demo_scene(
             RenderKind::Ruins => ruin_instances.push(Instance {
                 model: m,
                 color: [0.65, 0.66, 0.68],
+                selected: 0.0,
+            }),
+            RenderKind::Castle => castle_inst_vec.push(Instance {
+                model: m,
+                color: [0.90, 0.90, 0.92],
                 selected: 0.0,
             }),
         }
@@ -212,10 +245,16 @@ pub fn build_demo_scene(
         contents: bytemuck::cast_slice(&ruin_instances),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
+    let castle_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("castle-instances"),
+        contents: bytemuck::cast_slice(&castle_inst_vec),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    });
     log::info!(
-        "spawned {} wizards and {} ruins",
+        "spawned {} wizards, {} ruins, {} castles",
         wiz_instances.len(),
-        ruin_instances.len()
+        ruin_instances.len(),
+        castle_inst_vec.len()
     );
 
     SceneBuild {
@@ -223,6 +262,8 @@ pub fn build_demo_scene(
         wizard_count: wiz_instances.len() as u32,
         ruins_instances,
         ruins_count: ruin_instances.len() as u32,
+        castle_instances,
+        castle_count: castle_inst_vec.len() as u32,
         joints_per_wizard,
         wizard_anim_index,
         wizard_time_offset,
@@ -266,4 +307,17 @@ fn height_min_under(t: &TerrainCPU, x: f32, z: f32, radius: f32) -> (f32, glam::
         }
     }
     (hmin, n_at)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tilt_small_on_up_normal() {
+        let q = tilt_toward_normal(glam::Vec3::Y, 10.0_f32.to_radians());
+        let axis = q.axis().unwrap_or(glam::Vec3::Y);
+        let angle = q.angle_between(glam::Quat::IDENTITY).abs();
+        assert!(angle <= 1e-4, "tilt should be ~0 for up normal, got axis={:?} angle={}", axis, angle);
+    }
 }

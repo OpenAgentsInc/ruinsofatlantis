@@ -10,5 +10,6 @@ Modules overview (selected):
 - foliage.rs — tree instancing: builds transforms, loads tree GLTF, uploads buffers
 - rocks.rs — rock instancing: loads `assets/models/rock.glb`, scatters, uploads buffers
 - ruins.rs — ruins GLTF upload + base offset/radius metrics for placement
-- scene.rs — demo scene assembly (wizards/ruins placement)
+- castle.rs — castle GLB upload + base offset/radius metrics for placement
+- scene.rs — demo scene assembly (wizards/ruins placement, single distant castle)
 - ui.rs — HUD/nameplates/bars atlases and draw helpers

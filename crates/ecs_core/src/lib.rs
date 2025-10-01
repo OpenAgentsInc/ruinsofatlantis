@@ -9,6 +9,7 @@ pub struct Entity(u32);
 pub enum RenderKind {
     Wizard,
     Ruins,
+    Castle,
 }
 
 #[derive(Copy, Clone, Debug)]

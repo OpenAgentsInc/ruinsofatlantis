@@ -52,6 +52,31 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.sky.sun_dir.y <= 0.0 {
             g.fog_params = [0.01, 0.015, 0.02, 0.018];
         }
+
+        // Castle (single instanced draw). Allow disabling with RA_DRAW_CASTLE=0
+        if std::env::var("RA_DRAW_CASTLE")
+            .map(|v| v != "0")
+            .unwrap_or(true)
+            && r.castle_count > 0
+        {
+            log::debug!("draw: castle x{}", r.castle_count);
+            let inst_pipe = if r.wire_enabled {
+                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+            } else {
+                &r.inst_pipeline
+            };
+            rp.set_pipeline(inst_pipe);
+            rp.set_bind_group(0, &r.globals_bg, &[]);
+            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+            rp.set_vertex_buffer(0, r.castle_vb.slice(..));
+            rp.set_vertex_buffer(1, r.castle_instances.slice(..));
+            rp.set_index_buffer(r.castle_ib.slice(..), wgpu::IndexFormat::Uint32);
+            rp.draw_indexed(0..r.castle_index_count, 0, 0..r.castle_count);
+            r.draw_calls += 1;
+            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                log::error!("validation after castle: {:?}", e);
+            }
+        }
         r.queue
             .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&g));
 
@@ -531,6 +556,32 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 log::error!("validation after ruins: {:?}", e);
             }
         }
+        // Castle (instanced static mesh)
+        if std::env::var("RA_DRAW_CASTLE")
+            .map(|v| v != "0")
+            .unwrap_or(true)
+            && r.castle_count > 0
+        {
+            log::debug!("draw: castle x{}", r.castle_count);
+            if trace { r.device.push_error_scope(wgpu::ErrorFilter::Validation); }
+            let inst_pipe = if r.wire_enabled {
+                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+            } else {
+                &r.inst_pipeline
+            };
+            rp.set_pipeline(inst_pipe);
+            rp.set_bind_group(0, &r.globals_bg, &[]);
+            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+            rp.set_vertex_buffer(0, r.castle_vb.slice(..));
+            rp.set_vertex_buffer(1, r.castle_instances.slice(..));
+            rp.set_index_buffer(r.castle_ib.slice(..), wgpu::IndexFormat::Uint32);
+            rp.draw_indexed(0..r.castle_index_count, 0, 0..r.castle_count);
+            r.draw_calls += 1;
+            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                log::error!("validation after castle: {:?}", e);
+            }
+        }
+
         // Skinned: wizards (use helper to ensure correct bind group order/index type)
         if std::env::var("RA_DRAW_WIZARDS")
             .map(|v| v != "0")

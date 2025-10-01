@@ -34,6 +34,7 @@ mod material;
 mod npcs;
 mod rocks;
 mod ruins;
+mod castle;
 mod scene;
 mod sky;
 pub mod terrain;
@@ -171,6 +172,9 @@ pub struct Renderer {
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
+    castle_vb: wgpu::Buffer,
+    castle_ib: wgpu::Buffer,
+    castle_index_count: u32,
 
     // NPC cubes (legacy scaffolding)
     npc_vb: wgpu::Buffer,
@@ -209,6 +213,8 @@ pub struct Renderer {
     dk_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
+    castle_instances: wgpu::Buffer,
+    castle_count: u32,
 
     // FX buffers
     fx_instances: wgpu::Buffer,
@@ -410,6 +416,8 @@ impl Renderer {
             Some(&self.terrain_cpu),
             ruins_base_offset,
             ruins_radius,
+            0.4f32, // castle_base_offset (approx; only used if no terrain)
+            10.0f32, // castle_radius (approx radius for height sampling)
         );
         // Snap to terrain heights again
         let mut wizard_models = scene_build.wizard_models.clone();
@@ -1217,7 +1225,26 @@ impl Renderer {
                     None
                 }
             } else {
-                None
+                // No baked static colliders found; set up a simple barrier ring so the
+                // player cannot run infinitely far (and reach distant set pieces).
+                // Use a wide cylinder centered at origin as a soft world boundary.
+                let r = zone.terrain.extent * 1.2;
+                let half_h = 50.0f32; // effectively infinite relative to player
+                let cyl = collision_static::CylinderY {
+                    center: glam::vec3(0.0, 0.0, 0.0),
+                    radius: r,
+                    half_height: half_h,
+                };
+                let aabb = collision_static::Aabb {
+                    min: glam::vec3(-r - 1.0, -half_h - 1.0, -r - 1.0),
+                    max: glam::vec3(r + 1.0, half_h + 1.0, r + 1.0),
+                };
+                Some(collision_static::StaticIndex {
+                    colliders: vec![collision_static::StaticCollider {
+                        aabb,
+                        shape: collision_static::ShapeRef::Cyl(cyl),
+                    }],
+                })
             }
         };
 
@@ -1260,6 +1287,9 @@ impl Renderer {
         let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
         let ruins_base_offset = ruins_gpu.base_offset;
         let ruins_radius = ruins_gpu.radius;
+        let castle_gpu = castle::build_castle(&device).context("build castle mesh")?;
+        let castle_base_offset = castle_gpu.base_offset;
+        let castle_radius = castle_gpu.radius;
 
         // For robustness, pull UVs from a straightforward glTF read (same primitive as viewer)
         // and override the UVs we got from the skinned loader if the counts match. This
@@ -1324,6 +1354,8 @@ impl Renderer {
 
         let (ruins_vb, ruins_ib, ruins_index_count) =
             (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
+        let (castle_vb, castle_ib, castle_index_count) =
+            (castle_gpu.vb, castle_gpu.ib, castle_gpu.index_count);
 
         // Build scene instance buffers and camera target
         let scene_build = scene::build_demo_scene(
@@ -1333,6 +1365,8 @@ impl Renderer {
             Some(&terrain_cpu),
             ruins_base_offset,
             ruins_radius,
+            castle_base_offset,
+            castle_radius,
         );
 
         // Snap initial wizard ring to terrain height
@@ -1563,6 +1597,9 @@ impl Renderer {
             ruins_vb,
             ruins_ib,
             ruins_index_count,
+            castle_vb,
+            castle_ib,
+            castle_index_count,
             wizard_instances,
             wizard_count: wizard_instances_cpu.len() as u32,
             zombie_instances,
@@ -1570,6 +1607,8 @@ impl Renderer {
             zombie_instances_cpu,
             ruins_instances: scene_build.ruins_instances,
             ruins_count: scene_build.ruins_count,
+            castle_instances: scene_build.castle_instances,
+            castle_count: scene_build.castle_count,
             fx_instances,
             _fx_capacity: fx_capacity,
             fx_count,
@@ -2131,6 +2170,29 @@ impl Renderer {
                 self.draw_calls += 1;
             } else {
                 log::debug!("draw: ruins skipped (RA_DRAW_RUINS!=1)");
+            }
+
+            // Castle (single instanced draw). Allow disabling with RA_DRAW_CASTLE=0
+            let draw_castle = std::env::var("RA_DRAW_CASTLE")
+                .map(|v| v != "0")
+                .unwrap_or(true);
+            if draw_castle && self.castle_count > 0 {
+                log::debug!("draw: castle x{} (enabled)", self.castle_count);
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                rpass.set_pipeline(inst_pipe);
+                rpass.set_bind_group(0, &self.globals_bg, &[]);
+                rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+                rpass.set_vertex_buffer(0, self.castle_vb.slice(..));
+                rpass.set_vertex_buffer(1, self.castle_instances.slice(..));
+                rpass.set_index_buffer(self.castle_ib.slice(..), wgpu::IndexFormat::Uint32);
+                rpass.draw_indexed(0..self.castle_index_count, 0, 0..self.castle_count);
+                self.draw_calls += 1;
+            } else {
+                log::debug!("draw: castle skipped (RA_DRAW_CASTLE!=1)");
             }
 
             // NPCs (instanced cubes)
