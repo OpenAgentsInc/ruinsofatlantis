@@ -25,9 +25,9 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
     r.surface.configure(&r.device, &r.config);
     // Rebuild attachments in one place
     let sc_fmt = r.config.format;
-    // Match init: use Rgba16F on wasm as well
+    // Match init: use Rgba8Unorm on wasm for compatibility; keep HDR on native
     #[cfg(target_arch = "wasm32")]
-    let offscreen = wgpu::TextureFormat::Rgba16Float;
+    let offscreen = wgpu::TextureFormat::Rgba8Unorm;
     #[cfg(not(target_arch = "wasm32"))]
     let offscreen = wgpu::TextureFormat::Rgba16Float;
     r.attachments.swapchain_format = sc_fmt;

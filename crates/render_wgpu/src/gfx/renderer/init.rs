@@ -124,6 +124,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     }
     let info = adapter.get_info();
     log::info!("Adapter: {:?} ({:?})", info.name, info.backend);
+    log::warn!("features: {:?}", adapter.features());
+    log::warn!("limits:   {:?}", adapter.limits());
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("wgpu-device"),
@@ -143,6 +145,21 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // --- Surface configuration (with clamping to device limits) ---
     let size = window.inner_size();
     let caps = surface.get_capabilities(&adapter);
+    #[cfg(target_arch = "wasm32")]
+    let format = {
+        // On WebGPU (Dawn), some Linux/Wayland stacks fail to create BGRA shared images.
+        // Prefer RGBA8 to avoid "SharedImageBackingFactory ... format: BGRA_8888" errors.
+        let formats = caps.formats.clone();
+        formats
+            .iter()
+            .copied()
+            .find(|f| *f == wgpu::TextureFormat::Rgba8UnormSrgb)
+            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Rgba8Unorm))
+            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Bgra8UnormSrgb))
+            .or_else(|| formats.iter().copied().find(|f| *f == wgpu::TextureFormat::Bgra8Unorm))
+            .unwrap_or(caps.formats[0])
+    };
+    #[cfg(not(target_arch = "wasm32"))]
     let format = caps
         .formats
         .iter()
@@ -184,10 +201,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         present_mode
     );
     // Choose offscreen color format
-    // Web: use Rgba16Float for HDR offscreen. We sample it with a
-    // NonFiltering sampler in the present pass for portability.
+    // Web: prefer Rgba8Unorm for maximum compatibility across Linux/Wayland stacks.
+    // We still apply linear->sRGB in the present pass when swapchain is non‑sRGB.
     #[cfg(target_arch = "wasm32")]
-    let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
+    let offscreen_fmt = wgpu::TextureFormat::Rgba8Unorm;
     #[cfg(not(target_arch = "wasm32"))]
     let offscreen_fmt = wgpu::TextureFormat::Rgba16Float;
 
