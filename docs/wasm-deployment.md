@@ -360,3 +360,28 @@ Appendix: Why Trunk?
 - It wraps the wasm-bindgen step, copies assets, live-reloads, and is the most friction-free path for a winit + wgpu app targeting the web.
 
 Security note: do not embed secrets; use relative HTTP assets; static hosting is sufficient.
+
+---
+
+Appendix B: One‑shot Deploy to the Laravel Site
+
+For the local sibling site repo at `/Users/christopherdavid/code/ruinsofatlantis.com`, use the helper script to build, copy artifacts into `public/`, update the Blade view (`resources/views/play.blade.php`), commit, push, and open a PR:
+
+```
+# From the app repo root
+RUN_CI=1 scripts/deploy_wasm_to_site.sh
+
+# Optional environment vars
+# SITE_REPO=/path/to/ruinsofatlantis.com
+# PUBLIC_SUBDIR=wasm   # copy hashed JS/WASM under public/wasm instead of public/
+# NO_PR=1              # skip PR creation
+```
+
+What it does
+- Ensures the wasm toolchain and `trunk` exist.
+- Runs `cargo xtask ci` if `RUN_CI=1`.
+- Builds with `trunk build --release`.
+- Copies `dist/assets/` and `dist/packs/` to the site’s `public/` (rsync with delete).
+- Publishes the hashed JS and WASM at the public root (or `public/wasm` if `PUBLIC_SUBDIR` is set).
+- Edits `resources/views/play.blade.php` to point to the new hashed filenames.
+- Creates a branch, commits, pushes, and opens a PR (requires `gh` CLI).
