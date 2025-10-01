@@ -174,6 +174,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
+    log::info!(
+        "swapchain configured: fmt={:?} srgb={} size={}x{} present={:?}",
+        config.format,
+        config.format.is_srgb(),
+        config.width,
+        config.height,
+        present_mode
+    );
     // Choose offscreen color format
     // Web: prefer Rgba16Float to match desktop tonemapping/look now that
     // WebGPU implementations widely support it.
@@ -188,6 +196,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         config.height,
         config.format,
         offscreen_fmt,
+    );
+    log::info!(
+        "attachments: swapchain={:?} offscreen={:?}",
+        config.format,
+        offscreen_fmt
     );
     // Legacy fields: mirror attachments for existing struct layout
     let _depth = attachments.depth_view.clone();
@@ -204,18 +217,35 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (globals_bgl, model_bgl) = pipeline::create_bind_group_layouts(&device);
     let palettes_bgl = pipeline::create_palettes_bgl(&device);
     let material_bgl = pipeline::create_material_bgl(&device);
-    // On web, prefer offscreen + explicit present for predictable composition.
+    // Web parity: prefer direct-present; if the swapchain is not sRGB,
+    // fall back to offscreen + present to ensure correct gamma.
     #[cfg(target_arch = "wasm32")]
-    let direct_present = false;
+    let mut direct_present = true;
     #[cfg(not(target_arch = "wasm32"))]
     let direct_present = std::env::var("RA_DIRECT_PRESENT")
         .map(|v| v != "0")
         .unwrap_or(true);
+    // If swapchain format is not sRGB and we planned to direct-present, switch
+    // to offscreen so present.wgsl can handle tonemap/gamma correctly.
+    #[cfg(target_arch = "wasm32")]
+    if direct_present && !config.format.is_srgb() {
+        log::warn!(
+            "swapchain {:?} is not sRGB; using offscreen + present for correct gamma",
+            config.format
+        );
+        direct_present = false;
+    }
+
     let draw_fmt = if direct_present {
         config.format
     } else {
         offscreen_fmt
     };
+    log::info!(
+        "render path: direct_present={} draw_fmt={:?}",
+        direct_present,
+        draw_fmt
+    );
     let (pipeline, inst_pipeline, wire_pipeline) =
         pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
     // Sky background
@@ -948,12 +978,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         terrain_model_bg: plane_model_bg,
         shard_model_bg,
         present_bg,
-        enable_post_ao: true,
-        enable_ssgi: true,
-        enable_ssr: true,
+        // With direct-present on web, disable post passes that rely on
+        // offscreen SceneColor/SceneRead for now to match desktop visuals.
+        enable_post_ao: false,
+        enable_ssgi: false,
+        enable_ssr: false,
         // Disable bloom on wasm to reduce pipeline churn while stabilizing
         #[cfg(target_arch = "wasm32")]
-        enable_bloom: true,
+        enable_bloom: false,
         #[cfg(not(target_arch = "wasm32"))]
         enable_bloom: true,
         static_index: None,

@@ -44,6 +44,16 @@ fn tonemap_aces_approx(x: vec3<f32>) -> vec3<f32> {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+// Convert linear RGB to sRGB for presentation to a non‑sRGB swapchain.
+// Web swapchains commonly expose UNORM (non‑sRGB) formats; without this
+// encode, the scene appears much darker (nearly black at night).
+fn linear_to_srgb(x: vec3<f32>) -> vec3<f32> {
+  let lo = 12.92 * x;
+  let hi = 1.055 * pow(x, vec3<f32>(1.0/2.4)) - 0.055;
+  let cutoff = vec3<f32>(0.0031308);
+  return select(hi, lo, x <= cutoff);
+}
+
 @fragment
 fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   // Clamp UV to avoid sampling exactly at 0/1 edges (prevents mirrored/clamped artifacts)
@@ -52,10 +62,11 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
   var col = textureSample(scene_tex, samp_color, uv).rgb;
   // Fog (exponential) based on linearized depth
+  // Important: do NOT fog sky pixels (where no geometry was drawn and depth==1)
   let depth = textureSample(depth_tex, samp_depth, uv);
-  let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
   let density = globals.fog.a;
-  if (density > 0.0) {
+  if (density > 0.0 && depth < 0.9999) {
+    let zlin = linearize_depth(depth, globals.clip.x, globals.clip.y);
     let f = 1.0 - exp(-density * zlin);
     col = mix(col, globals.fog.rgb, clamp(f, 0.0, 1.0));
   }
@@ -64,7 +75,8 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   // Exposure: darker at night based on sun elevation
   let elev = globals.sunDirTime.y;
   let nf = smoothstep(0.0, 0.2, -elev);
-  mapped *= mix(1.0, 0.45, nf);
+  // Night attenuation: keep much brighter on web for parity with desktop
+  mapped *= mix(1.0, 0.70, nf);
   // Optional lightweight color grade (teal/orange) — subtle
   // This is intentionally conservative so it doesn’t override art direction,
   // but provides a little extra separation for the first‑playable demo.
@@ -75,5 +87,10 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   // push mids slightly warmer, shadows slightly teal
   mapped = mix(mapped, vec3<f32>(mapped.r * 1.04, mapped.g * 1.01, mapped.b * 0.96), mids * grade_strength);
   mapped = mix(mapped, vec3<f32>(mapped.r * 0.98, mapped.g * 1.02, mapped.b * 1.04), shadows * grade_strength);
-  return vec4<f32>(mapped, 1.0);
+
+  // Final output: sRGB encode before writing to the swapchain. This path is
+  // used when the swapchain format is not sRGB (e.g., WebGPU BGRA8Unorm), so
+  // we perform the correct transfer here to match desktop visuals.
+  let out_rgb = linear_to_srgb(clamp(mapped, vec3<f32>(0.0), vec3<f32>(1.0)));
+  return vec4<f32>(out_rgb, 1.0);
 }
