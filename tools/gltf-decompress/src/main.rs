@@ -1,6 +1,6 @@
 use std::{env, ffi::OsStr, fs, path::PathBuf, process::Command};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use ra_assets::gltf::load_gltf_mesh;

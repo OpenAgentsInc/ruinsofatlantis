@@ -8,6 +8,7 @@ use std::path::Path;
 
 use crate::draco::decode_draco_skinned_primitive;
 use crate::types::{AnimClip, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, VertexSkinCPU};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::util::prepare_gltf_path;
 
 pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {

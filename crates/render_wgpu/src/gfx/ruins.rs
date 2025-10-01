@@ -4,7 +4,7 @@
 //! The scene builder handles placement of ruins instances; this module focuses
 //! on mesh upload and basic metrics needed for terrain alignment/tilt.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ra_assets::gltf::load_gltf_mesh;
 use wgpu::util::DeviceExt;
 

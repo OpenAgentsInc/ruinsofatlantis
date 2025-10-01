@@ -4,10 +4,9 @@
 //! - `new_renderer` remains a thin wrapper used by `gfx::Renderer::new`.
 
 use anyhow::Context;
-use data_runtime::{
-    loader as data_loader,
-    zone::{ZoneManifest, load_zone_manifest},
-};
+#[cfg(not(target_arch = "wasm32"))]
+use data_runtime::zone::load_zone_manifest;
+use data_runtime::{loader as data_loader, zone::ZoneManifest};
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
@@ -15,7 +14,9 @@ use rand::Rng as _;
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
-use wgpu::{SurfaceTargetUnsafe, util::DeviceExt};
+#[cfg(not(target_arch = "wasm32"))]
+use wgpu::SurfaceTargetUnsafe;
+use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 

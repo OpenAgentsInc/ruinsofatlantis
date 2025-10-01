@@ -7,6 +7,7 @@ use gltf::{buffer::Data, mesh::Semantic};
 use crate::types::{Vertex, VertexSkinCPU};
 
 /// Decode a Draco-compressed primitive into POSITION/NORMAL vertices and indices.
+#[allow(dead_code)]
 pub(crate) fn decode_draco_primitive(
     doc: &gltf::Document,
     buffers: &[Data],
