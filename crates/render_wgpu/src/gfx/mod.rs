@@ -2242,10 +2242,10 @@ impl Renderer {
                 wiz_alive.push(*m);
             }
         }
-        // Nameplates default on; set RA_OVERLAYS=0 to hide
-        let draw_labels = std::env::var("RA_OVERLAYS")
-            .map(|v| v != "0")
-            .unwrap_or(true);
+        // Nameplates disabled by default; set RA_NAMEPLATES=1 to enable
+        let draw_labels = std::env::var("RA_NAMEPLATES")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         if draw_labels {
             let target_view = if self.direct_present {
                 &view

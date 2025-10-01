@@ -710,10 +710,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     };
     r.damage.draw(&mut encoder, damage_target);
 
-    // Nameplates (wizards first, then NPCs). Honor RA_OVERLAYS=0 to hide.
-    let draw_labels = std::env::var("RA_OVERLAYS")
-        .map(|v| v != "0")
-        .unwrap_or(true);
+    // Nameplates disabled by default. Set RA_NAMEPLATES=1 to enable.
+    let draw_labels = std::env::var("RA_NAMEPLATES")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     if draw_labels {
         // Alive wizards only
         let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
@@ -773,7 +773,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         {
             let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             let pos = head.truncate();
-            let target_view = if r.direct_present { &view } else { &r.attachments.scene_view };
+            let target_view = if r.direct_present {
+                &view
+            } else {
+                &r.attachments.scene_view
+            };
             r.nameplates_npc.queue_npc_labels(
                 &r.device,
                 &r.queue,
