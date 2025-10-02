@@ -323,6 +323,8 @@ pub struct Renderer {
     vox_debris_last: usize,
     vox_remesh_ms_last: f32,
     vox_collider_ms_last: f32,
+    // Deterministic debris seeding counter
+    impact_id: u64,
 
     // Voxel chunk GPU meshes (keyed by chunk coord)
     voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,

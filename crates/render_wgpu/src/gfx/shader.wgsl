@@ -46,6 +46,25 @@ fn vs_main(input: VSIn) -> VSOut {
   return out;
 }
 
+fn tri_checker(uv: vec2<f32>) -> vec3<f32> {
+  // Simple procedural checker; 0..1 pattern
+  let s = sin(uv.x * 6.2831853) * sin(uv.y * 6.2831853);
+  let v = 0.5 + 0.5 * s;
+  return vec3<f32>(v, v, v);
+}
+
+fn triplanar_albedo(world: vec3<f32>, nrm: vec3<f32>, scale: f32) -> vec3<f32> {
+  let n = normalize(abs(nrm) + vec3<f32>(1e-4));
+  let wsum = n.x + n.y + n.z;
+  let wx = n.x / wsum;
+  let wy = n.y / wsum;
+  let wz = n.z / wsum;
+  let ax = tri_checker(world.yz * scale);
+  let ay = tri_checker(world.xz * scale);
+  let az = tri_checker(world.xy * scale);
+  return ax * wx + ay * wy + az * wz;
+}
+
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let light_dir = normalize(globals.sunDirTime.xyz);
@@ -75,7 +94,15 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   // Dim baseline and ambient at night; direct light already 0 at night
   let base_term = mix(0.2, 0.02, nf);
   let amb_term = mix(0.5, 0.05, nf) * amb_int;
-  var base = model_u.color * (base_term + amb_term + 0.8 * ndl) + model_u.emissive;
+  // Optional triplanar for voxel chunks when model_u._pad.x > 0.5
+  var albedo = model_u.color;
+  if (model_u._pad.x > 0.5) {
+    let scale = max(model_u._pad.y, 1.0);
+    let tri = triplanar_albedo(in.world, n, scale);
+    // Mix with material color to keep palette tint
+    albedo = mix(albedo * 0.7, tri, 0.6);
+  }
+  var base = albedo * (base_term + amb_term + 0.8 * ndl) + model_u.emissive;
   // Subtle hemisphere ground bounce: greenish tint near low sun
   let sun = normalize(globals.sunDirTime.xyz);
   let sun_elev = max(sun.y, 0.0);
