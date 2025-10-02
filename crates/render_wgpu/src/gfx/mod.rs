@@ -332,6 +332,20 @@ pub struct Renderer {
     voxel_hashes: HashMap<(u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
+    // Debris (instanced cubes)
+    debris_vb: wgpu::Buffer,
+    debris_ib: wgpu::Buffer,
+    debris_index_count: u32,
+    debris_instances: wgpu::Buffer,
+    debris_capacity: u32,
+    debris_count: u32,
+    debris: Vec<Debris>,
+    debris_model_bg: wgpu::BindGroup,
+
+    // Demo helpers
+    voxel_grid_initial: Option<VoxelGrid>,
+    recent_impacts: Vec<(glam::DVec3, f64)>,
+    demo_hint_until: Option<f32>,
 
     // --- Player/Camera ---
     pc_index: usize,
@@ -383,6 +397,13 @@ pub struct VoxelChunkMesh {
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub idx: u32,
+}
+
+struct Debris {
+    pos: glam::Vec3,
+    vel: glam::Vec3,
+    age: f32,
+    life: f32,
 }
 
 impl Renderer {

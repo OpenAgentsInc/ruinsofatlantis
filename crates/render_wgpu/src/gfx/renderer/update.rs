@@ -1,13 +1,15 @@
 //! CPU-side update helpers extracted from gfx/mod.rs
 
+// use Debris via fully-qualified path
 use crate::gfx::Renderer;
 use crate::gfx::chunkcol;
-use crate::gfx::types::{InstanceSkin, ParticleInstance};
+use crate::gfx::types::{Instance, InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 use crate::server_ext::CollideProjectiles;
 use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
+// use destructible via fully-qualified path
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -632,7 +634,7 @@ impl Renderer {
         self.process_voxel_queues();
     }
 
-    fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
+    pub(crate) fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
         let Some(grid) = self.voxel_grid.as_mut() else {
             return;
         };
@@ -653,10 +655,42 @@ impl Renderer {
                 hit.voxel.z as f64 + 0.5,
             );
             let impact = o + vc * vm;
+            let mut radius = self.destruct_cfg.voxel_size_m * 2.0;
+            // Guardrail: clamp radius so chunks touched <= max_carve_chunks
+            if let Some(maxc) = self.destruct_cfg.max_carve_chunks {
+                let mut tries = 0;
+                loop {
+                    let vm = grid.voxel_m().0;
+                    let r = radius.0 as f32;
+                    let o = grid.origin_m();
+                    let c_v = ((impact - o) / vm).as_vec3();
+                    let d = grid.dims();
+                    let csz = grid.meta().chunk;
+                    // compute chunk bounds of sphere AABB
+                    let min_v = (c_v - glam::Vec3::splat(r / vm as f32))
+                        .floor()
+                        .max(glam::Vec3::ZERO);
+                    let max_v = (c_v + glam::Vec3::splat(r / vm as f32)).ceil();
+                    let cx0 = (min_v.x as u32 / csz.x).min(d.x.saturating_sub(1) / csz.x);
+                    let cy0 = (min_v.y as u32 / csz.y).min(d.y.saturating_sub(1) / csz.y);
+                    let cz0 = (min_v.z as u32 / csz.z).min(d.z.saturating_sub(1) / csz.z);
+                    let cx1 = (max_v.x.max(0.0) as u32 / csz.x).min(d.x.saturating_sub(1) / csz.x);
+                    let cy1 = (max_v.y.max(0.0) as u32 / csz.y).min(d.y.saturating_sub(1) / csz.y);
+                    let cz1 = (max_v.z.max(0.0) as u32 / csz.z).min(d.z.saturating_sub(1) / csz.z);
+                    let count = (cx1.saturating_sub(cx0) + 1) as u64
+                        * (cy1.saturating_sub(cy0) + 1) as u64
+                        * (cz1.saturating_sub(cz0) + 1) as u64;
+                    if count as u32 <= maxc || tries > 5 {
+                        break;
+                    }
+                    radius *= 0.85; // shrink and retry
+                    tries += 1;
+                }
+            }
             let out = carve_and_spawn_debris(
                 grid,
                 impact,
-                self.destruct_cfg.voxel_size_m * 2.0,
+                radius,
                 self.destruct_cfg.seed,
                 self.impact_id,
                 self.destruct_cfg.max_debris,
@@ -681,6 +715,32 @@ impl Renderer {
             }
             self.impact_id = self.impact_id.wrapping_add(1);
             self.vox_debris_last = out.positions_m.len();
+            // Stash recent impacts (for quick replay)
+            if !out.positions_m.is_empty() {
+                let rec = (impact, radius.0);
+                if self.recent_impacts.len() >= 3 {
+                    self.recent_impacts.remove(0);
+                }
+                self.recent_impacts.push(rec);
+            }
+            // Spawn visible debris instances (cubes)
+            let _vsize = grid.voxel_m().0 as f32;
+            for (i, p) in out.positions_m.iter().enumerate() {
+                let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                let vel = out
+                    .velocities_mps
+                    .get(i)
+                    .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                    .unwrap_or(glam::Vec3::Y * 2.5);
+                if (self.debris.len() as u32) < self.debris_capacity {
+                    self.debris.push(crate::gfx::Debris {
+                        pos,
+                        vel,
+                        age: 0.0,
+                        life: 2.5,
+                    });
+                }
+            }
             // Enqueue chunks deterministically
             let enq = grid.pop_dirty_chunks(usize::MAX);
             self.chunk_queue.enqueue_many(enq);
@@ -757,6 +817,53 @@ impl Renderer {
         }
         self.vox_last_chunks = chunks.len();
         self.vox_queue_len = self.chunk_queue.len();
+    }
+
+    pub(crate) fn update_debris(&mut self, dt: f32) {
+        if self.debris.is_empty() {
+            self.debris_count = 0;
+            return;
+        }
+        let g = glam::Vec3::new(0.0, -9.8, 0.0);
+        let mut instances: Vec<Instance> = Vec::with_capacity(self.debris.len());
+        let vsize = self.destruct_cfg.voxel_size_m.0 as f32;
+        let half = vsize * 0.5;
+        let mut i = 0usize;
+        while i < self.debris.len() {
+            let d = &mut self.debris[i];
+            d.vel += g * dt;
+            d.pos += d.vel * dt;
+            // Ground collision
+            let (h, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, d.pos.x, d.pos.z);
+            let floor = h + half;
+            if d.pos.y < floor {
+                d.pos.y = floor;
+                d.vel.y = -d.vel.y * 0.35;
+                d.vel.x *= 0.98;
+                d.vel.z *= 0.98;
+            }
+            d.age += dt;
+            if d.age > d.life {
+                self.debris.swap_remove(i);
+                continue;
+            }
+            let m = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(vsize),
+                glam::Quat::IDENTITY,
+                d.pos,
+            );
+            instances.push(Instance {
+                model: m.to_cols_array_2d(),
+                color: [0.55, 0.55, 0.55],
+                selected: 0.0,
+            });
+            i += 1;
+        }
+        self.debris_count = instances.len() as u32;
+        if self.debris_count > 0 {
+            let bytes: &[u8] = bytemuck::cast_slice(&instances);
+            self.queue.write_buffer(&self.debris_instances, 0, bytes);
+        }
     }
 
     pub(crate) fn spawn_firebolt(
@@ -1036,6 +1143,62 @@ pub(super) fn wrap_angle(a: f32) -> f32 {
         x += std::f32::consts::TAU;
     }
     x
+}
+
+impl Renderer {
+    pub(crate) fn reset_voxel_and_replay(&mut self) {
+        // Reset grid to initial state if available
+        let initial = self.voxel_grid_initial.clone();
+        if let Some(init) = initial {
+            self.voxel_grid = Some(init);
+            self.impact_id = 0;
+            self.voxel_meshes.clear();
+            self.voxel_hashes.clear();
+            self.chunk_colliders.clear();
+            self.static_index = None;
+            // Enqueue all chunks
+            if let Some(ref grid) = self.voxel_grid {
+                let dims = grid.dims();
+                let csz = grid.meta().chunk;
+                let nx = dims.x.div_ceil(csz.x);
+                let ny = dims.y.div_ceil(csz.y);
+                let nz = dims.z.div_ceil(csz.z);
+                for cz in 0..nz {
+                    for cy in 0..ny {
+                        for cx in 0..nx {
+                            self.chunk_queue
+                                .enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                        }
+                    }
+                }
+                self.vox_queue_len = self.chunk_queue.len();
+            }
+            // Clear debris
+            self.debris.clear();
+            self.debris_count = 0;
+            // Replay recent impacts deterministically
+            let rec = self.recent_impacts.clone();
+            if let Some(grid) = self.voxel_grid.as_mut() {
+                for (center, r) in rec {
+                    let _ = server_core::destructible::carve_and_spawn_debris(
+                        grid,
+                        center,
+                        core_units::Length::meters(r),
+                        self.destruct_cfg.seed,
+                        self.impact_id,
+                        self.destruct_cfg.max_debris,
+                    );
+                    self.impact_id = self.impact_id.wrapping_add(1);
+                    let enq = grid.pop_dirty_chunks(usize::MAX);
+                    self.chunk_queue.enqueue_many(enq);
+                }
+            }
+            log::info!(
+                "Voxel world reset; replayed {} impacts",
+                self.recent_impacts.len()
+            );
+        }
+    }
 }
 
 pub(super) fn rand_unit() -> f32 {
