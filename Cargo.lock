@@ -4925,6 +4925,8 @@ dependencies = [
  "client_core",
  "client_runtime",
  "collision_static",
+ "core_materials",
+ "core_units",
  "data_runtime",
  "ecs_core",
  "glam 0.30.8",

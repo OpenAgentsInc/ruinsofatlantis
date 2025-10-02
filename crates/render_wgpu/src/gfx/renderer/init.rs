@@ -10,8 +10,11 @@ use data_runtime::{loader as data_loader, zone::ZoneManifest};
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
+use glam::{DVec3, UVec3};
+use server_core::destructible::config::DestructibleConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
@@ -957,6 +960,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         (1.0, 2.0)
     };
 
+    // Parse CLI flags for destructibles
+    let dcfg = DestructibleConfig::from_args(std::env::args());
+
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
         let mdl = crate::gfx::types::Model {
@@ -980,7 +986,42 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         })
     };
 
-    Ok(crate::gfx::Renderer {
+    // Optionally create a demo voxel grid from flags (--voxel-demo)
+    let voxel_grid = if dcfg.demo_grid {
+        let chunk = dcfg.chunk;
+        let dims = UVec3::new(chunk.x * 2, chunk.y, chunk.z * 2);
+        let meta = VoxelProxyMeta {
+            object_id: voxel_proxy::GlobalId(1),
+            origin_m: DVec3::ZERO,
+            voxel_m: dcfg.voxel_size_m,
+            dims,
+            chunk,
+            material: dcfg.material,
+        };
+        // Shell surface marks for a centered box
+        let mut surf = vec![0u8; (dims.x * dims.y * dims.z) as usize];
+        let idx =
+            |x: u32, y: u32, z: u32| -> usize { (x + y * dims.x + z * dims.x * dims.y) as usize };
+        let (x0, x1) = (2, dims.x.saturating_sub(3));
+        let (y0, y1) = (2, dims.y.saturating_sub(3));
+        let (z0, z1) = (2, dims.z.saturating_sub(3));
+        for z in z0..=z1 {
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    if x == x0 || x == x1 || y == y0 || y == y1 || z == z0 || z == z1 {
+                        surf[idx(x, y, z)] = 1;
+                    }
+                }
+            }
+        }
+        let grid = voxelize_surface_fill(meta, &surf, dcfg.close_surfaces);
+        Some(grid)
+    } else {
+        None
+    };
+
+    // Build the renderer struct first so we can optionally seed the voxel chunk queue
+    let mut renderer = crate::gfx::Renderer {
         surface,
         device,
         queue,
@@ -1127,13 +1168,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hud,
         hud_model: Default::default(),
         // Destructible defaults; leave grid None until provided by a loader/demo
-        destruct_cfg: server_core::destructible::config::DestructibleConfig::default(),
-        voxel_grid: None,
+        destruct_cfg: dcfg,
+        voxel_grid,
         chunk_queue: server_core::destructible::queue::ChunkQueue::new(),
         chunk_colliders: Vec::new(),
         vox_last_chunks: 0,
         vox_queue_len: 0,
         vox_debris_last: 0,
+        vox_remesh_ms_last: 0.0,
+        vox_collider_ms_last: 0.0,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_model_bg,
         pc_index: scene_build.pc_index,
@@ -1209,5 +1252,26 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 glam::vec3(c[12], c[13], c[14])
             })
             .unwrap_or(glam::Vec3::ZERO),
-    })
+    };
+
+    // If a demo voxel grid was created, enqueue all chunks once so it renders immediately
+    if let Some(ref grid) = renderer.voxel_grid {
+        let dims = grid.dims();
+        let csz = grid.meta().chunk;
+        let nx = dims.x.div_ceil(csz.x);
+        let ny = dims.y.div_ceil(csz.y);
+        let nz = dims.z.div_ceil(csz.z);
+        for cz in 0..nz {
+            for cy in 0..ny {
+                for cx in 0..nx {
+                    renderer
+                        .chunk_queue
+                        .enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                }
+            }
+        }
+        renderer.vox_queue_len = renderer.chunk_queue.len();
+    }
+
+    Ok(renderer)
 }

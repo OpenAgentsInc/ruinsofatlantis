@@ -29,6 +29,8 @@ client_runtime = { version = "0.1.0", path = "../client_runtime" }
 web-time = "1.1.0"
 voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
 voxel_mesh = { version = "0.1.0", path = "../voxel_mesh" }
+core_units = { version = "0.1.0", path = "../core_units" }
+core_materials = { version = "0.1.0", path = "../core_materials" }
 
 [dev-dependencies]
 sha2 = "0.10.9"
