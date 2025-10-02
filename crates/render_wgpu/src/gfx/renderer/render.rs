@@ -593,9 +593,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.draw_calls += 1;
         }
         // Skinned: zombies
-        if !r.is_vox_onepath() && std::env::var("RA_DRAW_ZOMBIES")
-            .map(|v| v != "0")
-            .unwrap_or(true)
+        if !r.is_vox_onepath()
+            && std::env::var("RA_DRAW_ZOMBIES")
+                .map(|v| v != "0")
+                .unwrap_or(true)
         {
             log::debug!("draw: zombies x{}", r.zombie_count);
             r.draw_zombies(&mut rp);
@@ -720,7 +721,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.config.height,
             view_proj,
         );
-        let damage_target = if r.direct_present { &view } else { &r.attachments.scene_view };
+        let damage_target = if r.direct_present {
+            &view
+        } else {
+            &r.attachments.scene_view
+        };
         r.damage.draw(&mut encoder, damage_target);
     }
 
@@ -1041,8 +1046,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.hud_model.perf_enabled() {
             let ms = dt * 1000.0;
             let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
-            let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
-            r.hud.append_perf_text(r.size.width, r.size.height, &line);
+            let line0 = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
+            r.hud.append_perf_text_line(r.size.width, r.size.height, &line0, 0);
             // Destructible overlay line
             let vox = format!(
                 "vox: queue={} chunks={} skipped={} debris={} | remesh {:.2}ms coll {:.2}ms",
@@ -1053,7 +1058,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.vox_remesh_ms_last,
                 r.vox_collider_ms_last
             );
-            r.hud.append_perf_text(r.size.width, r.size.height, &vox);
+            r.hud.append_perf_text_line(r.size.width, r.size.height, &vox, 1);
             if let Some((shot, carved, meshed)) = r.vox_onepath_ui {
                 let check = |b: bool| if b { '✓' } else { ' ' };
                 let demo = format!(
@@ -1063,7 +1068,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     check(meshed),
                     r.debris.len()
                 );
-                r.hud.append_perf_text(r.size.width, r.size.height, &demo);
+                r.hud.append_perf_text_line(r.size.width, r.size.height, &demo, 2);
             }
         }
         // Short demo hint for first few seconds
