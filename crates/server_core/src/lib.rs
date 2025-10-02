@@ -1,6 +1,11 @@
 //! In‑process NPC state and simple melee AI/collision avoidance.
+//!
+//! Also hosts simple voxel destructible helpers (see `destructible` module):
+//! - Grid raycast via Amanatides & Woo DDA
+//! - Carve impact sphere + spawn debris with seeded RNG
 
 use glam::Vec3;
+pub mod destructible;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NpcId(pub u32);

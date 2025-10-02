@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::cmp::{max, min};
-use core_materials::{MaterialId, mass_for_voxel};
+use core_materials::MaterialId;
 use core_units::{Length, Mass};
 use glam::{DVec3, UVec3, Vec3};
 use std::collections::{HashSet, VecDeque};
@@ -170,7 +170,7 @@ pub fn voxelize_surface_fill(
                     if surf[idx] != 0 { continue; }
                     // if any 6-neighbor is surface, mark
                     let nbs = neighbors6(x, y, z, d);
-                    if nbs.into_iter().any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
+                    if nbs.iter().any(|&(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
                         dil[idx] = 1;
                     }
                 }
@@ -199,7 +199,7 @@ pub fn voxelize_surface_fill(
         }
     }
     while let Some((x, y, z)) = q.pop_front() {
-        for (nx, ny, nz) in neighbors6(x, y, z, d) {
+        for &(nx, ny, nz) in neighbors6(x, y, z, d).iter() {
             let i = grid.index(nx, ny, nz);
             if surf[i] == 0 && outside[i] == 0 {
                 outside[i] = 1;
@@ -230,8 +230,9 @@ pub fn carve_sphere(grid: &mut VoxelGrid, center_m: DVec3, radius: Length) -> Re
     // Compute voxel-space AABB bounds
     let to_voxel = |p: DVec3| -> Vec3 { ((p - grid.meta.origin_m) / vm).as_vec3() };
     let c_v = to_voxel(center_m);
-    let min_v = c_v - Vec3::splat((r / vm) + 1.0);
-    let max_v = c_v + Vec3::splat((r / vm) + 1.0);
+    let pad = ((r / vm) as f32) + 1.0;
+    let min_v = c_v - Vec3::splat(pad);
+    let max_v = c_v + Vec3::splat(pad);
     let xi0 = max(min_v.x.floor() as i32, 0) as u32;
     let yi0 = max(min_v.y.floor() as i32, 0) as u32;
     let zi0 = max(min_v.z.floor() as i32, 0) as u32;
@@ -286,7 +287,7 @@ fn neighbors6(x: u32, y: u32, z: u32, d: UVec3) -> Small6 {
         n: 0,
         v: [(0, 0, 0); 6],
     };
-    let mut push = |xx: u32, yy: u32, zz: u32, out: &mut Small6| {
+    let push = |xx: u32, yy: u32, zz: u32, out: &mut Small6| {
         out.v[out.n] = (xx, yy, zz);
         out.n += 1;
     };
@@ -315,13 +316,7 @@ struct Small6 {
     n: usize,
     v: [(u32, u32, u32); 6],
 }
-impl IntoIterator for Small6 {
-    type Item = (u32, u32, u32);
-    type IntoIter = core::array::IntoIter<(u32, u32, u32), 6>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.v.into_iter().take(self.n)
-    }
-}
+impl Small6 { fn iter(&self) -> core::slice::Iter<'_, (u32,u32,u32)> { self.v[..self.n].iter() } }
 
 #[cfg(test)]
 mod tests {
