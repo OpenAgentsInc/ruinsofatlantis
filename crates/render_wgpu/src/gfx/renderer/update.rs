@@ -689,8 +689,14 @@ impl Renderer {
                             contents: bytemuck::cast_slice(&mb.indices),
                             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                         });
-                    self.voxel_meshes
-                        .insert((c.x, c.y, c.z), crate::gfx::VoxelChunkMesh { vb, ib, idx: mb.indices.len() as u32 });
+                    self.voxel_meshes.insert(
+                        (c.x, c.y, c.z),
+                        crate::gfx::VoxelChunkMesh {
+                            vb,
+                            ib,
+                            idx: mb.indices.len() as u32,
+                        },
+                    );
                 }
             }
             // Refresh coarse colliders for these chunks
