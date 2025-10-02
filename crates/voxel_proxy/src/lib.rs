@@ -58,19 +58,27 @@ impl VoxelGrid {
 
     /// Access proxy metadata.
     #[inline]
-    pub fn meta(&self) -> &VoxelProxyMeta { &self.meta }
+    pub fn meta(&self) -> &VoxelProxyMeta {
+        &self.meta
+    }
 
     /// Grid dimensions (voxels).
     #[inline]
-    pub fn dims(&self) -> UVec3 { self.meta.dims }
+    pub fn dims(&self) -> UVec3 {
+        self.meta.dims
+    }
 
     /// Grid origin in meters.
     #[inline]
-    pub fn origin_m(&self) -> DVec3 { self.meta.origin_m }
+    pub fn origin_m(&self) -> DVec3 {
+        self.meta.origin_m
+    }
 
     /// Voxel edge length in meters.
     #[inline]
-    pub fn voxel_m(&self) -> Length { self.meta.voxel_m }
+    pub fn voxel_m(&self) -> Length {
+        self.meta.voxel_m
+    }
 
     /// Linear index for (x,y,z).
     #[inline]
@@ -137,7 +145,9 @@ impl VoxelGrid {
 
     /// Number of dirty chunks currently queued.
     #[inline]
-    pub fn dirty_len(&self) -> usize { self.dirty_chunks.len() }
+    pub fn dirty_len(&self) -> usize {
+        self.dirty_chunks.len()
+    }
 
     /// Bounds check helper.
     #[inline]
@@ -167,17 +177,26 @@ pub fn voxelize_surface_fill(
             for y in 0..d.y {
                 for x in 0..d.x {
                     let idx = grid.index(x, y, z);
-                    if surf[idx] != 0 { continue; }
+                    if surf[idx] != 0 {
+                        continue;
+                    }
                     // if any 6-neighbor is surface, mark
                     let nbs = neighbors6(x, y, z, d);
-                    if nbs.iter().any(|&(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
+                    if nbs
+                        .iter()
+                        .any(|&(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0)
+                    {
                         dil[idx] = 1;
                     }
                 }
             }
         }
         // Preserve original surface by OR-ing
-        for i in 0..surf.len() { if surf[i] != 0 { dil[i] = 1; } }
+        for i in 0..surf.len() {
+            if surf[i] != 0 {
+                dil[i] = 1;
+            }
+        }
         surf = dil;
     }
 
@@ -316,7 +335,11 @@ struct Small6 {
     n: usize,
     v: [(u32, u32, u32); 6],
 }
-impl Small6 { fn iter(&self) -> core::slice::Iter<'_, (u32,u32,u32)> { self.v[..self.n].iter() } }
+impl Small6 {
+    fn iter(&self) -> core::slice::Iter<'_, (u32, u32, u32)> {
+        self.v[..self.n].iter()
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -404,14 +427,14 @@ mod tests {
 
     #[test]
     fn close_surfaces_preserves_surface_voxels() {
-        let d = UVec3::new(8,8,8);
-        let meta = mk_meta(d, UVec3::new(4,4,4));
-        let mut surf = vec![0u8; (d.x*d.y*d.z) as usize];
+        let d = UVec3::new(8, 8, 8);
+        let meta = mk_meta(d, UVec3::new(4, 4, 4));
+        let mut surf = vec![0u8; (d.x * d.y * d.z) as usize];
         // Mark a single surface voxel in the center
-        let idx = |x:u32,y:u32,z:u32| -> usize { (x + y*d.x + z*d.x*d.y) as usize };
-        surf[idx(4,4,4)] = 1;
+        let idx = |x: u32, y: u32, z: u32| -> usize { (x + y * d.x + z * d.x * d.y) as usize };
+        surf[idx(4, 4, 4)] = 1;
         let g = voxelize_surface_fill(meta, &surf, true);
         // The marked cell should remain solid after dilation + flood fill
-        assert!(g.is_solid(4,4,4));
+        assert!(g.is_solid(4, 4, 4));
     }
 }
