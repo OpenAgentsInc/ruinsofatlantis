@@ -64,6 +64,9 @@ use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use collision_static::chunks::{self as chunkcol, StaticChunk};
 use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
+use std::collections::HashMap;
+#[allow(unused_imports)]
+use voxel_mesh::MeshBuffers;
 use voxel_proxy::VoxelGrid;
 use winit::window::Window;
 
@@ -319,6 +322,11 @@ pub struct Renderer {
     vox_queue_len: usize,
     vox_debris_last: usize,
 
+    // Voxel chunk GPU meshes (keyed by chunk coord)
+    voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,
+    // Simple model color for voxels (neutral gray)
+    voxel_model_bg: wgpu::BindGroup,
+
     // --- Player/Camera ---
     pc_index: usize,
     player: client_core::controller::PlayerController,
@@ -363,6 +371,12 @@ pub struct Renderer {
     // NPC wizard casting rotation state
     wizard_fire_cycle_count: Vec<u32>,
     wizard_fireball_next_at: Vec<u32>,
+}
+
+pub struct VoxelChunkMesh {
+    pub vb: wgpu::Buffer,
+    pub ib: wgpu::Buffer,
+    pub idx: u32,
 }
 
 impl Renderer {
