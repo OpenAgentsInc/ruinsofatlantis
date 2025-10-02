@@ -616,14 +616,16 @@ impl Renderer {
             }
         }
 
-        // 2.6) Projectiles that died without hitting an NPC: attempt voxel impact
+        // 2.6) Projectiles that died without hitting an NPC: attempt voxel impact (Fireball only)
         let mut i = 0usize;
         while i < self.projectiles.len() {
             let kill = self.last_time >= self.projectiles[i].t_die;
             if kill {
                 let p1 = self.projectiles[i].pos;
                 let p0 = p1 - self.projectiles[i].vel * dt.max(1e-3);
-                self.try_voxel_impact(p0, p1);
+                if let crate::gfx::fx::ProjectileKind::Fireball { .. } = self.projectiles[i].kind {
+                    self.try_voxel_impact(p0, p1);
+                }
                 self.projectiles.swap_remove(i);
             } else {
                 i += 1;
