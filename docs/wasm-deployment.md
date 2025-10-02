@@ -415,3 +415,12 @@ gh release create <tag> ruinsofatlantis-wasm-<tag>.zip \
 Notes
 - Keep the `.zip` as the canonical immutable artifact; filenames inside are content‑hashed by Trunk.
 - If hosting under a subpath, consider passing `--public-url` so runtime asset URLs resolve.
+
+Run a release bundle locally
+- Unzip the Release asset (`ruinsofatlantis-wasm-<tag>.zip`) and serve the unzipped folder with any static HTTP server (browsers block `file://` for WASM):
+
+  - Python (3.x): `python3 -m http.server 8080 --directory /path/to/unzipped`
+  - Node (npx): `npx --yes serve -p 8080 /path/to/unzipped`
+  - Rust (miniserve): `cargo install miniserve && miniserve /path/to/unzipped -p 8080`
+
+Then open http://127.0.0.1:8080 in your browser. Ensure you serve the directory that contains `index.html`, the hashed `ruinsofatlantis-*.js`, `*_bg.wasm`, and `assets/` + `packs/`.

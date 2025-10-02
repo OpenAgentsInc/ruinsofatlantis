@@ -56,3 +56,7 @@ Notes
 
 Versioned WASM Releases
 - We publish immutable, versioned WASM bundles as GitHub Release assets. See docs: `docs/wasm-deployment.md:14`.
+- Run a release bundle locally (unzip first, then serve over HTTP):
+  - Python: `python3 -m http.server 8080 --directory /path/to/unzipped`
+  - Node: `npx --yes serve -p 8080 /path/to/unzipped`
+  - Rust: `miniserve /path/to/unzipped -p 8080` (install with `cargo install miniserve`)
