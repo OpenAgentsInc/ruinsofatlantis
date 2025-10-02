@@ -89,15 +89,16 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
     let csz = grid.meta().chunk;
     let mut keep = Vec::with_capacity(all.indices.len() / 3);
     // Select triangles whose centroid falls within the chunk voxel bounds
+    let eps: f32 = 1e-6;
     for tri in all.indices.chunks_exact(3) {
         let p0 = Vec3::from(all.positions[tri[0] as usize]);
         let p1 = Vec3::from(all.positions[tri[1] as usize]);
         let p2 = Vec3::from(all.positions[tri[2] as usize]);
         let centroid = (p0 + p1 + p2) / 3.0;
         let v = (centroid - origin) / vm; // voxel coords (float)
-        let vx = v.x.floor() as i32;
-        let vy = v.y.floor() as i32;
-        let vz = v.z.floor() as i32;
+        let vx = (v.x - eps).floor() as i32;
+        let vy = (v.y - eps).floor() as i32;
+        let vz = (v.z - eps).floor() as i32;
         if vx >= xr.start as i32
             && vx < xr.end as i32
             && vy >= yr.start as i32
@@ -354,5 +355,26 @@ mod tests {
         let m1 = greedy_mesh_chunk(&g, UVec3::new(1, 0, 0));
         assert_eq!(m0.indices.len(), 0);
         assert_eq!(m1.indices.len(), 36);
+    }
+
+    #[test]
+    fn boundary_face_goes_to_lower_chunk_with_bias() {
+        // Single voxel exactly at x=16 boundary between chunks (0,0,0) and (1,0,0)
+        let meta = VoxelProxyMeta {
+            object_id: GlobalId(1),
+            origin_m: DVec3::ZERO,
+            voxel_m: Length::meters(1.0),
+            dims: UVec3::new(32, 4, 4),
+            chunk: UVec3::new(16, 16, 16),
+            material: find_material_id("stone").unwrap(),
+        };
+        let mut g = voxel_proxy::VoxelGrid::new(meta);
+        g.set(16, 1, 1, true);
+        let left = greedy_mesh_chunk(&g, UVec3::new(0, 0, 0));
+        let right = greedy_mesh_chunk(&g, UVec3::new(1, 0, 0));
+        // Left chunk should own exactly the boundary face (2 triangles = 6 indices)
+        assert_eq!(left.indices.len(), 6);
+        // Right chunk should own the remaining 5 faces (10 triangles = 30 indices)
+        assert_eq!(right.indices.len(), 30);
     }
 }
