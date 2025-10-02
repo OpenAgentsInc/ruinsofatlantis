@@ -276,6 +276,7 @@ pub mod config {
         pub profile: bool,
         pub seed: u64,
         pub debris_vs_world: bool,
+        pub demo_grid: bool,
     }
 
     impl Default for DestructibleConfig {
@@ -290,6 +291,7 @@ pub mod config {
                 profile: false,
                 seed: 0xC0FFEE,
                 debris_vs_world: false,
+                demo_grid: false,
             }
         }
     }
@@ -357,6 +359,9 @@ pub mod config {
                     "--debris-vs-world" => {
                         cfg.debris_vs_world = true;
                     }
+                    "--voxel-demo" | "--voxel-grid" => {
+                        cfg.demo_grid = true;
+                    }
                     _ => {}
                 }
             }
@@ -383,6 +388,7 @@ pub mod config {
                 "--close-surfaces",
                 "--seed",
                 "1234",
+                "--voxel-demo",
             ];
             let c = DestructibleConfig::from_args(args);
             assert!((f64::from(c.voxel_size_m) - 0.1).abs() < 1e-12);
@@ -390,6 +396,7 @@ pub mod config {
             assert_eq!(c.max_debris, 42);
             assert!(c.close_surfaces);
             assert_eq!(c.seed, 1234);
+            assert!(c.demo_grid);
         }
     }
 }

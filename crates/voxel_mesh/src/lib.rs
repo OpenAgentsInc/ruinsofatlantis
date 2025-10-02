@@ -232,17 +232,7 @@ fn greedy_emit(
                 }
                 // Emit quad at rectangle [x..x+w_run), [y..y+h_run)
                 emit_rect(
-                    mesh,
-                    axis,
-                    layer,
-                    x,
-                    y,
-                    w_run,
-                    h_run,
-                    vm,
-                    origin,
-                    normal,
-                    pos_normal,
+                    mesh, axis, layer, x, y, w_run, h_run, vm, origin, normal, pos_normal,
                 );
                 x += w_run; // advance past rect
             } else {

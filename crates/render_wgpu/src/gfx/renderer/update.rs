@@ -9,6 +9,10 @@ use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use wgpu::util::DeviceExt;
 
 impl Renderer {
@@ -669,6 +673,7 @@ impl Renderer {
         let budget = self.destruct_cfg.max_chunk_remesh.max(1);
         let chunks = self.chunk_queue.pop_budget(budget);
         if let Some(grid) = self.voxel_grid.as_ref() {
+            let t0 = Instant::now();
             // Mesh changed chunks and upload to GPU; drop entries that became empty
             for c in &chunks {
                 let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
@@ -689,12 +694,20 @@ impl Renderer {
                             contents: bytemuck::cast_slice(&mb.indices),
                             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                         });
-                    self.voxel_meshes
-                        .insert((c.x, c.y, c.z), crate::gfx::VoxelChunkMesh { vb, ib, idx: mb.indices.len() as u32 });
+                    self.voxel_meshes.insert(
+                        (c.x, c.y, c.z),
+                        crate::gfx::VoxelChunkMesh {
+                            vb,
+                            ib,
+                            idx: mb.indices.len() as u32,
+                        },
+                    );
                 }
             }
+            self.vox_remesh_ms_last = t0.elapsed().as_secs_f32() * 1000.0;
             // Refresh coarse colliders for these chunks
             if self.destruct_cfg.debris_vs_world {
+                let t1 = Instant::now();
                 let mut updates: Vec<collision_static::chunks::StaticChunk> = Vec::new();
                 for c in &chunks {
                     if let Some(col) = chunkcol::build_chunk_collider(grid, *c) {
@@ -705,6 +718,7 @@ impl Renderer {
                     chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
                     self.static_index = Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
                 }
+                self.vox_collider_ms_last = t1.elapsed().as_secs_f32() * 1000.0;
             }
         }
         self.vox_last_chunks = chunks.len();

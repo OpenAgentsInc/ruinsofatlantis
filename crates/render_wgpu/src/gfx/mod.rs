@@ -321,6 +321,8 @@ pub struct Renderer {
     vox_last_chunks: usize,
     vox_queue_len: usize,
     vox_debris_last: usize,
+    vox_remesh_ms_last: f32,
+    vox_collider_ms_last: f32,
 
     // Voxel chunk GPU meshes (keyed by chunk coord)
     voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,
