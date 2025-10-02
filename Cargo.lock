@@ -1643,6 +1643,7 @@ dependencies = [
  "approx",
  "glam 0.30.8",
  "smallvec",
+ "voxel_proxy",
 ]
 
 [[package]]

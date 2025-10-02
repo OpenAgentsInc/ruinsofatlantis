@@ -15,7 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::cmp::{max, min};
-use core_materials::{MaterialId, mass_for_voxel};
+use core_materials::MaterialId;
 use core_units::{Length, Mass};
 use glam::{DVec3, UVec3, Vec3};
 use std::collections::{HashSet, VecDeque};
@@ -58,19 +58,27 @@ impl VoxelGrid {
 
     /// Access proxy metadata.
     #[inline]
-    pub fn meta(&self) -> &VoxelProxyMeta { &self.meta }
+    pub fn meta(&self) -> &VoxelProxyMeta {
+        &self.meta
+    }
 
     /// Grid dimensions (voxels).
     #[inline]
-    pub fn dims(&self) -> UVec3 { self.meta.dims }
+    pub fn dims(&self) -> UVec3 {
+        self.meta.dims
+    }
 
     /// Grid origin in meters.
     #[inline]
-    pub fn origin_m(&self) -> DVec3 { self.meta.origin_m }
+    pub fn origin_m(&self) -> DVec3 {
+        self.meta.origin_m
+    }
 
     /// Voxel edge length in meters.
     #[inline]
-    pub fn voxel_m(&self) -> Length { self.meta.voxel_m }
+    pub fn voxel_m(&self) -> Length {
+        self.meta.voxel_m
+    }
 
     /// Linear index for (x,y,z).
     #[inline]
@@ -105,6 +113,26 @@ impl VoxelGrid {
         UVec3::new(x / c.x.max(1), y / c.y.max(1), z / c.z.max(1))
     }
 
+    /// Bounds (start..end) in voxel coordinates for a given chunk coordinate.
+    pub fn chunk_bounds_voxels(
+        &self,
+        chunk: UVec3,
+    ) -> (
+        core::ops::Range<u32>,
+        core::ops::Range<u32>,
+        core::ops::Range<u32>,
+    ) {
+        let d = self.meta.dims;
+        let c = self.meta.chunk;
+        let x0 = chunk.x.saturating_mul(c.x);
+        let y0 = chunk.y.saturating_mul(c.y);
+        let z0 = chunk.z.saturating_mul(c.z);
+        let x1 = (x0 + c.x).min(d.x);
+        let y1 = (y0 + c.y).min(d.y);
+        let z1 = (z0 + c.z).min(d.z);
+        (x0..x1, y0..y1, z0..z1)
+    }
+
     #[inline]
     fn mark_chunk_dirty_xyz(&mut self, x: u32, y: u32, z: u32) {
         let cc = self.chunk_of(x, y, z);
@@ -137,7 +165,9 @@ impl VoxelGrid {
 
     /// Number of dirty chunks currently queued.
     #[inline]
-    pub fn dirty_len(&self) -> usize { self.dirty_chunks.len() }
+    pub fn dirty_len(&self) -> usize {
+        self.dirty_chunks.len()
+    }
 
     /// Bounds check helper.
     #[inline]
@@ -167,17 +197,26 @@ pub fn voxelize_surface_fill(
             for y in 0..d.y {
                 for x in 0..d.x {
                     let idx = grid.index(x, y, z);
-                    if surf[idx] != 0 { continue; }
+                    if surf[idx] != 0 {
+                        continue;
+                    }
                     // if any 6-neighbor is surface, mark
                     let nbs = neighbors6(x, y, z, d);
-                    if nbs.into_iter().any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
+                    if nbs
+                        .iter()
+                        .any(|&(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0)
+                    {
                         dil[idx] = 1;
                     }
                 }
             }
         }
         // Preserve original surface by OR-ing
-        for i in 0..surf.len() { if surf[i] != 0 { dil[i] = 1; } }
+        for i in 0..surf.len() {
+            if surf[i] != 0 {
+                dil[i] = 1;
+            }
+        }
         surf = dil;
     }
 
@@ -199,7 +238,7 @@ pub fn voxelize_surface_fill(
         }
     }
     while let Some((x, y, z)) = q.pop_front() {
-        for (nx, ny, nz) in neighbors6(x, y, z, d) {
+        for &(nx, ny, nz) in neighbors6(x, y, z, d).iter() {
             let i = grid.index(nx, ny, nz);
             if surf[i] == 0 && outside[i] == 0 {
                 outside[i] = 1;
@@ -230,8 +269,9 @@ pub fn carve_sphere(grid: &mut VoxelGrid, center_m: DVec3, radius: Length) -> Re
     // Compute voxel-space AABB bounds
     let to_voxel = |p: DVec3| -> Vec3 { ((p - grid.meta.origin_m) / vm).as_vec3() };
     let c_v = to_voxel(center_m);
-    let min_v = c_v - Vec3::splat((r / vm) + 1.0);
-    let max_v = c_v + Vec3::splat((r / vm) + 1.0);
+    let pad = ((r / vm) as f32) + 1.0;
+    let min_v = c_v - Vec3::splat(pad);
+    let max_v = c_v + Vec3::splat(pad);
     let xi0 = max(min_v.x.floor() as i32, 0) as u32;
     let yi0 = max(min_v.y.floor() as i32, 0) as u32;
     let zi0 = max(min_v.z.floor() as i32, 0) as u32;
@@ -286,7 +326,7 @@ fn neighbors6(x: u32, y: u32, z: u32, d: UVec3) -> Small6 {
         n: 0,
         v: [(0, 0, 0); 6],
     };
-    let mut push = |xx: u32, yy: u32, zz: u32, out: &mut Small6| {
+    let push = |xx: u32, yy: u32, zz: u32, out: &mut Small6| {
         out.v[out.n] = (xx, yy, zz);
         out.n += 1;
     };
@@ -315,11 +355,10 @@ struct Small6 {
     n: usize,
     v: [(u32, u32, u32); 6],
 }
-impl IntoIterator for Small6 {
-    type Item = (u32, u32, u32);
-    type IntoIter = core::array::IntoIter<(u32, u32, u32), 6>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.v.into_iter().take(self.n)
+impl Small6 {
+    #[inline]
+    fn iter(&self) -> core::slice::Iter<'_, (u32, u32, u32)> {
+        self.v[..self.n].iter()
     }
 }
 
@@ -409,14 +448,14 @@ mod tests {
 
     #[test]
     fn close_surfaces_preserves_surface_voxels() {
-        let d = UVec3::new(8,8,8);
-        let meta = mk_meta(d, UVec3::new(4,4,4));
-        let mut surf = vec![0u8; (d.x*d.y*d.z) as usize];
+        let d = UVec3::new(8, 8, 8);
+        let meta = mk_meta(d, UVec3::new(4, 4, 4));
+        let mut surf = vec![0u8; (d.x * d.y * d.z) as usize];
         // Mark a single surface voxel in the center
-        let idx = |x:u32,y:u32,z:u32| -> usize { (x + y*d.x + z*d.x*d.y) as usize };
-        surf[idx(4,4,4)] = 1;
+        let idx = |x: u32, y: u32, z: u32| -> usize { (x + y * d.x + z * d.x * d.y) as usize };
+        surf[idx(4, 4, 4)] = 1;
         let g = voxelize_surface_fill(meta, &surf, true);
         // The marked cell should remain solid after dilation + flood fill
-        assert!(g.is_solid(4,4,4));
+        assert!(g.is_solid(4, 4, 4));
     }
 }

@@ -75,6 +75,62 @@ pub fn greedy_mesh_all(grid: &VoxelGrid) -> MeshBuffers {
     mesh
 }
 
+/// Generate a meshed surface for a single chunk by filtering the full mesh to triangles
+/// whose centroids belong to the given chunk coordinate. This prioritizes correctness
+/// and chunk ownership of faces; optimized per-slice greedy meshing can layer on later.
+pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
+    let all = greedy_mesh_all(grid);
+    if all.indices.is_empty() {
+        return all;
+    }
+    let (xr, yr, zr) = grid.chunk_bounds_voxels(chunk);
+    let origin = grid.meta().origin_m.as_vec3();
+    let vm = grid.meta().voxel_m.0 as f32;
+    let csz = grid.meta().chunk;
+    let mut keep = Vec::with_capacity(all.indices.len() / 3);
+    // Select triangles whose centroid falls within the chunk voxel bounds
+    let eps: f32 = 1e-6;
+    for tri in all.indices.chunks_exact(3) {
+        let p0 = Vec3::from(all.positions[tri[0] as usize]);
+        let p1 = Vec3::from(all.positions[tri[1] as usize]);
+        let p2 = Vec3::from(all.positions[tri[2] as usize]);
+        let centroid = (p0 + p1 + p2) / 3.0;
+        let v = (centroid - origin) / vm; // voxel coords (float)
+        let vx = (v.x - eps).floor() as i32;
+        let vy = (v.y - eps).floor() as i32;
+        let vz = (v.z - eps).floor() as i32;
+        if vx >= xr.start as i32
+            && vx < xr.end as i32
+            && vy >= yr.start as i32
+            && vy < yr.end as i32
+            && vz >= zr.start as i32
+            && vz < zr.end as i32
+        {
+            keep.push([tri[0], tri[1], tri[2]]);
+        }
+    }
+    if keep.is_empty() {
+        return MeshBuffers::default();
+    }
+    // Reindex vertices to only include those referenced by kept triangles
+    use std::collections::HashMap;
+    let mut map: HashMap<u32, u32> = HashMap::new();
+    let mut out = MeshBuffers::default();
+    for tri in keep.into_iter() {
+        for &old_i in &tri {
+            let next = *map.entry(old_i).or_insert_with(|| {
+                let p = all.positions[old_i as usize];
+                let n = all.normals[old_i as usize];
+                out.positions.push(p);
+                out.normals.push(n);
+                (out.positions.len() as u32) - 1
+            });
+            out.indices.push(next);
+        }
+    }
+    out
+}
+
 fn plane_dims(axis: u32, d: UVec3) -> (u32, u32, u32, UVec3, UVec3, UVec3) {
     match axis {
         // (w,h,ld)
@@ -280,5 +336,45 @@ mod tests {
         g.set(0, 0, 0, true);
         let m = greedy_mesh_all(&g);
         assert_eq!(m.indices.len(), 36);
+    }
+
+    #[test]
+    fn chunk_mesher_filters_to_correct_chunk() {
+        // 32x16x16 with chunk size 16^3: voxel at x=17,y=2,z=3
+        let meta = VoxelProxyMeta {
+            object_id: GlobalId(1),
+            origin_m: DVec3::ZERO,
+            voxel_m: Length::meters(1.0),
+            dims: UVec3::new(32, 16, 16),
+            chunk: UVec3::new(16, 16, 16),
+            material: find_material_id("stone").unwrap(),
+        };
+        let mut g = voxel_proxy::VoxelGrid::new(meta);
+        g.set(17, 2, 3, true);
+        let m0 = greedy_mesh_chunk(&g, UVec3::new(0, 0, 0));
+        let m1 = greedy_mesh_chunk(&g, UVec3::new(1, 0, 0));
+        assert_eq!(m0.indices.len(), 0);
+        assert_eq!(m1.indices.len(), 36);
+    }
+
+    #[test]
+    fn boundary_face_goes_to_lower_chunk_with_bias() {
+        // Single voxel exactly at x=16 boundary between chunks (0,0,0) and (1,0,0)
+        let meta = VoxelProxyMeta {
+            object_id: GlobalId(1),
+            origin_m: DVec3::ZERO,
+            voxel_m: Length::meters(1.0),
+            dims: UVec3::new(32, 4, 4),
+            chunk: UVec3::new(16, 16, 16),
+            material: find_material_id("stone").unwrap(),
+        };
+        let mut g = voxel_proxy::VoxelGrid::new(meta);
+        g.set(16, 1, 1, true);
+        let left = greedy_mesh_chunk(&g, UVec3::new(0, 0, 0));
+        let right = greedy_mesh_chunk(&g, UVec3::new(1, 0, 0));
+        // Left chunk should own exactly the boundary face (2 triangles = 6 indices)
+        assert_eq!(left.indices.len(), 6);
+        // Right chunk should own the remaining 5 faces (10 triangles = 30 indices)
+        assert_eq!(right.indices.len(), 30);
     }
 }
