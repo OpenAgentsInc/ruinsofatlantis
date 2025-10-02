@@ -1047,7 +1047,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             let ms = dt * 1000.0;
             let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
             let line0 = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
-            r.hud.append_perf_text_line(r.size.width, r.size.height, &line0, 0);
+            r.hud
+                .append_perf_text_line(r.size.width, r.size.height, &line0, 0);
             // Destructible overlay line
             let vox = format!(
                 "vox: queue={} chunks={} skipped={} debris={} | remesh {:.2}ms coll {:.2}ms",
@@ -1058,7 +1059,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.vox_remesh_ms_last,
                 r.vox_collider_ms_last
             );
-            r.hud.append_perf_text_line(r.size.width, r.size.height, &vox, 1);
+            r.hud
+                .append_perf_text_line(r.size.width, r.size.height, &vox, 1);
             if let Some((shot, carved, meshed)) = r.vox_onepath_ui {
                 let check = |b: bool| if b { '✓' } else { ' ' };
                 let demo = format!(
@@ -1068,7 +1070,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     check(meshed),
                     r.debris.len()
                 );
-                r.hud.append_perf_text_line(r.size.width, r.size.height, &demo, 2);
+                r.hud
+                    .append_perf_text_line(r.size.width, r.size.height, &demo, 2);
             }
         }
         // Short demo hint for first few seconds

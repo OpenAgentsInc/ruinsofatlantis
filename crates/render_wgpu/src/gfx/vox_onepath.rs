@@ -66,12 +66,7 @@ struct App {
 }
 
 #[derive(Default)]
-struct Script {
-    t: f32,
-    shot: bool,
-    carved: bool,
-    saved: bool,
-}
+struct Script { shot: bool, carved: bool, saved: bool }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, el: &ActiveEventLoop) {
@@ -195,42 +190,6 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => el.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
-                // Advance a tiny scripted timeline
-                let dt = (state.last_time - state.start.elapsed().as_secs_f32()).abs();
-                self.script.t += if dt.is_finite() {
-                    dt.max(1.0 / 120.0)
-                } else {
-                    1.0 / 60.0
-                };
-
-                // Fire a single carve along camera forward after a short delay
-                if !self.script.shot && self.script.t > 0.4 {
-                    let aspect = state.size.width as f32 / state.size.height.max(1) as f32;
-                    let (off, look) = camera_sys::compute_local_orbit_offsets(
-                        state.cam_distance,
-                        state.cam_orbit_yaw,
-                        state.cam_orbit_pitch,
-                        state.cam_lift,
-                        state.cam_look_height,
-                    );
-                    // Zero smoothing for this query
-                    let (cam, _g) = camera_sys::third_person_follow(
-                        &mut state.cam_follow,
-                        state.scene_inputs.pos(),
-                        glam::Quat::IDENTITY,
-                        off,
-                        look,
-                        aspect,
-                        0.0,
-                    );
-                    let p0 = cam.eye;
-                    let forward = (cam.target - cam.eye).normalize_or_zero();
-                    let p1 = p0 + forward * 10.0;
-                    let pre_queue = state.vox_queue_len;
-                    state.try_voxel_impact(p0, p1);
-                    self.script.shot = true;
-                    self.script.carved = state.vox_queue_len > pre_queue;
-                }
                 // Update UI checklist
                 let meshed = state.vox_queue_len == 0 && state.vox_last_chunks == 0;
                 state.vox_onepath_ui = Some((self.script.shot, self.script.carved, meshed));
@@ -255,6 +214,57 @@ impl ApplicationHandler for App {
                         log::info!("saved screenshot: {:?}", path);
                     }
                     self.script.saved = true;
+                }
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                use winit::keyboard::{KeyCode, PhysicalKey};
+                let pressed = event.state.is_pressed();
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::Space) | PhysicalKey::Code(KeyCode::Enter) => {
+                        if pressed {
+                            // Aim from camera forward and carve once
+                            let aspect = state.size.width as f32 / state.size.height.max(1) as f32;
+                            let (off, look) = camera_sys::compute_local_orbit_offsets(
+                                state.cam_distance,
+                                state.cam_orbit_yaw,
+                                state.cam_orbit_pitch,
+                                state.cam_lift,
+                                state.cam_look_height,
+                            );
+                            let (cam, _g) = camera_sys::third_person_follow(
+                                &mut state.cam_follow,
+                                state.scene_inputs.pos(),
+                                glam::Quat::IDENTITY,
+                                off,
+                                look,
+                                aspect,
+                                0.0,
+                            );
+                            let p0 = cam.eye;
+                            let p1 = p0 + (cam.target - cam.eye).normalize_or_zero() * 10.0;
+                            let pre = state.vox_queue_len;
+                            state.try_voxel_impact(p0, p1);
+                            self.script.shot = true;
+                            self.script.carved = state.vox_queue_len > pre;
+                            self.script.saved = false;
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyR) => {
+                        if pressed {
+                            reset_to_block(state);
+                            self.script = Script::default();
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyP) => {
+                        if pressed { state.hud_model.toggle_perf(); }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyS) => {
+                        if pressed {
+                            let path = PathBuf::from("target/vox_onepath.png");
+                            let _ = save_screenshot(state, &path);
+                        }
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -349,4 +359,57 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
     let mut wrt = enc.write_header()?;
     wrt.write_image_data(&out)?;
     Ok(())
+}
+
+fn reset_to_block(renderer: &mut Renderer) {
+    // Procedural voxel block grid 6m ahead
+    let dims = UVec3::new(64, 32, 64);
+    let vm = renderer.destruct_cfg.voxel_size_m;
+    let meta = VoxelProxyMeta {
+        object_id: GlobalId(1),
+        origin_m: DVec3::new(0.0, 0.0, 6.0),
+        voxel_m: vm,
+        dims,
+        chunk: renderer.destruct_cfg.chunk,
+        material: renderer.destruct_cfg.material,
+    };
+    let mut grid = VoxelGrid::new(meta);
+    for z in 16..48 {
+        for y in 0..20 {
+            for x in 16..48 {
+                grid.set(x, y, z, true);
+            }
+        }
+    }
+    renderer.voxel_meshes.clear();
+    renderer.voxel_hashes.clear();
+    renderer.debris.clear();
+    renderer.debris_count = 0;
+    renderer.voxel_grid = Some(grid.clone());
+    renderer.voxel_grid_initial = Some(grid);
+    // Enqueue all chunks
+    let dims = renderer.voxel_grid.as_ref().unwrap().dims();
+    let csz = renderer.voxel_grid.as_ref().unwrap().meta().chunk;
+    let nx = dims.x.div_ceil(csz.x);
+    let ny = dims.y.div_ceil(csz.y);
+    let nz = dims.z.div_ceil(csz.z);
+    renderer.chunk_queue = server_core::destructible::queue::ChunkQueue::new();
+    for cz in 0..nz {
+        for cy in 0..ny {
+            for cx in 0..nx {
+                renderer
+                    .chunk_queue
+                    .enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+            }
+        }
+    }
+    renderer.impact_id = 0;
+    renderer.vox_queue_len = renderer.chunk_queue.len();
+    // Pre-mesh synchronously
+    let saved_budget = renderer.destruct_cfg.max_chunk_remesh;
+    renderer.destruct_cfg.max_chunk_remesh = 64;
+    while renderer.vox_queue_len > 0 {
+        renderer.process_voxel_queues();
+    }
+    renderer.destruct_cfg.max_chunk_remesh = saved_budget;
 }
