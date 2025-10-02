@@ -56,6 +56,22 @@ impl VoxelGrid {
         }
     }
 
+    /// Access proxy metadata.
+    #[inline]
+    pub fn meta(&self) -> &VoxelProxyMeta { &self.meta }
+
+    /// Grid dimensions (voxels).
+    #[inline]
+    pub fn dims(&self) -> UVec3 { self.meta.dims }
+
+    /// Grid origin in meters.
+    #[inline]
+    pub fn origin_m(&self) -> DVec3 { self.meta.origin_m }
+
+    /// Voxel edge length in meters.
+    #[inline]
+    pub fn voxel_m(&self) -> Length { self.meta.voxel_m }
+
     /// Linear index for (x,y,z).
     #[inline]
     pub fn index(&self, x: u32, y: u32, z: u32) -> usize {
@@ -73,6 +89,7 @@ impl VoxelGrid {
         if solid {
             self.mark_chunk_dirty_xyz(x, y, z);
         }
+        // NOTE: dirty-chunk marking on clear happens in carve ops (e.g., carve_sphere).
     }
 
     /// Read occupancy at (x,y,z).
@@ -117,6 +134,16 @@ impl VoxelGrid {
     pub fn voxel_mass(&self) -> Mass {
         core_materials::mass_for_voxel(self.meta.material, self.meta.voxel_m).unwrap()
     }
+
+    /// Number of dirty chunks currently queued.
+    #[inline]
+    pub fn dirty_len(&self) -> usize { self.dirty_chunks.len() }
+
+    /// Bounds check helper.
+    #[inline]
+    pub fn inside(&self, x: u32, y: u32, z: u32) -> bool {
+        x < self.meta.dims.x && y < self.meta.dims.y && z < self.meta.dims.z
+    }
 }
 
 /// Builds a voxel grid by marking a watertight surface then flood-filling interior.
@@ -140,20 +167,17 @@ pub fn voxelize_surface_fill(
             for y in 0..d.y {
                 for x in 0..d.x {
                     let idx = grid.index(x, y, z);
-                    if surf[idx] != 0 {
-                        continue;
-                    }
+                    if surf[idx] != 0 { continue; }
                     // if any 6-neighbor is surface, mark
                     let nbs = neighbors6(x, y, z, d);
-                    if nbs
-                        .into_iter()
-                        .any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0)
-                    {
+                    if nbs.into_iter().any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
                         dil[idx] = 1;
                     }
                 }
             }
         }
+        // Preserve original surface by OR-ing
+        for i in 0..surf.len() { if surf[i] != 0 { dil[i] = 1; } }
         surf = dil;
     }
 
@@ -381,5 +405,18 @@ mod tests {
             xs.len() >= 2,
             "expected carve to touch chunks across boundary"
         );
+    }
+
+    #[test]
+    fn close_surfaces_preserves_surface_voxels() {
+        let d = UVec3::new(8,8,8);
+        let meta = mk_meta(d, UVec3::new(4,4,4));
+        let mut surf = vec![0u8; (d.x*d.y*d.z) as usize];
+        // Mark a single surface voxel in the center
+        let idx = |x:u32,y:u32,z:u32| -> usize { (x + y*d.x + z*d.x*d.y) as usize };
+        surf[idx(4,4,4)] = 1;
+        let g = voxelize_surface_fill(meta, &surf, true);
+        // The marked cell should remain solid after dilation + flood fill
+        assert!(g.is_solid(4,4,4));
     }
 }

@@ -265,4 +265,20 @@ mod tests {
         let m = greedy_mesh_all(&g);
         assert_eq!(m.quad_count(), 6);
     }
+
+    #[test]
+    fn single_voxel_produces_36_indices() {
+        let meta = VoxelProxyMeta {
+            object_id: GlobalId(1),
+            origin_m: DVec3::ZERO,
+            voxel_m: Length::meters(1.0),
+            dims: UVec3::new(1, 1, 1),
+            chunk: UVec3::new(1, 1, 1),
+            material: find_material_id("stone").unwrap(),
+        };
+        let mut g = voxel_proxy::VoxelGrid::new(meta);
+        g.set(0, 0, 0, true);
+        let m = greedy_mesh_all(&g);
+        assert_eq!(m.indices.len(), 36);
+    }
 }
