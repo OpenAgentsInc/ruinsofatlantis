@@ -1056,7 +1056,25 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 } else {
                     // Clamp voxel density so total cells <= budget
                     let mut vm = (dcfg.voxel_size_m.0 as f32).max(1e-4);
-                    let origin = glam::DVec3::new(min.x as f64, min.y as f64, min.z as f64);
+                    // Compute origin; allow optional offset to position model near the player
+                    let center_world = glam::DVec3::new(
+                        0.5 * (min.x + max.x) as f64,
+                        0.5 * (min.y + max.y) as f64,
+                        0.5 * (min.z + max.z) as f64,
+                    );
+                    let origin = if let Some(off) = dcfg.vox_offset {
+                        off - center_world
+                    } else if dcfg.vox_sandbox {
+                        // Default: place ruin ~8m in front of PC at terrain height
+                        let off = glam::DVec3::new(
+                            pc_initial_pos.x as f64,
+                            pc_initial_pos.y as f64,
+                            (pc_initial_pos.z + 8.0) as f64,
+                        );
+                        off - center_world
+                    } else {
+                        glam::DVec3::new(min.x as f64, min.y as f64, min.z as f64)
+                    };
                     let size = max - min;
                     const MAX_VOXELS: u64 = 8_000_000;
                     let dims;
@@ -1092,56 +1110,107 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                     let idx = |x: u32, y: u32, z: u32| -> usize {
                         (x + y * dims.x + z * dims.x * dims.y) as usize
                     };
+                    // SAT triangle–AABB test helper (triangle and box expressed in voxel coords)
+                    #[inline]
+                    fn tri_intersects_box(
+                        a: glam::Vec3,
+                        b: glam::Vec3,
+                        c: glam::Vec3,
+                        center: glam::Vec3,
+                        half: f32,
+                    ) -> bool {
+                        let v0 = a - center;
+                        let v1 = b - center;
+                        let v2 = c - center;
+                        let e0 = v1 - v0;
+                        let e1 = v2 - v1;
+                        let e2 = v0 - v2;
+                        let h = glam::Vec3::splat(half);
+                        let axes = [
+                            glam::Vec3::new(0.0, -e0.z, e0.y),
+                            glam::Vec3::new(0.0, -e1.z, e1.y),
+                            glam::Vec3::new(0.0, -e2.z, e2.y),
+                            glam::Vec3::new(e0.z, 0.0, -e0.x),
+                            glam::Vec3::new(e1.z, 0.0, -e1.x),
+                            glam::Vec3::new(e2.z, 0.0, -e2.x),
+                            glam::Vec3::new(-e0.y, e0.x, 0.0),
+                            glam::Vec3::new(-e1.y, e1.x, 0.0),
+                            glam::Vec3::new(-e2.y, e2.x, 0.0),
+                        ];
+                        for ax in axes.iter() {
+                            if ax.length_squared() > 1e-12 {
+                                let p0 = v0.dot(*ax);
+                                let p1 = v1.dot(*ax);
+                                let p2 = v2.dot(*ax);
+                                let r = h.x * ax.x.abs() + h.y * ax.y.abs() + h.z * ax.z.abs();
+                                let minp = p0.min(p1.min(p2));
+                                let maxp = p0.max(p1.max(p2));
+                                if minp > r || maxp < -r {
+                                    return false;
+                                }
+                            }
+                        }
+                        // Box axes
+                        let minv = glam::Vec3::new(
+                            v0.x.min(v1.x.min(v2.x)),
+                            v0.y.min(v1.y.min(v2.y)),
+                            v0.z.min(v1.z.min(v2.z)),
+                        );
+                        let maxv = glam::Vec3::new(
+                            v0.x.max(v1.x.max(v2.x)),
+                            v0.y.max(v1.y.max(v2.y)),
+                            v0.z.max(v1.z.max(v2.z)),
+                        );
+                        if minv.x > h.x || maxv.x < -h.x {
+                            return false;
+                        }
+                        if minv.y > h.y || maxv.y < -h.y {
+                            return false;
+                        }
+                        if minv.z > h.z || maxv.z < -h.z {
+                            return false;
+                        }
+                        // Plane-box overlap
+                        let n = e0.cross(e1);
+                        if n.length_squared() > 1e-12 {
+                            let d = v0.dot(n);
+                            let r = h.x * n.x.abs() + h.y * n.y.abs() + h.z * n.z.abs();
+                            if d.abs() > r {
+                                return false;
+                            }
+                        }
+                        true
+                    }
+
                     let verts = &cpu.vertices;
                     let inds = &cpu.indices;
+                    let inv_vm = 1.0 / vm;
                     for tri in inds.chunks_exact(3) {
-                        let a = glam::Vec3::from(verts[tri[0] as usize].pos);
-                        let b = glam::Vec3::from(verts[tri[1] as usize].pos);
-                        let c = glam::Vec3::from(verts[tri[2] as usize].pos);
-                        let n = (b - a).cross(c - a).normalize_or_zero();
-                        if !n.is_finite() || n.length_squared() < 1e-12 {
-                            continue;
-                        }
-                        let bbmin = a.min(b).min(c);
-                        let bbmax = a.max(b).max(c);
-                        let vmin = ((bbmin - min) / vm).floor().max(glam::Vec3::ZERO);
-                        let vmax = ((bbmax - min) / vm).ceil() + glam::Vec3::splat(1.0);
-                        let xi0 = vmin.x as u32;
-                        let yi0 = vmin.y as u32;
-                        let zi0 = vmin.z as u32;
-                        let xi1 = vmax.x.min(dims.x as f32) as u32;
-                        let yi1 = vmax.y.min(dims.y as f32) as u32;
-                        let zi1 = vmax.z.min(dims.z as f32) as u32;
-                        let thick = vm * 0.6;
-                        for z in zi0..zi1 {
-                            for y in yi0..yi1 {
-                                for x in xi0..xi1 {
-                                    let pc = glam::Vec3::new(
-                                        min.x + (x as f32 + 0.5) * vm,
-                                        min.y + (y as f32 + 0.5) * vm,
-                                        min.z + (z as f32 + 0.5) * vm,
+                        // Convert to voxel space
+                        let a_w = glam::Vec3::from(verts[tri[0] as usize].pos);
+                        let b_w = glam::Vec3::from(verts[tri[1] as usize].pos);
+                        let c_w = glam::Vec3::from(verts[tri[2] as usize].pos);
+                        let av = ((a_w.as_dvec3() - origin).as_vec3()) * inv_vm;
+                        let bv = ((b_w.as_dvec3() - origin).as_vec3()) * inv_vm;
+                        let cv = ((c_w.as_dvec3() - origin).as_vec3()) * inv_vm;
+                        // Voxel AABB of triangle (with 1-cell pad)
+                        let minv = av.min(bv.min(cv)).floor() - glam::Vec3::ONE;
+                        let maxv = av.max(bv.max(cv)).ceil() + glam::Vec3::ONE;
+                        let xi0 = minv.x.max(0.0) as u32;
+                        let yi0 = minv.y.max(0.0) as u32;
+                        let zi0 = minv.z.max(0.0) as u32;
+                        let xi1 = maxv.x.min((dims.x - 1) as f32) as u32;
+                        let yi1 = maxv.y.min((dims.y - 1) as f32) as u32;
+                        let zi1 = maxv.z.min((dims.z - 1) as f32) as u32;
+                        for z in zi0..=zi1 {
+                            for y in yi0..=yi1 {
+                                for x in xi0..=xi1 {
+                                    let center = glam::Vec3::new(
+                                        x as f32 + 0.5,
+                                        y as f32 + 0.5,
+                                        z as f32 + 0.5,
                                     );
-                                    let dist = (pc - a).dot(n);
-                                    if dist.abs() > thick {
-                                        continue;
-                                    }
-                                    let pproj = pc - dist * n;
-                                    let v0 = b - a;
-                                    let v1 = c - a;
-                                    let v2 = pproj - a;
-                                    let d00 = v0.dot(v0);
-                                    let d01 = v0.dot(v1);
-                                    let d11 = v1.dot(v1);
-                                    let d20 = v2.dot(v0);
-                                    let d21 = v2.dot(v1);
-                                    let denom = d00 * d11 - d01 * d01;
-                                    if denom.abs() < 1e-20 {
-                                        continue;
-                                    }
-                                    let v = (d11 * d20 - d01 * d21) / denom;
-                                    let w = (d00 * d21 - d01 * d20) / denom;
-                                    let u = 1.0 - v - w;
-                                    if u >= -0.05 && v >= -0.05 && w >= -0.05 {
+                                    if tri_intersects_box(av, bv, cv, center, 0.5) {
                                         surf[idx(x, y, z)] = 1;
                                     }
                                 }

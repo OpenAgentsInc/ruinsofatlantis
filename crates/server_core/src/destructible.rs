@@ -263,7 +263,7 @@ pub mod config {
     //! Minimal flag parser for destructible demo configuration.
     use core_materials::{MaterialId, find_material_id};
     use core_units::Length;
-    use glam::UVec3;
+    use glam::{DVec3, UVec3};
 
     #[derive(Debug, Clone)]
     pub struct DestructibleConfig {
@@ -283,6 +283,8 @@ pub mod config {
         pub vox_tiles_per_meter: Option<f32>,
         pub max_carve_chunks: Option<u32>,
         pub vox_sandbox: bool,
+        pub hide_wizards: bool,
+        pub vox_offset: Option<DVec3>,
     }
 
     impl Default for DestructibleConfig {
@@ -304,6 +306,8 @@ pub mod config {
                 vox_tiles_per_meter: None,
                 max_carve_chunks: Some(64),
                 vox_sandbox: false,
+                hide_wizards: false,
+                vox_offset: None,
             }
         }
     }
@@ -438,6 +442,20 @@ pub mod config {
                     "--vox-sandbox" => {
                         any_vox_flag = true;
                         cfg.vox_sandbox = true;
+                    }
+                    "--hide-wizards" => {
+                        cfg.hide_wizards = true;
+                    }
+                    "--vox-offset" => {
+                        if let (Some(x), Some(y), Some(z)) = (it.next(), it.next(), it.next())
+                            && let (Ok(xf), Ok(yf), Ok(zf)) = (
+                                x.as_ref().parse::<f64>(),
+                                y.as_ref().parse::<f64>(),
+                                z.as_ref().parse::<f64>(),
+                            )
+                        {
+                            cfg.vox_offset = Some(DVec3::new(xf, yf, zf));
+                        }
                     }
                     other => {
                         if other.starts_with("--vox") && !UNKNOWN_ONCE.swap(true, Ordering::Relaxed)
