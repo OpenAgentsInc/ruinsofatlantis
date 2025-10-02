@@ -89,12 +89,16 @@ pub fn mass_for_voxel(mat: MaterialId, voxel_m: Length) -> Option<Mass> {
 
 impl From<u16> for MaterialId {
     #[inline]
-    fn from(v: u16) -> Self { MaterialId(v) }
+    fn from(v: u16) -> Self {
+        MaterialId(v)
+    }
 }
 
 impl From<MaterialId> for usize {
     #[inline]
-    fn from(v: MaterialId) -> Self { v.0 as usize }
+    fn from(v: MaterialId) -> Self {
+        v.0 as usize
+    }
 }
 
 #[cfg(test)]

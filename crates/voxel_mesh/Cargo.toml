@@ -1,0 +1,8 @@
+[package]
+name = "voxel_mesh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = "0.30.8"
+voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
