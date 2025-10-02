@@ -959,9 +959,25 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
 
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
-        let mdl = crate::gfx::types::Model { model: glam::Mat4::IDENTITY.to_cols_array_2d(), color: [0.6,0.6,0.6], emissive: 0.02, _pad:[0.0;4] };
-        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor{ label: Some("voxel-model"), contents: bytemuck::bytes_of(&mdl), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
-        device.create_bind_group(&wgpu::BindGroupDescriptor{ label: Some("voxel-model-bg"), layout: &model_bgl, entries: &[wgpu::BindGroupEntry{ binding:0, resource: buf.as_entire_binding() }] })
+        let mdl = crate::gfx::types::Model {
+            model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+            color: [0.6, 0.6, 0.6],
+            emissive: 0.02,
+            _pad: [0.0; 4],
+        };
+        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("voxel-model"),
+            contents: bytemuck::bytes_of(&mdl),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("voxel-model-bg"),
+            layout: &model_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buf.as_entire_binding(),
+            }],
+        })
     };
 
     Ok(crate::gfx::Renderer {

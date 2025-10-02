@@ -541,17 +541,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             rp.set_pipeline(&r.pipeline);
             rp.set_bind_group(0, &r.globals_bg, &[]);
             rp.set_bind_group(1, &r.voxel_model_bg, &[]);
-            for (_k, m) in &r.voxel_meshes {
+            for m in r.voxel_meshes.values() {
                 rp.set_vertex_buffer(0, m.vb.slice(..));
                 rp.set_index_buffer(m.ib.slice(..), wgpu::IndexFormat::Uint32);
                 rp.draw_indexed(0..m.idx, 0, 0..1);
                 r.draw_calls += 1;
             }
             #[cfg(not(target_arch = "wasm32"))]
-            if trace {
-                if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                    log::error!("validation after voxel meshes: {:?}", e);
-                }
+            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                log::error!("validation after voxel meshes: {:?}", e);
             }
         }
         // Skinned: wizards (use helper to ensure correct bind group order/index type)

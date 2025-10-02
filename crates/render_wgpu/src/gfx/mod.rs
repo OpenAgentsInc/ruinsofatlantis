@@ -64,10 +64,11 @@ use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use collision_static::chunks::{self as chunkcol, StaticChunk};
 use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
+use std::collections::HashMap;
+#[allow(unused_imports)]
+use voxel_mesh::MeshBuffers;
 use voxel_proxy::VoxelGrid;
 use winit::window::Window;
-use std::collections::HashMap;
-use voxel_mesh::MeshBuffers;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
     // Prefer workspace-level assets so this crate works when built inside a workspace.
@@ -322,7 +323,7 @@ pub struct Renderer {
     vox_debris_last: usize,
 
     // Voxel chunk GPU meshes (keyed by chunk coord)
-    voxel_meshes: HashMap<(u32,u32,u32), VoxelChunkMesh>,
+    voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
 
