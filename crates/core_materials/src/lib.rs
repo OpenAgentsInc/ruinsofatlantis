@@ -9,7 +9,7 @@
 //! - Add optional properties (yield strength, thermal_k) as `Option<f64>` later.
 //! - Add `serde` behind a feature if materials cross process boundaries.
 
-use core_units::{cube_volume_m3, Length, Mass};
+use core_units::{Length, Mass, cube_volume_m3};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaterialId(pub u16);
@@ -23,12 +23,36 @@ pub struct MaterialInfo {
 
 /// Initial palette approved for P0.
 pub static MATERIALS: &[MaterialInfo] = &[
-    MaterialInfo { name: "stone",    density_kg_m3: 2400.0, albedo: [0.55, 0.55, 0.55] },
-    MaterialInfo { name: "wood",     density_kg_m3:  500.0, albedo: [0.45, 0.30, 0.15] },
-    MaterialInfo { name: "steel",    density_kg_m3: 7850.0, albedo: [0.50, 0.50, 0.55] },
-    MaterialInfo { name: "concrete", density_kg_m3: 2400.0, albedo: [0.60, 0.60, 0.60] },
-    MaterialInfo { name: "glass",    density_kg_m3: 2500.0, albedo: [0.70, 0.85, 0.90] },
-    MaterialInfo { name: "dirt",     density_kg_m3: 1600.0, albedo: [0.35, 0.25, 0.20] },
+    MaterialInfo {
+        name: "stone",
+        density_kg_m3: 2400.0,
+        albedo: [0.55, 0.55, 0.55],
+    },
+    MaterialInfo {
+        name: "wood",
+        density_kg_m3: 500.0,
+        albedo: [0.45, 0.30, 0.15],
+    },
+    MaterialInfo {
+        name: "steel",
+        density_kg_m3: 7850.0,
+        albedo: [0.50, 0.50, 0.55],
+    },
+    MaterialInfo {
+        name: "concrete",
+        density_kg_m3: 2400.0,
+        albedo: [0.60, 0.60, 0.60],
+    },
+    MaterialInfo {
+        name: "glass",
+        density_kg_m3: 2500.0,
+        albedo: [0.70, 0.85, 0.90],
+    },
+    MaterialInfo {
+        name: "dirt",
+        density_kg_m3: 1600.0,
+        albedo: [0.35, 0.25, 0.20],
+    },
 ];
 
 /// Look up a material by case-insensitive name.
