@@ -650,6 +650,47 @@ impl Renderer {
         let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
         // Extend a bit beyond the segment to catch grazing hits
         let max_len_m = core_units::Length::meters((seg.length() * 1.25) as f64);
+        // Extra guard: skip raycast entirely if the projectile segment doesn't intersect
+        // the grid AABB (in meters). Prevents accidental carves when firing into empty sky.
+        {
+            let vm_f = grid.voxel_m().0 as f32;
+            let dims = grid.dims();
+            let gmin = glam::vec3(
+                grid.origin_m().x as f32,
+                grid.origin_m().y as f32,
+                grid.origin_m().z as f32,
+            );
+            let gmax = gmin
+                + glam::vec3(dims.x as f32 * vm_f, dims.y as f32 * vm_f, dims.z as f32 * vm_f);
+            let aabb_min = gmin - glam::Vec3::splat(0.25 * vm_f);
+            let aabb_max = gmax + glam::Vec3::splat(0.25 * vm_f);
+            let mut tmin = 0.0f32;
+            let mut tmax = 1.0f32;
+            let d = p1 - p0;
+            for i in 0..3 {
+                let s = p0[i];
+                let dir = d[i];
+                let minb = aabb_min[i];
+                let maxb = aabb_max[i];
+                if dir.abs() < 1e-6 {
+                    if s < minb || s > maxb {
+                        return; // parallel and outside slab
+                    }
+                } else {
+                    let inv = 1.0 / dir;
+                    let mut t0 = (minb - s) * inv;
+                    let mut t1 = (maxb - s) * inv;
+                    if t0 > t1 {
+                        core::mem::swap(&mut t0, &mut t1);
+                    }
+                    tmin = tmin.max(t0);
+                    tmax = tmax.min(t1);
+                    if tmin > tmax {
+                        return; // no intersection
+                    }
+                }
+            }
+        }
         if let Some(hit) = raycast_voxels(grid, origin, dir_m, max_len_m) {
             // Carve a small hole at voxel center and schedule chunk updates
             let vm = grid.voxel_m().0;
