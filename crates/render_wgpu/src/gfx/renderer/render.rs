@@ -1072,6 +1072,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 );
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, &demo, 2);
+                let hint = "Space/Enter carve   R reset   S screenshot   P perf";
+                r.hud
+                    .append_perf_text_line(r.size.width, r.size.height, hint, 3);
             }
         }
         // Short demo hint for first few seconds

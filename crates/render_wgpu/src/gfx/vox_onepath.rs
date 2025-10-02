@@ -66,7 +66,11 @@ struct App {
 }
 
 #[derive(Default)]
-struct Script { shot: bool, carved: bool, saved: bool }
+struct Script {
+    shot: bool,
+    carved: bool,
+    saved: bool,
+}
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, el: &ActiveEventLoop) {
@@ -241,9 +245,67 @@ impl ApplicationHandler for App {
                                 0.0,
                             );
                             let p0 = cam.eye;
-                            let p1 = p0 + (cam.target - cam.eye).normalize_or_zero() * 10.0;
+                            // Aim at the center of the voxel grid to guarantee a hit
+                            let p1 = if let Some(ref grid) = state.voxel_grid {
+                                let vm = grid.voxel_m().0 as f32;
+                                let dims = grid.dims();
+                                let origin = grid.origin_m();
+                                let center = glam::vec3(
+                                    (origin.x as f32) + (dims.x as f32 * vm * 0.5),
+                                    (origin.y as f32) + (dims.y as f32 * vm * 0.5),
+                                    (origin.z as f32) + (dims.z as f32 * vm * 0.5),
+                                );
+                                let dir = (center - p0).normalize_or_zero();
+                                p0 + dir * 10.0
+                            } else {
+                                p0 + (cam.target - cam.eye).normalize_or_zero() * 10.0
+                            };
                             let pre = state.vox_queue_len;
+                            let pre_debris = state.debris.len();
+                            log::info!("[onepath] carve attempt from p0={:?} -> p1={:?}", p0, p1);
                             state.try_voxel_impact(p0, p1);
+                            // Fallback: if nothing enqueued, carve at grid center directly
+                            if state.vox_queue_len == pre
+                                && let Some(ref mut grid) = state.voxel_grid
+                            {
+                                    let vm = grid.voxel_m().0;
+                                    let dims = grid.dims();
+                                    let o = grid.origin_m();
+                                    let center = DVec3::new(
+                                        o.x + vm * (dims.x as f64 * 0.5),
+                                        o.y + vm * (dims.y as f64 * 0.5),
+                                        o.z + vm * (dims.z as f64 * 0.5),
+                                    );
+                                    let out = server_core::destructible::carve_and_spawn_debris(
+                                        grid,
+                                        center,
+                                        core_units::Length::meters(0.25),
+                                        state.destruct_cfg.seed,
+                                        state.impact_id,
+                                        state.destruct_cfg.max_debris,
+                                    );
+                                    state.impact_id = state.impact_id.wrapping_add(1);
+                                    // enqueue dirty chunks
+                                    let enq = grid.pop_dirty_chunks(usize::MAX);
+                                    state.chunk_queue.enqueue_many(enq);
+                                    state.vox_queue_len = state.chunk_queue.len();
+                                    // stash debris
+                                    for (i, p) in out.positions_m.iter().enumerate() {
+                                        if (state.debris.len() as u32) < state.debris_capacity {
+                                            let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                                            let vel = out
+                                                .velocities_mps
+                                                .get(i)
+                                                .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                                                .unwrap_or(glam::Vec3::Y * 2.5);
+                                            state.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+                                        }
+                                    }
+                                    log::info!("[onepath] fallback carve at center enq={} debris+{}",
+                                        state.vox_queue_len - pre,
+                                        state.debris.len().saturating_sub(pre_debris));
+                                }
+                            // end fallback
                             self.script.shot = true;
                             self.script.carved = state.vox_queue_len > pre;
                             self.script.saved = false;
@@ -256,7 +318,9 @@ impl ApplicationHandler for App {
                         }
                     }
                     PhysicalKey::Code(KeyCode::KeyP) => {
-                        if pressed { state.hud_model.toggle_perf(); }
+                        if pressed {
+                            state.hud_model.toggle_perf();
+                        }
                     }
                     PhysicalKey::Code(KeyCode::KeyS) => {
                         if pressed {
