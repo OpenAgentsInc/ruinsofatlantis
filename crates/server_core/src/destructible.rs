@@ -210,9 +210,17 @@ pub mod queue {
     }
 
     impl ChunkQueue {
-        pub fn new() -> Self { Self { set: BTreeSet::new() } }
-        pub fn len(&self) -> usize { self.set.len() }
-        pub fn is_empty(&self) -> bool { self.set.is_empty() }
+        pub fn new() -> Self {
+            Self {
+                set: BTreeSet::new(),
+            }
+        }
+        pub fn len(&self) -> usize {
+            self.set.len()
+        }
+        pub fn is_empty(&self) -> bool {
+            self.set.is_empty()
+        }
         pub fn enqueue_many<I: IntoIterator<Item = UVec3>>(&mut self, it: I) {
             for c in it.into_iter() {
                 self.set.insert((c.x, c.y, c.z));
@@ -238,19 +246,23 @@ pub mod queue {
         #[test]
         fn budget_yields_sorted_chunks() {
             let mut q = ChunkQueue::new();
-            q.enqueue_many([UVec3::new(2,0,0), UVec3::new(1,0,0), UVec3::new(1,0,1)]);
+            q.enqueue_many([
+                UVec3::new(2, 0, 0),
+                UVec3::new(1, 0, 0),
+                UVec3::new(1, 0, 1),
+            ]);
             let a = q.pop_budget(2);
-            assert_eq!(a, vec![UVec3::new(1,0,0), UVec3::new(1,0,1)]);
+            assert_eq!(a, vec![UVec3::new(1, 0, 0), UVec3::new(1, 0, 1)]);
             let b = q.pop_budget(2);
-            assert_eq!(b, vec![UVec3::new(2,0,0)]);
+            assert_eq!(b, vec![UVec3::new(2, 0, 0)]);
         }
     }
 }
 
 pub mod config {
     //! Minimal flag parser for destructible demo configuration.
-    use core_units::Length;
     use core_materials::{MaterialId, find_material_id};
+    use core_units::Length;
     use glam::UVec3;
 
     #[derive(Debug, Clone)]
@@ -294,28 +306,46 @@ pub mod config {
                 let a = a.as_ref();
                 match a {
                     "--voxel-size" => {
-                        if let Some(v) = it.next() { if let Ok(f) = v.as_ref().parse::<f64>() { cfg.voxel_size_m = Length::meters(f); } }
+                        if let Some(v) = it.next() && let Ok(f) = v.as_ref().parse::<f64>() {
+                            cfg.voxel_size_m = Length::meters(f);
+                        }
                     }
                     "--chunk-size" => {
-                        if let (Some(x), Some(y), Some(z)) = (it.next(), it.next(), it.next()) {
-                            if let (Ok(x), Ok(y), Ok(z)) = (x.as_ref().parse(), y.as_ref().parse(), z.as_ref().parse()) {
-                                cfg.chunk = UVec3::new(x, y, z);
-                            }
+                        if let (Some(x), Some(y), Some(z)) = (it.next(), it.next(), it.next())
+                            && let (Ok(x), Ok(y), Ok(z)) = (x.as_ref().parse(), y.as_ref().parse(), z.as_ref().parse())
+                        {
+                            cfg.chunk = UVec3::new(x, y, z);
                         }
                     }
                     "--mat" => {
-                        if let Some(n) = it.next() { if let Some(id) = find_material_id(n.as_ref()) { cfg.material = id; } }
+                        if let Some(n) = it.next() && let Some(id) = find_material_id(n.as_ref()) {
+                            cfg.material = id;
+                        }
                     }
                     "--max-debris" => {
-                        if let Some(v) = it.next() { if let Ok(n) = v.as_ref().parse() { cfg.max_debris = n; } }
+                        if let Some(v) = it.next() && let Ok(n) = v.as_ref().parse() {
+                            cfg.max_debris = n;
+                        }
                     }
                     "--max-chunk-remesh" => {
-                        if let Some(v) = it.next() { if let Ok(n) = v.as_ref().parse() { cfg.max_chunk_remesh = n; } }
+                        if let Some(v) = it.next() && let Ok(n) = v.as_ref().parse() {
+                            cfg.max_chunk_remesh = n;
+                        }
                     }
-                    "--close-surfaces" => { cfg.close_surfaces = true; }
-                    "--profile" => { cfg.profile = true; }
-                    "--seed" => { if let Some(v) = it.next() { if let Ok(n) = v.as_ref().parse() { cfg.seed = n; } } }
-                    "--debris-vs-world" => { cfg.debris_vs_world = true; }
+                    "--close-surfaces" => {
+                        cfg.close_surfaces = true;
+                    }
+                    "--profile" => {
+                        cfg.profile = true;
+                    }
+                    "--seed" => {
+                        if let Some(v) = it.next() && let Ok(n) = v.as_ref().parse() {
+                            cfg.seed = n;
+                        }
+                    }
+                    "--debris-vs-world" => {
+                        cfg.debris_vs_world = true;
+                    }
                     _ => {}
                 }
             }
@@ -328,10 +358,24 @@ pub mod config {
         use super::*;
         #[test]
         fn parse_minimal_flags() {
-            let args = ["--voxel-size","0.1","--chunk-size","16","16","16","--mat","wood","--max-debris","42","--close-surfaces","--seed","1234"]; 
+            let args = [
+                "--voxel-size",
+                "0.1",
+                "--chunk-size",
+                "16",
+                "16",
+                "16",
+                "--mat",
+                "wood",
+                "--max-debris",
+                "42",
+                "--close-surfaces",
+                "--seed",
+                "1234",
+            ];
             let c = DestructibleConfig::from_args(args);
             assert!((f64::from(c.voxel_size_m) - 0.1).abs() < 1e-12);
-            assert_eq!(c.chunk, UVec3::new(16,16,16));
+            assert_eq!(c.chunk, UVec3::new(16, 16, 16));
             assert_eq!(c.max_debris, 42);
             assert!(c.close_surfaces);
             assert_eq!(c.seed, 1234);
