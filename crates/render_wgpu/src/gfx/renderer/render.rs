@@ -990,6 +990,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
             let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, r.draw_calls);
             r.hud.append_perf_text(r.size.width, r.size.height, &line);
+            // Destructible overlay line
+            let vox = format!(
+                "vox: queue={} chunks={} debris={}",
+                r.vox_queue_len, r.vox_last_chunks, r.vox_debris_last
+            );
+            r.hud.append_perf_text(r.size.width, r.size.height, &vox);
         }
     }
     r.hud.queue(&r.device, &r.queue);

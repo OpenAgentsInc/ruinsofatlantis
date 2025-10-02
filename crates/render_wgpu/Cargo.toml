@@ -27,6 +27,8 @@ pollster = "0.4.0"
 collision_static = { version = "0.1.0", path = "../collision_static" }
 client_runtime = { version = "0.1.0", path = "../client_runtime" }
 web-time = "1.1.0"
+voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
+voxel_mesh = { version = "0.1.0", path = "../voxel_mesh" }
 
 [dev-dependencies]
 sha2 = "0.10.9"

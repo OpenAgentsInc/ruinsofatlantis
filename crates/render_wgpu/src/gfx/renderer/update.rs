@@ -4,6 +4,9 @@ use crate::gfx::Renderer;
 use crate::gfx::types::{InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 use crate::server_ext::CollideProjectiles;
+use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
+use crate::gfx::chunkcol;
+use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
 
@@ -387,7 +390,7 @@ impl Renderer {
         let mut burst: Vec<Particle> = Vec::new();
         let mut i = 0;
         while i < self.projectiles.len() {
-            let kill = t >= self.projectiles[i].t_die;
+            let kill = self.last_time >= self.projectiles[i].t_die;
             if kill {
                 let hit = self.projectiles[i].pos;
                 // If Fireball, explode on timeout at current position
@@ -603,6 +606,66 @@ impl Renderer {
             }
             if !hit_someone {
                 i += 1;
+            }
+        }
+
+        // 2.6) Projectiles that died without hitting an NPC: attempt voxel impact
+        let mut i = 0usize;
+        while i < self.projectiles.len() {
+            let kill = self.last_time >= self.projectiles[i].t_die;
+            if kill {
+                let p1 = self.projectiles[i].pos;
+                let p0 = p1 - self.projectiles[i].vel * dt.max(1e-3);
+                self.try_voxel_impact(p0, p1);
+                self.projectiles.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+
+        // 2.7) Process voxel chunk work budget per frame
+        self.process_voxel_queues();
+    }
+
+    fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
+        let Some(grid) = self.voxel_grid.as_mut() else { return; };
+        let dir = (p1 - p0).normalize_or_zero();
+        if dir.length_squared() < 1e-6 { return; }
+        let origin = DVec3::new(p0.x as f64, p0.y as f64, p0.z as f64);
+        let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
+        if let Some(_hit) = raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0) {
+            // Carve a small hole and schedule chunk updates
+            let impact = DVec3::new(p1.x as f64, p1.y as f64, p1.z as f64);
+            let out = carve_and_spawn_debris(
+                grid,
+                impact,
+                self.destruct_cfg.voxel_size_m * 2.0,
+                self.destruct_cfg.seed,
+                self.frame_counter as u64,
+                self.destruct_cfg.max_debris,
+            );
+            self.vox_debris_last = out.positions_m.len();
+            // Enqueue chunks deterministically
+            self.chunk_queue.enqueue_many(grid.pop_dirty_chunks(usize::MAX));
+        }
+    }
+
+    fn process_voxel_queues(&mut self) {
+        let budget = self.destruct_cfg.max_chunk_remesh.max(1);
+        let chunks = self.chunk_queue.pop_budget(budget);
+        self.vox_last_chunks = chunks.len();
+        self.vox_queue_len = self.chunk_queue.len();
+        if let Some(grid) = self.voxel_grid.as_ref() {
+            // Refresh coarse colliders for these chunks
+            let mut updates: Vec<collision_static::chunks::StaticChunk> = Vec::new();
+            for c in chunks {
+                if let Some(col) = chunkcol::build_chunk_collider(grid, c) {
+                    updates.push(col);
+                }
+            }
+            if !updates.is_empty() {
+                chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
+                self.static_index = Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
             }
         }
     }

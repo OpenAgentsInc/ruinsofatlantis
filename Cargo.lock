@@ -4940,6 +4940,8 @@ dependencies = [
  "server_core",
  "sha2",
  "ux_hud",
+ "voxel_mesh",
+ "voxel_proxy",
  "web-time",
  "wgpu 26.0.1",
  "winit",
