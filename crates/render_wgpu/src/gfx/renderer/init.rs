@@ -1054,18 +1054,36 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                     log::warn!("voxel-model: invalid bounds; falling back to demo grid");
                     None
                 } else {
-                    let vm = dcfg.voxel_size_m.0 as f32;
+                    // Clamp voxel density so total cells <= budget
+                    let mut vm = (dcfg.voxel_size_m.0 as f32).max(1e-4);
                     let origin = glam::DVec3::new(min.x as f64, min.y as f64, min.z as f64);
                     let size = max - min;
-                    let dims = glam::UVec3::new(
-                        (size.x / vm).ceil().max(1.0) as u32 + 2,
-                        (size.y / vm).ceil().max(1.0) as u32 + 2,
-                        (size.z / vm).ceil().max(1.0) as u32 + 2,
-                    );
+                    const MAX_VOXELS: u64 = 8_000_000;
+                    let dims;
+                    loop {
+                        let dx = ((size.x / vm).ceil().max(1.0) as u32) + 2;
+                        let dy = ((size.y / vm).ceil().max(1.0) as u32) + 2;
+                        let dz = ((size.z / vm).ceil().max(1.0) as u32) + 2;
+                        let total = dx as u64 * dy as u64 * dz as u64;
+                        if total <= MAX_VOXELS {
+                            dims = glam::UVec3::new(dx, dy, dz);
+                            log::info!(
+                                "[vox] dims={}x{}x{} (~{:.2}M)",
+                                dx,
+                                dy,
+                                dz,
+                                total as f32 / 1e6
+                            );
+                            break;
+                        }
+                        vm *= 1.25; // coarsen until under budget
+                        log::warn!("[vox] too dense → increasing voxel size to {:.3} m", vm);
+                    }
+                    let voxel_m = core_units::Length::meters(vm as f64);
                     let meta = VoxelProxyMeta {
                         object_id: voxel_proxy::GlobalId(1),
                         origin_m: origin,
-                        voxel_m: dcfg.voxel_size_m,
+                        voxel_m,
                         dims,
                         chunk: dcfg.chunk.min(dims.max(glam::UVec3::splat(1))),
                         material: dcfg.material,
@@ -1130,12 +1148,21 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                             }
                         }
                     }
-                    let mut grid = voxelize_surface_fill(meta.clone(), &surf, dcfg.close_surfaces);
-                    if grid.solid_count() == 0 && !dcfg.close_surfaces {
-                        log::warn!("voxel-model: empty after fill; retrying with close-surfaces");
-                        grid = voxelize_surface_fill(meta, &surf, true);
+                    let grid = voxelize_surface_fill(meta.clone(), &surf, dcfg.close_surfaces);
+                    if grid.solid_count() == 0 {
+                        log::warn!("[vox] flood fill empty; retrying with --close-surfaces (auto)");
+                        let grid2 = voxelize_surface_fill(meta.clone(), &surf, true);
+                        if grid2.solid_count() == 0 {
+                            log::warn!(
+                                "[vox] model voxelization produced no solids; falling back to demo grid"
+                            );
+                            None
+                        } else {
+                            Some(grid2)
+                        }
+                    } else {
+                        Some(grid)
                     }
-                    Some(grid)
                 }
             }
             Err(e) => {
