@@ -637,8 +637,7 @@ impl Renderer {
         }
         let origin = DVec3::new(p0.x as f64, p0.y as f64, p0.z as f64);
         let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
-        if let Some(hit) =
-            raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0)
+        if let Some(hit) = raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0)
         {
             // Carve a small hole at voxel center and schedule chunk updates
             let vm = grid.voxel_m().0;
