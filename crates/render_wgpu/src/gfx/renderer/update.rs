@@ -759,7 +759,6 @@ impl Renderer {
             self.vox_queue_len = self.chunk_queue.len();
         } else {
             // No voxel hit along the projectile path — do nothing
-            return;
         }
     }
 
