@@ -2687,6 +2687,9 @@ name = "glam"
 version = "0.30.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e12d847aeb25f41be4c0ec9587d624e9cd631bc007a8fd7ce3f5851e064c6460"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "glob"
@@ -6042,6 +6045,23 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "voxel_mesh"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.8",
+ "voxel_proxy",
+]
+
+[[package]]
+name = "voxel_proxy"
+version = "0.1.0"
+dependencies = [
+ "core_materials",
+ "core_units",
+ "glam 0.30.8",
+]
 
 [[package]]
 name = "walkdir"

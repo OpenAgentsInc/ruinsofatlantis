@@ -176,33 +176,45 @@ pub fn cube_volume_m3(voxel: Length) -> f64 {
 impl Mul<Length> for f64 {
     type Output = Length;
     #[inline]
-    fn mul(self, rhs: Length) -> Length { Length(self * rhs.0) }
+    fn mul(self, rhs: Length) -> Length {
+        Length(self * rhs.0)
+    }
 }
 impl Mul<Time> for f64 {
     type Output = Time;
     #[inline]
-    fn mul(self, rhs: Time) -> Time { Time(self * rhs.0) }
+    fn mul(self, rhs: Time) -> Time {
+        Time(self * rhs.0)
+    }
 }
 impl Mul<Mass> for f64 {
     type Output = Mass;
     #[inline]
-    fn mul(self, rhs: Mass) -> Mass { Mass(self * rhs.0) }
+    fn mul(self, rhs: Mass) -> Mass {
+        Mass(self * rhs.0)
+    }
 }
 
 impl Length {
     /// Construct from meters.
     #[inline]
-    pub fn meters(v: f64) -> Self { Self(v) }
+    pub fn meters(v: f64) -> Self {
+        Self(v)
+    }
 }
 impl Time {
     /// Construct from seconds.
     #[inline]
-    pub fn seconds(v: f64) -> Self { Self(v) }
+    pub fn seconds(v: f64) -> Self {
+        Self(v)
+    }
 }
 impl Mass {
     /// Construct from kilograms.
     #[inline]
-    pub fn kilograms(v: f64) -> Self { Self(v) }
+    pub fn kilograms(v: f64) -> Self {
+        Self(v)
+    }
 }
 
 #[cfg(test)]
