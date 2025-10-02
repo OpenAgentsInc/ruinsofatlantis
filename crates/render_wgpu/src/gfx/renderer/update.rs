@@ -9,6 +9,7 @@ use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
+use wgpu::util::DeviceExt;
 
 impl Renderer {
     #[inline]
@@ -668,16 +669,42 @@ impl Renderer {
         let budget = self.destruct_cfg.max_chunk_remesh.max(1);
         let chunks = self.chunk_queue.pop_budget(budget);
         if let Some(grid) = self.voxel_grid.as_ref() {
-            // Refresh coarse colliders for these chunks
-            let mut updates: Vec<collision_static::chunks::StaticChunk> = Vec::new();
+            // Mesh changed chunks and upload to GPU; drop entries that became empty
             for c in &chunks {
-                if let Some(col) = chunkcol::build_chunk_collider(grid, *c) {
-                    updates.push(col);
+                let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
+                if mb.indices.is_empty() {
+                    self.voxel_meshes.remove(&(c.x, c.y, c.z));
+                } else {
+                    let vb = self
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("voxel-chunk-vb"),
+                            contents: bytemuck::cast_slice(&mb.positions),
+                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        });
+                    let ib = self
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("voxel-chunk-ib"),
+                            contents: bytemuck::cast_slice(&mb.indices),
+                            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                        });
+                    self.voxel_meshes
+                        .insert((c.x, c.y, c.z), crate::gfx::VoxelChunkMesh { vb, ib, idx: mb.indices.len() as u32 });
                 }
             }
-            if !updates.is_empty() {
-                chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
-                self.static_index = Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
+            // Refresh coarse colliders for these chunks
+            if self.destruct_cfg.debris_vs_world {
+                let mut updates: Vec<collision_static::chunks::StaticChunk> = Vec::new();
+                for c in &chunks {
+                    if let Some(col) = chunkcol::build_chunk_collider(grid, *c) {
+                        updates.push(col);
+                    }
+                }
+                if !updates.is_empty() {
+                    chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
+                    self.static_index = Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
+                }
             }
         }
         self.vox_last_chunks = chunks.len();

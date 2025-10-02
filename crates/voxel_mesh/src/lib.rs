@@ -231,7 +231,19 @@ fn greedy_emit(
                     }
                 }
                 // Emit quad at rectangle [x..x+w_run), [y..y+h_run)
-                emit_rect(mesh, axis, layer, x, y, w_run, h_run, vm, origin, normal);
+                emit_rect(
+                    mesh,
+                    axis,
+                    layer,
+                    x,
+                    y,
+                    w_run,
+                    h_run,
+                    vm,
+                    origin,
+                    normal,
+                    pos_normal,
+                );
                 x += w_run; // advance past rect
             } else {
                 x += 1;
@@ -253,6 +265,7 @@ fn emit_rect(
     vm: f32,
     origin: Vec3,
     normal: Vec3,
+    pos_normal: bool,
 ) {
     // Compute the 4 corners in voxel space at face plane
     let (ax_u, ax_v, ax_w) = match axis {
@@ -276,9 +289,14 @@ fn emit_rect(
     add(mesh, p1, normal);
     add(mesh, p2, normal);
     add(mesh, p3, normal);
-    // Two triangles (i0,i1,i2) and (i0,i2,i3)
-    mesh.indices
-        .extend_from_slice(&[i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3]);
+    // Two triangles; flip winding when normal is negative to keep faces front-facing
+    if pos_normal {
+        mesh.indices
+            .extend_from_slice(&[i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3]);
+    } else {
+        mesh.indices
+            .extend_from_slice(&[i0, i0 + 2, i0 + 1, i0, i0 + 3, i0 + 2]);
+    }
 }
 
 #[cfg(test)]
