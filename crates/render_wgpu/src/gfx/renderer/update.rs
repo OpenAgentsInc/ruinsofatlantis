@@ -637,11 +637,18 @@ impl Renderer {
         }
         let origin = DVec3::new(p0.x as f64, p0.y as f64, p0.z as f64);
         let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
-        if let Some(_hit) =
+        if let Some(hit) =
             raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0)
         {
-            // Carve a small hole and schedule chunk updates
-            let impact = DVec3::new(p1.x as f64, p1.y as f64, p1.z as f64);
+            // Carve a small hole at voxel center and schedule chunk updates
+            let vm = grid.voxel_m().0;
+            let o = grid.origin_m();
+            let vc = DVec3::new(
+                hit.voxel.x as f64 + 0.5,
+                hit.voxel.y as f64 + 0.5,
+                hit.voxel.z as f64 + 0.5,
+            );
+            let impact = o + vc * vm;
             let out = carve_and_spawn_debris(
                 grid,
                 impact,
@@ -652,21 +659,20 @@ impl Renderer {
             );
             self.vox_debris_last = out.positions_m.len();
             // Enqueue chunks deterministically
-            self.chunk_queue
-                .enqueue_many(grid.pop_dirty_chunks(usize::MAX));
+            let enq = grid.pop_dirty_chunks(usize::MAX);
+            self.chunk_queue.enqueue_many(enq);
+            self.vox_queue_len = self.chunk_queue.len();
         }
     }
 
     fn process_voxel_queues(&mut self) {
         let budget = self.destruct_cfg.max_chunk_remesh.max(1);
         let chunks = self.chunk_queue.pop_budget(budget);
-        self.vox_last_chunks = chunks.len();
-        self.vox_queue_len = self.chunk_queue.len();
         if let Some(grid) = self.voxel_grid.as_ref() {
             // Refresh coarse colliders for these chunks
             let mut updates: Vec<collision_static::chunks::StaticChunk> = Vec::new();
-            for c in chunks {
-                if let Some(col) = chunkcol::build_chunk_collider(grid, c) {
+            for c in &chunks {
+                if let Some(col) = chunkcol::build_chunk_collider(grid, *c) {
                     updates.push(col);
                 }
             }
@@ -675,6 +681,8 @@ impl Renderer {
                 self.static_index = Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
             }
         }
+        self.vox_last_chunks = chunks.len();
+        self.vox_queue_len = self.chunk_queue.len();
     }
 
     pub(crate) fn spawn_firebolt(
