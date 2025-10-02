@@ -62,6 +62,9 @@ use rand::Rng as _;
 use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
+use collision_static::chunks::{self as chunkcol, StaticChunk};
+use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
+use voxel_proxy::VoxelGrid;
 use winit::window::Window;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
@@ -305,6 +308,16 @@ pub struct Renderer {
     damage: ui::DamageFloaters,
     hud: ui::Hud,
     hud_model: ux_hud::HudModel,
+
+    // --- Destructible (voxel) state ---
+    destruct_cfg: DestructibleConfig,
+    voxel_grid: Option<VoxelGrid>,
+    chunk_queue: ChunkQueue,
+    chunk_colliders: Vec<StaticChunk>,
+    // Per-frame metrics for overlay
+    vox_last_chunks: usize,
+    vox_queue_len: usize,
+    vox_debris_last: usize,
 
     // --- Player/Camera ---
     pc_index: usize,
