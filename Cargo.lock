@@ -1825,6 +1825,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "core_materials"
+version = "0.1.0"
+dependencies = [
+ "core_units",
+]
+
+[[package]]
+name = "core_units"
+version = "0.1.0"
+
+[[package]]
 name = "coreaudio-rs"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
