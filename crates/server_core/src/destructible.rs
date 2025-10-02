@@ -277,6 +277,8 @@ pub mod config {
         pub seed: u64,
         pub debris_vs_world: bool,
         pub demo_grid: bool,
+        pub replay_log: Option<String>,
+        pub replay: Option<String>,
     }
 
     impl Default for DestructibleConfig {
@@ -292,6 +294,8 @@ pub mod config {
                 seed: 0xC0FFEE,
                 debris_vs_world: false,
                 demo_grid: false,
+                replay_log: None,
+                replay: None,
             }
         }
     }
@@ -369,8 +373,24 @@ pub mod config {
                             cfg.seed = n;
                         }
                     }
+                    "--help" => {
+                        // Friendly pointer to destructible flags when using general help
+                        HELP_ONCE.call_once(|| {
+                            eprintln!("(see --help-vox for destructible flags)");
+                        });
+                    }
                     "--debris-vs-world" => {
                         cfg.debris_vs_world = true;
+                    }
+                    "--replay-log" => {
+                        if let Some(p) = it.next() {
+                            cfg.replay_log = Some(p.as_ref().to_string());
+                        }
+                    }
+                    "--replay" => {
+                        if let Some(p) = it.next() {
+                            cfg.replay = Some(p.as_ref().to_string());
+                        }
                     }
                     "--voxel-demo" | "--voxel-grid" => {
                         cfg.demo_grid = true;

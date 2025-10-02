@@ -661,6 +661,24 @@ impl Renderer {
                 self.impact_id,
                 self.destruct_cfg.max_debris,
             );
+            // Optional: append JSONL replay record (native builds only)
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(ref path) = self.destruct_cfg.replay_log {
+                let _ = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .and_then(|mut f| {
+                        use std::io::Write as _;
+                        let line = format!(
+                            "{{\"impact_id\":{},\"center\":[{:.6},{:.6},{:.6}],\"radius\":{:.6}}}\n",
+                            self.impact_id,
+                            impact.x, impact.y, impact.z,
+                            (self.destruct_cfg.voxel_size_m * 2.0).0
+                        );
+                        f.write_all(line.as_bytes())
+                    });
+            }
             self.impact_id = self.impact_id.wrapping_add(1);
             self.vox_debris_last = out.positions_m.len();
             // Enqueue chunks deterministically
@@ -676,11 +694,13 @@ impl Renderer {
         if let Some(grid) = self.voxel_grid.as_ref() {
             let t0 = Instant::now();
             // Mesh changed chunks and upload to GPU; drop entries that became empty
+            let mut skipped = 0usize;
             for c in &chunks {
                 // Skip meshing if occupancy hash hasn't changed
                 let key = (c.x, c.y, c.z);
                 let h = grid.chunk_occ_hash(*c);
                 if self.voxel_hashes.get(&key).copied() == Some(h) {
+                    skipped += 1;
                     continue;
                 }
                 let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
@@ -717,6 +737,7 @@ impl Renderer {
                     self.voxel_hashes.insert(key, h);
                 }
             }
+            self.vox_skipped_last = skipped;
             self.vox_remesh_ms_last = t0.elapsed().as_secs_f32() * 1000.0;
             // Refresh coarse colliders for these chunks
             if self.destruct_cfg.debris_vs_world {

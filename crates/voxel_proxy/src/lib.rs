@@ -188,8 +188,8 @@ impl VoxelGrid {
             for y in yr.clone() {
                 let base = self.index(xr.start, y, z);
                 let len = (xr.end - xr.start) as usize;
-                // Sample every 8th byte (min stride 1) and always include the last
-                let stride = 8usize;
+                // Sample every Nth byte (denser on short rows) and always include the last
+                let stride = if len < 64 { 4 } else { 8 };
                 let mut i = 0usize;
                 while i < len {
                     let b = self.occ[base + i] as u64;

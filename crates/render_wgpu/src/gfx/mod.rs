@@ -323,6 +323,7 @@ pub struct Renderer {
     vox_debris_last: usize,
     vox_remesh_ms_last: f32,
     vox_collider_ms_last: f32,
+    vox_skipped_last: usize,
     // Deterministic debris seeding counter
     impact_id: u64,
 

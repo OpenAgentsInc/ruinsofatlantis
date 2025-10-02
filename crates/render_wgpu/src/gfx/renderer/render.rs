@@ -1013,9 +1013,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.hud.append_perf_text(r.size.width, r.size.height, &line);
             // Destructible overlay line
             let vox = format!(
-                "vox: queue={} chunks={} debris={} | remesh {:.2}ms coll {:.2}ms",
+                "vox: queue={} chunks={} skipped={} debris={} | remesh {:.2}ms coll {:.2}ms",
                 r.vox_queue_len,
                 r.vox_last_chunks,
+                r.vox_skipped_last,
                 r.vox_debris_last,
                 r.vox_remesh_ms_last,
                 r.vox_collider_ms_last
