@@ -98,9 +98,12 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
         let vx = v.x.floor() as i32;
         let vy = v.y.floor() as i32;
         let vz = v.z.floor() as i32;
-        if vx >= xr.start as i32 && vx < xr.end as i32
-            && vy >= yr.start as i32 && vy < yr.end as i32
-            && vz >= zr.start as i32 && vz < zr.end as i32
+        if vx >= xr.start as i32
+            && vx < xr.end as i32
+            && vy >= yr.start as i32
+            && vy < yr.end as i32
+            && vz >= zr.start as i32
+            && vz < zr.end as i32
         {
             keep.push([tri[0], tri[1], tri[2]]);
         }
