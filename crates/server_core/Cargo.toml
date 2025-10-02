@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+core_materials = { version = "0.1.0", path = "../core_materials" }
+core_units = { version = "0.1.0", path = "../core_units" }
 glam = "0.30"
+rand = "0.9.2"
+voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
 
