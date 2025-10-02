@@ -1488,5 +1488,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         renderer.vox_queue_len = renderer.chunk_queue.len();
     }
 
+    // Vox sandbox: remove mobs/boss for a clean destructible demo
+    if renderer.destruct_cfg.vox_sandbox {
+        renderer.server.npcs.clear();
+        renderer.zombie_count = 0;
+        renderer.dk_count = 0;
+        renderer.dk_id = None;
+    }
+
     Ok(renderer)
 }

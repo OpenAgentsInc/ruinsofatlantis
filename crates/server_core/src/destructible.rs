@@ -282,6 +282,7 @@ pub mod config {
         pub voxel_model: Option<String>,
         pub vox_tiles_per_meter: Option<f32>,
         pub max_carve_chunks: Option<u32>,
+        pub vox_sandbox: bool,
     }
 
     impl Default for DestructibleConfig {
@@ -302,6 +303,7 @@ pub mod config {
                 voxel_model: None,
                 vox_tiles_per_meter: None,
                 max_carve_chunks: Some(64),
+                vox_sandbox: false,
             }
         }
     }
@@ -432,6 +434,10 @@ pub mod config {
                         {
                             cfg.max_carve_chunks = Some(n);
                         }
+                    }
+                    "--vox-sandbox" => {
+                        any_vox_flag = true;
+                        cfg.vox_sandbox = true;
                     }
                     other => {
                         if other.starts_with("--vox") && !UNKNOWN_ONCE.swap(true, Ordering::Relaxed)
