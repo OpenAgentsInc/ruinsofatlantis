@@ -105,6 +105,19 @@ impl VoxelGrid {
         UVec3::new(x / c.x.max(1), y / c.y.max(1), z / c.z.max(1))
     }
 
+    /// Bounds (start..end) in voxel coordinates for a given chunk coordinate.
+    pub fn chunk_bounds_voxels(&self, chunk: UVec3) -> (core::ops::Range<u32>, core::ops::Range<u32>, core::ops::Range<u32>) {
+        let d = self.meta.dims;
+        let c = self.meta.chunk;
+        let x0 = chunk.x.saturating_mul(c.x);
+        let y0 = chunk.y.saturating_mul(c.y);
+        let z0 = chunk.z.saturating_mul(c.z);
+        let x1 = (x0 + c.x).min(d.x);
+        let y1 = (y0 + c.y).min(d.y);
+        let z1 = (z0 + c.z).min(d.z);
+        (x0..x1, y0..y1, z0..z1)
+    }
+
     #[inline]
     fn mark_chunk_dirty_xyz(&mut self, x: u32, y: u32, z: u32) {
         let cc = self.chunk_of(x, y, z);
@@ -167,17 +180,23 @@ pub fn voxelize_surface_fill(
             for y in 0..d.y {
                 for x in 0..d.x {
                     let idx = grid.index(x, y, z);
-                    if surf[idx] != 0 { continue; }
+                    if surf[idx] != 0 {
+                        continue;
+                    }
                     // if any 6-neighbor is surface, mark
                     let nbs = neighbors6(x, y, z, d);
-                    if nbs.into_iter().any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
+                    if nbs.iter().any(|&(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
                         dil[idx] = 1;
                     }
                 }
             }
         }
         // Preserve original surface by OR-ing
-        for i in 0..surf.len() { if surf[i] != 0 { dil[i] = 1; } }
+        for i in 0..surf.len() {
+            if surf[i] != 0 {
+                dil[i] = 1;
+            }
+        }
         surf = dil;
     }
 
@@ -199,7 +218,7 @@ pub fn voxelize_surface_fill(
         }
     }
     while let Some((x, y, z)) = q.pop_front() {
-        for (nx, ny, nz) in neighbors6(x, y, z, d) {
+        for &(nx, ny, nz) in neighbors6(x, y, z, d).iter() {
             let i = grid.index(nx, ny, nz);
             if surf[i] == 0 && outside[i] == 0 {
                 outside[i] = 1;
@@ -230,8 +249,9 @@ pub fn carve_sphere(grid: &mut VoxelGrid, center_m: DVec3, radius: Length) -> Re
     // Compute voxel-space AABB bounds
     let to_voxel = |p: DVec3| -> Vec3 { ((p - grid.meta.origin_m) / vm).as_vec3() };
     let c_v = to_voxel(center_m);
-    let min_v = c_v - Vec3::splat((r / vm) + 1.0);
-    let max_v = c_v + Vec3::splat((r / vm) + 1.0);
+    let pad = ((r / vm) as f32) + 1.0;
+    let min_v = c_v - Vec3::splat(pad);
+    let max_v = c_v + Vec3::splat(pad);
     let xi0 = max(min_v.x.floor() as i32, 0) as u32;
     let yi0 = max(min_v.y.floor() as i32, 0) as u32;
     let zi0 = max(min_v.z.floor() as i32, 0) as u32;
@@ -315,12 +335,9 @@ struct Small6 {
     n: usize,
     v: [(u32, u32, u32); 6],
 }
-impl IntoIterator for Small6 {
-    type Item = (u32, u32, u32);
-    type IntoIter = core::array::IntoIter<(u32, u32, u32), 6>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.v.into_iter().take(self.n)
-    }
+impl Small6 {
+    #[inline]
+    fn iter(&self) -> core::slice::Iter<'_, (u32, u32, u32)> { self.v[..self.n].iter() }
 }
 
 #[cfg(test)]
