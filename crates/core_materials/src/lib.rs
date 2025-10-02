@@ -5,9 +5,17 @@
 //! - Lightweight ID lookup by name for CLI/config friendliness.
 //! - Helper to compute debris mass from voxel size and density.
 //!
-//! Extending
-//! - Add optional properties (yield strength, thermal_k) as `Option<f64>` later.
-//! - Add `serde` behind a feature if materials cross process boundaries.
+//! Initial palette (P0, uniform per proxy):
+//! - stone:    ρ = 2400 kg/m^3
+//! - wood:     ρ = 500  kg/m^3
+//! - steel:    ρ = 7850 kg/m^3
+//! - concrete: ρ = 2400 kg/m^3
+//! - glass:    ρ = 2500 kg/m^3
+//! - dirt:     ρ = 1600 kg/m^3
+//!
+//! Notes
+//! - P0 uses a uniform material per voxel proxy. A follow-up may add an optional per-voxel `u8`
+//!   palette for mixed materials.
 
 use core_units::{Length, Mass, cube_volume_m3};
 
@@ -56,6 +64,7 @@ pub static MATERIALS: &[MaterialInfo] = &[
 ];
 
 /// Look up a material by case-insensitive name.
+#[inline]
 pub fn find_material_id(name: &str) -> Option<MaterialId> {
     let n = name.trim().to_ascii_lowercase();
     MATERIALS
@@ -65,15 +74,27 @@ pub fn find_material_id(name: &str) -> Option<MaterialId> {
 }
 
 /// Fetch material info by id.
+#[inline]
 pub fn get(mat: MaterialId) -> Option<&'static MaterialInfo> {
     MATERIALS.get(mat.0 as usize)
 }
 
 /// Compute mass for a single voxel cube of edge `voxel_m` (meters) for a given material.
+#[inline]
 pub fn mass_for_voxel(mat: MaterialId, voxel_m: Length) -> Option<Mass> {
     let m = get(mat)?;
     let vol = cube_volume_m3(voxel_m); // m^3
     Some(Mass(m.density_kg_m3 * vol))
+}
+
+impl From<u16> for MaterialId {
+    #[inline]
+    fn from(v: u16) -> Self { MaterialId(v) }
+}
+
+impl From<MaterialId> for usize {
+    #[inline]
+    fn from(v: MaterialId) -> Self { v.0 as usize }
 }
 
 #[cfg(test)]

@@ -1834,6 +1834,9 @@ dependencies = [
 [[package]]
 name = "core_units"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "coreaudio-rs"
