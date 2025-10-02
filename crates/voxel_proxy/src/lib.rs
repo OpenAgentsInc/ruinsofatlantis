@@ -15,8 +15,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::cmp::{max, min};
-use core_units::{Length, Mass};
 use core_materials::{MaterialId, mass_for_voxel};
+use core_units::{Length, Mass};
 use glam::{DVec3, UVec3, Vec3};
 use std::collections::{HashSet, VecDeque};
 
@@ -49,14 +49,20 @@ impl VoxelGrid {
     /// Create an empty grid with given meta.
     pub fn new(meta: VoxelProxyMeta) -> Self {
         let len = (meta.dims.x as usize) * (meta.dims.y as usize) * (meta.dims.z as usize);
-        Self { meta, occ: vec![0; len], dirty_chunks: HashSet::new() }
+        Self {
+            meta,
+            occ: vec![0; len],
+            dirty_chunks: HashSet::new(),
+        }
     }
 
     /// Linear index for (x,y,z).
     #[inline]
     pub fn index(&self, x: u32, y: u32, z: u32) -> usize {
         let d = self.meta.dims;
-        (x as usize) + (y as usize) * (d.x as usize) + (z as usize) * (d.x as usize) * (d.y as usize)
+        (x as usize)
+            + (y as usize) * (d.x as usize)
+            + (z as usize) * (d.x as usize) * (d.y as usize)
     }
 
     /// Mark occupancy at (x,y,z).
@@ -103,10 +109,14 @@ impl VoxelGrid {
     }
 
     /// Total solid voxels.
-    pub fn solid_count(&self) -> usize { self.occ.iter().filter(|&&b| b != 0).count() }
+    pub fn solid_count(&self) -> usize {
+        self.occ.iter().filter(|&&b| b != 0).count()
+    }
 
     /// Estimate debris mass for one voxel (helper for upstream usage/tests).
-    pub fn voxel_mass(&self) -> Mass { core_materials::mass_for_voxel(self.meta.material, self.meta.voxel_m).unwrap() }
+    pub fn voxel_mass(&self) -> Mass {
+        core_materials::mass_for_voxel(self.meta.material, self.meta.voxel_m).unwrap()
+    }
 }
 
 /// Builds a voxel grid by marking a watertight surface then flood-filling interior.
@@ -117,7 +127,10 @@ pub fn voxelize_surface_fill(
 ) -> VoxelGrid {
     let mut grid = VoxelGrid::new(meta);
     let d = grid.meta.dims;
-    assert_eq!(surface_marks.len(), (d.x as usize) * (d.y as usize) * (d.z as usize));
+    assert_eq!(
+        surface_marks.len(),
+        (d.x as usize) * (d.y as usize) * (d.z as usize)
+    );
 
     // Optionally dilate by 1 voxel to close small leaks.
     let mut surf = surface_marks.to_vec();
@@ -127,10 +140,15 @@ pub fn voxelize_surface_fill(
             for y in 0..d.y {
                 for x in 0..d.x {
                     let idx = grid.index(x, y, z);
-                    if surf[idx] != 0 { continue; }
+                    if surf[idx] != 0 {
+                        continue;
+                    }
                     // if any 6-neighbor is surface, mark
                     let nbs = neighbors6(x, y, z, d);
-                    if nbs.into_iter().any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0) {
+                    if nbs
+                        .into_iter()
+                        .any(|(nx, ny, nz)| surf[grid.index(nx, ny, nz)] != 0)
+                    {
                         dil[idx] = 1;
                     }
                 }
@@ -143,23 +161,39 @@ pub fn voxelize_surface_fill(
     let mut outside = vec![0u8; surf.len()];
     let mut q = VecDeque::new();
     // seed all boundary cells that are not surface
-    for z in 0..d.z { for y in 0..d.y { for x in 0..d.x {
-        if x==0 || y==0 || z==0 || x==d.x-1 || y==d.y-1 || z==d.z-1 {
-            let idx = grid.index(x,y,z);
-            if surf[idx]==0 && outside[idx]==0 { outside[idx]=1; q.push_back((x,y,z)); }
+    for z in 0..d.z {
+        for y in 0..d.y {
+            for x in 0..d.x {
+                if x == 0 || y == 0 || z == 0 || x == d.x - 1 || y == d.y - 1 || z == d.z - 1 {
+                    let idx = grid.index(x, y, z);
+                    if surf[idx] == 0 && outside[idx] == 0 {
+                        outside[idx] = 1;
+                        q.push_back((x, y, z));
+                    }
+                }
+            }
         }
-    }}}
-    while let Some((x,y,z)) = q.pop_front() {
-        for (nx,ny,nz) in neighbors6(x,y,z,d) {
-            let i = grid.index(nx,ny,nz);
-            if surf[i]==0 && outside[i]==0 { outside[i]=1; q.push_back((nx,ny,nz)); }
+    }
+    while let Some((x, y, z)) = q.pop_front() {
+        for (nx, ny, nz) in neighbors6(x, y, z, d) {
+            let i = grid.index(nx, ny, nz);
+            if surf[i] == 0 && outside[i] == 0 {
+                outside[i] = 1;
+                q.push_back((nx, ny, nz));
+            }
         }
     }
     // Cells not marked outside are interior or surface -> solid
-    for z in 0..d.z { for y in 0..d.y { for x in 0..d.x {
-        let idx = grid.index(x,y,z);
-        if outside[idx]==0 { grid.set(x,y,z,true); }
-    }}}
+    for z in 0..d.z {
+        for y in 0..d.y {
+            for x in 0..d.x {
+                let idx = grid.index(x, y, z);
+                if outside[idx] == 0 {
+                    grid.set(x, y, z, true);
+                }
+            }
+        }
+    }
     grid
 }
 
@@ -168,35 +202,52 @@ pub fn carve_sphere(grid: &mut VoxelGrid, center_m: DVec3, radius: Length) -> Re
     let d = grid.meta.dims;
     let vm = grid.meta.voxel_m.0;
     let r = radius.0;
-    let r2 = r*r;
+    let r2 = r * r;
     // Compute voxel-space AABB bounds
     let to_voxel = |p: DVec3| -> Vec3 { ((p - grid.meta.origin_m) / vm).as_vec3() };
     let c_v = to_voxel(center_m);
-    let min_v = c_v - Vec3::splat((r/vm) + 1.0);
-    let max_v = c_v + Vec3::splat((r/vm) + 1.0);
+    let min_v = c_v - Vec3::splat((r / vm) + 1.0);
+    let max_v = c_v + Vec3::splat((r / vm) + 1.0);
     let xi0 = max(min_v.x.floor() as i32, 0) as u32;
     let yi0 = max(min_v.y.floor() as i32, 0) as u32;
     let zi0 = max(min_v.z.floor() as i32, 0) as u32;
-    let xi1 = min(max_v.x.ceil() as u32, d.x-1);
-    let yi1 = min(max_v.y.ceil() as u32, d.y-1);
-    let zi1 = min(max_v.z.ceil() as u32, d.z-1);
+    let xi1 = min(max_v.x.ceil() as u32, d.x - 1);
+    let yi1 = min(max_v.y.ceil() as u32, d.y - 1);
+    let zi1 = min(max_v.z.ceil() as u32, d.z - 1);
     let mut removed_centers = Vec::new();
     let mut chunks = HashSet::new();
-    for z in zi0..=zi1 { for y in yi0..=yi1 { for x in xi0..=xi1 {
-        // center of voxel in meters
-        let p_m = grid.meta.origin_m + DVec3::new((x as f64 + 0.5)*vm, (y as f64 + 0.5)*vm, (z as f64 + 0.5)*vm);
-        let d2 = (p_m - center_m).length_squared();
-        if d2 <= r2 && grid.is_solid(x,y,z) {
-            // clear
-            let idx = grid.index(x,y,z);
-            grid.occ[idx]=0; // cleared
-            let cc = grid.chunk_of(x,y,z);
-            chunks.insert((cc.x,cc.y,cc.z));
-            removed_centers.push(p_m);
+    for z in zi0..=zi1 {
+        for y in yi0..=yi1 {
+            for x in xi0..=xi1 {
+                // center of voxel in meters
+                let p_m = grid.meta.origin_m
+                    + DVec3::new(
+                        (x as f64 + 0.5) * vm,
+                        (y as f64 + 0.5) * vm,
+                        (z as f64 + 0.5) * vm,
+                    );
+                let d2 = (p_m - center_m).length_squared();
+                if d2 <= r2 && grid.is_solid(x, y, z) {
+                    // clear
+                    let idx = grid.index(x, y, z);
+                    grid.occ[idx] = 0; // cleared
+                    let cc = grid.chunk_of(x, y, z);
+                    chunks.insert((cc.x, cc.y, cc.z));
+                    removed_centers.push(p_m);
+                }
+            }
         }
-    }}}
-    for (x,y,z) in &chunks { grid.dirty_chunks.insert((*x,*y,*z)); }
-    RemovedVoxels { centers_m: removed_centers, chunks_touched: chunks.into_iter().map(|(x,y,z)| UVec3::new(x,y,z)).collect() }
+    }
+    for (x, y, z) in &chunks {
+        grid.dirty_chunks.insert((*x, *y, *z));
+    }
+    RemovedVoxels {
+        centers_m: removed_centers,
+        chunks_touched: chunks
+            .into_iter()
+            .map(|(x, y, z)| UVec3::new(x, y, z))
+            .collect(),
+    }
 }
 
 /// Summary of carve operation for debris spawning and remesh scheduling.
@@ -207,22 +258,45 @@ pub struct RemovedVoxels {
 
 #[inline]
 fn neighbors6(x: u32, y: u32, z: u32, d: UVec3) -> Small6 {
-    let mut out = Small6 { n: 0, v: [(0,0,0); 6] };
-    let mut push = |xx:u32,yy:u32,zz:u32, out: &mut Small6| { out.v[out.n] = (xx,yy,zz); out.n+=1; };
-    if x>0       { push(x-1,y ,z , &mut out); }
-    if x+1<d.x   { push(x+1,y ,z , &mut out); }
-    if y>0       { push(x ,y-1,z , &mut out); }
-    if y+1<d.y   { push(x ,y+1,z , &mut out); }
-    if z>0       { push(x ,y ,z-1, &mut out); }
-    if z+1<d.z   { push(x ,y ,z+1, &mut out); }
+    let mut out = Small6 {
+        n: 0,
+        v: [(0, 0, 0); 6],
+    };
+    let mut push = |xx: u32, yy: u32, zz: u32, out: &mut Small6| {
+        out.v[out.n] = (xx, yy, zz);
+        out.n += 1;
+    };
+    if x > 0 {
+        push(x - 1, y, z, &mut out);
+    }
+    if x + 1 < d.x {
+        push(x + 1, y, z, &mut out);
+    }
+    if y > 0 {
+        push(x, y - 1, z, &mut out);
+    }
+    if y + 1 < d.y {
+        push(x, y + 1, z, &mut out);
+    }
+    if z > 0 {
+        push(x, y, z - 1, &mut out);
+    }
+    if z + 1 < d.z {
+        push(x, y, z + 1, &mut out);
+    }
     out
 }
 
-struct Small6 { n: usize, v: [(u32,u32,u32); 6] }
+struct Small6 {
+    n: usize,
+    v: [(u32, u32, u32); 6],
+}
 impl IntoIterator for Small6 {
-    type Item = (u32,u32,u32);
-    type IntoIter = core::array::IntoIter<(u32,u32,u32), 6>;
-    fn into_iter(self) -> Self::IntoIter { self.v.into_iter().take(self.n) }
+    type Item = (u32, u32, u32);
+    type IntoIter = core::array::IntoIter<(u32, u32, u32), 6>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.v.into_iter().take(self.n)
+    }
 }
 
 #[cfg(test)]
@@ -242,45 +316,70 @@ mod tests {
 
     #[test]
     fn indexing_round_trip() {
-        let meta = mk_meta(UVec3::new(8,9,10), UVec3::new(4,4,4));
+        let meta = mk_meta(UVec3::new(8, 9, 10), UVec3::new(4, 4, 4));
         let mut g = VoxelGrid::new(meta);
-        for z in 0..10 { for y in 0..9 { for x in 0..8 {
-            let i = g.index(x,y,z);
-            g.occ[i] = 1;
-            assert!(g.is_solid(x,y,z));
-        }}}
-        assert_eq!(g.solid_count(), 8*9*10);
+        for z in 0..10 {
+            for y in 0..9 {
+                for x in 0..8 {
+                    let i = g.index(x, y, z);
+                    g.occ[i] = 1;
+                    assert!(g.is_solid(x, y, z));
+                }
+            }
+        }
+        assert_eq!(g.solid_count(), 8 * 9 * 10);
     }
 
     #[test]
     fn flood_fill_cube_shell_fills_interior() {
-        let d = UVec3::new(16,16,16);
-        let meta = mk_meta(d, UVec3::new(8,8,8));
-        let mut surf = vec![0u8; (d.x*d.y*d.z) as usize];
+        let d = UVec3::new(16, 16, 16);
+        let meta = mk_meta(d, UVec3::new(8, 8, 8));
+        let mut surf = vec![0u8; (d.x * d.y * d.z) as usize];
         // inner box spans [2..=13] each axis; mark its surface cells
-        let mut idx = |x:u32,y:u32,z:u32| -> usize { (x + y*d.x + z*d.x*d.y) as usize };
-        for z in 2..=13 { for y in 2..=13 { for x in 2..=13 {
-            if x==2 || x==13 || y==2 || y==13 || z==2 || z==13 { surf[idx(x,y,z)] = 1; }
-        }}}
+        let mut idx = |x: u32, y: u32, z: u32| -> usize { (x + y * d.x + z * d.x * d.y) as usize };
+        for z in 2..=13 {
+            for y in 2..=13 {
+                for x in 2..=13 {
+                    if x == 2 || x == 13 || y == 2 || y == 13 || z == 2 || z == 13 {
+                        surf[idx(x, y, z)] = 1;
+                    }
+                }
+            }
+        }
         let g = voxelize_surface_fill(meta, &surf, false);
         // expected solids = volume of 12^3 cube (including surface) = 1728
-        assert_eq!(g.solid_count(), 12*12*12);
+        assert_eq!(g.solid_count(), 12 * 12 * 12);
     }
 
     #[test]
     fn carve_sphere_marks_dirty_chunks_across_boundary() {
-        let d = UVec3::new(32,16,16);
-        let meta = mk_meta(d, UVec3::new(16,16,16));
+        let d = UVec3::new(32, 16, 16);
+        let meta = mk_meta(d, UVec3::new(16, 16, 16));
         // Fill entire grid solid
         let mut g = VoxelGrid::new(meta);
-        for z in 0..d.z { for y in 0..d.y { for x in 0..d.x { g.set(x,y,z,true); }}}
+        for z in 0..d.z {
+            for y in 0..d.y {
+                for x in 0..d.x {
+                    g.set(x, y, z, true);
+                }
+            }
+        }
         // Carve a sphere centered near x=16 boundary to touch both chunks
-        let center = DVec3::new(16.0 * g.meta.voxel_m.0, (d.y as f64)*g.meta.voxel_m.0*0.5, (d.z as f64)*g.meta.voxel_m.0*0.5);
+        let center = DVec3::new(
+            16.0 * g.meta.voxel_m.0,
+            (d.y as f64) * g.meta.voxel_m.0 * 0.5,
+            (d.z as f64) * g.meta.voxel_m.0 * 0.5,
+        );
         let _removed = carve_sphere(&mut g, center, Length::meters(0.5));
         let dirty = g.pop_dirty_chunks(16);
         // Expect at least two distinct chunk x-coordinates
         let mut xs: HashSet<u32> = HashSet::new();
-        for c in dirty { xs.insert(c.x); }
-        assert!(xs.len()>=2, "expected carve to touch chunks across boundary");
+        for c in dirty {
+            xs.insert(c.x);
+        }
+        assert!(
+            xs.len() >= 2,
+            "expected carve to touch chunks across boundary"
+        );
     }
 }
