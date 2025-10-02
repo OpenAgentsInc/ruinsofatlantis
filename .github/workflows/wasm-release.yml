@@ -31,10 +31,11 @@ jobs:
           git fetch --tags --force
           git checkout "refs/tags/${{ inputs.tag }}"
 
-      - name: Setup Rust (stable + wasm target)
+      - name: Setup Rust (stable + fmt/clippy + wasm target)
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -92,4 +93,3 @@ jobs:
             ${{ env.ZIP }}.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
