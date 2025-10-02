@@ -1056,7 +1056,25 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 } else {
                     // Clamp voxel density so total cells <= budget
                     let mut vm = (dcfg.voxel_size_m.0 as f32).max(1e-4);
-                    let origin = glam::DVec3::new(min.x as f64, min.y as f64, min.z as f64);
+                    // Compute origin; allow optional offset to position model near the player
+                    let center_world = glam::DVec3::new(
+                        0.5 * (min.x + max.x) as f64,
+                        0.5 * (min.y + max.y) as f64,
+                        0.5 * (min.z + max.z) as f64,
+                    );
+                    let origin = if let Some(off) = dcfg.vox_offset {
+                        off - center_world
+                    } else if dcfg.vox_sandbox {
+                        // Default: place ruin ~8m in front of PC at terrain height
+                        let off = glam::DVec3::new(
+                            pc_initial_pos.x as f64,
+                            pc_initial_pos.y as f64,
+                            (pc_initial_pos.z + 8.0) as f64,
+                        );
+                        off - center_world
+                    } else {
+                        glam::DVec3::new(min.x as f64, min.y as f64, min.z as f64)
+                    };
                     let size = max - min;
                     const MAX_VOXELS: u64 = 8_000_000;
                     let dims;

@@ -79,56 +79,142 @@ pub fn greedy_mesh_all(grid: &VoxelGrid) -> MeshBuffers {
 /// whose centroids belong to the given chunk coordinate. This prioritizes correctness
 /// and chunk ownership of faces; optimized per-slice greedy meshing can layer on later.
 pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
-    let all = greedy_mesh_all(grid);
-    if all.indices.is_empty() {
-        return all;
-    }
+    // Per-chunk, slice-local greedy meshing. We only emit faces whose
+    // adjacent solid voxel lies inside the given chunk to avoid duplication
+    // across chunk boundaries.
     let (xr, yr, zr) = grid.chunk_bounds_voxels(chunk);
-    let origin = grid.meta().origin_m.as_vec3();
     let vm = grid.meta().voxel_m.0 as f32;
-    let _csz = grid.meta().chunk;
-    let mut keep = Vec::with_capacity(all.indices.len() / 3);
-    // Select triangles whose centroid falls within the chunk voxel bounds
-    let eps: f32 = 1e-6;
-    for tri in all.indices.chunks_exact(3) {
-        let p0 = Vec3::from(all.positions[tri[0] as usize]);
-        let p1 = Vec3::from(all.positions[tri[1] as usize]);
-        let p2 = Vec3::from(all.positions[tri[2] as usize]);
-        let centroid = (p0 + p1 + p2) / 3.0;
-        let v = (centroid - origin) / vm; // voxel coords (float)
-        let vx = (v.x - eps).floor() as i32;
-        let vy = (v.y - eps).floor() as i32;
-        let vz = (v.z - eps).floor() as i32;
-        if vx >= xr.start as i32
-            && vx < xr.end as i32
-            && vy >= yr.start as i32
-            && vy < yr.end as i32
-            && vz >= zr.start as i32
-            && vz < zr.end as i32
-        {
-            keep.push([tri[0], tri[1], tri[2]]);
+    let origin_world = grid.meta().origin_m.as_vec3();
+    let offset = Vec3::new(xr.start as f32, yr.start as f32, zr.start as f32);
+    let origin = origin_world + offset * vm;
+
+    let mut mesh = MeshBuffers::default();
+
+    // Axis 0 (X): w = Y, h = Z, ld = X
+    {
+        let w = yr.end - yr.start;
+        let h = zr.end - zr.start;
+        let ld = xr.end - xr.start;
+        // Positive normal (+X): own faces where (x,y,z) is solid inside chunk and (x-1,y,z) is empty
+        for layer_rel in 0..ld {
+            let x = xr.start + layer_rel;
+            let mut mask = vec![false; (w * h) as usize];
+            for j in 0..h {
+                for i in 0..w {
+                    let y = yr.start + i;
+                    let z = zr.start + j;
+                    let here = grid.is_solid(x, y, z);
+                    let there = if x > 0 {
+                        grid.is_solid(x - 1, y, z)
+                    } else {
+                        false
+                    };
+                    mask[(i + j * w) as usize] = here && !there;
+                }
+            }
+            greedy_emit(&mut mesh, &mask, 0, layer_rel, w, h, vm, origin, true);
+        }
+        // Negative normal (-X): own faces where (x-1,y,z) solid is inside chunk and (x,y,z) empty
+        for layer_rel in 1..=ld {
+            // layer_rel corresponds to current (x) and x-1 must be inside [xr.start..xr.end)
+            let x = xr.start + layer_rel;
+            let mut mask = vec![false; (w * h) as usize];
+            for j in 0..h {
+                for i in 0..w {
+                    let y = yr.start + i;
+                    let z = zr.start + j;
+                    let here = grid.is_solid(x, y, z);
+                    let there = grid.is_solid(x - 1, y, z); // x-1 is inside chunk by loop start
+                    mask[(i + j * w) as usize] = !here && there;
+                }
+            }
+            greedy_emit(&mut mesh, &mask, 0, layer_rel, w, h, vm, origin, false);
         }
     }
-    if keep.is_empty() {
-        return MeshBuffers::default();
-    }
-    // Reindex vertices to only include those referenced by kept triangles
-    use std::collections::HashMap;
-    let mut map: HashMap<u32, u32> = HashMap::new();
-    let mut out = MeshBuffers::default();
-    for tri in keep.into_iter() {
-        for &old_i in &tri {
-            let next = *map.entry(old_i).or_insert_with(|| {
-                let p = all.positions[old_i as usize];
-                let n = all.normals[old_i as usize];
-                out.positions.push(p);
-                out.normals.push(n);
-                (out.positions.len() as u32) - 1
-            });
-            out.indices.push(next);
+
+    // Axis 1 (Y): w = X, h = Z, ld = Y
+    {
+        let w = xr.end - xr.start;
+        let h = zr.end - zr.start;
+        let ld = yr.end - yr.start;
+        // +Y
+        for layer_rel in 0..ld {
+            let y = yr.start + layer_rel;
+            let mut mask = vec![false; (w * h) as usize];
+            for j in 0..h {
+                for i in 0..w {
+                    let x = xr.start + i;
+                    let z = zr.start + j;
+                    let here = grid.is_solid(x, y, z);
+                    let there = if y > 0 {
+                        grid.is_solid(x, y - 1, z)
+                    } else {
+                        false
+                    };
+                    mask[(i + j * w) as usize] = here && !there;
+                }
+            }
+            greedy_emit(&mut mesh, &mask, 1, layer_rel, w, h, vm, origin, true);
+        }
+        // -Y (y-1 must be inside chunk)
+        for layer_rel in 1..=ld {
+            let y = yr.start + layer_rel;
+            let mut mask = vec![false; (w * h) as usize];
+            for j in 0..h {
+                for i in 0..w {
+                    let x = xr.start + i;
+                    let z = zr.start + j;
+                    let here = grid.is_solid(x, y, z);
+                    let there = grid.is_solid(x, y - 1, z);
+                    mask[(i + j * w) as usize] = !here && there;
+                }
+            }
+            greedy_emit(&mut mesh, &mask, 1, layer_rel, w, h, vm, origin, false);
         }
     }
-    out
+
+    // Axis 2 (Z): w = X, h = Y, ld = Z
+    {
+        let w = xr.end - xr.start;
+        let h = yr.end - yr.start;
+        let ld = zr.end - zr.start;
+        // +Z
+        for layer_rel in 0..ld {
+            let z = zr.start + layer_rel;
+            let mut mask = vec![false; (w * h) as usize];
+            for j in 0..h {
+                for i in 0..w {
+                    let x = xr.start + i;
+                    let y = yr.start + j;
+                    let here = grid.is_solid(x, y, z);
+                    let there = if z > 0 {
+                        grid.is_solid(x, y, z - 1)
+                    } else {
+                        false
+                    };
+                    mask[(i + j * w) as usize] = here && !there;
+                }
+            }
+            greedy_emit(&mut mesh, &mask, 2, layer_rel, w, h, vm, origin, true);
+        }
+        // -Z (z-1 must be inside chunk)
+        for layer_rel in 1..=ld {
+            let z = zr.start + layer_rel;
+            let mut mask = vec![false; (w * h) as usize];
+            for j in 0..h {
+                for i in 0..w {
+                    let x = xr.start + i;
+                    let y = yr.start + j;
+                    let here = grid.is_solid(x, y, z);
+                    let there = grid.is_solid(x, y, z - 1);
+                    mask[(i + j * w) as usize] = !here && there;
+                }
+            }
+            greedy_emit(&mut mesh, &mask, 2, layer_rel, w, h, vm, origin, false);
+        }
+    }
+
+    mesh
 }
 
 fn plane_dims(axis: u32, d: UVec3) -> (u32, u32, u32, UVec3, UVec3, UVec3) {

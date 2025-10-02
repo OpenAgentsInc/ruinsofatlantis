@@ -570,8 +570,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 log::error!("validation after voxel meshes: {:?}", e);
             }
         }
-        // Skinned: wizards (use helper to ensure correct bind group order/index type)
-        if std::env::var("RA_DRAW_WIZARDS")
+        // Skinned: wizards (PC always visible even if hide_wizards)
+        if r.destruct_cfg.hide_wizards {
+            r.draw_pc_only(&mut rp);
+            r.draw_calls += 1;
+        } else if std::env::var("RA_DRAW_WIZARDS")
             .map(|v| v != "0")
             .unwrap_or(true)
         {
@@ -642,6 +645,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Bars for wizards
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         for (i, m) in r.wizard_models.iter().enumerate() {
+            if r.destruct_cfg.hide_wizards && i != r.pc_index {
+                continue;
+            }
             let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
             let frac = (r.wizard_hp.get(i).copied().unwrap_or(r.wizard_hp_max) as f32)
                 / (r.wizard_hp_max as f32);
@@ -654,6 +660,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
         }
         for (i, id) in r.zombie_ids.iter().enumerate() {
+            if r.destruct_cfg.vox_sandbox {
+                continue;
+            }
             if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied()
                 && alive
             {
@@ -669,6 +678,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         // Death Knight health bar (use server HP; lower vertical offset)
         if r.dk_count > 0
+            && !r.destruct_cfg.vox_sandbox
             && let Some(m) = r.dk_models.first().copied()
         {
             let frac = if let Some(id) = r.dk_id

@@ -640,14 +640,17 @@ impl Renderer {
         let Some(grid) = self.voxel_grid.as_mut() else {
             return;
         };
-        let dir = (p1 - p0).normalize_or_zero();
-        if dir.length_squared() < 1e-6 {
+        // Trace strictly along the projectile segment (plus a small safety margin)
+        let seg = p1 - p0;
+        if seg.length_squared() < 1e-6 {
             return;
         }
+        let dir = seg.normalize_or_zero();
         let origin = DVec3::new(p0.x as f64, p0.y as f64, p0.z as f64);
         let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
-        if let Some(hit) = raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0)
-        {
+        // Extend a bit beyond the segment to catch grazing hits
+        let max_len_m = core_units::Length::meters((seg.length() * 1.25) as f64);
+        if let Some(hit) = raycast_voxels(grid, origin, dir_m, max_len_m) {
             // Carve a small hole at voxel center and schedule chunk updates
             let vm = grid.voxel_m().0;
             let o = grid.origin_m();
@@ -689,6 +692,13 @@ impl Renderer {
                     tries += 1;
                 }
             }
+            log::info!(
+                "[vox] hit @ ({:.2},{:.2},{:.2}) r={:.2}m",
+                impact.x,
+                impact.y,
+                impact.z,
+                radius.0
+            );
             let out = carve_and_spawn_debris(
                 grid,
                 impact,
@@ -747,6 +757,9 @@ impl Renderer {
             let enq = grid.pop_dirty_chunks(usize::MAX);
             self.chunk_queue.enqueue_many(enq);
             self.vox_queue_len = self.chunk_queue.len();
+        } else {
+            // No voxel hit along the projectile path — do nothing
+            return;
         }
     }
 

@@ -5,6 +5,22 @@ use wgpu::IndexFormat;
 use super::Renderer;
 
 impl Renderer {
+    pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
+        if self.wizard_index_count == 0 {
+            return;
+        }
+        let stride = std::mem::size_of::<crate::gfx::types::InstanceSkin>() as u64;
+        let offset = (self.pc_index as u64) * stride;
+        rpass.set_pipeline(&self.wizard_pipeline);
+        rpass.set_bind_group(0, &self.globals_bg, &[]);
+        rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        rpass.set_bind_group(2, &self.palettes_bg, &[]);
+        rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
+        rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
+        rpass.set_vertex_buffer(1, self.wizard_instances.slice(offset..offset + stride));
+        rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
+        rpass.draw_indexed(0..self.wizard_index_count, 0, 0..1);
+    }
     pub(crate) fn draw_wizards(&self, rpass: &mut wgpu::RenderPass<'_>) {
         rpass.set_pipeline(&self.wizard_pipeline);
         rpass.set_bind_group(0, &self.globals_bg, &[]);
