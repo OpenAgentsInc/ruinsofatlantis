@@ -63,7 +63,7 @@ use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use collision_static::chunks::{self as chunkcol, StaticChunk};
-use server_core::destructible::{self, config::DestructibleConfig, queue::ChunkQueue};
+use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
 use voxel_proxy::VoxelGrid;
 use winit::window::Window;
 
