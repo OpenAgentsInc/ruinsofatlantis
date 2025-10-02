@@ -87,6 +87,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
     let origin_world = grid.meta().origin_m.as_vec3();
     let offset = Vec3::new(xr.start as f32, yr.start as f32, zr.start as f32);
     let origin = origin_world + offset * vm;
+    let dims = grid.meta().dims;
 
     let mut mesh = MeshBuffers::default();
 
@@ -123,7 +124,8 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
                 for i in 0..w {
                     let y = yr.start + i;
                     let z = zr.start + j;
-                    let here = grid.is_solid(x, y, z);
+                    // At the upper chunk boundary, x may equal dims.x; treat out-of-bounds as empty
+                    let here = if x < dims.x { grid.is_solid(x, y, z) } else { false };
                     let there = grid.is_solid(x - 1, y, z); // x-1 is inside chunk by loop start
                     mask[(i + j * w) as usize] = !here && there;
                 }
@@ -164,7 +166,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
                 for i in 0..w {
                     let x = xr.start + i;
                     let z = zr.start + j;
-                    let here = grid.is_solid(x, y, z);
+                    let here = if y < dims.y { grid.is_solid(x, y, z) } else { false };
                     let there = grid.is_solid(x, y - 1, z);
                     mask[(i + j * w) as usize] = !here && there;
                 }
@@ -205,7 +207,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
                 for i in 0..w {
                     let x = xr.start + i;
                     let y = yr.start + j;
-                    let here = grid.is_solid(x, y, z);
+                    let here = if z < dims.z { grid.is_solid(x, y, z) } else { false };
                     let there = grid.is_solid(x, y, z - 1);
                     mask[(i + j * w) as usize] = !here && there;
                 }
