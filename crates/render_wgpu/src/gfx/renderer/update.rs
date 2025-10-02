@@ -661,7 +661,11 @@ impl Renderer {
                 grid.origin_m().z as f32,
             );
             let gmax = gmin
-                + glam::vec3(dims.x as f32 * vm_f, dims.y as f32 * vm_f, dims.z as f32 * vm_f);
+                + glam::vec3(
+                    dims.x as f32 * vm_f,
+                    dims.y as f32 * vm_f,
+                    dims.z as f32 * vm_f,
+                );
             let aabb_min = gmin - glam::Vec3::splat(0.25 * vm_f);
             let aabb_max = gmax + glam::Vec3::splat(0.25 * vm_f);
             let mut tmin = 0.0f32;

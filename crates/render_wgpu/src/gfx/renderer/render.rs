@@ -461,7 +461,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Trees
-        if r.trees_count > 0 {
+        if r.trees_count > 0 && !r.is_vox_onepath() {
             log::debug!("draw: trees x{}", r.trees_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -486,7 +486,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Rocks
-        if r.rocks_count > 0 {
+        if r.rocks_count > 0 && !r.is_vox_onepath() {
             log::debug!("draw: rocks x{}", r.rocks_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -527,7 +527,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.draw_calls += 1;
         }
         // Ruins
-        if r.ruins_count > 0 {
+        if r.ruins_count > 0 && !r.is_vox_onepath() {
             log::debug!("draw: ruins x{}", r.ruins_count);
             if trace {
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -571,7 +571,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Skinned: wizards (PC always visible even if hide_wizards)
-        if r.destruct_cfg.hide_wizards {
+        if r.is_vox_onepath() {
+            // skip wizard visuals entirely in one‑path demo
+        } else if r.destruct_cfg.hide_wizards {
             r.draw_pc_only(&mut rp);
             r.draw_calls += 1;
         } else if std::env::var("RA_DRAW_WIZARDS")
@@ -585,13 +587,13 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
         // Skinned: Death Knight (boss)
-        if r.dk_count > 0 {
+        if r.dk_count > 0 && !r.is_vox_onepath() {
             log::debug!("draw: deathknight x{}", r.dk_count);
             r.draw_deathknight(&mut rp);
             r.draw_calls += 1;
         }
         // Skinned: zombies
-        if std::env::var("RA_DRAW_ZOMBIES")
+        if !r.is_vox_onepath() && std::env::var("RA_DRAW_ZOMBIES")
             .map(|v| v != "0")
             .unwrap_or(true)
         {
@@ -641,7 +643,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let overlays_disabled = std::env::var("RA_OVERLAYS")
         .map(|v| v == "0")
         .unwrap_or(false);
-    if !overlays_disabled {
+    if !overlays_disabled && !r.is_vox_onepath() {
         // Bars for wizards
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         for (i, m) in r.wizard_models.iter().enumerate() {
@@ -709,26 +711,24 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     // Damage numbers: update, queue, draw (independent of RA_OVERLAYS to ensure visibility)
-    r.damage.update(dt);
-    r.damage.queue(
-        &r.device,
-        &r.queue,
-        r.config.width,
-        r.config.height,
-        view_proj,
-    );
-    let damage_target = if r.direct_present {
-        &view
-    } else {
-        &r.attachments.scene_view
-    };
-    r.damage.draw(&mut encoder, damage_target);
+    if !r.is_vox_onepath() {
+        r.damage.update(dt);
+        r.damage.queue(
+            &r.device,
+            &r.queue,
+            r.config.width,
+            r.config.height,
+            view_proj,
+        );
+        let damage_target = if r.direct_present { &view } else { &r.attachments.scene_view };
+        r.damage.draw(&mut encoder, damage_target);
+    }
 
     // Nameplates disabled by default. Set RA_NAMEPLATES=1 to enable.
     let draw_labels = std::env::var("RA_NAMEPLATES")
         .map(|v| v == "1")
         .unwrap_or(false);
-    if draw_labels {
+    if draw_labels && !r.is_vox_onepath() {
         // Alive wizards only
         let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
         for (i, m) in r.wizard_models.iter().enumerate() {
@@ -1014,7 +1014,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             "Press R to respawn",
         );
     } else if !overlays_disabled {
-        let cast_label = if cast_frac > 0.0 {
+        let cast_label = if !r.is_vox_onepath() && cast_frac > 0.0 {
             match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                 super::super::PcCast::FireBolt => Some("Fire Bolt"),
                 super::super::PcCast::MagicMissile => Some("Magic Missile"),
@@ -1023,17 +1023,21 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         } else {
             None
         };
-        r.hud.build(
-            r.size.width,
-            r.size.height,
-            pc_hp,
-            r.wizard_hp_max,
-            cast_frac,
-            cd1,
-            cd2,
-            cd3,
-            cast_label,
-        );
+        if !r.is_vox_onepath() {
+            r.hud.build(
+                r.size.width,
+                r.size.height,
+                pc_hp,
+                r.wizard_hp_max,
+                cast_frac,
+                cd1,
+                cd2,
+                cd3,
+                cast_label,
+            );
+        } else {
+            r.hud.reset();
+        }
         if r.hud_model.perf_enabled() {
             let ms = dt * 1000.0;
             let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
@@ -1063,7 +1067,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Short demo hint for first few seconds
-        if r.last_time <= r.demo_hint_until.unwrap_or(0.0) {
+        if !r.is_vox_onepath() && r.last_time <= r.demo_hint_until.unwrap_or(0.0) {
             let hint = "Press F to blast (voxel destructible demo)";
             r.hud.append_perf_text(r.size.width, r.size.height, hint);
         }

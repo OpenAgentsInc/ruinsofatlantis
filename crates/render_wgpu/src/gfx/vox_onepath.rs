@@ -6,9 +6,9 @@
 //! - Fires one scripted ray from camera forward to carve a 0.25m sphere
 //! - Saves a screenshot to `target/vox_onepath.png` when the remesh queue drains
 
-use crate::gfx::{camera_sys, Renderer};
+use crate::gfx::{Renderer, camera_sys};
 use anyhow::Result;
-use glam::{DVec3, UVec3, Vec3};
+use glam::{DVec3, UVec3};
 use server_core::destructible::config::DestructibleConfig;
 use std::path::PathBuf;
 use voxel_proxy::{GlobalId, VoxelGrid, VoxelProxyMeta};
@@ -31,7 +31,10 @@ pub fn run() -> Result<()> {
 }
 
 fn is_headless() -> bool {
-    if std::env::var("RA_HEADLESS").map(|v| v == "1").unwrap_or(false) {
+    if std::env::var("RA_HEADLESS")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         return true;
     }
     if std::env::var("CI")
@@ -40,10 +43,15 @@ fn is_headless() -> bool {
     {
         return true;
     }
-    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     {
-        if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none()
-        {
+        if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
             return true;
         }
     }
@@ -165,6 +173,9 @@ impl ApplicationHandler for App {
         renderer.zombie_count = 0;
         renderer.dk_count = 0;
         renderer.dk_id = None;
+        renderer.rocks_count = 0;
+        renderer.trees_count = 0;
+        renderer.ruins_count = 0;
         if renderer.destruct_cfg.hide_wizards {
             renderer.wizard_count = 0;
         }
@@ -174,15 +185,23 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, el: &ActiveEventLoop, id: winit::window::WindowId, e: WindowEvent) {
-        let (Some(window), Some(state)) = (&self.window, &mut self.state) else { return; };
-        if window.id() != id { return; }
+        let (Some(window), Some(state)) = (&self.window, &mut self.state) else {
+            return;
+        };
+        if window.id() != id {
+            return;
+        }
         match e {
             WindowEvent::CloseRequested => el.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
                 // Advance a tiny scripted timeline
                 let dt = (state.last_time - state.start.elapsed().as_secs_f32()).abs();
-                self.script.t += if dt.is_finite() { dt.max(1.0/120.0) } else { 1.0/60.0 };
+                self.script.t += if dt.is_finite() {
+                    dt.max(1.0 / 120.0)
+                } else {
+                    1.0 / 60.0
+                };
 
                 // Fire a single carve along camera forward after a short delay
                 if !self.script.shot && self.script.t > 0.4 {
@@ -243,7 +262,9 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
-        if let Some(win) = &self.window { win.request_redraw(); }
+        if let Some(win) = &self.window {
+            win.request_redraw();
+        }
     }
 }
 
@@ -254,7 +275,7 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
     let bytes_per_pixel = 8u32; // RGBA16F
     let unpadded = w * bytes_per_pixel;
     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-    let padded = ((unpadded + align - 1) / align) * align;
+    let padded = unpadded.div_ceil(align);
     let buf_size = (padded * h) as u64;
     let readback = r.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vox_onepath-readback"),
@@ -264,20 +285,32 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
     });
     let mut enc = r
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("vox_onepath-enc") });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("vox_onepath-enc"),
+        });
     enc.copy_texture_to_buffer(
         r.attachments.scene_color.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &readback,
-            layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(padded), rows_per_image: Some(h) },
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(padded),
+                rows_per_image: Some(h),
+            },
         },
-        wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
     );
     r.queue.submit([enc.finish()]);
     // Map and convert to RGBA8
     let slice = readback.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |res| { let _ = tx.send(res); });
+    slice.map_async(wgpu::MapMode::Read, move |res| {
+        let _ = tx.send(res);
+    });
     // Kick the callback dispatch
     r.queue.submit(std::iter::empty());
     let _ = rx.recv();
@@ -290,7 +323,7 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
         // Each pixel: 4 * f16
         for px in 0..w as usize {
             let off = px * 8;
-            let r16 = u16::from_le_bytes([row_bytes[off + 0], row_bytes[off + 1]]);
+            let r16 = u16::from_le_bytes([row_bytes[off], row_bytes[off + 1]]);
             let g16 = u16::from_le_bytes([row_bytes[off + 2], row_bytes[off + 3]]);
             let b16 = u16::from_le_bytes([row_bytes[off + 4], row_bytes[off + 5]]);
             let a16 = u16::from_le_bytes([row_bytes[off + 6], row_bytes[off + 7]]);
@@ -298,7 +331,7 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
             let gf = half::f16::from_bits(g16).to_f32().clamp(0.0, 1.0);
             let bf = half::f16::from_bits(b16).to_f32().clamp(0.0, 1.0);
             let af = half::f16::from_bits(a16).to_f32().clamp(0.0, 1.0);
-            out[idx8 + 0] = (rf * 255.0) as u8;
+            out[idx8] = (rf * 255.0) as u8;
             out[idx8 + 1] = (gf * 255.0) as u8;
             out[idx8 + 2] = (bf * 255.0) as u8;
             out[idx8 + 3] = (af * 255.0) as u8;

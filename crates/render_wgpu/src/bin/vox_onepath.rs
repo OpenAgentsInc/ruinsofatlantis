@@ -7,4 +7,3 @@ use anyhow::Result;
 fn main() -> Result<()> {
     render_wgpu::gfx::vox_onepath::run()
 }
-
