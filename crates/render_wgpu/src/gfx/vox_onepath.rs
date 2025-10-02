@@ -264,26 +264,41 @@ impl ApplicationHandler for App {
                             let pre_debris = state.debris.len();
                             log::info!("[onepath] carve attempt from p0={:?} -> p1={:?}", p0, p1);
                             state.try_voxel_impact(p0, p1);
-                            // Fallback: if nothing enqueued, carve at grid center directly
+                            // Fallback: if nothing enqueued, carve near the camera-facing surface
                             if state.vox_queue_len == pre
                                 && let Some(ref mut grid) = state.voxel_grid
                             {
-                                let vm = grid.voxel_m().0;
-                                let dims = grid.dims();
-                                let o = grid.origin_m();
-                                let center = DVec3::new(
-                                    o.x + vm * (dims.x as f64 * 0.5),
-                                    o.y + vm * (dims.y as f64 * 0.5),
-                                    o.z + vm * (dims.z as f64 * 0.5),
-                                );
-                                let out = server_core::destructible::carve_and_spawn_debris(
-                                    grid,
-                                    center,
-                                    core_units::Length::meters(0.25),
-                                    state.destruct_cfg.seed,
-                                    state.impact_id,
-                                    state.destruct_cfg.max_debris,
-                                );
+                                    let vm = grid.voxel_m().0 as f32;
+                                    let dims = grid.dims();
+                                    let o = grid.origin_m();
+                                    let gmin = glam::vec3(o.x as f32, o.y as f32, o.z as f32);
+                                    let gmax = gmin + glam::vec3(dims.x as f32 * vm, dims.y as f32 * vm, dims.z as f32 * vm);
+                                    let dir = (p1 - p0).normalize_or_zero();
+                                    // slab intersection to find entry point
+                                    let mut tmin = 0.0f32; let mut tmax = 1.0e6f32;
+                                    for i in 0..3 {
+                                        let s = p0[i]; let d = dir[i];
+                                        let (minb,maxb) = (gmin[i], gmax[i]);
+                                        if d.abs() < 1e-6 {
+                                            if s < minb || s > maxb { tmin = 1.0e9; break; }
+                                        } else {
+                                            let inv = 1.0/d; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv;
+                                            if t0>t1 { core::mem::swap(&mut t0,&mut t1); }
+                                            tmin = tmin.max(t0); tmax = tmax.min(t1);
+                                            if tmin>tmax { tmin = 1.0e9; break; }
+                                        }
+                                    }
+                                    // Pick entry point plus a small inward offset so we actually remove surface voxels
+                                    let hit = if tmin.is_finite() && tmin<1.0e8 { p0 + dir * (tmin + vm*0.6) } else { p0 + dir * 0.5 };
+                                    let center = DVec3::new(hit.x as f64, hit.y as f64, hit.z as f64);
+                                    let out = server_core::destructible::carve_and_spawn_debris(
+                                        grid,
+                                        center,
+                                        core_units::Length::meters(0.25),
+                                        state.destruct_cfg.seed,
+                                        state.impact_id,
+                                        state.destruct_cfg.max_debris,
+                                    );
                                 state.impact_id = state.impact_id.wrapping_add(1);
                                 // enqueue dirty chunks
                                 let enq = grid.pop_dirty_chunks(usize::MAX);
