@@ -1,14 +1,14 @@
 //! CPU-side update helpers extracted from gfx/mod.rs
 
 use crate::gfx::Renderer;
+use crate::gfx::chunkcol;
 use crate::gfx::types::{InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 use crate::server_ext::CollideProjectiles;
-use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
-use crate::gfx::chunkcol;
 use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
+use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
 
 impl Renderer {
     #[inline]
@@ -628,12 +628,18 @@ impl Renderer {
     }
 
     fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
-        let Some(grid) = self.voxel_grid.as_mut() else { return; };
+        let Some(grid) = self.voxel_grid.as_mut() else {
+            return;
+        };
         let dir = (p1 - p0).normalize_or_zero();
-        if dir.length_squared() < 1e-6 { return; }
+        if dir.length_squared() < 1e-6 {
+            return;
+        }
         let origin = DVec3::new(p0.x as f64, p0.y as f64, p0.z as f64);
         let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
-        if let Some(_hit) = raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0) {
+        if let Some(_hit) =
+            raycast_voxels(grid, origin, dir_m, self.destruct_cfg.voxel_size_m * 4.0)
+        {
             // Carve a small hole and schedule chunk updates
             let impact = DVec3::new(p1.x as f64, p1.y as f64, p1.z as f64);
             let out = carve_and_spawn_debris(
@@ -646,7 +652,8 @@ impl Renderer {
             );
             self.vox_debris_last = out.positions_m.len();
             // Enqueue chunks deterministically
-            self.chunk_queue.enqueue_many(grid.pop_dirty_chunks(usize::MAX));
+            self.chunk_queue
+                .enqueue_many(grid.pop_dirty_chunks(usize::MAX));
         }
     }
 

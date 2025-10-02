@@ -36,7 +36,7 @@ pub fn greedy_mesh_all(grid: &VoxelGrid) -> MeshBuffers {
     let mut mesh = MeshBuffers::default();
     // Iterate three axes
     for axis in 0..3 {
-        let (w, h, ld, step_w, step_h, step_ld) = plane_dims(axis, d);
+        let (w, h, ld, _step_w, _step_h, _step_ld) = plane_dims(axis, d);
         // For each layer along the axis
         for layer in 0..ld {
             // Build face mask for this slice for positive normal
@@ -86,7 +86,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
     let (xr, yr, zr) = grid.chunk_bounds_voxels(chunk);
     let origin = grid.meta().origin_m.as_vec3();
     let vm = grid.meta().voxel_m.0 as f32;
-    let csz = grid.meta().chunk;
+    let _csz = grid.meta().chunk;
     let mut keep = Vec::with_capacity(all.indices.len() / 3);
     // Select triangles whose centroid falls within the chunk voxel bounds
     let eps: f32 = 1e-6;
@@ -175,6 +175,7 @@ fn inside(d: UVec3, x: u32, y: u32, z: u32) -> bool {
     x < d.x && y < d.y && z < d.z
 }
 
+#[allow(clippy::too_many_arguments)]
 fn greedy_emit(
     mesh: &mut MeshBuffers,
     mask: &[bool],
@@ -240,6 +241,7 @@ fn greedy_emit(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_rect(
     mesh: &mut MeshBuffers,
     axis: u32,

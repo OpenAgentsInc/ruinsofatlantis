@@ -62,10 +62,10 @@ use rand::Rng as _;
 use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
-use winit::window::Window;
-use voxel_proxy::VoxelGrid;
-use server_core::destructible::{self, config::DestructibleConfig, queue::ChunkQueue};
 use collision_static::chunks::{self as chunkcol, StaticChunk};
+use server_core::destructible::{self, config::DestructibleConfig, queue::ChunkQueue};
+use voxel_proxy::VoxelGrid;
+use winit::window::Window;
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
     // Prefer workspace-level assets so this crate works when built inside a workspace.
