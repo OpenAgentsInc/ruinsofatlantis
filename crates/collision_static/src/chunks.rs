@@ -92,7 +92,9 @@ pub fn swap_in_updates(store: &mut Vec<StaticChunk>, updates: Vec<StaticChunk>) 
 
 /// Flatten chunk colliders into a `StaticIndex` for queries.
 pub fn rebuild_static_index(store: &[StaticChunk]) -> StaticIndex {
-    StaticIndex { colliders: store.iter().map(|c| c.collider).collect() }
+    StaticIndex {
+        colliders: store.iter().map(|c| c.collider).collect(),
+    }
 }
 
 #[cfg(test)]
