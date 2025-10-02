@@ -193,6 +193,8 @@ fn capsule_vs_obb(_cap: &Capsule, _obb: &OBB) -> Option<Hit> {
     None
 }
 
+pub mod chunks;
+
 #[cfg(test)]
 mod tests {
     use super::*;

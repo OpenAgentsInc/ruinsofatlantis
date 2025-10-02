@@ -113,6 +113,26 @@ impl VoxelGrid {
         UVec3::new(x / c.x.max(1), y / c.y.max(1), z / c.z.max(1))
     }
 
+    /// Bounds (start..end) in voxel coordinates for a given chunk coordinate.
+    pub fn chunk_bounds_voxels(
+        &self,
+        chunk: UVec3,
+    ) -> (
+        core::ops::Range<u32>,
+        core::ops::Range<u32>,
+        core::ops::Range<u32>,
+    ) {
+        let d = self.meta.dims;
+        let c = self.meta.chunk;
+        let x0 = chunk.x.saturating_mul(c.x);
+        let y0 = chunk.y.saturating_mul(c.y);
+        let z0 = chunk.z.saturating_mul(c.z);
+        let x1 = (x0 + c.x).min(d.x);
+        let y1 = (y0 + c.y).min(d.y);
+        let z1 = (z0 + c.z).min(d.z);
+        (x0..x1, y0..y1, z0..z1)
+    }
+
     #[inline]
     fn mark_chunk_dirty_xyz(&mut self, x: u32, y: u32, z: u32) {
         let cc = self.chunk_of(x, y, z);
@@ -336,6 +356,7 @@ struct Small6 {
     v: [(u32, u32, u32); 6],
 }
 impl Small6 {
+    #[inline]
     fn iter(&self) -> core::slice::Iter<'_, (u32, u32, u32)> {
         self.v[..self.n].iter()
     }

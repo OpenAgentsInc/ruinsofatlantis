@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 glam = "0.30"
 smallvec = "1"
+voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
 
 [dev-dependencies]
 approx = "0.5"
