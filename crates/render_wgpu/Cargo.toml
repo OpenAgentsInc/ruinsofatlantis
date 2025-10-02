@@ -3,6 +3,10 @@ name = "render_wgpu"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "vox_onepath"
+path = "src/bin/vox_onepath.rs"
+
 [dependencies]
 ab_glyph = "0.2.31"
 anyhow = "1.0.100"
@@ -32,6 +36,8 @@ voxel_mesh = { version = "0.1.0", path = "../voxel_mesh" }
 core_units = { version = "0.1.0", path = "../core_units" }
 core_materials = { version = "0.1.0", path = "../core_materials" }
 web-sys = { version = "0.3.70", features = ["Window", "Location"] }
+png = "0.17"
+half = "2"
 
 [dev-dependencies]
 sha2 = "0.10.9"

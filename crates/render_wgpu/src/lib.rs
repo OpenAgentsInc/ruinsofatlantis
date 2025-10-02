@@ -11,6 +11,7 @@ pub use server_core;
 
 // Renderer modules live under `gfx/*` to preserve internal paths.
 pub mod gfx;
+pub mod prelude { pub use crate::gfx::*; }
 pub use gfx::*;
 
 // Renderer-specific extensions over server_core.

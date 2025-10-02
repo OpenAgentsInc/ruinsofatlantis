@@ -1050,6 +1050,17 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.vox_collider_ms_last
             );
             r.hud.append_perf_text(r.size.width, r.size.height, &vox);
+            if let Some((shot, carved, meshed)) = r.vox_onepath_ui {
+                let check = |b: bool| if b { '✓' } else { ' ' };
+                let demo = format!(
+                    "VOX ONEPATH | ray {} | carve {} | mesh {} | debris: {}",
+                    check(shot),
+                    check(carved),
+                    check(meshed),
+                    r.debris.len()
+                );
+                r.hud.append_perf_text(r.size.width, r.size.height, &demo);
+            }
         }
         // Short demo hint for first few seconds
         if r.last_time <= r.demo_hint_until.unwrap_or(0.0) {

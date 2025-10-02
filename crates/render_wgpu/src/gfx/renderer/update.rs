@@ -803,7 +803,7 @@ impl Renderer {
         }
     }
 
-    fn process_voxel_queues(&mut self) {
+    pub fn process_voxel_queues(&mut self) {
         let budget = self.destruct_cfg.max_chunk_remesh.max(1);
         let chunks = self.chunk_queue.pop_budget(budget);
         if let Some(grid) = self.voxel_grid.as_ref() {

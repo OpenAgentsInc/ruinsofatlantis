@@ -40,6 +40,7 @@ pub mod terrain;
 mod ui;
 mod util;
 mod zombies;
+pub mod vox_onepath;
 
 use data_runtime::spell::SpellSpec;
 use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
@@ -324,6 +325,8 @@ pub struct Renderer {
     vox_remesh_ms_last: f32,
     vox_collider_ms_last: f32,
     vox_skipped_last: usize,
+    // One-path demo status (optional): (ray, carve, mesh)
+    vox_onepath_ui: Option<(bool, bool, bool)>,
     // Deterministic debris seeding counter
     impact_id: u64,
 
@@ -346,6 +349,7 @@ pub struct Renderer {
     voxel_grid_initial: Option<VoxelGrid>,
     recent_impacts: Vec<(glam::DVec3, f64)>,
     demo_hint_until: Option<f32>,
+    
 
     // --- Player/Camera ---
     pc_index: usize,
