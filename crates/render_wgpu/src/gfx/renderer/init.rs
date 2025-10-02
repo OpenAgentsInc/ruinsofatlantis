@@ -957,6 +957,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         (1.0, 2.0)
     };
 
+    // Prepare neutral gray voxel model BG (before moving device into struct)
+    let voxel_model_bg = {
+        let mdl = crate::gfx::types::Model { model: glam::Mat4::IDENTITY.to_cols_array_2d(), color: [0.6,0.6,0.6], emissive: 0.02, _pad:[0.0;4] };
+        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor{ label: Some("voxel-model"), contents: bytemuck::bytes_of(&mdl), usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST });
+        device.create_bind_group(&wgpu::BindGroupDescriptor{ label: Some("voxel-model-bg"), layout: &model_bgl, entries: &[wgpu::BindGroupEntry{ binding:0, resource: buf.as_entire_binding() }] })
+    };
+
     Ok(crate::gfx::Renderer {
         surface,
         device,
@@ -1111,6 +1118,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_last_chunks: 0,
         vox_queue_len: 0,
         vox_debris_last: 0,
+        voxel_meshes: std::collections::HashMap::new(),
+        voxel_model_bg,
         pc_index: scene_build.pc_index,
         player: client_core::controller::PlayerController::new(pc_initial_pos),
         scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
