@@ -306,29 +306,38 @@ pub mod config {
                 let a = a.as_ref();
                 match a {
                     "--voxel-size" => {
-                        if let Some(v) = it.next() && let Ok(f) = v.as_ref().parse::<f64>() {
+                        if let Some(v) = it.next()
+                            && let Ok(f) = v.as_ref().parse::<f64>()
+                        {
                             cfg.voxel_size_m = Length::meters(f);
                         }
                     }
                     "--chunk-size" => {
                         if let (Some(x), Some(y), Some(z)) = (it.next(), it.next(), it.next())
-                            && let (Ok(x), Ok(y), Ok(z)) = (x.as_ref().parse(), y.as_ref().parse(), z.as_ref().parse())
+                            && let (Ok(x), Ok(y), Ok(z)) =
+                                (x.as_ref().parse(), y.as_ref().parse(), z.as_ref().parse())
                         {
                             cfg.chunk = UVec3::new(x, y, z);
                         }
                     }
                     "--mat" => {
-                        if let Some(n) = it.next() && let Some(id) = find_material_id(n.as_ref()) {
+                        if let Some(n) = it.next()
+                            && let Some(id) = find_material_id(n.as_ref())
+                        {
                             cfg.material = id;
                         }
                     }
                     "--max-debris" => {
-                        if let Some(v) = it.next() && let Ok(n) = v.as_ref().parse() {
+                        if let Some(v) = it.next()
+                            && let Ok(n) = v.as_ref().parse()
+                        {
                             cfg.max_debris = n;
                         }
                     }
                     "--max-chunk-remesh" => {
-                        if let Some(v) = it.next() && let Ok(n) = v.as_ref().parse() {
+                        if let Some(v) = it.next()
+                            && let Ok(n) = v.as_ref().parse()
+                        {
                             cfg.max_chunk_remesh = n;
                         }
                     }
@@ -339,7 +348,9 @@ pub mod config {
                         cfg.profile = true;
                     }
                     "--seed" => {
-                        if let Some(v) = it.next() && let Ok(n) = v.as_ref().parse() {
+                        if let Some(v) = it.next()
+                            && let Ok(n) = v.as_ref().parse()
+                        {
                             cfg.seed = n;
                         }
                     }
