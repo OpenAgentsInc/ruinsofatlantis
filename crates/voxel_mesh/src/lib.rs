@@ -387,4 +387,39 @@ mod tests {
         // Right chunk should own the remaining 5 faces (10 triangles = 30 indices)
         assert_eq!(right.indices.len(), 30);
     }
+
+    #[test]
+    fn normals_match_triangle_winding() {
+        // Single 1x1x1 solid at origin
+        let meta = VoxelProxyMeta {
+            object_id: GlobalId(1),
+            origin_m: DVec3::ZERO,
+            voxel_m: Length::meters(1.0),
+            dims: UVec3::new(1, 1, 1),
+            chunk: UVec3::new(1, 1, 1),
+            material: find_material_id("stone").unwrap(),
+        };
+        let mut g = voxel_proxy::VoxelGrid::new(meta);
+        g.set(0, 0, 0, true);
+        let m = greedy_mesh_all(&g);
+        assert_eq!(m.indices.len(), 36);
+        // For each triangle, the geometric normal should align with the stored vertex normal
+        for tri in m.indices.chunks_exact(3) {
+            let p0 = glam::Vec3::from(m.positions[tri[0] as usize]);
+            let p1 = glam::Vec3::from(m.positions[tri[1] as usize]);
+            let p2 = glam::Vec3::from(m.positions[tri[2] as usize]);
+            let face_n = (p1 - p0).cross(p2 - p0).normalize();
+            let n0 = glam::Vec3::from(m.normals[tri[0] as usize]).normalize();
+            let n1 = glam::Vec3::from(m.normals[tri[1] as usize]).normalize();
+            let n2 = glam::Vec3::from(m.normals[tri[2] as usize]).normalize();
+            assert!(
+                face_n.dot(n0) > 0.5 && face_n.dot(n1) > 0.5 && face_n.dot(n2) > 0.5,
+                "triangle normal not aligned with vertex normals: face_n={:?} n0={:?} n1={:?} n2={:?}",
+                face_n,
+                n0,
+                n1,
+                n2
+            );
+        }
+    }
 }

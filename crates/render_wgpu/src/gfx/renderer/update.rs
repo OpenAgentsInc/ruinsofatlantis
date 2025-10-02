@@ -658,9 +658,10 @@ impl Renderer {
                 impact,
                 self.destruct_cfg.voxel_size_m * 2.0,
                 self.destruct_cfg.seed,
-                self.frame_counter as u64,
+                self.impact_id,
                 self.destruct_cfg.max_debris,
             );
+            self.impact_id = self.impact_id.wrapping_add(1);
             self.vox_debris_last = out.positions_m.len();
             // Enqueue chunks deterministically
             let enq = grid.pop_dirty_chunks(usize::MAX);

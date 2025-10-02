@@ -965,11 +965,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
 
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
+        // Enable triplanar path for voxel meshes by setting _pad[0]=1, and
+        // use a simple tile frequency via _pad[1].
         let mdl = crate::gfx::types::Model {
             model: glam::Mat4::IDENTITY.to_cols_array_2d(),
             color: [0.6, 0.6, 0.6],
             emissive: 0.02,
-            _pad: [0.0; 4],
+            _pad: [1.0, 6.0, 0.0, 0.0],
         };
         let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("voxel-model"),
@@ -1179,6 +1181,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_collider_ms_last: 0.0,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_model_bg,
+        impact_id: 0,
         pc_index: scene_build.pc_index,
         player: client_core::controller::PlayerController::new(pc_initial_pos),
         scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),
