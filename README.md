@@ -60,3 +60,30 @@ Versioned WASM Releases
   - Python: `python3 -m http.server 8080 --directory /path/to/unzipped`
   - Node: `npx --yes serve -p 8080 /path/to/unzipped`
   - Rust: `miniserve /path/to/unzipped -p 8080` (install with `cargo install miniserve`)
+## Voxel Destructibility Demo
+
+You can preview the destructible voxel path with a built‑in demo grid and perf overlay.
+
+Example:
+
+```
+cargo run -p ruinsofatlantis -- \
+  --voxel-demo \
+  --voxel-size 0.05 \
+  --chunk-size 32 32 32 \
+  --mat stone \
+  --max-debris 1500 \
+  --max-chunk-remesh 3 \
+  --seed 123
+```
+
+Overlay line shows:
+
+```
+vox: queue=<pending chunks>  chunks=<processed this frame>  debris=<spawned last>  remesh=<ms>  colliders=<ms>
+```
+
+Notes:
+- `--debris-vs-world` enables coarse per‑chunk colliders so debris can bounce against dirty chunks.
+- Use `--help-vox` to print available destructible flags.
+- The demo grid seeds the queue on creation so geometry renders immediately; no carve required.

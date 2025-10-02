@@ -323,11 +323,13 @@ pub struct Renderer {
     vox_debris_last: usize,
     vox_remesh_ms_last: f32,
     vox_collider_ms_last: f32,
+    vox_skipped_last: usize,
     // Deterministic debris seeding counter
     impact_id: u64,
 
     // Voxel chunk GPU meshes (keyed by chunk coord)
     voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,
+    voxel_hashes: HashMap<(u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
 

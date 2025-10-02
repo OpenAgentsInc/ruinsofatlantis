@@ -966,12 +966,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
         // Enable triplanar path for voxel meshes by setting _pad[0]=1, and
-        // use a simple tile frequency via _pad[1].
+        // set tile frequency via _pad[1] derived from voxel size (meters).
+        let tiles_per_meter = (1.0f32 / (dcfg.voxel_size_m.0 as f32).max(1e-3)) * 0.25;
         let mdl = crate::gfx::types::Model {
             model: glam::Mat4::IDENTITY.to_cols_array_2d(),
             color: [0.6, 0.6, 0.6],
             emissive: 0.02,
-            _pad: [1.0, 6.0, 0.0, 0.0],
+            _pad: [1.0, tiles_per_meter, 0.0, 0.0],
         };
         let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("voxel-model"),
@@ -1179,7 +1180,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_debris_last: 0,
         vox_remesh_ms_last: 0.0,
         vox_collider_ms_last: 0.0,
+        vox_skipped_last: 0,
         voxel_meshes: std::collections::HashMap::new(),
+        voxel_hashes: std::collections::HashMap::new(),
         voxel_model_bg,
         impact_id: 0,
         pc_index: scene_build.pc_index,
@@ -1270,6 +1273,47 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                     renderer
                         .chunk_queue
                         .enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                }
+            }
+        }
+        renderer.impact_id = 0; // reset deterministic seeding for a fresh grid
+        renderer.vox_queue_len = renderer.chunk_queue.len();
+    }
+
+    // Optionally apply a replay file of impacts to the current grid (native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    if let (Some(grid), Some(ref path)) = (
+        &mut renderer.voxel_grid,
+        renderer.destruct_cfg.replay.as_ref(),
+    ) && let Ok(txt) = std::fs::read_to_string(path)
+    {
+        for line in txt.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                let center = val
+                    .get("center")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                let radius = val.get("radius").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                if center.len() == 3 && radius > 0.0 {
+                    let cx = center[0].as_f64().unwrap_or(0.0);
+                    let cy = center[1].as_f64().unwrap_or(0.0);
+                    let cz = center[2].as_f64().unwrap_or(0.0);
+                    let impact = glam::DVec3::new(cx, cy, cz);
+                    let _out = server_core::destructible::carve_and_spawn_debris(
+                        grid,
+                        impact,
+                        core_units::Length::meters(radius),
+                        renderer.destruct_cfg.seed,
+                        0,
+                        renderer.destruct_cfg.max_debris,
+                    );
+                    // Enqueue all dirty chunks
+                    let enq = grid.pop_dirty_chunks(usize::MAX);
+                    renderer.chunk_queue.enqueue_many(enq);
                 }
             }
         }

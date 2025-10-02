@@ -174,6 +174,38 @@ impl VoxelGrid {
     pub fn inside(&self, x: u32, y: u32, z: u32) -> bool {
         x < self.meta.dims.x && y < self.meta.dims.y && z < self.meta.dims.z
     }
+
+    /// Compute a lightweight hash of the occupancy bytes within a chunk's voxel bounds.
+    ///
+    /// This can be used upstream to skip meshing/uploads when a chunk hasn't changed.
+    #[inline]
+    pub fn chunk_occ_hash(&self, chunk: UVec3) -> u64 {
+        let (xr, yr, zr) = self.chunk_bounds_voxels(chunk);
+        // FNV-1a 64-bit
+        let mut h: u64 = 0xcbf29ce484222325;
+        let prime: u64 = 0x00000100000001B3;
+        for z in zr.clone() {
+            for y in yr.clone() {
+                let base = self.index(xr.start, y, z);
+                let len = (xr.end - xr.start) as usize;
+                // Sample every Nth byte (denser on short rows) and always include the last
+                let stride = if len < 64 { 4 } else { 8 };
+                let mut i = 0usize;
+                while i < len {
+                    let b = self.occ[base + i] as u64;
+                    h ^= b;
+                    h = h.wrapping_mul(prime);
+                    i = i.saturating_add(stride);
+                }
+                if len > 0 {
+                    let b = self.occ[base + (len - 1)] as u64;
+                    h ^= b;
+                    h = h.wrapping_mul(prime);
+                }
+            }
+        }
+        h
+    }
 }
 
 /// Builds a voxel grid by marking a watertight surface then flood-filling interior.
@@ -457,5 +489,19 @@ mod tests {
         let g = voxelize_surface_fill(meta, &surf, true);
         // The marked cell should remain solid after dilation + flood fill
         assert!(g.is_solid(4, 4, 4));
+    }
+
+    #[test]
+    fn chunk_occ_hash_changes_when_last_cell_flips() {
+        let d = UVec3::new(8, 2, 1); // small row to exercise stride sampling
+        let meta = mk_meta(d, UVec3::new(8, 2, 1));
+        let mut g = VoxelGrid::new(meta);
+        // Mark all zeros initially
+        let c = UVec3::new(0, 0, 0);
+        let h0 = g.chunk_occ_hash(c);
+        // Flip the last cell in the row to solid
+        g.set(d.x - 1, 0, 0, true);
+        let h1 = g.chunk_occ_hash(c);
+        assert_ne!(h0, h1, "hash should change when last cell flips");
     }
 }

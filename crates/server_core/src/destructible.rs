@@ -277,6 +277,8 @@ pub mod config {
         pub seed: u64,
         pub debris_vs_world: bool,
         pub demo_grid: bool,
+        pub replay_log: Option<String>,
+        pub replay: Option<String>,
     }
 
     impl Default for DestructibleConfig {
@@ -292,6 +294,8 @@ pub mod config {
                 seed: 0xC0FFEE,
                 debris_vs_world: false,
                 demo_grid: false,
+                replay_log: None,
+                replay: None,
             }
         }
     }
@@ -304,9 +308,22 @@ pub mod config {
         {
             let mut cfg = Self::default();
             let mut it = args.into_iter();
+            use std::sync::{
+                Once,
+                atomic::{AtomicBool, Ordering},
+            };
+            static HELP_ONCE: Once = Once::new();
+            static UNKNOWN_ONCE: AtomicBool = AtomicBool::new(false);
             while let Some(a) = it.next() {
                 let a = a.as_ref();
                 match a {
+                    "--help-vox" => {
+                        HELP_ONCE.call_once(|| {
+                            eprintln!(
+                                "--voxel-demo  --voxel-size <m>  --chunk-size <x y z>  --mat <name>  --max-debris <n>  --max-chunk-remesh <n>  --close-surfaces  --debris-vs-world  --seed <u64>"
+                            );
+                        });
+                    }
                     "--voxel-size" => {
                         if let Some(v) = it.next()
                             && let Ok(f) = v.as_ref().parse::<f64>()
@@ -356,13 +373,34 @@ pub mod config {
                             cfg.seed = n;
                         }
                     }
+                    "--help" => {
+                        // Friendly pointer to destructible flags when using general help
+                        HELP_ONCE.call_once(|| {
+                            eprintln!("(see --help-vox for destructible flags)");
+                        });
+                    }
                     "--debris-vs-world" => {
                         cfg.debris_vs_world = true;
+                    }
+                    "--replay-log" => {
+                        if let Some(p) = it.next() {
+                            cfg.replay_log = Some(p.as_ref().to_string());
+                        }
+                    }
+                    "--replay" => {
+                        if let Some(p) = it.next() {
+                            cfg.replay = Some(p.as_ref().to_string());
+                        }
                     }
                     "--voxel-demo" | "--voxel-grid" => {
                         cfg.demo_grid = true;
                     }
-                    _ => {}
+                    other => {
+                        if other.starts_with("--vox") && !UNKNOWN_ONCE.swap(true, Ordering::Relaxed)
+                        {
+                            eprintln!("[vox] warning: unknown flag `{}` (use --help-vox)", other);
+                        }
+                    }
                 }
             }
             cfg
@@ -437,6 +475,18 @@ mod tests {
         let dir = DVec3::new(1.0, 1.0, 1.0);
         let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
         assert_eq!(hit.voxel, UVec3::new(7, 7, 7));
+    }
+
+    #[test]
+    fn dda_negative_step_boundary_case() {
+        // Ray starts just left of a voxel boundary, stepping negative along X
+        let mut g = mk_grid(UVec3::new(16, 16, 16), UVec3::new(8, 8, 8), 1.0);
+        // Solid voxel at x=10
+        g.set(10, 5, 5, true);
+        let o = DVec3::new(10.999, 5.2, 5.2);
+        let dir = DVec3::new(-1.0, 0.0, 0.0);
+        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+        assert_eq!(hit.voxel, UVec3::new(10, 5, 5));
     }
 
     #[test]
