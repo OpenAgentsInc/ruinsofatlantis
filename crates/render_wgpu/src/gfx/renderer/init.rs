@@ -961,7 +961,21 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // Parse CLI flags for destructibles
-    let dcfg = DestructibleConfig::from_args(std::env::args());
+    #[allow(unused_mut)]
+    let mut dcfg = DestructibleConfig::from_args(std::env::args());
+    // On web, allow enabling demo via query param ?vox=1 (unless a model is specified)
+    #[cfg(target_arch = "wasm32")]
+    {
+        if dcfg.voxel_model.is_none() && !dcfg.demo_grid {
+            if let Some(win) = web_sys::window() {
+                if let Ok(href) = win.location().href() {
+                    if href.contains("vox=1") {
+                        dcfg.demo_grid = true;
+                    }
+                }
+            }
+        }
+    }
 
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
