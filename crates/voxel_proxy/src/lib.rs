@@ -188,13 +188,19 @@ impl VoxelGrid {
             for y in yr.clone() {
                 let base = self.index(xr.start, y, z);
                 let len = (xr.end - xr.start) as usize;
-                // Sample every 8th byte to keep this cheap; still changes on most edits.
+                // Sample every 8th byte (min stride 1) and always include the last
+                let stride = 8usize;
                 let mut i = 0usize;
                 while i < len {
                     let b = self.occ[base + i] as u64;
                     h ^= b;
                     h = h.wrapping_mul(prime);
-                    i += 8;
+                    i = i.saturating_add(stride);
+                }
+                if len > 0 {
+                    let b = self.occ[base + (len - 1)] as u64;
+                    h ^= b;
+                    h = h.wrapping_mul(prime);
                 }
             }
         }
@@ -483,5 +489,19 @@ mod tests {
         let g = voxelize_surface_fill(meta, &surf, true);
         // The marked cell should remain solid after dilation + flood fill
         assert!(g.is_solid(4, 4, 4));
+    }
+
+    #[test]
+    fn chunk_occ_hash_changes_when_last_cell_flips() {
+        let d = UVec3::new(8, 2, 1); // small row to exercise stride sampling
+        let meta = mk_meta(d, UVec3::new(8, 2, 1));
+        let mut g = VoxelGrid::new(meta);
+        // Mark all zeros initially
+        let c = UVec3::new(0, 0, 0);
+        let h0 = g.chunk_occ_hash(c);
+        // Flip the last cell in the row to solid
+        g.set(d.x - 1, 0, 0, true);
+        let h1 = g.chunk_occ_hash(c);
+        assert_ne!(h0, h1, "hash should change when last cell flips");
     }
 }

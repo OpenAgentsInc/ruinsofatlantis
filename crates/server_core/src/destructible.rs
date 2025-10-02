@@ -304,13 +304,21 @@ pub mod config {
         {
             let mut cfg = Self::default();
             let mut it = args.into_iter();
+            use std::sync::{
+                Once,
+                atomic::{AtomicBool, Ordering},
+            };
+            static HELP_ONCE: Once = Once::new();
+            static UNKNOWN_ONCE: AtomicBool = AtomicBool::new(false);
             while let Some(a) = it.next() {
                 let a = a.as_ref();
                 match a {
                     "--help-vox" => {
-                        println!(
-                            "Destructible flags:\n  --voxel-demo | --voxel-grid\n  --voxel-size <meters>\n  --chunk-size <x y z>\n  --mat <name>\n  --max-debris <n>\n  --max-chunk-remesh <n>\n  --close-surfaces\n  --debris-vs-world\n  --seed <u64>\n"
-                        );
+                        HELP_ONCE.call_once(|| {
+                            eprintln!(
+                                "--voxel-demo  --voxel-size <m>  --chunk-size <x y z>  --mat <name>  --max-debris <n>  --max-chunk-remesh <n>  --close-surfaces  --debris-vs-world  --seed <u64>"
+                            );
+                        });
                     }
                     "--voxel-size" => {
                         if let Some(v) = it.next()
@@ -368,7 +376,8 @@ pub mod config {
                         cfg.demo_grid = true;
                     }
                     other => {
-                        if other.starts_with("--vox") {
+                        if other.starts_with("--vox") && !UNKNOWN_ONCE.swap(true, Ordering::Relaxed)
+                        {
                             eprintln!("[vox] warning: unknown flag `{}` (use --help-vox)", other);
                         }
                     }

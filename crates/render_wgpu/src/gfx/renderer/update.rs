@@ -683,12 +683,13 @@ impl Renderer {
                 if self.voxel_hashes.get(&key).copied() == Some(h) {
                     continue;
                 }
-                self.voxel_hashes.insert(key, h);
                 let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
                 if mb.indices.is_empty() {
                     self.voxel_meshes.remove(&(c.x, c.y, c.z));
                     // Also drop any stale chunk collider so debris-vs-world avoids dead volumes
                     self.chunk_colliders.retain(|sc| sc.coord != *c);
+                    // Evict cached hash so future solidification can't be skipped
+                    self.voxel_hashes.remove(&key);
                 } else {
                     let vb = self
                         .device
@@ -712,6 +713,8 @@ impl Renderer {
                             idx: mb.indices.len() as u32,
                         },
                     );
+                    // Cache hash after successful upload
+                    self.voxel_hashes.insert(key, h);
                 }
             }
             self.vox_remesh_ms_last = t0.elapsed().as_secs_f32() * 1000.0;
