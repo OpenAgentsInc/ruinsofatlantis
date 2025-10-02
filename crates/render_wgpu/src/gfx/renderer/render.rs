@@ -317,6 +317,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.update_deathknight_palettes(t);
     // FX update (projectiles/particles)
     r.update_fx(t, dt);
+    // Debris cubes update and upload instances
+    r.update_debris(dt);
     // Update dynamic lights from active projectiles (up to 16)
     {
         #[repr(C)]
@@ -507,6 +509,22 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                 log::error!("validation after rocks: {:?}", e);
             }
+        }
+        // Debris cubes (instanced)
+        if r.debris_count > 0 {
+            let inst_pipe = if r.wire_enabled {
+                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+            } else {
+                &r.inst_pipeline
+            };
+            rp.set_pipeline(inst_pipe);
+            rp.set_bind_group(0, &r.globals_bg, &[]);
+            rp.set_bind_group(1, &r.debris_model_bg, &[]);
+            rp.set_vertex_buffer(0, r.debris_vb.slice(..));
+            rp.set_vertex_buffer(1, r.debris_instances.slice(..));
+            rp.set_index_buffer(r.debris_ib.slice(..), wgpu::IndexFormat::Uint16);
+            rp.draw_indexed(0..r.debris_index_count, 0, 0..r.debris_count);
+            r.draw_calls += 1;
         }
         // Ruins
         if r.ruins_count > 0 {
@@ -1022,6 +1040,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.vox_collider_ms_last
             );
             r.hud.append_perf_text(r.size.width, r.size.height, &vox);
+        }
+        // Short demo hint for first few seconds
+        if r.last_time <= r.demo_hint_until.unwrap_or(0.0) {
+            let hint = "Press F to blast (voxel destructible demo)";
+            r.hud.append_perf_text(r.size.width, r.size.height, hint);
         }
     }
     r.hud.queue(&r.device, &r.queue);

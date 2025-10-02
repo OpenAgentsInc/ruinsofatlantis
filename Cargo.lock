@@ -4944,6 +4944,7 @@ dependencies = [
  "ux_hud",
  "voxel_mesh",
  "voxel_proxy",
+ "web-sys",
  "web-time",
  "wgpu 26.0.1",
  "winit",

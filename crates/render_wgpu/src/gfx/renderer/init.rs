@@ -961,13 +961,30 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // Parse CLI flags for destructibles
-    let dcfg = DestructibleConfig::from_args(std::env::args());
+    #[allow(unused_mut)]
+    let mut dcfg = DestructibleConfig::from_args(std::env::args());
+    // On web, allow enabling demo via query param ?vox=1 (unless a model is specified)
+    #[cfg(target_arch = "wasm32")]
+    {
+        if dcfg.voxel_model.is_none() && !dcfg.demo_grid {
+            if let Some(win) = web_sys::window() {
+                if let Ok(href) = win.location().href() {
+                    if href.contains("vox=1") {
+                        dcfg.demo_grid = true;
+                    }
+                }
+            }
+        }
+    }
 
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
         // Enable triplanar path for voxel meshes by setting _pad[0]=1, and
         // set tile frequency via _pad[1] derived from voxel size (meters).
-        let tiles_per_meter = (1.0f32 / (dcfg.voxel_size_m.0 as f32).max(1e-3)) * 0.25;
+        let mut tiles_per_meter = (1.0f32 / (dcfg.voxel_size_m.0 as f32).max(1e-3)) * 0.25;
+        if let Some(t) = dcfg.vox_tiles_per_meter {
+            tiles_per_meter = t.max(0.01);
+        }
         let mdl = crate::gfx::types::Model {
             model: glam::Mat4::IDENTITY.to_cols_array_2d(),
             color: [0.6, 0.6, 0.6],
@@ -989,8 +1006,148 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         })
     };
 
-    // Optionally create a demo voxel grid from flags (--voxel-demo)
-    let voxel_grid = if dcfg.demo_grid {
+    // Debris instancing: unit cube VB/IB and instance buffer
+    let (debris_vb, debris_ib, debris_index_count) = crate::gfx::mesh::create_cube(&device);
+    let debris_capacity = dcfg.max_debris as u32;
+    let debris_instances = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("debris-instances"),
+        size: (debris_capacity as usize * std::mem::size_of::<crate::gfx::types::Instance>())
+            as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let debris_model_bg = {
+        let mdl = crate::gfx::types::Model {
+            model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+            color: [0.55, 0.55, 0.55],
+            emissive: 0.0,
+            _pad: [0.0; 4],
+        };
+        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("debris-model"),
+            contents: bytemuck::bytes_of(&mdl),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("debris-model-bg"),
+            layout: &model_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buf.as_entire_binding(),
+            }],
+        })
+    };
+
+    // Optionally create a voxel grid from a model (--voxel-model) or demo shell (--voxel-demo)
+    let voxel_grid = if let Some(ref model_path) = dcfg.voxel_model {
+        // Load triangles and voxelize a surface shell, then flood-fill
+        match ra_assets::gltf::load_gltf_mesh(std::path::Path::new(model_path)) {
+            Ok(cpu) => {
+                let mut min = glam::Vec3::splat(f32::INFINITY);
+                let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
+                for v in &cpu.vertices {
+                    let p = glam::Vec3::from(v.pos);
+                    min = min.min(p);
+                    max = max.max(p);
+                }
+                if !min.is_finite() || !max.is_finite() {
+                    log::warn!("voxel-model: invalid bounds; falling back to demo grid");
+                    None
+                } else {
+                    let vm = dcfg.voxel_size_m.0 as f32;
+                    let origin = glam::DVec3::new(min.x as f64, min.y as f64, min.z as f64);
+                    let size = max - min;
+                    let dims = glam::UVec3::new(
+                        (size.x / vm).ceil().max(1.0) as u32 + 2,
+                        (size.y / vm).ceil().max(1.0) as u32 + 2,
+                        (size.z / vm).ceil().max(1.0) as u32 + 2,
+                    );
+                    let meta = VoxelProxyMeta {
+                        object_id: voxel_proxy::GlobalId(1),
+                        origin_m: origin,
+                        voxel_m: dcfg.voxel_size_m,
+                        dims,
+                        chunk: dcfg.chunk.min(dims.max(glam::UVec3::splat(1))),
+                        material: dcfg.material,
+                    };
+                    let mut surf = vec![0u8; (dims.x * dims.y * dims.z) as usize];
+                    let idx = |x: u32, y: u32, z: u32| -> usize {
+                        (x + y * dims.x + z * dims.x * dims.y) as usize
+                    };
+                    let verts = &cpu.vertices;
+                    let inds = &cpu.indices;
+                    for tri in inds.chunks_exact(3) {
+                        let a = glam::Vec3::from(verts[tri[0] as usize].pos);
+                        let b = glam::Vec3::from(verts[tri[1] as usize].pos);
+                        let c = glam::Vec3::from(verts[tri[2] as usize].pos);
+                        let n = (b - a).cross(c - a).normalize_or_zero();
+                        if !n.is_finite() || n.length_squared() < 1e-12 {
+                            continue;
+                        }
+                        let bbmin = a.min(b).min(c);
+                        let bbmax = a.max(b).max(c);
+                        let vmin = ((bbmin - min) / vm).floor().max(glam::Vec3::ZERO);
+                        let vmax = ((bbmax - min) / vm).ceil() + glam::Vec3::splat(1.0);
+                        let xi0 = vmin.x as u32;
+                        let yi0 = vmin.y as u32;
+                        let zi0 = vmin.z as u32;
+                        let xi1 = vmax.x.min(dims.x as f32) as u32;
+                        let yi1 = vmax.y.min(dims.y as f32) as u32;
+                        let zi1 = vmax.z.min(dims.z as f32) as u32;
+                        let thick = vm * 0.6;
+                        for z in zi0..zi1 {
+                            for y in yi0..yi1 {
+                                for x in xi0..xi1 {
+                                    let pc = glam::Vec3::new(
+                                        min.x + (x as f32 + 0.5) * vm,
+                                        min.y + (y as f32 + 0.5) * vm,
+                                        min.z + (z as f32 + 0.5) * vm,
+                                    );
+                                    let dist = (pc - a).dot(n);
+                                    if dist.abs() > thick {
+                                        continue;
+                                    }
+                                    let pproj = pc - dist * n;
+                                    let v0 = b - a;
+                                    let v1 = c - a;
+                                    let v2 = pproj - a;
+                                    let d00 = v0.dot(v0);
+                                    let d01 = v0.dot(v1);
+                                    let d11 = v1.dot(v1);
+                                    let d20 = v2.dot(v0);
+                                    let d21 = v2.dot(v1);
+                                    let denom = d00 * d11 - d01 * d01;
+                                    if denom.abs() < 1e-20 {
+                                        continue;
+                                    }
+                                    let v = (d11 * d20 - d01 * d21) / denom;
+                                    let w = (d00 * d21 - d01 * d20) / denom;
+                                    let u = 1.0 - v - w;
+                                    if u >= -0.05 && v >= -0.05 && w >= -0.05 {
+                                        surf[idx(x, y, z)] = 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let mut grid = voxelize_surface_fill(meta.clone(), &surf, dcfg.close_surfaces);
+                    if grid.solid_count() == 0 && !dcfg.close_surfaces {
+                        log::warn!("voxel-model: empty after fill; retrying with close-surfaces");
+                        grid = voxelize_surface_fill(meta, &surf, true);
+                    }
+                    Some(grid)
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "voxel-model load failed ({}): {:?}. Falling back to demo",
+                    model_path,
+                    e
+                );
+                None
+            }
+        }
+    } else if dcfg.demo_grid {
         let chunk = dcfg.chunk;
         let dims = UVec3::new(chunk.x * 2, chunk.y, chunk.z * 2);
         let meta = VoxelProxyMeta {
@@ -1172,7 +1329,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hud_model: Default::default(),
         // Destructible defaults; leave grid None until provided by a loader/demo
         destruct_cfg: dcfg,
-        voxel_grid,
+        voxel_grid: voxel_grid.clone(),
         chunk_queue: server_core::destructible::queue::ChunkQueue::new(),
         chunk_colliders: Vec::new(),
         vox_last_chunks: 0,
@@ -1184,6 +1341,17 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
         voxel_model_bg,
+        debris_vb,
+        debris_ib,
+        debris_index_count,
+        debris_instances,
+        debris_capacity,
+        debris_count: 0,
+        debris: Vec::new(),
+        debris_model_bg,
+        voxel_grid_initial: voxel_grid,
+        recent_impacts: Vec::new(),
+        demo_hint_until: Some(5.0),
         impact_id: 0,
         pc_index: scene_build.pc_index,
         player: client_core::controller::PlayerController::new(pc_initial_pos),

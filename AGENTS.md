@@ -91,6 +91,8 @@ IMPORTANT: Keep `src/README.md` current
 - Branch name: `area/short-summary` (e.g., `gfx/fix-bottom-ghost`).
 - PR title: `area: imperative summary`.
 - Must include screenshots for UI, perf note if GPU cost changed ≥0.5 ms, and schema diffs if data changed.
+- Merge method: Always use squash-merge and delete the source branch after merge. When using the GitHub CLI:
+  - `gh pr merge <num> --squash --delete-branch` (use `--admin` if required).
 
 ## Build, Test, and Development Commands
 - Prerequisites: Install Rust via `rustup` (stable toolchain). If the edition is unsupported, run `rustup update`.

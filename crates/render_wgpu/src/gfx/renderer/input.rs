@@ -167,11 +167,33 @@ impl Renderer {
                             log::info!("Screenshot mode: 5s orbit starting");
                         }
                     }
+                    // Demo blast: press F to raycast and carve at first voxel hit
+                    PhysicalKey::Code(KeyCode::KeyF) => {
+                        if pressed {
+                            let m = if self.pc_index < self.wizard_models.len() {
+                                self.wizard_models[self.pc_index]
+                            } else {
+                                glam::Mat4::IDENTITY
+                            };
+                            let origin_w = (m * glam::Vec4::new(0.0, 1.2, 0.0, 1.0)).truncate();
+                            let dir_w = (m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
+                                .truncate()
+                                .normalize_or_zero();
+                            let p0 = origin_w + dir_w * 0.5;
+                            let p1 = p0 + dir_w * 50.0;
+                            self.try_voxel_impact(p0, p1);
+                        }
+                    }
                     // Allow keyboard respawn as fallback when dead
                     PhysicalKey::Code(KeyCode::KeyR) | PhysicalKey::Code(KeyCode::Enter) => {
-                        if pressed && !self.pc_alive {
-                            log::info!("Respawn via keyboard");
-                            self.respawn();
+                        if pressed {
+                            if !self.pc_alive {
+                                log::info!("Respawn via keyboard");
+                                self.respawn();
+                            } else {
+                                // Reset destructible grid and replay recent impacts
+                                self.reset_voxel_and_replay();
+                            }
                         }
                     }
                     _ => {}

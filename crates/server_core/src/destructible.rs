@@ -279,6 +279,9 @@ pub mod config {
         pub demo_grid: bool,
         pub replay_log: Option<String>,
         pub replay: Option<String>,
+        pub voxel_model: Option<String>,
+        pub vox_tiles_per_meter: Option<f32>,
+        pub max_carve_chunks: Option<u32>,
     }
 
     impl Default for DestructibleConfig {
@@ -296,6 +299,9 @@ pub mod config {
                 demo_grid: false,
                 replay_log: None,
                 replay: None,
+                voxel_model: None,
+                vox_tiles_per_meter: None,
+                max_carve_chunks: Some(64),
             }
         }
     }
@@ -307,6 +313,7 @@ pub mod config {
             S: AsRef<str>,
         {
             let mut cfg = Self::default();
+            let mut any_vox_flag = false;
             let mut it = args.into_iter();
             use std::sync::{
                 Once,
@@ -325,6 +332,7 @@ pub mod config {
                         });
                     }
                     "--voxel-size" => {
+                        any_vox_flag = true;
                         if let Some(v) = it.next()
                             && let Ok(f) = v.as_ref().parse::<f64>()
                         {
@@ -332,6 +340,7 @@ pub mod config {
                         }
                     }
                     "--chunk-size" => {
+                        any_vox_flag = true;
                         if let (Some(x), Some(y), Some(z)) = (it.next(), it.next(), it.next())
                             && let (Ok(x), Ok(y), Ok(z)) =
                                 (x.as_ref().parse(), y.as_ref().parse(), z.as_ref().parse())
@@ -340,6 +349,7 @@ pub mod config {
                         }
                     }
                     "--mat" => {
+                        any_vox_flag = true;
                         if let Some(n) = it.next()
                             && let Some(id) = find_material_id(n.as_ref())
                         {
@@ -347,6 +357,7 @@ pub mod config {
                         }
                     }
                     "--max-debris" => {
+                        any_vox_flag = true;
                         if let Some(v) = it.next()
                             && let Ok(n) = v.as_ref().parse()
                         {
@@ -354,6 +365,7 @@ pub mod config {
                         }
                     }
                     "--max-chunk-remesh" => {
+                        any_vox_flag = true;
                         if let Some(v) = it.next()
                             && let Ok(n) = v.as_ref().parse()
                         {
@@ -361,12 +373,14 @@ pub mod config {
                         }
                     }
                     "--close-surfaces" => {
+                        any_vox_flag = true;
                         cfg.close_surfaces = true;
                     }
                     "--profile" => {
                         cfg.profile = true;
                     }
                     "--seed" => {
+                        any_vox_flag = true;
                         if let Some(v) = it.next()
                             && let Ok(n) = v.as_ref().parse()
                         {
@@ -380,6 +394,7 @@ pub mod config {
                         });
                     }
                     "--debris-vs-world" => {
+                        any_vox_flag = true;
                         cfg.debris_vs_world = true;
                     }
                     "--replay-log" => {
@@ -393,7 +408,30 @@ pub mod config {
                         }
                     }
                     "--voxel-demo" | "--voxel-grid" => {
+                        any_vox_flag = true;
                         cfg.demo_grid = true;
+                    }
+                    "--voxel-model" => {
+                        any_vox_flag = true;
+                        if let Some(p) = it.next() {
+                            cfg.voxel_model = Some(p.as_ref().to_string());
+                        }
+                    }
+                    "--vox-tiles-per-meter" => {
+                        any_vox_flag = true;
+                        if let Some(v) = it.next()
+                            && let Ok(f) = v.as_ref().parse::<f32>()
+                        {
+                            cfg.vox_tiles_per_meter = Some(f);
+                        }
+                    }
+                    "--max-carve-chunks" => {
+                        any_vox_flag = true;
+                        if let Some(v) = it.next()
+                            && let Ok(n) = v.as_ref().parse::<u32>()
+                        {
+                            cfg.max_carve_chunks = Some(n);
+                        }
                     }
                     other => {
                         if other.starts_with("--vox") && !UNKNOWN_ONCE.swap(true, Ordering::Relaxed)
@@ -402,6 +440,10 @@ pub mod config {
                         }
                     }
                 }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if !any_vox_flag && cfg.voxel_model.is_none() {
+                cfg.demo_grid = true;
             }
             cfg
         }
