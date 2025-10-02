@@ -174,6 +174,32 @@ impl VoxelGrid {
     pub fn inside(&self, x: u32, y: u32, z: u32) -> bool {
         x < self.meta.dims.x && y < self.meta.dims.y && z < self.meta.dims.z
     }
+
+    /// Compute a lightweight hash of the occupancy bytes within a chunk's voxel bounds.
+    ///
+    /// This can be used upstream to skip meshing/uploads when a chunk hasn't changed.
+    #[inline]
+    pub fn chunk_occ_hash(&self, chunk: UVec3) -> u64 {
+        let (xr, yr, zr) = self.chunk_bounds_voxels(chunk);
+        // FNV-1a 64-bit
+        let mut h: u64 = 0xcbf29ce484222325;
+        let prime: u64 = 0x00000100000001B3;
+        for z in zr.clone() {
+            for y in yr.clone() {
+                let base = self.index(xr.start, y, z);
+                let len = (xr.end - xr.start) as usize;
+                // Sample every 8th byte to keep this cheap; still changes on most edits.
+                let mut i = 0usize;
+                while i < len {
+                    let b = self.occ[base + i] as u64;
+                    h ^= b;
+                    h = h.wrapping_mul(prime);
+                    i += 8;
+                }
+            }
+        }
+        h
+    }
 }
 
 /// Builds a voxel grid by marking a watertight surface then flood-filling interior.

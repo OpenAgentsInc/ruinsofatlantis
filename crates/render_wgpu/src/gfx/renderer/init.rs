@@ -966,12 +966,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
         // Enable triplanar path for voxel meshes by setting _pad[0]=1, and
-        // use a simple tile frequency via _pad[1].
+        // set tile frequency via _pad[1] derived from voxel size (meters).
+        let tiles_per_meter = (1.0f32 / (dcfg.voxel_size_m.0 as f32).max(1e-3)) * 0.25;
         let mdl = crate::gfx::types::Model {
             model: glam::Mat4::IDENTITY.to_cols_array_2d(),
             color: [0.6, 0.6, 0.6],
             emissive: 0.02,
-            _pad: [1.0, 6.0, 0.0, 0.0],
+            _pad: [1.0, tiles_per_meter, 0.0, 0.0],
         };
         let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("voxel-model"),
@@ -1180,6 +1181,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_remesh_ms_last: 0.0,
         vox_collider_ms_last: 0.0,
         voxel_meshes: std::collections::HashMap::new(),
+        voxel_hashes: std::collections::HashMap::new(),
         voxel_model_bg,
         impact_id: 0,
         pc_index: scene_build.pc_index,
@@ -1273,6 +1275,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 }
             }
         }
+        renderer.impact_id = 0; // reset deterministic seeding for a fresh grid
         renderer.vox_queue_len = renderer.chunk_queue.len();
     }
 

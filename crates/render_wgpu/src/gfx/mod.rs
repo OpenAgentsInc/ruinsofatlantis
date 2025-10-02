@@ -328,6 +328,7 @@ pub struct Renderer {
 
     // Voxel chunk GPU meshes (keyed by chunk coord)
     voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,
+    voxel_hashes: HashMap<(u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
 

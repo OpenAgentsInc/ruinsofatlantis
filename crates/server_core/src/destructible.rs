@@ -307,6 +307,11 @@ pub mod config {
             while let Some(a) = it.next() {
                 let a = a.as_ref();
                 match a {
+                    "--help-vox" => {
+                        println!(
+                            "Destructible flags:\n  --voxel-demo | --voxel-grid\n  --voxel-size <meters>\n  --chunk-size <x y z>\n  --mat <name>\n  --max-debris <n>\n  --max-chunk-remesh <n>\n  --close-surfaces\n  --debris-vs-world\n  --seed <u64>\n"
+                        );
+                    }
                     "--voxel-size" => {
                         if let Some(v) = it.next()
                             && let Ok(f) = v.as_ref().parse::<f64>()
@@ -362,7 +367,11 @@ pub mod config {
                     "--voxel-demo" | "--voxel-grid" => {
                         cfg.demo_grid = true;
                     }
-                    _ => {}
+                    other => {
+                        if other.starts_with("--vox") {
+                            eprintln!("[vox] warning: unknown flag `{}` (use --help-vox)", other);
+                        }
+                    }
                 }
             }
             cfg
@@ -437,6 +446,18 @@ mod tests {
         let dir = DVec3::new(1.0, 1.0, 1.0);
         let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
         assert_eq!(hit.voxel, UVec3::new(7, 7, 7));
+    }
+
+    #[test]
+    fn dda_negative_step_boundary_case() {
+        // Ray starts just left of a voxel boundary, stepping negative along X
+        let mut g = mk_grid(UVec3::new(16, 16, 16), UVec3::new(8, 8, 8), 1.0);
+        // Solid voxel at x=10
+        g.set(10, 5, 5, true);
+        let o = DVec3::new(10.999, 5.2, 5.2);
+        let dir = DVec3::new(-1.0, 0.0, 0.0);
+        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+        assert_eq!(hit.voxel, UVec3::new(10, 5, 5));
     }
 
     #[test]

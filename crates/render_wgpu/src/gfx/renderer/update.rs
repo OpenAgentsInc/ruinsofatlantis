@@ -677,9 +677,18 @@ impl Renderer {
             let t0 = Instant::now();
             // Mesh changed chunks and upload to GPU; drop entries that became empty
             for c in &chunks {
+                // Skip meshing if occupancy hash hasn't changed
+                let key = (c.x, c.y, c.z);
+                let h = grid.chunk_occ_hash(*c);
+                if self.voxel_hashes.get(&key).copied() == Some(h) {
+                    continue;
+                }
+                self.voxel_hashes.insert(key, h);
                 let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
                 if mb.indices.is_empty() {
                     self.voxel_meshes.remove(&(c.x, c.y, c.z));
+                    // Also drop any stale chunk collider so debris-vs-world avoids dead volumes
+                    self.chunk_colliders.retain(|sc| sc.coord != *c);
                 } else {
                     let vb = self
                         .device
