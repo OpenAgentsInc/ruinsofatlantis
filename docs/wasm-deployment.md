@@ -385,3 +385,33 @@ What it does
 - Publishes the hashed JS and WASM at the public root (or `public/wasm` if `PUBLIC_SUBDIR` is set).
 - Edits `resources/views/play.blade.php` to point to the new hashed filenames.
 - Creates a branch, commits, pushes, and opens a PR (requires `gh` CLI).
+
+## 14) Versioned GitHub Releases (immutable WASM bundles)
+
+Goal: produce immutable, versioned WASM artifacts zipped from `dist/` and attached to a GitHub Release for a specific tag (or on-demand).
+
+Workflow: `.github/workflows/wasm-release.yml`
+
+- Triggers:
+  - Tag push: `v*` → builds from the tag and attaches `ruinsofatlantis-wasm-<tag>.zip` (+ `.sha256`) to the Release.
+  - Manual: `workflow_dispatch` with inputs:
+    - `tag` (optional): build that tag. If omitted, builds current commit and opens a draft Release with a synthetic tag `draft-<sha7>`.
+    - `public_url` (optional): passes `--public-url` to Trunk (e.g., `/ruinsofatlantis/` or `/wasm/`).
+
+What it builds
+- Runs `cargo xtask ci` and `cargo xtask build-packs`.
+- Builds via `trunk build --release` (including `assets/` and `packs/` copied via `index.html`).
+- Packages `dist/` into `ruinsofatlantis-wasm-<tag>.zip` and generates a `.sha256` checksum.
+- Attaches both files to the Release with `softprops/action-gh-release`.
+
+Manual fallback (local)
+```
+trunk build --release
+zip -r ruinsofatlantis-wasm-<tag>.zip dist/
+gh release create <tag> ruinsofatlantis-wasm-<tag>.zip \
+  --title "WASM <tag>" --notes "Trunk build from <sha>"
+```
+
+Notes
+- Keep the `.zip` as the canonical immutable artifact; filenames inside are content‑hashed by Trunk.
+- If hosting under a subpath, consider passing `--public-url` so runtime asset URLs resolve.

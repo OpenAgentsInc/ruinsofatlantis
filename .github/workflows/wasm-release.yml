@@ -1,0 +1,95 @@
+name: WASM Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v0.1.0). If empty, a draft release will be created for the current commit.'
+        required: false
+      public_url:
+        description: 'Optional Trunk --public-url (e.g., /ruinsofatlantis/ or /wasm/)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout tag (manual run)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+        run: |
+          git fetch --tags --force
+          git checkout "refs/tags/${{ inputs.tag }}"
+
+      - name: Setup Rust (stable + wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install trunk
+        run: cargo install trunk
+
+      - name: CI checks (fmt + clippy + tests + schemas)
+        run: cargo xtask ci
+
+      - name: Build packs
+        run: cargo xtask build-packs
+
+      - name: Build WASM bundle
+        run: |
+          if [ -n "${{ inputs.public_url }}" ]; then
+            echo "Building with public-url='${{ inputs.public_url }}'"
+            trunk build --release --public-url "${{ inputs.public_url }}"
+          else
+            trunk build --release
+          fi
+
+      - name: Determine tag and release mode
+        id: meta
+        run: |
+          # Default to the ref name (tag push), else synthesize a draft tag for manual runs without a tag
+          TAG_NAME="${GITHUB_REF_NAME}"
+          DRAFT=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ inputs.tag }}" ]; then
+              TAG_NAME="${{ inputs.tag }}"
+            else
+              TAG_NAME="draft-${GITHUB_SHA::7}"
+              DRAFT=true
+            fi
+          fi
+          echo "TAG_NAME=${TAG_NAME}" >> "$GITHUB_ENV"
+          echo "DRAFT=${DRAFT}"       >> "$GITHUB_ENV"
+          echo "zip_name=ruinsofatlantis-wasm-${TAG_NAME}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Package dist
+        run: |
+          ZIP="ruinsofatlantis-wasm-${TAG_NAME}.zip"
+          (cd dist && zip -r "../${ZIP}" .)
+          sha256sum "${ZIP}" > "${ZIP}.sha256"
+          echo "ZIP=${ZIP}" >> "$GITHUB_ENV"
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          draft: ${{ env.DRAFT == 'true' }}
+          files: |
+            ${{ env.ZIP }}
+            ${{ env.ZIP }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
