@@ -319,6 +319,9 @@ pub struct Renderer {
     voxel_grid: Option<VoxelGrid>,
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
+    // Track which ruin instance the active voxel grid represents (single-grid P0)
+    active_voxel_ruin: Option<usize>,
+    ruin_voxelized: Vec<bool>,
     // Per-frame metrics for overlay
     vox_last_chunks: usize,
     vox_queue_len: usize,
