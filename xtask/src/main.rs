@@ -52,6 +52,51 @@ fn ci() -> Result<()> {
     build_packs()?;
     cargo(&["test"])?;
     schema_check()?;
+    // 95A: Validate renderer with feature combos for legacy/demo gates
+    // Default/no-features sanity for render_wgpu (explicit no-default-features to be clear)
+    cargo(&["check", "-p", "render_wgpu", "--no-default-features"])?;
+    cargo(&[
+        "clippy",
+        "-p",
+        "render_wgpu",
+        "--no-default-features",
+        "--",
+        "-D",
+        "warnings",
+    ])?;
+    cargo(&["test", "-p", "render_wgpu", "--no-default-features"])?;
+    // Feature combo: vox_onepath_demo + legacy_client_carve + destruct_debug
+    let feat = "vox_onepath_demo,legacy_client_carve,destruct_debug";
+    cargo(&[
+        "clippy",
+        "-p",
+        "render_wgpu",
+        "--no-default-features",
+        "--features",
+        feat,
+        "--",
+        "-D",
+        "warnings",
+    ])?;
+    cargo(&[
+        "test",
+        "-p",
+        "render_wgpu",
+        "--no-default-features",
+        "--features",
+        feat,
+    ])?;
+    // Ensure demo bin builds under feature combo
+    cargo(&[
+        "build",
+        "-p",
+        "render_wgpu",
+        "--no-default-features",
+        "--features",
+        feat,
+        "--bin",
+        "vox_onepath",
+    ])?;
     Ok(())
 }
 

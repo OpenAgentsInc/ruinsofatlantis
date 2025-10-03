@@ -998,10 +998,11 @@ impl Renderer {
 
     // (collider refresh done inline at carve sites)
 
+    #[allow(unused_variables)]
     fn explode_fireball_on_segment(
         &mut self,
         owner: Option<usize>,
-        _p0: glam::Vec3,
+        p0: glam::Vec3,
         p1: glam::Vec3,
         radius: f32,
         damage: i32,
@@ -1612,10 +1613,13 @@ impl Renderer {
                             self.projectiles.swap_remove(i);
                             continue;
                         }
-                        // Default: still show explosion visuals on destructible hit
-                        self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
-                        self.projectiles.swap_remove(i);
-                        continue;
+                        #[cfg(not(feature = "legacy_client_carve"))]
+                        {
+                            // Default: still show explosion visuals on destructible hit
+                            self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
+                            self.projectiles.swap_remove(i);
+                            continue;
+                        }
                     }
                     let mut exploded = false;
                     // collide against any alive NPC cylinder in XZ

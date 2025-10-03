@@ -1,4 +1,3 @@
-#![cfg(feature = "vox_onepath_demo")]
 //! vox_onepath: self-contained, deterministic voxel demo.
 //!
 //! - Creates a tiny winit window + Renderer
