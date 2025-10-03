@@ -12,3 +12,6 @@ pub mod scenario;
 pub mod specdb;
 pub mod spell;
 pub mod zone;
+pub mod configs {
+    pub mod destructible;
+}

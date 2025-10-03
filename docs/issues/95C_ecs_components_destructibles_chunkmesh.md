@@ -8,6 +8,8 @@ Intent
 
 Outcomes
 - Components compile with rustdoc; simple unit test constructs an entity with a ChunkMesh map entry.
+ 
+Status: COMPLETE (components landed; unit tests pass; exported from ecs_core)
 
 Repo‑aware Inventory
 - `crates/ecs_core/src/lib.rs` currently defines `Entity`, `Transform`, `RenderKind`, and a minimal `World` with arrays (no type‑erased components yet).
@@ -53,3 +55,22 @@ Tasks
 Acceptance
 - Components available to `server_core`/`client_core`/`render_wgpu`; unit test passes.
  - All new types derive `serde::{Serialize,Deserialize}` (optionally behind a `replication` feature if you prefer a lean default).
+
+---
+
+## Addendum — Implementation Summary (95C landed)
+
+Implemented in `ecs_core`:
+- Added `src/components.rs` with:
+  - `EntityId`, `DestructibleId` (hashable IDs, serde behind feature `replication`).
+  - `Destructible { id, material: core_materials::MaterialId }`.
+  - `VoxelProxy { meta: voxel_proxy::VoxelProxyMeta }`.
+  - `ChunkDirty(Vec<UVec3>)` (serde behind `replication`).
+  - `MeshCpu { positions, normals, indices }` + `validate()` invariants.
+  - `ChunkMesh { map: HashMap<(u32,u32,u32), MeshCpu> }` (serde behind `replication`).
+  - `CarveRequest { did, center_m, radius_m, seed, impact_id }` (serde behind `replication`).
+  - Helper `chunk_key(DestructibleId, UVec3)`.
+- Exported via `pub mod components; pub use components::*;` in `ecs_core::lib`.
+- Added deps: `serde` (derive), `anyhow`, `voxel_proxy`, `core_materials`.
+- Unit test constructs a minimal `MeshCpu` and inserts into a `ChunkMesh` map, then validates.
+- CI: clippy/tests green with new module; serde derives gated under `replication` feature.
