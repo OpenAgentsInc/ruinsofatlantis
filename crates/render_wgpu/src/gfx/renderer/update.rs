@@ -354,7 +354,11 @@ impl Renderer {
         let dims = vp.grid.dims();
         log::info!(
             "[destruct] carve: did={:?} grid dims={}x{}x{} vm={:.3}",
-            did, dims.x, dims.y, dims.z, vp.grid.voxel_m().0 as f32
+            did,
+            dims.x,
+            dims.y,
+            dims.z,
+            vp.grid.voxel_m().0 as f32
         );
         let seg = p1 - p0;
         let len = seg.length();
@@ -400,7 +404,10 @@ impl Renderer {
         let p_entry = p0 + seg * (tmin + (vm * 1e-3) / len);
         log::debug!(
             "[destruct] carve: AABB entry t={:.3} p_entry=({:.2},{:.2},{:.2})",
-            tmin, p_entry.x, p_entry.y, p_entry.z
+            tmin,
+            p_entry.x,
+            p_entry.y,
+            p_entry.z
         );
         if let Some(hit) = server_core::destructible::raycast_voxels(
             &vp.grid,
@@ -410,7 +417,9 @@ impl Renderer {
         ) {
             log::info!(
                 "[destruct] carve: DDA hit voxel=({}, {}, {})",
-                hit.voxel.x, hit.voxel.y, hit.voxel.z
+                hit.voxel.x,
+                hit.voxel.y,
+                hit.voxel.z
             );
             let vc = glam::DVec3::new(
                 hit.voxel.x as f64 + 0.5,
@@ -459,7 +468,8 @@ impl Renderer {
                 vp2.queue_len = vp2.chunk_queue.len();
                 log::debug!(
                     "[destruct] queue: did={:?} len={} (post-enqueue)",
-                    did, vp2.queue_len
+                    did,
+                    vp2.queue_len
                 );
             }
             for (i, p) in out.positions_m.iter().enumerate() {
@@ -549,7 +559,11 @@ impl Renderer {
         let static_index = Some(chunkcol::rebuild_static_index(&colliders));
         log::info!(
             "[destruct] proxy(box) ruin={} dims={}x{}x{} vm={:.3}",
-            ruin_idx, dims.x, dims.y, dims.z, vm
+            ruin_idx,
+            dims.x,
+            dims.y,
+            dims.z,
+            vm
         );
         crate::gfx::RuinVox {
             grid,
@@ -564,7 +578,10 @@ impl Renderer {
     fn build_ruin_proxy_from_mesh(&self, ruin_idx: usize) -> crate::gfx::RuinVox {
         // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
         if self.destruct_meshes_cpu.is_empty() {
-            log::warn!("[destruct] no CPU mesh; falling back to AABB proxy for ruin {}", ruin_idx);
+            log::warn!(
+                "[destruct] no CPU mesh; falling back to AABB proxy for ruin {}",
+                ruin_idx
+            );
             let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
             return self.build_ruin_proxy_from_aabb(ruin_idx, bmin, bmax);
         }
@@ -770,7 +787,8 @@ impl Renderer {
             .contains_key(&crate::gfx::DestructibleId(ruin_idx))
         {
             log::info!("[destruct] spawn proxy for ruin {}", ruin_idx);
-            self.hide_ruins_instance(ruin_idx);
+            // IMPORTANT: build the proxy BEFORE hiding the instance, otherwise
+            // the zero-scale model matrix would collapse triangles.
             // Prefer real-mesh voxelization when available
             let mut rv = if self.destruct_meshes_cpu.is_empty() {
                 let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
@@ -778,6 +796,8 @@ impl Renderer {
             } else {
                 self.build_ruin_proxy_from_mesh(ruin_idx)
             };
+            // Now hide the original instance visuals
+            self.hide_ruins_instance(ruin_idx);
             // Enqueue all chunks and mesh once for immediate appearance
             let dims = rv.grid.dims();
             let csz = rv.grid.meta().chunk;
@@ -816,7 +836,8 @@ impl Renderer {
                 .count();
             log::info!(
                 "[destruct] uploaded {} chunk meshes for ruin {} (initial)",
-                total, ruin_idx
+                total,
+                ruin_idx
             );
         }
         self.destr_voxels
