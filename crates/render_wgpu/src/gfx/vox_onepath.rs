@@ -120,12 +120,12 @@ impl ApplicationHandler for App {
             vox_offset: None,
         };
 
-        // Build a procedural voxel block grid (64x32x64), origin 2m forward.
+        // Build a procedural voxel block grid (64x32x64), origin 1m forward.
         let dims = UVec3::new(64, 32, 64);
         let vm = renderer.destruct_cfg.voxel_size_m;
         let meta = VoxelProxyMeta {
             object_id: GlobalId(1),
-            origin_m: DVec3::new(0.0, 0.0, 2.0),
+            origin_m: DVec3::new(0.0, 0.0, 1.0),
             voxel_m: vm,
             dims,
             chunk: renderer.destruct_cfg.chunk,
@@ -534,12 +534,12 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
 }
 
 fn reset_to_block(renderer: &mut Renderer) {
-    // Procedural voxel block grid 2m ahead
+    // Procedural voxel block grid 1m ahead
     let dims = UVec3::new(64, 32, 64);
     let vm = renderer.destruct_cfg.voxel_size_m;
     let meta = VoxelProxyMeta {
         object_id: GlobalId(1),
-        origin_m: DVec3::new(0.0, 0.0, 2.0),
+        origin_m: DVec3::new(0.0, 0.0, 1.0),
         voxel_m: vm,
         dims,
         chunk: renderer.destruct_cfg.chunk,
