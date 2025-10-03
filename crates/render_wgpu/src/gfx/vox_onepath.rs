@@ -482,7 +482,7 @@ impl ApplicationHandler for App {
                                             // As a last resort, scatter on the front face so we still remove material
                                             let o = grid.origin_m();
                                             let vm_f = grid.voxel_m().0 as f32;
-                                            let dims = grid.dims();
+                                            let _dims = grid.dims();
                                             let bmin = glam::vec3(
                                                 o.x as f32 + 16.0 * vm_f,
                                                 o.y as f32 + 0.0 * vm_f,
