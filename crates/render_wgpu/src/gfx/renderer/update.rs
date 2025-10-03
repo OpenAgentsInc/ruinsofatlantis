@@ -288,7 +288,9 @@ impl Renderer {
             }
         }
         if best.is_some() {
-            if let Some((did, t)) = best { destruct_log!("[destruct] select(proxy) did={:?} t={:.3}", did, t); }
+            if let Some((did, t)) = best {
+                destruct_log!("[destruct] select(proxy) did={:?} t={:.3}", did, t);
+            }
             return best;
         }
         // 2) instances fallback (skip any with an existing proxy)
@@ -331,7 +333,11 @@ impl Renderer {
                 best = Some((did, tmin));
             }
         }
-        if let Some((did, t)) = best { destruct_log!("[destruct] select(instance) did={:?} t={:.3}", did, t); } else { destruct_log!("[destruct] select: no hit on proxies or instances"); }
+        if let Some((did, t)) = best {
+            destruct_log!("[destruct] select(instance) did={:?} t={:.3}", did, t);
+        } else {
+            destruct_log!("[destruct] select: no hit on proxies or instances");
+        }
         best
     }
 
@@ -979,108 +985,108 @@ impl Renderer {
         self.explode_fireball_at(owner, p1, radius, damage);
         #[cfg(feature = "legacy_client_carve")]
         {
-        // Voxel impact along the shot segment
-        let blast_r = radius * 0.25;
-        let mut _handled = false;
-        if self.voxel_grid.is_some() {
-            let dir = (p1 - p0).normalize_or_zero();
-            if dir.length_squared() > 1e-6 {
-                // Gather grid bounds first
-                let (o, vm, d) = {
-                    let g = self.voxel_grid.as_ref().unwrap();
-                    (g.origin_m(), g.voxel_m().0 as f32, g.dims())
-                };
-                let gmin = glam::vec3(o.x as f32, o.y as f32, o.z as f32);
-                let gmax = gmin + glam::vec3(d.x as f32 * vm, d.y as f32 * vm, d.z as f32 * vm);
-                if let Some((t_enter, _)) = Renderer::ray_box_intersect(p0, dir, gmin, gmax) {
-                    let seg_len = (p1 - p0).length();
-                    if t_enter <= seg_len {
-                        let p_entry = p0 + dir * (t_enter + vm * 1e-3);
-                        let max_len_m =
-                            core_units::Length::meters(seg_len as f64 + (vm as f64) * 4.0);
-                        // Perform DDA and carve while holding the mutable borrow
-                        if let Some(hit) = {
-                            let g = self.voxel_grid.as_ref().unwrap();
-                            raycast_voxels(
-                                g,
-                                glam::DVec3::new(
-                                    p_entry.x as f64,
-                                    p_entry.y as f64,
-                                    p_entry.z as f64,
-                                ),
-                                glam::DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64),
-                                max_len_m,
-                            )
-                        } {
-                            let vc = glam::DVec3::new(
-                                hit.voxel.x as f64 + 0.5,
-                                hit.voxel.y as f64 + 0.5,
-                                hit.voxel.z as f64 + 0.5,
-                            );
-                            let impact = o + vc * (vm as f64);
-                            let out = {
-                                let g = self.voxel_grid.as_mut().unwrap();
-                                carve_and_spawn_debris(
-                                    g,
-                                    impact,
-                                    core_units::Length::meters(blast_r as f64),
-                                    self.destruct_cfg.seed ^ self.impact_id,
-                                    self.impact_id,
-                                    self.destruct_cfg.max_debris,
-                                )
-                            };
-                            self.impact_id = self.impact_id.wrapping_add(1);
-                            let dirty = {
-                                let g = self.voxel_grid.as_mut().unwrap();
-                                g.pop_dirty_chunks(usize::MAX)
-                            };
-                            // Now refresh colliders and mesh (drop grid borrow before calling self.*)
-                            let updates = {
+            // Voxel impact along the shot segment
+            let blast_r = radius * 0.25;
+            let mut _handled = false;
+            if self.voxel_grid.is_some() {
+                let dir = (p1 - p0).normalize_or_zero();
+                if dir.length_squared() > 1e-6 {
+                    // Gather grid bounds first
+                    let (o, vm, d) = {
+                        let g = self.voxel_grid.as_ref().unwrap();
+                        (g.origin_m(), g.voxel_m().0 as f32, g.dims())
+                    };
+                    let gmin = glam::vec3(o.x as f32, o.y as f32, o.z as f32);
+                    let gmax = gmin + glam::vec3(d.x as f32 * vm, d.y as f32 * vm, d.z as f32 * vm);
+                    if let Some((t_enter, _)) = Renderer::ray_box_intersect(p0, dir, gmin, gmax) {
+                        let seg_len = (p1 - p0).length();
+                        if t_enter <= seg_len {
+                            let p_entry = p0 + dir * (t_enter + vm * 1e-3);
+                            let max_len_m =
+                                core_units::Length::meters(seg_len as f64 + (vm as f64) * 4.0);
+                            // Perform DDA and carve while holding the mutable borrow
+                            if let Some(hit) = {
                                 let g = self.voxel_grid.as_ref().unwrap();
-                                dirty
-                                    .clone()
-                                    .into_iter()
-                                    .filter_map(|c| chunkcol::build_chunk_collider(g, c))
-                                    .collect::<Vec<_>>()
-                            };
-                            if !updates.is_empty() {
-                                chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
-                                self.static_index =
-                                    Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
-                            }
-                            self.chunk_queue.enqueue_many(dirty);
-                            self.vox_queue_len = self.chunk_queue.len();
-                            let saved = self.destruct_cfg.max_chunk_remesh;
-                            self.destruct_cfg.max_chunk_remesh = 32;
-                            while self.vox_queue_len > 0 {
-                                self.process_voxel_queues();
-                            }
-                            self.destruct_cfg.max_chunk_remesh = saved;
-                            for (i, p) in out.positions_m.iter().enumerate() {
-                                if (self.debris.len() as u32) >= self.debris_capacity {
-                                    break;
+                                raycast_voxels(
+                                    g,
+                                    glam::DVec3::new(
+                                        p_entry.x as f64,
+                                        p_entry.y as f64,
+                                        p_entry.z as f64,
+                                    ),
+                                    glam::DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64),
+                                    max_len_m,
+                                )
+                            } {
+                                let vc = glam::DVec3::new(
+                                    hit.voxel.x as f64 + 0.5,
+                                    hit.voxel.y as f64 + 0.5,
+                                    hit.voxel.z as f64 + 0.5,
+                                );
+                                let impact = o + vc * (vm as f64);
+                                let out = {
+                                    let g = self.voxel_grid.as_mut().unwrap();
+                                    carve_and_spawn_debris(
+                                        g,
+                                        impact,
+                                        core_units::Length::meters(blast_r as f64),
+                                        self.destruct_cfg.seed ^ self.impact_id,
+                                        self.impact_id,
+                                        self.destruct_cfg.max_debris,
+                                    )
+                                };
+                                self.impact_id = self.impact_id.wrapping_add(1);
+                                let dirty = {
+                                    let g = self.voxel_grid.as_mut().unwrap();
+                                    g.pop_dirty_chunks(usize::MAX)
+                                };
+                                // Now refresh colliders and mesh (drop grid borrow before calling self.*)
+                                let updates = {
+                                    let g = self.voxel_grid.as_ref().unwrap();
+                                    dirty
+                                        .clone()
+                                        .into_iter()
+                                        .filter_map(|c| chunkcol::build_chunk_collider(g, c))
+                                        .collect::<Vec<_>>()
+                                };
+                                if !updates.is_empty() {
+                                    chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
+                                    self.static_index =
+                                        Some(chunkcol::rebuild_static_index(&self.chunk_colliders));
                                 }
-                                let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
-                                let vel = out
-                                    .velocities_mps
-                                    .get(i)
-                                    .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
-                                    .unwrap_or(glam::Vec3::Y * 2.5);
-                                self.debris.push(crate::gfx::Debris {
-                                    pos,
-                                    vel,
-                                    age: 0.0,
-                                    life: 2.5,
-                                });
+                                self.chunk_queue.enqueue_many(dirty);
+                                self.vox_queue_len = self.chunk_queue.len();
+                                let saved = self.destruct_cfg.max_chunk_remesh;
+                                self.destruct_cfg.max_chunk_remesh = 32;
+                                while self.vox_queue_len > 0 {
+                                    self.process_voxel_queues();
+                                }
+                                self.destruct_cfg.max_chunk_remesh = saved;
+                                for (i, p) in out.positions_m.iter().enumerate() {
+                                    if (self.debris.len() as u32) >= self.debris_capacity {
+                                        break;
+                                    }
+                                    let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                                    let vel = out
+                                        .velocities_mps
+                                        .get(i)
+                                        .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                                        .unwrap_or(glam::Vec3::Y * 2.5);
+                                    self.debris.push(crate::gfx::Debris {
+                                        pos,
+                                        vel,
+                                        age: 0.0,
+                                        life: 2.5,
+                                    });
+                                }
+                                _handled = true;
                             }
-                            _handled = true;
                         }
                     }
                 }
             }
-        }
-        
-        // If not handled by an existing grid, do nothing here; we only voxelize on explicit ruin hit.
+
+            // If not handled by an existing grid, do nothing here; we only voxelize on explicit ruin hit.
         }
     }
 
