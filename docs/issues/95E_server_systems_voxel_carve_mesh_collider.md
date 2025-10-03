@@ -14,6 +14,13 @@ Repo‑aware Inventory
 - Use existing helpers: `crates/server_core/src/destructible.rs::{raycast_voxels,carve_and_spawn_debris}`, `queue::ChunkQueue`, `config::DestructibleConfig`.
 - Voxel core: `crates/voxel_proxy` (grid + carve + flood-fill), `crates/voxel_mesh` (per-chunk greedy mesher).
 - Renderer colliders: builder logic under `render_wgpu::gfx::chunkcol`; mirror it under `server_core::collision_static::chunks`.
+ - Current client mutation sites to replace (for reference):
+   - `crates/render_wgpu/src/gfx/renderer/update.rs`:
+     - Selector: `find_destructible_hit(p0,p1)`
+     - Carve: `explode_fireball_against_destructible(owner,p0,p1,did,t_hit,radius,damage)`
+     - Meshing: `process_one_ruin_vox(..)`, `process_all_ruin_queues(..)`
+     - Collider builds: calls to `chunkcol::build_chunk_collider`, `swap_in_updates`, `rebuild_static_index`
+     - Debris: `update_debris` (visual; keep client‑side only)
 
 Files
 - `crates/server_core/src/systems/mod.rs` (new)
@@ -53,3 +60,4 @@ Tests
 Acceptance
 - With a seeded grid + `CarveRequest`, server tick produces `ChunkMesh` entries and collider updates within budget.
 - No renderer carve/collider/mesh mutation needed for visual updates once replication lands.
+ - Verified by temporarily stubbing a local apply of `ChunkMesh` to renderer (or by printing mesh counts in logs under `destruct_debug`).

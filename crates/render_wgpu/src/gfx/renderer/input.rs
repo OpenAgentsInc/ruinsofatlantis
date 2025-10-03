@@ -175,8 +175,11 @@ impl Renderer {
                                 log::info!("Respawn via keyboard");
                                 self.respawn();
                             } else {
-                                // Reset destructible grid and replay recent impacts
-                                self.reset_voxel_and_replay();
+                                // Reset destructible grid and replay recent impacts (demo only)
+                                #[cfg(feature = "vox_onepath_demo")]
+                                {
+                                    self.reset_voxel_and_replay();
+                                }
                             }
                         }
                     }

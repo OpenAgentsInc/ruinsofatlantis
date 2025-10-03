@@ -6,6 +6,16 @@ edition = "2024"
 [[bin]]
 name = "vox_onepath"
 path = "src/bin/vox_onepath.rs"
+required-features = ["vox_onepath_demo"]
+
+[features]
+default = []
+# Enables client-side voxel carve/collider/meshing/debris (legacy path)
+legacy_client_carve = []
+# Compiles the one-path voxel demo module and related helpers
+vox_onepath_demo = []
+# Opt-in verbose logging for destructible workflows
+destruct_debug = []
 
 [dependencies]
 ab_glyph = "0.2.31"

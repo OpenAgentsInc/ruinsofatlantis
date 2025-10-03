@@ -14,6 +14,8 @@ Files
 - `crates/render_wgpu/src/gfx/renderer/voxel_upload.rs` (new) — helper to upload/remove a single chunk mesh.
 - `crates/render_wgpu/src/gfx/renderer/init.rs` — call helper where necessary (e.g., on initial demo/proxy uploads if feature‑flagged).
 - `crates/render_wgpu/src/gfx/renderer/render.rs` — unchanged draw loop.
+ - Keys and caches already present in `Renderer`:
+   - Maps: `voxel_meshes: HashMap<(DestructibleId,u32,u32,u32), VoxelChunkMesh>`, `voxel_hashes: HashMap<(DestructibleId,u32,u32,u32), u64>`; standardize access via a `chunk_key(did, UVec3)` helper.
 
 Tasks
 - [ ] Extract the VB/IB creation code path currently in `process_one_ruin_vox(..)` into:
@@ -33,7 +35,9 @@ Tasks
 
 Compile Hygiene
 - Keep legacy carve paths behind `legacy_client_carve`; annotate gated functions with `#[cfg_attr(not(feature = "legacy_client_carve"), allow(dead_code))]` to avoid `-D warnings` when disabled.
+ - Gate demo helpers (`process_voxel_queues`, `build_voxel_grid_for_ruins`, `reset_voxel_and_replay`) behind `vox_onepath_demo` (see 95A).
 
 Acceptance
 - Default build: renderer only uploads/removes meshes via `voxel_upload`, with no world mutations.
 - Feature build: legacy carve works as before; upload helper remains compatible.
+ - Smoke test: a single `MeshCpu` upload path renders a 1×1×1 cube (use a tiny CPU mesh in a test/dev hook).

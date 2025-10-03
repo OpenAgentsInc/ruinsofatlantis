@@ -18,6 +18,15 @@ use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
 use web_time::Instant;
 use wgpu::util::DeviceExt;
 
+// Opt-in logging for destructible workflows
+#[macro_export]
+macro_rules! destruct_log {
+    ($($tt:tt)*) => {
+        #[cfg(feature = "destruct_debug")]
+        log::info!($($tt)*);
+    };
+}
+
 // Tiny deterministic RNG for demo variations (no external deps)
 #[inline]
 fn splitmix64(state: &mut u64) -> u64 {
@@ -279,9 +288,7 @@ impl Renderer {
             }
         }
         if best.is_some() {
-            if let Some((did, t)) = best {
-                log::info!("[destruct] select(proxy) did={:?} t={:.3}", did, t);
-            }
+            if let Some((did, t)) = best { destruct_log!("[destruct] select(proxy) did={:?} t={:.3}", did, t); }
             return best;
         }
         // 2) instances fallback (skip any with an existing proxy)
@@ -324,19 +331,17 @@ impl Renderer {
                 best = Some((did, tmin));
             }
         }
-        if let Some((did, t)) = best {
-            log::info!("[destruct] select(instance) did={:?} t={:.3}", did, t);
-        } else {
-            log::debug!("[destruct] select: no hit on proxies or instances");
-        }
+        if let Some((did, t)) = best { destruct_log!("[destruct] select(instance) did={:?} t={:.3}", did, t); } else { destruct_log!("[destruct] select: no hit on proxies or instances"); }
         best
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     fn get_or_spawn_proxy(&mut self, did: crate::gfx::DestructibleId) -> &mut crate::gfx::VoxProxy {
         // For now, reuse ruins-specific spawner; generic builder can be added later
         self.get_or_spawn_ruin_proxy(did.0)
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     #[allow(clippy::too_many_arguments)]
     fn explode_fireball_against_destructible(
         &mut self,
@@ -354,7 +359,7 @@ impl Renderer {
         let max_debris0 = self.destruct_cfg.max_debris;
         let vp = self.get_or_spawn_proxy(did);
         let dims = vp.grid.dims();
-        log::info!(
+        destruct_log!(
             "[destruct] carve: did={:?} grid dims={}x{}x{} vm={:.3}",
             did,
             dims.x,
@@ -365,14 +370,14 @@ impl Renderer {
         let seg = p1 - p0;
         let len = seg.length();
         if len < 1e-6 {
-            log::warn!("[destruct] carve: zero-length segment; skipping");
+            destruct_log!("[destruct] carve: zero-length segment; skipping");
             return;
         }
         let vm = vp.grid.voxel_m().0 as f32;
         // Use hit t from selector (computed vs padded AABB); step a tiny epsilon inward
         let eps_n = (vm * 1e-3) / len.max(1e-6);
         let p_entry = p0 + seg * (t_hit + eps_n);
-        log::debug!(
+        destruct_log!(
             "[destruct] carve: entry t={:.3} p_entry=({:.2},{:.2},{:.2})",
             t_hit,
             p_entry.x,
@@ -387,7 +392,7 @@ impl Renderer {
             glam::DVec3::new(seg.x as f64, seg.y as f64, seg.z as f64).normalize(),
             core_units::Length::meters(dda_max as f64),
         ) {
-            log::info!(
+            destruct_log!(
                 "[destruct] carve: DDA hit voxel=({}, {}, {})",
                 hit.voxel.x,
                 hit.voxel.y,
@@ -417,7 +422,7 @@ impl Renderer {
                 vp2.grid.pop_dirty_chunks(usize::MAX)
             };
             if !dirty.is_empty() {
-                log::info!(
+                destruct_log!(
                     "[destruct] carve: did={:?} enq dirty={} debris+{}",
                     did,
                     dirty.len(),
@@ -438,7 +443,7 @@ impl Renderer {
                 let vp2 = self.get_or_spawn_proxy(did);
                 vp2.chunk_queue.enqueue_many(dirty);
                 vp2.queue_len = vp2.chunk_queue.len();
-                log::debug!(
+                destruct_log!(
                     "[destruct] queue: did={:?} len={} (post-enqueue)",
                     did,
                     vp2.queue_len
@@ -462,7 +467,7 @@ impl Renderer {
                 });
             }
         } else {
-            log::warn!(
+            destruct_log!(
                 "[destruct] carve: DDA found no solid (dda_max={:.2}m, vm={:.3}m)",
                 dda_max,
                 vm
@@ -757,12 +762,13 @@ impl Renderer {
         }
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
         if !self
             .destr_voxels
             .contains_key(&crate::gfx::DestructibleId(ruin_idx))
         {
-            log::info!("[destruct] spawn proxy for ruin {}", ruin_idx);
+            destruct_log!("[destruct] spawn proxy for ruin {}", ruin_idx);
             // IMPORTANT: build the proxy BEFORE hiding the instance, otherwise
             // the zero-scale model matrix would collapse triangles.
             // Prefer real-mesh voxelization when available
@@ -790,7 +796,7 @@ impl Renderer {
                 }
             }
             rv.queue_len = rv.chunk_queue.len();
-            log::info!("[destruct] queued {} chunks for ruin {}", enq, ruin_idx);
+            destruct_log!("[destruct] queued {} chunks for ruin {}", enq, ruin_idx);
             // Insert proxy before bursting so meshing can find it in the map
             self.destr_voxels
                 .insert(crate::gfx::DestructibleId(ruin_idx), rv);
@@ -810,7 +816,7 @@ impl Renderer {
                 .keys()
                 .filter(|(id, _, _, _)| id.0 == ruin_idx)
                 .count();
-            log::info!(
+            destruct_log!(
                 "[destruct] uploaded {} chunk meshes for ruin {} (initial)",
                 total,
                 ruin_idx
@@ -821,6 +827,7 @@ impl Renderer {
             .unwrap()
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
         if budget == 0 {
             return;
@@ -889,7 +896,7 @@ impl Renderer {
             }
         }
         rv.queue_len = rv.chunk_queue.len();
-        log::debug!(
+        destruct_log!(
             "[destruct] meshed ruin {}: +{} / -{} (queue left={})",
             ruin_idx,
             inserted,
@@ -898,6 +905,7 @@ impl Renderer {
         );
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     fn process_all_ruin_queues(&mut self) {
         if self.destr_voxels.is_empty() {
             return;
@@ -935,6 +943,7 @@ impl Renderer {
         }
     }
 
+    #[cfg(feature = "vox_onepath_demo")]
     fn seed_voxel_chunk_colliders(&mut self, grid: &voxel_proxy::VoxelGrid) {
         self.chunk_colliders.clear();
         let d = grid.meta().dims;
@@ -968,7 +977,8 @@ impl Renderer {
     ) {
         // visuals + damage
         self.explode_fireball_at(owner, p1, radius, damage);
-
+        #[cfg(feature = "legacy_client_carve")]
+        {
         // Voxel impact along the shot segment
         let blast_r = radius * 0.25;
         let mut _handled = false;
@@ -1069,10 +1079,12 @@ impl Renderer {
                 }
             }
         }
-
+        
         // If not handled by an existing grid, do nothing here; we only voxelize on explicit ruin hit.
+        }
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     #[allow(dead_code)]
     fn explode_fireball_against_ruin(
         &mut self,
@@ -1201,6 +1213,7 @@ impl Renderer {
             .write_buffer(&self.ruins_instances, offset, bytes);
     }
 
+    #[cfg(feature = "vox_onepath_demo")]
     fn build_voxel_grid_for_ruins(&mut self, center: glam::Vec3, half_extent: glam::Vec3) {
         // Create a solid box proxy around the ruins instance with clamped size/density
         // 1) Clamp half extents to a sane maximum to avoid huge grids
@@ -1552,18 +1565,21 @@ impl Renderer {
                     let p0 = pr.pos - pr.vel * dt;
                     let p1 = pr.pos;
                     if let Some((did, t)) = self.find_destructible_hit(p0, p1) {
-                        log::info!("[destruct] hit did={:?}", did);
-                        self.explode_fireball_against_destructible(
-                            pr.owner_wizard,
-                            p0,
-                            p1,
-                            did,
-                            t,
-                            radius,
-                            damage,
-                        );
-                        self.projectiles.swap_remove(i);
-                        continue;
+                        destruct_log!("[destruct] hit did={:?}", did);
+                        #[cfg(feature = "legacy_client_carve")]
+                        {
+                            self.explode_fireball_against_destructible(
+                                pr.owner_wizard,
+                                p0,
+                                p1,
+                                did,
+                                t,
+                                radius,
+                                damage,
+                            );
+                            self.projectiles.swap_remove(i);
+                            continue;
+                        }
                     }
                     let mut exploded = false;
                     // collide against any alive NPC cylinder in XZ
@@ -1931,10 +1947,13 @@ impl Renderer {
 
         // 2.7) Process voxel chunk work budget per frame
         // Multi‑proxy: process all ruin queues, then the single‑grid demo if present
+        #[cfg(feature = "legacy_client_carve")]
         self.process_all_ruin_queues();
+        #[cfg(feature = "vox_onepath_demo")]
         self.process_voxel_queues();
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     pub(crate) fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
         let is_demo = self.is_vox_onepath();
         let Some(grid) = self.voxel_grid.as_mut() else {
@@ -2121,6 +2140,7 @@ impl Renderer {
         }
     }
 
+    #[cfg(feature = "vox_onepath_demo")]
     pub fn process_voxel_queues(&mut self) {
         // In the one‑path demo, burst‑remesh to make cuts instantly visible
         let budget = if self.vox_onepath_ui.is_some() {
@@ -2389,6 +2409,7 @@ impl Renderer {
             }
         }
         // Destructible: ruins -> voxelize on first impact, then carve (one‑path demo only)
+        #[cfg(feature = "vox_onepath_demo")]
         if self.vox_onepath_ui.is_some() {
             // If we already have a voxel grid (from a prior impact), carve it.
             if let Some(grid) = self.voxel_grid.as_mut() {
@@ -2601,6 +2622,20 @@ impl Renderer {
     }
 }
 
+// No-op stubs for demo helpers when vox_onepath_demo is disabled
+#[cfg(not(feature = "vox_onepath_demo"))]
+impl Renderer {
+    pub fn process_voxel_queues(&mut self) {}
+    fn build_voxel_grid_for_ruins(&mut self, _center: glam::Vec3, _half_extent: glam::Vec3) {}
+    pub(crate) fn reset_voxel_and_replay(&mut self) {}
+    fn seed_voxel_chunk_colliders(&mut self, _grid: &voxel_proxy::VoxelGrid) {}
+}
+
+#[cfg(not(feature = "legacy_client_carve"))]
+impl Renderer {
+    pub(crate) fn try_voxel_impact(&mut self, _p0: glam::Vec3, _p1: glam::Vec3) {}
+}
+
 // Small helpers used by input/update
 pub(super) fn wrap_angle(a: f32) -> f32 {
     let mut x = a;
@@ -2614,6 +2649,7 @@ pub(super) fn wrap_angle(a: f32) -> f32 {
 }
 
 impl Renderer {
+    #[cfg(feature = "vox_onepath_demo")]
     pub(crate) fn reset_voxel_and_replay(&mut self) {
         // Reset grid to initial state if available
         let initial = self.voxel_grid_initial.clone();
@@ -2661,7 +2697,7 @@ impl Renderer {
                     self.chunk_queue.enqueue_many(enq);
                 }
             }
-            log::info!(
+            destruct_log!(
                 "Voxel world reset; replayed {} impacts",
                 self.recent_impacts.len()
             );

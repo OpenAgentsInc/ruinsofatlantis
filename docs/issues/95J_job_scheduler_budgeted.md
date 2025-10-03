@@ -12,6 +12,7 @@ Outcomes
 Files
 - `crates/server_core/src/jobs/{mod.rs,thread_pool.rs,job_types.rs}` (new)
 - Integrate into: `crates/server_core/src/systems/destructible.rs` (GreedyMesh/Collider systems dispatch jobs)
+ - Budget values come from `data_runtime` (95D) via `DestructibleConfig`.
 
 Tasks
 - [ ] Thread pool (scoped to server) and MPSC queues per job type.
@@ -21,3 +22,4 @@ Tasks
 
 Acceptance
 - With many dirty chunks, only `max_remesh_per_tick` / `collider_budget_per_tick` are processed each tick; logs show budgets adhered.
+ - Server tick remains below target frame budget (e.g., 16.6 ms for 60Hz) on a mid config; add a warning log when exceeded.

@@ -109,6 +109,14 @@ Gameplay wiring (prototype)
   - `cargo watch -x run` (rebuild and rerun on change), or
   - `cargo dev` / `cargo dev-test` via Cargo aliases in `.cargo/config.toml`.
 
+## Feature Flags (Renderer)
+- `vox_onepath_demo` (default: off)
+  - Compiles and exposes the one‑path voxel demo helpers and bin; gates demo grid creation and related helpers in the renderer.
+- `legacy_client_carve` (default: off)
+  - Enables legacy client‑side voxel carve/collider/mesh/debris paths for A/B testing. Default builds do not mutate voxels on the client.
+- `destruct_debug` (default: off)
+  - Opt‑in verbose logging for destructible selection/carve/meshing.
+
 ## Frame Graph (Renderer)
 - The renderer encodes pass I/O in a minimal static frame-graph (`renderer::graph`).
 - Invariants validated each frame:

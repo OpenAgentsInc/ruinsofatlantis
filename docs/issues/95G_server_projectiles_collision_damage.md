@@ -15,6 +15,10 @@ Files
 - `crates/server_core/src/systems/damage.rs` (new)
 - `crates/server_core/src/tick.rs` (insert ordering)
 - `crates/data_runtime/src/specs/projectiles.rs` (from 95D)
+ - Reference current client usage to replace later:
+   - `crates/render_wgpu/src/gfx/renderer/update.rs`:
+     - Projectile spawn: `spawn_fireball`, `spawn_firebolt`, `spawn_magic_missile`
+     - Projectile integrate and collision against NPCs (zombies/DK) and destructibles (selection call)
 
 Components
 - `Projectile { kind: ProjectileId, speed_mps: f32, radius_m: f32, damage: i32, owner: EntityId, life_s: f32 }`
@@ -25,9 +29,11 @@ Systems
 - `ProjectileIntegrateSystem` — fixed dt; update positions and produce segment [p0,p1] per tick; cull by `life_s<=0`.
 - `CollisionSystem` — broadphase grid or simple O(n·m) first pass; test projectile spheres against destructible AABBs and entity `CollisionShape`; emit `HitEvent`s; for destructible hits, compute segment–AABB entry t and emit `CarveRequest` with `did`.
 - `DamageApplySystem` — apply to `Health`; spawn death events.
+ - Optional: `AggroSystem` to set wizard hostility flags server‑side (replacing client‑side toggles in renderer).
 
 Data Wiring
 - Load projectile params from `data_runtime::specs::projectiles` (id→speed/radius/damage/life). No hard‑coded constants.
+ - Replace hard‑coded spell mappings in renderer (e.g., firebolt/fireball) with ids used by server when emitting projectiles.
 
 Tests
 - Build a tiny world with one projectile and a capsule/sphere target; assert hit, hp decreases deterministically.
@@ -35,3 +41,4 @@ Tests
 
 Acceptance
 - Server tick produces deterministic hits and damage based on SpecDb; destructible hits enqueue `CarveRequest` for 95E.
+ - Client still renders projectile visuals (prediction ok), and reconciles on hits once replication arrives.
