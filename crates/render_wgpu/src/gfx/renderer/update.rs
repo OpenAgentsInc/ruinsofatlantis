@@ -841,20 +841,19 @@ impl Renderer {
                     self.voxel_hashes.remove(&key);
                 } else {
                     // Interleave positions + normals to match types::Vertex layout
-                    let mut verts: Vec<crate::gfx::types::Vertex> = Vec::with_capacity(mb.positions.len());
+                    let mut verts: Vec<crate::gfx::types::Vertex> =
+                        Vec::with_capacity(mb.positions.len());
                     for (i, p) in mb.positions.iter().enumerate() {
-                        let n = mb
-                            .normals
-                            .get(i)
-                            .copied()
-                            .unwrap_or([0.0, 1.0, 0.0]);
+                        let n = mb.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
                         verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
                     }
-                    let vb = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("voxel-chunk-vb"),
-                        contents: bytemuck::cast_slice(&verts),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
+                    let vb = self
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("voxel-chunk-vb"),
+                            contents: bytemuck::cast_slice(&verts),
+                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        });
                     let ib = self
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {

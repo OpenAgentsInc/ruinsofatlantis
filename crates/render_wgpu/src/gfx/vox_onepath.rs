@@ -206,95 +206,7 @@ impl ApplicationHandler for App {
                     }
                 }
 
-                // Auto-carve once on the first frame so no input is required
-                if !self.script.shot {
-                    let aspect = state.size.width as f32 / state.size.height.max(1) as f32;
-                    let (off, look) = camera_sys::compute_local_orbit_offsets(
-                        state.cam_distance,
-                        state.cam_orbit_yaw,
-                        state.cam_orbit_pitch,
-                        state.cam_lift,
-                        state.cam_look_height,
-                    );
-                    let (cam, _g) = camera_sys::third_person_follow(
-                        &mut state.cam_follow,
-                        state.scene_inputs.pos(),
-                        glam::Quat::IDENTITY,
-                        off,
-                        look,
-                        aspect,
-                        0.0,
-                    );
-                    let p0 = cam.eye;
-                    let p1 = if let Some(ref grid) = state.voxel_grid {
-                        let vm = grid.voxel_m().0 as f32;
-                        let dims = grid.dims();
-                        let origin = grid.origin_m();
-                        let center = glam::vec3(
-                            (origin.x as f32) + (dims.x as f32 * vm * 0.5),
-                            (origin.y as f32) + (dims.y as f32 * vm * 0.5),
-                            (origin.z as f32) + (dims.z as f32 * vm * 0.5),
-                        );
-                        let dir = (center - p0).normalize_or_zero();
-                        p0 + dir * 10.0
-                    } else {
-                        p0 + glam::Vec3::Z
-                    };
-                    let pre = state.vox_queue_len;
-                    let pre_debris = state.debris.len();
-                    state.try_voxel_impact(p0, p1);
-                    if state.vox_queue_len == pre {
-                        // Minimal fallback: carve a small sphere at grid center
-                        if let Some(ref mut grid) = state.voxel_grid {
-                            let vm = grid.voxel_m().0;
-                            let d = grid.dims();
-                            let o = grid.origin_m();
-                            let center = DVec3::new(
-                                o.x + vm * (d.x as f64 * 0.5),
-                                o.y + vm * (d.y as f64 * 0.5),
-                                o.z + vm * (d.z as f64 * 0.5),
-                            );
-                            let out = server_core::destructible::carve_and_spawn_debris(
-                                grid,
-                                center,
-                                core_units::Length::meters(0.30),
-                                state.destruct_cfg.seed,
-                                state.impact_id,
-                                state.destruct_cfg.max_debris,
-                            );
-                            state.impact_id = state.impact_id.wrapping_add(1);
-                            let enq = grid.pop_dirty_chunks(usize::MAX);
-                            state.chunk_queue.enqueue_many(enq);
-                            state.vox_queue_len = state.chunk_queue.len();
-                            for (i, p) in out.positions_m.iter().enumerate() {
-                                if (state.debris.len() as u32) < state.debris_capacity {
-                                    let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
-                                    let vel = out
-                                        .velocities_mps
-                                        .get(i)
-                                        .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
-                                        .unwrap_or(glam::Vec3::Y * 2.5);
-                                    state.debris.push(crate::gfx::Debris {
-                                        pos,
-                                        vel,
-                                        age: 0.0,
-                                        life: 2.5,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    // Immediately rebuild all chunk meshes for the demo
-                    force_remesh_all(state);
-                    self.script.shot = true;
-                    self.script.carved = state.vox_queue_len > pre;
-                    self.script.saved = false;
-                    log::info!(
-                        "[onepath] auto carve enq={} debris+{}",
-                        state.vox_queue_len - pre,
-                        state.debris.len().saturating_sub(pre_debris)
-                    );
-                }
+                // No auto-carve: wait for explicit input so debris only spawns on hit
 
                 // When remesh queue drains, save a screenshot once.
                 if self.script.shot && self.script.carved && !self.script.saved && meshed {
@@ -655,7 +567,9 @@ fn reset_to_block(renderer: &mut Renderer) {
 // Demo-only: rebuild all chunk meshes from the CPU grid immediately and upload to GPU
 fn force_remesh_all(r: &mut Renderer) {
     use wgpu::util::DeviceExt as _;
-    let Some(grid) = r.voxel_grid.as_ref() else { return; };
+    let Some(grid) = r.voxel_grid.as_ref() else {
+        return;
+    };
 
     // Clear existing GPU meshes and hashes so we don't draw stale buffers
     r.voxel_meshes.clear();
@@ -682,16 +596,20 @@ fn force_remesh_all(r: &mut Renderer) {
                     verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
                 }
 
-                let vb = r.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("vox_onepath-chunk-vb"),
-                    contents: bytemuck::cast_slice(&verts),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                });
-                let ib = r.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("vox_onepath-chunk-ib"),
-                    contents: bytemuck::cast_slice(&mb.indices),
-                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                });
+                let vb = r
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("vox_onepath-chunk-vb"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
+                let ib = r
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("vox_onepath-chunk-ib"),
+                        contents: bytemuck::cast_slice(&mb.indices),
+                        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                    });
 
                 r.voxel_meshes.insert(
                     (cx, cy, cz),
