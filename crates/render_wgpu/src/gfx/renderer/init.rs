@@ -977,6 +977,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }
     }
 
+    // In the main scene, avoid seeding a demo voxel grid unless explicitly requested
+    if std::env::var("RA_VOX_DEMO")
+        .map(|v| v != "1")
+        .unwrap_or(true)
+    {
+        dcfg.demo_grid = false;
+    }
+
     // Prepare neutral gray voxel model BG (before moving device into struct)
     let voxel_model_bg = {
         // Enable triplanar path for voxel meshes by setting _pad[0]=1, and
@@ -1380,6 +1388,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         zombie_instances_cpu,
         ruins_instances: scene_build.ruins_instances,
         ruins_count: scene_build.ruins_count,
+        ruins_instances_cpu: scene_build.ruins_instances_cpu,
         fx_instances,
         _fx_capacity: fx_capacity,
         fx_count,
@@ -1437,6 +1446,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_onepath_ui: None,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
+        ruin_voxels: std::collections::HashMap::new(),
         voxel_model_bg,
         debris_vb,
         debris_ib,

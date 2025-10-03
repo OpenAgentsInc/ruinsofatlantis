@@ -216,6 +216,7 @@ pub struct Renderer {
     dk_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
+    ruins_instances_cpu: Vec<types::Instance>,
 
     // FX buffers
     fx_instances: wgpu::Buffer,
@@ -318,6 +319,8 @@ pub struct Renderer {
     voxel_grid: Option<VoxelGrid>,
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
+    // Multi‑proxy: one voxel proxy per ruin (main scene path)
+    ruin_voxels: HashMap<usize, RuinVox>,
     // Per-frame metrics for overlay
     vox_last_chunks: usize,
     vox_queue_len: usize,
@@ -331,8 +334,9 @@ pub struct Renderer {
     impact_id: u64,
 
     // Voxel chunk GPU meshes (keyed by chunk coord)
-    voxel_meshes: HashMap<(u32, u32, u32), VoxelChunkMesh>,
-    voxel_hashes: HashMap<(u32, u32, u32), u64>,
+    // Multi‑ruin voxel meshes; key includes ruin id
+    voxel_meshes: HashMap<(usize, u32, u32, u32), VoxelChunkMesh>,
+    voxel_hashes: HashMap<(usize, u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
     // Debris (instanced cubes)
@@ -400,6 +404,15 @@ pub struct VoxelChunkMesh {
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub idx: u32,
+}
+
+// Per‑ruin voxel proxy container
+pub struct RuinVox {
+    pub grid: voxel_proxy::VoxelGrid,
+    pub chunk_queue: server_core::destructible::queue::ChunkQueue,
+    pub queue_len: usize,
+    pub colliders: Vec<chunkcol::StaticChunk>,
+    pub static_index: Option<collision_static::StaticIndex>,
 }
 
 struct Debris {
