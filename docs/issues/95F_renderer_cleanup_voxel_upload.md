@@ -40,4 +40,16 @@ Compile Hygiene
 Acceptance
 - Default build: renderer only uploads/removes meshes via `voxel_upload`, with no world mutations.
 - Feature build: legacy carve works as before; upload helper remains compatible.
- - Smoke test: a single `MeshCpu` upload path renders a 1×1×1 cube (use a tiny CPU mesh in a test/dev hook).
+- Smoke test: a single `MeshCpu` upload path renders a 1×1×1 cube (use a tiny CPU mesh in a test/dev hook).
+
+---
+
+## Addendum — Implementation Summary (95F partial)
+
+- Added `crates/render_wgpu/src/gfx/renderer/voxel_upload.rs` with:
+  - `upload_chunk_mesh(..)` that validates and uploads CPU mesh to VB/IB and updates renderer caches.
+  - `remove_chunk_mesh(..)` to evict a chunk entry.
+  - CPU-only test that `MeshCpu::validate()` catches mismatched lengths.
+- Exported `voxel_upload` from `renderer/mod.rs`.
+- Next: replace direct VB/IB creation sites in `update.rs` with the helper.
+Status: PARTIAL (voxel_upload helper landed; call-sites to be migrated incrementally)

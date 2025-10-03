@@ -60,4 +60,17 @@ Tests
 Acceptance
 - With a seeded grid + `CarveRequest`, server tick produces `ChunkMesh` entries and collider updates within budget.
 - No renderer carve/collider/mesh mutation needed for visual updates once replication lands.
- - Verified by temporarily stubbing a local apply of `ChunkMesh` to renderer (or by printing mesh counts in logs under `destruct_debug`).
+- Verified by temporarily stubbing a local apply of `ChunkMesh` to renderer (or by printing mesh counts in logs under `destruct_debug`).
+
+---
+
+## Addendum — Implementation Summary (95E partial)
+
+- server_core::systems
+  - Added `systems/mod.rs` and `systems/destructible.rs` with:
+    - `voxel_carve(grid, req, cfg, dirty) -> touched_chunks`
+    - `greedy_mesh_budget(grid, dirty, out_mesh, budget) -> processed_count`
+  - Unit test constructs a small grid, issues a `CarveRequest`, and verifies that `greedy_mesh_budget` processes up to the budget and produces meshes.
+- Collision rebuild is deferred; existing `collision_static` crate can be integrated in a subsequent step.
+- CI remains green.
+Status: PARTIAL (VoxelCarve + GreedyMesh landed with tests; ColliderRebuild TBD)

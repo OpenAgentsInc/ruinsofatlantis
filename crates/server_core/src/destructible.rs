@@ -333,6 +333,15 @@ pub mod config {
                 self.seed = file.seed;
             }
         }
+        fn clamp_effective(&mut self) {
+            // Ensure effective values are sane regardless of source.
+            if f64::from(self.voxel_size_m) < 0.02 {
+                self.voxel_size_m = Length::meters(0.02);
+            }
+            if self.max_chunk_remesh > 256 {
+                self.max_chunk_remesh = 256;
+            }
+        }
         pub fn from_args<I, S>(args: I) -> Self
         where
             I: IntoIterator<Item = S>,
@@ -490,7 +499,8 @@ pub mod config {
             if !any_vox_flag && cfg.voxel_model.is_none() {
                 cfg.demo_grid = true;
             }
-            // Log effective configuration once
+            // Clamp and log effective configuration once
+            cfg.clamp_effective();
             {
                 let seed = cfg.seed;
                 eprintln!(
@@ -535,6 +545,33 @@ pub mod config {
             assert!(c.close_surfaces);
             assert_eq!(c.seed, 1234);
             assert!(c.demo_grid);
+        }
+    }
+
+    #[cfg(test)]
+    mod precedence_tests {
+        use super::*;
+        #[test]
+        fn file_defaults_then_cli_overrides_and_clamp() {
+            // Load with no args: should reflect file defaults (or sane defaults)
+            let base = DestructibleConfig::from_args(["app"]);
+            assert!(f64::from(base.voxel_size_m) >= 0.02);
+            // CLI overrides take precedence and clamp applies
+            let args = [
+                "app",
+                "--voxel-size",
+                "0.2",
+                "--chunk-size",
+                "16",
+                "16",
+                "16",
+                "--max-chunk-remesh",
+                "9999",
+            ];
+            let cfg = DestructibleConfig::from_args(args);
+            assert!((f64::from(cfg.voxel_size_m) - 0.2).abs() < 1e-9);
+            assert_eq!(cfg.chunk, glam::UVec3::new(16, 16, 16));
+            assert_eq!(cfg.max_chunk_remesh, 256); // clamped
         }
     }
 }

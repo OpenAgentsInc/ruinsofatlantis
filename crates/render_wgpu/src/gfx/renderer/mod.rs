@@ -10,6 +10,7 @@ pub mod init;
 pub mod passes;
 pub mod render;
 pub mod resize;
+pub mod voxel_upload;
 pub(crate) use attachments::Attachments;
 mod input;
 mod update;
