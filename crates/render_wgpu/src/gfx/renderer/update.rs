@@ -40,16 +40,23 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 
 impl Renderer {
     fn hide_ruins_instance(&mut self, index: usize) {
-        if index >= self.ruins_instances_cpu.len() { return; }
+        if index >= self.ruins_instances_cpu.len() {
+            return;
+        }
         // Zero-scale the instance model matrix to hide it
         let mut inst = self.ruins_instances_cpu[index];
-        let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(0.0), glam::Quat::IDENTITY, glam::Vec3::ZERO);
+        let m = glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::splat(0.0),
+            glam::Quat::IDENTITY,
+            glam::Vec3::ZERO,
+        );
         inst.model = m.to_cols_array_2d();
         self.ruins_instances_cpu[index] = inst;
         let stride = std::mem::size_of::<crate::gfx::types::Instance>() as u64;
         let offset = (index as u64) * stride;
         let bytes = bytemuck::bytes_of(&inst);
-        self.queue.write_buffer(&self.ruins_instances, offset, bytes);
+        self.queue
+            .write_buffer(&self.ruins_instances, offset, bytes);
     }
 
     fn build_voxel_grid_for_ruins(&mut self, center: glam::Vec3, half_extent: glam::Vec3) {
@@ -60,7 +67,8 @@ impl Renderer {
             (size.x / vm.0 as f32).ceil() as u32,
             (size.y / vm.0 as f32).ceil() as u32,
             (size.z / vm.0 as f32).ceil() as u32,
-        ).max(glam::UVec3::new(8,8,8));
+        )
+        .max(glam::UVec3::new(8, 8, 8));
         let origin = glam::DVec3::new(
             (center.x - half_extent.x) as f64,
             (center.y - half_extent.y) as f64,
@@ -76,19 +84,36 @@ impl Renderer {
         };
         let mut grid = voxel_proxy::VoxelGrid::new(meta);
         // Fill the entire box solid
-        for z in 0..dims.z { for y in 0..dims.y { for x in 0..dims.x { grid.set(x,y,z,true); }}}
+        for z in 0..dims.z {
+            for y in 0..dims.y {
+                for x in 0..dims.x {
+                    grid.set(x, y, z, true);
+                }
+            }
+        }
         self.voxel_grid = Some(grid);
         // enqueue all chunks
         let d = dims;
         let c = self.destruct_cfg.chunk;
-        let nx = d.x.div_ceil(c.x); let ny = d.y.div_ceil(c.y); let nz = d.z.div_ceil(c.z);
+        let nx = d.x.div_ceil(c.x);
+        let ny = d.y.div_ceil(c.y);
+        let nz = d.z.div_ceil(c.z);
         self.chunk_queue = server_core::destructible::queue::ChunkQueue::new();
-        for cz in 0..nz { for cy in 0..ny { for cx in 0..nx { self.chunk_queue.enqueue_many([glam::UVec3::new(cx,cy,cz)]); }}}
+        for cz in 0..nz {
+            for cy in 0..ny {
+                for cx in 0..nx {
+                    self.chunk_queue
+                        .enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                }
+            }
+        }
         self.vox_queue_len = self.chunk_queue.len();
         // Process aggressively so geometry shows immediately
         let saved = self.destruct_cfg.max_chunk_remesh;
         self.destruct_cfg.max_chunk_remesh = 64;
-        while self.vox_queue_len > 0 { self.process_voxel_queues(); }
+        while self.vox_queue_len > 0 {
+            self.process_voxel_queues();
+        }
         self.destruct_cfg.max_chunk_remesh = saved;
     }
     #[inline]
@@ -1165,7 +1190,7 @@ impl Renderer {
         {
             // If we already have a voxel grid (from a prior impact), carve it.
             if let Some(grid) = self.voxel_grid.as_mut() {
-                let out = carve_and_spawn_debris(
+                let _out = carve_and_spawn_debris(
                     grid,
                     glam::DVec3::new(center.x as f64, center.y as f64, center.z as f64),
                     core_units::Length::meters((radius * 0.25) as f64),
@@ -1190,22 +1215,33 @@ impl Renderer {
                         let m = glam::Mat4::from_cols_array_2d(&inst.model);
                         let pos = m.transform_point3(glam::Vec3::ZERO);
                         let d2 = pos.distance_squared(center);
-                        if d2 < best.1 { best = (i, d2, pos); }
+                        if d2 < best.1 {
+                            best = (i, d2, pos);
+                        }
                     }
                     let idx = best.0;
                     if idx != usize::MAX {
                         let pos = best.2;
-                        let horiz = glam::vec2(pos.x, pos.z).distance(glam::vec2(center.x, center.z));
+                        let horiz =
+                            glam::vec2(pos.x, pos.z).distance(glam::vec2(center.x, center.z));
                         let approx_ruins_radius = 6.5f32; // horizontal radius estimate
                         if horiz < approx_ruins_radius * 1.6 {
                             // Hide instance and build voxel grid around it (approximate box)
-                            let half = glam::vec3(approx_ruins_radius, approx_ruins_radius * 0.8, approx_ruins_radius);
+                            let half = glam::vec3(
+                                approx_ruins_radius,
+                                approx_ruins_radius * 0.8,
+                                approx_ruins_radius,
+                            );
                             self.hide_ruins_instance(idx);
                             self.build_voxel_grid_for_ruins(pos, half);
                             if let Some(grid) = self.voxel_grid.as_mut() {
                                 let _ = carve_and_spawn_debris(
                                     grid,
-                                    glam::DVec3::new(center.x as f64, center.y as f64, center.z as f64),
+                                    glam::DVec3::new(
+                                        center.x as f64,
+                                        center.y as f64,
+                                        center.z as f64,
+                                    ),
                                     core_units::Length::meters((radius * 0.25) as f64),
                                     self.destruct_cfg.seed,
                                     self.impact_id,
@@ -1217,7 +1253,9 @@ impl Renderer {
                                 self.vox_queue_len = self.chunk_queue.len();
                                 let saved = self.destruct_cfg.max_chunk_remesh;
                                 self.destruct_cfg.max_chunk_remesh = 64;
-                                while self.vox_queue_len > 0 { self.process_voxel_queues(); }
+                                while self.vox_queue_len > 0 {
+                                    self.process_voxel_queues();
+                                }
                                 self.destruct_cfg.max_chunk_remesh = saved;
                             }
                         }
