@@ -151,6 +151,37 @@ Acceptance
 
 ---
 
+## Phase 2b — Classes/Spells, Casting/GCD, and HUD (1–2 PRs)
+
+2b.1 Classes/Spells to ECS
+- Current:
+  - Specs live in `crates/data_runtime/src/spell.rs`, `class.rs`; `specdb.rs` loads `data/spells/*.json` and `data/classes/*.json`.
+  - `crates/sim_core` hosts SRD rules and a deterministic combat pipeline (`sim/systems/*`, `combat/fsm.rs`).
+- Target:
+  - Represent SRD‑derived runtime state as ECS components:
+    - `AbilityBook { slots: Vec<AbilityId>, cooldowns: HashMap<AbilityId, u32> }` (leverage `sim_core::sim::components::ability_book`)
+    - `CastBar { state: ActionState, gcd: Gcd, reaction: ReactionWindow }` (see `sim_core::combat::fsm`)
+    - `WizardClass { class_id, spell_attack_bonus, save_dc }`
+  - Systems (server tick or shared):
+    - `CastBeginSystem`/`CastProgressSystem` from `sim_core::sim::systems::{cast_begin, cast_progress}`
+    - `SavingThrow`, `Buffs`, `AttackRoll`, `Damage`, `Conditions` (reuse from `sim_core::sim::systems`)
+  - Files to touch:
+    - Wire `sim_core` systems into `server_core::tick.rs` (authoritative). Maintain determinism.
+    - `crates/data_runtime/src/specdb.rs`: expose getters for projectile/cast times/cooldowns used by client prediction.
+
+2b.2 HUD integration (client)
+- Current: `crates/ux_hud` stores HUD toggles; `crates/render_wgpu/src/gfx/ui.rs` builds overlays (hotbar, cooldown wedges, death overlay). Renderer computes cooldown fractions via `scene_inputs`.
+- Target: Drive HUD from ECS replication:
+  - Expose `AbilityBook.cooldowns` and `CastBar` to client via replication; compute HUD cooldown fills client‑side without reaching into renderer state.
+  - Files:
+    - `crates/client_core/src/replication.rs`: apply `AbilityBook`/`CastBar` deltas.
+    - `crates/render_wgpu/src/gfx/ui.rs`: read cooldown fractions from a small client_core facade instead of `scene_inputs`.
+
+Acceptance
+- Casting/GCD progress and cooldowns are managed by ECS systems (authoritative server); HUD reflects replicated state.
+
+---
+
 ## Phase 3 — Replication & Interest (2–4 PRs)
 
 3.1 `net_core` crate (local loop first)
@@ -196,6 +227,46 @@ Acceptance
 
 ---
 
+## Phase 6 — NPCs, Character Controller, Camera, Zones (2–4 PRs)
+
+6.1 NPCs (server‑side ECS)
+- Current:
+  - `crates/server_core/src/lib.rs` manages `ServerState { npcs: Vec<Npc> }` with AI/resolve functions; renderer polls `server.npcs` and applies damage/aggro.
+- Target:
+  - Components: `Npc { id, radius, speed }`, `Health`, `Transform`, `Velocity`, `Team`.
+  - Systems (server): `NpcAiSystem`, `NpcResolveCollisionsSystem`, `NpcMeleeSystem`, `NpcDeathSystem`.
+  - Replicate `Transform`/`Health` to client; remove direct `server.npcs` use in renderer.
+  - Files:
+    - New `crates/server_core/src/systems/npc.rs` (split logic from `ServerState`).
+    - Update `crates/render_wgpu/src/gfx/renderer/update.rs` to consume replication for NPC visuals/damage floaters only.
+
+6.2 Character Controller & Camera (client)
+- Current:
+  - `crates/client_core/src/lib.rs` has `input::InputState` and `controller::PlayerController` (WASD/run/yaw with hard‑coded speeds).
+  - Renderer `input.rs` handles window events and yaw/camera orbit; `update.rs::apply_pc_transform` applies controller to the PC and clamps against terrain; `camera_sys` manages follow state.
+- Target:
+  - Keep winit event handling, but route to `client_core::input::InputState`. Move `apply_pc_transform` into `client_core::systems::controller` to update a `Transform` component for the PC entity; compute camera target via `camera_sys` from that transform.
+  - Config: speeds/yaw rates under `data_runtime` instead of hard‑coded.
+  - Files:
+    - New `crates/client_core/src/systems/controller.rs` with `update(dt, &InputState, &mut Transform, &TerrainCpu)`.
+    - Update `crates/render_wgpu/src/gfx/renderer/update.rs` to call into client_core for PC transform and keep GPU upload only.
+    - Keep `crates/render_wgpu/src/gfx/renderer/input.rs` for event plumbing.
+
+6.3 Zones & Scene build
+- Current:
+  - `crates/data_runtime/src/zone.rs` defines zone specs; `crates/render_wgpu/src/gfx/scene.rs` assembles scene and seeds destructibles.
+- Target:
+  - Introduce `ZoneId` and (eventually) per‑zone ECS worlds. In v0, single world with `ZoneId(0)` tags.
+  - Move scene assembly to server `crates/server_core/src/scene_build.rs`: build terrain/NPC/destructibles from data; replicate CPU artifacts to client for GPU buffer builds.
+  - Files: new `server_core::scene_build.rs`; shrink `render_wgpu::gfx::scene.rs` to GPU build only.
+
+Acceptance
+- NPCs are server‑authoritative via ECS; client only renders.
+- PC controller/camera live in client_core systems; renderer draws.
+- Scene build resides server‑side; renderer uses replicated CPU data.
+
+---
+
 ## File/Module References (concrete changes)
 
 - Move out of renderer:
@@ -210,6 +281,10 @@ Acceptance
   - `crates/client_core/{src/replication.rs,src/upload.rs,src/lib.rs}`
   - `crates/net_core/{src/snapshot.rs,src/apply.rs}`
   - `crates/data_runtime/src/specs/{projectiles.rs,destructible.rs}`
+  - `crates/render_wgpu/src/gfx/renderer/voxel_upload.rs`
+  - `crates/server_core/src/scene_build.rs`
+  - `crates/server_core/src/systems/npc.rs`
+  - `crates/client_core/src/systems/controller.rs`
   - `crates/render_wgpu/src/gfx/renderer/voxel_upload.rs`
 
 ---
