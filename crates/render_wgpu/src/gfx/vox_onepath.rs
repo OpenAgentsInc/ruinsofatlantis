@@ -498,12 +498,15 @@ impl ApplicationHandler for App {
                                             let v = rand01(&mut rng);
                                             let px = lerp(bmin.x + vm_f, bmax.x - vm_f, u);
                                             let py = lerp(bmin.y + vm_f, bmax.y - vm_f, v);
-                                            let pz = bmin.z + vm_f * 0.8;
+                                            // Distribute depth across thickness for coverage
+                                            let z_layers = ((bmax.z - bmin.z) / vm_f).floor().max(1.0) as u32;
+                                            let layer = (splitmix64(&mut rng) as u32) % z_layers;
+                                            let pz = bmin.z + (layer as f32 + 0.5) * vm_f;
                                             let center =
                                                 DVec3::new(px as f64, py as f64, pz as f64);
                                             let radius_m = (0.26 + 0.22 * rand01(&mut rng)) as f64;
                                             let seed = splitmix64(&mut rng);
-                                            let _out =
+                                            let out =
                                                 server_core::destructible::carve_and_spawn_debris(
                                                     grid,
                                                     center,
@@ -512,6 +515,18 @@ impl ApplicationHandler for App {
                                                     state.impact_id,
                                                     state.destruct_cfg.max_debris,
                                                 );
+                                            // Spawn debris instances for scatter too
+                                            for (i, p) in out.positions_m.iter().enumerate() {
+                                                if (state.debris.len() as u32) < state.debris_capacity {
+                                                    let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                                                    let vel = out
+                                                        .velocities_mps
+                                                        .get(i)
+                                                        .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                                                        .unwrap_or(glam::Vec3::Y * 2.5);
+                                                    state.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+                                                }
+                                            }
                                             state.impact_id = state.impact_id.wrapping_add(1);
                                             let enq = grid.pop_dirty_chunks(usize::MAX);
                                             state.chunk_queue.enqueue_many(enq);
