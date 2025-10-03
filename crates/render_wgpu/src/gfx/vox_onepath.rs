@@ -36,7 +36,9 @@ fn rand01(s: &mut u64) -> f32 {
 }
 
 #[inline]
-fn lerp(a: f32, b: f32, t: f32) -> f32 { a + (b - a) * t }
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
 
 pub fn run() -> Result<()> {
     // Skip in headless environments (CI)
@@ -338,12 +340,15 @@ impl ApplicationHandler for App {
                                 };
                                 let center = DVec3::new(hit.x as f64, hit.y as f64, hit.z as f64);
                                 // Per-impact randomization (deterministic): radius, debris budget, seed
-                                let mut rng = (state.destruct_cfg.seed as u64)
-                                    ^ (state.impact_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                                let mut rng = state.destruct_cfg.seed
+                                    ^ state.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
                                 let radius_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
                                 let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
-                                let max_debris_hit = ((state.destruct_cfg.max_debris as f32 * debris_scale).round() as u32).max(8);
-                                let seed = splitmix64(&mut rng) as u64;
+                                let max_debris_hit =
+                                    ((state.destruct_cfg.max_debris as f32 * debris_scale).round()
+                                        as u32)
+                                        .max(8);
+                                let seed = splitmix64(&mut rng);
                                 let out = server_core::destructible::carve_and_spawn_debris(
                                     grid,
                                     center,
@@ -413,12 +418,15 @@ impl ApplicationHandler for App {
                                     o.z + vm * (d.z as f64 * 0.5),
                                 );
                                 // Per-impact randomization
-                                let mut rng = (state.destruct_cfg.seed as u64)
-                                    ^ (state.impact_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                                let mut rng = state.destruct_cfg.seed
+                                    ^ state.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
                                 let radius_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
                                 let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
-                                let max_debris_hit = ((state.destruct_cfg.max_debris as f32 * debris_scale).round() as u32).max(8);
-                                let seed = splitmix64(&mut rng) as u64;
+                                let max_debris_hit =
+                                    ((state.destruct_cfg.max_debris as f32 * debris_scale).round()
+                                        as u32)
+                                        .max(8);
+                                let seed = splitmix64(&mut rng);
                                 let out = server_core::destructible::carve_and_spawn_debris(
                                     grid,
                                     center,
@@ -480,8 +488,8 @@ impl ApplicationHandler for App {
                                     o.z as f32 + 48.0 * vm,
                                 );
                                 // Base RNG for the burst
-                                let mut base_rng = (state.destruct_cfg.seed as u64)
-                                    ^ (state.impact_id as u64).wrapping_mul(0xD2B7_4407_B1CE_6E93);
+                                let mut base_rng = state.destruct_cfg.seed
+                                    ^ state.impact_id.wrapping_mul(0xD2B7_4407_B1CE_6E93);
                                 for _ in 0..hits {
                                     let mut r = splitmix64(&mut base_rng);
                                     // Random u,v on face
@@ -494,8 +502,12 @@ impl ApplicationHandler for App {
                                     // Random radius / debris / seed
                                     let radius_m = lerp(0.22, 0.45, rand01(&mut r)) as f64;
                                     let debris_scale = lerp(0.60, 1.40, rand01(&mut r));
-                                    let max_debris_hit = ((state.destruct_cfg.max_debris as f32 * debris_scale).round() as u32).max(8);
-                                    let seed = splitmix64(&mut r) as u64;
+                                    let max_debris_hit = ((state.destruct_cfg.max_debris as f32
+                                        * debris_scale)
+                                        .round()
+                                        as u32)
+                                        .max(8);
+                                    let seed = splitmix64(&mut r);
                                     let center = DVec3::new(px as f64, py as f64, pz as f64);
                                     let out = server_core::destructible::carve_and_spawn_debris(
                                         grid,
@@ -513,11 +525,14 @@ impl ApplicationHandler for App {
                                     enq_total += enq_len;
                                     for (i, p) in out.positions_m.iter().enumerate() {
                                         if (state.debris.len() as u32) < state.debris_capacity {
-                                            let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                                            let pos =
+                                                glam::vec3(p.x as f32, p.y as f32, p.z as f32);
                                             let vel = out
                                                 .velocities_mps
                                                 .get(i)
-                                                .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                                                .map(|v| {
+                                                    glam::vec3(v.x as f32, v.y as f32, v.z as f32)
+                                                })
                                                 .unwrap_or(glam::Vec3::Y * 2.5);
                                             state.debris.push(crate::gfx::Debris {
                                                 pos,

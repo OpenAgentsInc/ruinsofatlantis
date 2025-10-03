@@ -34,7 +34,9 @@ fn rand01(s: &mut u64) -> f32 {
 }
 
 #[inline]
-fn lerp(a: f32, b: f32, t: f32) -> f32 { a + (b - a) * t }
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
 
 impl Renderer {
     #[inline]
@@ -727,8 +729,7 @@ impl Renderer {
             let impact = o + vc * vm;
             // Demo: jitter radius per impact when in vox_onepath mode; otherwise use default
             let mut radius = if is_demo {
-                let mut rng = (self.destruct_cfg.seed as u64)
-                    ^ (self.impact_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let mut rng = self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
                 let r_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
                 core_units::Length::meters(r_m)
             } else {
@@ -774,16 +775,17 @@ impl Renderer {
             );
             // Demo: vary seed and per-impact debris cap in vox_onepath mode
             let (seed, max_debris_hit) = if is_demo {
-                let mut rng = (self.destruct_cfg.seed as u64)
-                    ^ (self.impact_id as u64).wrapping_mul(0xA24B_A1AC_B9F1_3F7B);
+                let mut rng = self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0xA24B_A1AC_B9F1_3F7B);
                 let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
-                let cap = ((self.destruct_cfg.max_debris as f32 * debris_scale).round() as u32).max(8) as usize;
-                let seed = splitmix64(&mut rng) as u64;
+                let cap = ((self.destruct_cfg.max_debris as f32 * debris_scale).round() as u32)
+                    .max(8) as usize;
+                let seed = splitmix64(&mut rng);
                 (seed, cap)
             } else {
                 (self.destruct_cfg.seed, self.destruct_cfg.max_debris)
             };
-            let out = carve_and_spawn_debris(grid, impact, radius, seed, self.impact_id, max_debris_hit);
+            let out =
+                carve_and_spawn_debris(grid, impact, radius, seed, self.impact_id, max_debris_hit);
             // Optional: append JSONL replay record (native builds only)
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref path) = self.destruct_cfg.replay_log {
