@@ -2388,8 +2388,8 @@ impl Renderer {
                 let _ = before; // reserved for future events
             }
         }
-        // Destructible: ruins -> voxelize on first impact, then carve
-        {
+        // Destructible: ruins -> voxelize on first impact, then carve (one‑path demo only)
+        if self.vox_onepath_ui.is_some() {
             // If we already have a voxel grid (from a prior impact), carve it.
             if let Some(grid) = self.voxel_grid.as_mut() {
                 let _out = carve_and_spawn_debris(
