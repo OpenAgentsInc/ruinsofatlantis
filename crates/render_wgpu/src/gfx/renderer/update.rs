@@ -17,6 +17,27 @@ use std::time::Instant;
 use web_time::Instant;
 use wgpu::util::DeviceExt;
 
+// Tiny deterministic RNG for demo variations (no external deps)
+#[inline]
+fn splitmix64(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+#[inline]
+fn rand01(s: &mut u64) -> f32 {
+    let r = splitmix64(s);
+    ((r >> 40) as u32) as f32 / (1u32 << 24) as f32
+}
+
+#[inline]
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
 impl Renderer {
     #[inline]
     pub(crate) fn wrap_angle(a: f32) -> f32 {
@@ -637,6 +658,7 @@ impl Renderer {
     }
 
     pub(crate) fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
+        let is_demo = self.is_vox_onepath();
         let Some(grid) = self.voxel_grid.as_mut() else {
             return;
         };
@@ -705,7 +727,15 @@ impl Renderer {
                 hit.voxel.z as f64 + 0.5,
             );
             let impact = o + vc * vm;
-            let mut radius = self.destruct_cfg.voxel_size_m * 2.0;
+            // Demo: jitter radius per impact when in vox_onepath mode; otherwise use default
+            let mut radius = if is_demo {
+                let mut rng =
+                    self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let r_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
+                core_units::Length::meters(r_m)
+            } else {
+                self.destruct_cfg.voxel_size_m * 2.0
+            };
             // Guardrail: clamp radius so chunks touched <= max_carve_chunks
             if let Some(maxc) = self.destruct_cfg.max_carve_chunks {
                 let mut tries = 0;
@@ -744,14 +774,20 @@ impl Renderer {
                 impact.z,
                 radius.0
             );
-            let out = carve_and_spawn_debris(
-                grid,
-                impact,
-                radius,
-                self.destruct_cfg.seed,
-                self.impact_id,
-                self.destruct_cfg.max_debris,
-            );
+            // Demo: vary seed and per-impact debris cap in vox_onepath mode
+            let (seed, max_debris_hit) = if is_demo {
+                let mut rng =
+                    self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0xA24B_A1AC_B9F1_3F7B);
+                let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
+                let cap = ((self.destruct_cfg.max_debris as f32 * debris_scale).round() as u32)
+                    .max(8) as usize;
+                let seed = splitmix64(&mut rng);
+                (seed, cap)
+            } else {
+                (self.destruct_cfg.seed, self.destruct_cfg.max_debris)
+            };
+            let out =
+                carve_and_spawn_debris(grid, impact, radius, seed, self.impact_id, max_debris_hit);
             // Optional: append JSONL replay record (native builds only)
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref path) = self.destruct_cfg.replay_log {
