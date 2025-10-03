@@ -11,9 +11,9 @@ use ra_assets::types::AnimClip;
 use rand::Rng as _;
 // use destructible via fully-qualified path
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
-use voxel_proxy::{voxelize_surface_fill, VoxelProxyMeta};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 use wgpu::util::DeviceExt;
@@ -178,7 +178,7 @@ impl Renderer {
 
     #[inline]
     fn segment_hits_any_proxy(&self, p0: glam::Vec3, p1: glam::Vec3) -> Option<(usize, f32)> {
-        if self.ruin_voxels.is_empty() {
+        if self.destr_voxels.is_empty() {
             return None;
         }
         let d = p1 - p0;
@@ -188,7 +188,7 @@ impl Renderer {
         }
         let dir = d / seg_len;
         let mut best: Option<(usize, f32)> = None;
-        for (ri, rv) in &self.ruin_voxels {
+        for (ri, rv) in &self.destr_voxels {
             let (bmin, bmax) = Self::grid_world_aabb(&rv.grid);
             if let Some((t, _)) = Self::ray_box_intersect(p0, dir, bmin, bmax)
                 && t <= seg_len
@@ -320,34 +320,66 @@ impl Renderer {
         };
         // Mark surface hits by tri-box SAT in voxel space
         let mut surf = vec![0u8; (dims.x * dims.y * dims.z) as usize];
-        let idx = |x: u32, y: u32, z: u32| -> usize { (x + y * dims.x + z * dims.x * dims.y) as usize };
+        let idx =
+            |x: u32, y: u32, z: u32| -> usize { (x + y * dims.x + z * dims.x * dims.y) as usize };
         #[inline]
-        fn tri_intersects_box(a: glam::Vec3, b: glam::Vec3, c: glam::Vec3, center: glam::Vec3, half: f32) -> bool {
-            let v0 = a - center; let v1 = b - center; let v2 = c - center;
-            let e0 = v1 - v0; let e1 = v2 - v1; let e2 = v0 - v2;
+        fn tri_intersects_box(
+            a: glam::Vec3,
+            b: glam::Vec3,
+            c: glam::Vec3,
+            center: glam::Vec3,
+            half: f32,
+        ) -> bool {
+            let v0 = a - center;
+            let v1 = b - center;
+            let v2 = c - center;
+            let e0 = v1 - v0;
+            let e1 = v2 - v1;
+            let e2 = v0 - v2;
             let h = glam::Vec3::splat(half);
             let axes = [
-                glam::Vec3::new(0.0, -e0.z, e0.y), glam::Vec3::new(0.0, -e1.z, e1.y), glam::Vec3::new(0.0, -e2.z, e2.y),
-                glam::Vec3::new(e0.z, 0.0, -e0.x), glam::Vec3::new(e1.z, 0.0, -e1.x), glam::Vec3::new(e2.z, 0.0, -e2.x),
-                glam::Vec3::new(-e0.y, e0.x, 0.0), glam::Vec3::new(-e1.y, e1.x, 0.0), glam::Vec3::new(-e2.y, e2.x, 0.0),
+                glam::Vec3::new(0.0, -e0.z, e0.y),
+                glam::Vec3::new(0.0, -e1.z, e1.y),
+                glam::Vec3::new(0.0, -e2.z, e2.y),
+                glam::Vec3::new(e0.z, 0.0, -e0.x),
+                glam::Vec3::new(e1.z, 0.0, -e1.x),
+                glam::Vec3::new(e2.z, 0.0, -e2.x),
+                glam::Vec3::new(-e0.y, e0.x, 0.0),
+                glam::Vec3::new(-e1.y, e1.x, 0.0),
+                glam::Vec3::new(-e2.y, e2.x, 0.0),
             ];
             for ax in axes.iter() {
                 if ax.length_squared() > 1e-12 {
-                    let p0 = v0.dot(*ax); let p1 = v1.dot(*ax); let p2 = v2.dot(*ax);
+                    let p0 = v0.dot(*ax);
+                    let p1 = v1.dot(*ax);
+                    let p2 = v2.dot(*ax);
                     let r = h.x * ax.x.abs() + h.y * ax.y.abs() + h.z * ax.z.abs();
-                    let minp = p0.min(p1.min(p2)); let maxp = p0.max(p1.max(p2));
-                    if minp > r || maxp < -r { return false; }
+                    let minp = p0.min(p1.min(p2));
+                    let maxp = p0.max(p1.max(p2));
+                    if minp > r || maxp < -r {
+                        return false;
+                    }
                 }
             }
             let minv = glam::Vec3::new(
-                v0.x.min(v1.x.min(v2.x)), v0.y.min(v1.y.min(v2.y)), v0.z.min(v1.z.min(v2.z)),
+                v0.x.min(v1.x.min(v2.x)),
+                v0.y.min(v1.y.min(v2.y)),
+                v0.z.min(v1.z.min(v2.z)),
             );
             let maxv = glam::Vec3::new(
-                v0.x.max(v1.x.max(v2.x)), v0.y.max(v1.y.max(v2.y)), v0.z.max(v1.z.max(v2.z)),
+                v0.x.max(v1.x.max(v2.x)),
+                v0.y.max(v1.y.max(v2.y)),
+                v0.z.max(v1.z.max(v2.z)),
             );
-            if minv.x > h.x || maxv.x < -h.x { return false; }
-            if minv.y > h.y || maxv.y < -h.y { return false; }
-            if minv.z > h.z || maxv.z < -h.z { return false; }
+            if minv.x > h.x || maxv.x < -h.x {
+                return false;
+            }
+            if minv.y > h.y || maxv.y < -h.y {
+                return false;
+            }
+            if minv.z > h.z || maxv.z < -h.z {
+                return false;
+            }
             let n = e0.cross(e1);
             let d = -n.dot(v0);
             let rb = h.x * n.x.abs() + h.y * n.y.abs() + h.z * n.z.abs();
@@ -355,32 +387,76 @@ impl Renderer {
             s.abs() <= rb
         }
         // Transform triangles to voxel space
-        let to_vox = |p: glam::Vec3| glam::vec3((p.x - bmin.x) / vm, (p.y - bmin.y) / vm, (p.z - bmin.z) / vm);
+        let to_vox = |p: glam::Vec3| {
+            glam::vec3(
+                (p.x - bmin.x) / vm,
+                (p.y - bmin.y) / vm,
+                (p.z - bmin.z) / vm,
+            )
+        };
         for [a_w, b_w, c_w] in tris.into_iter() {
-            let a = to_vox(a_w); let b = to_vox(b_w); let c = to_vox(c_w);
-            let minv = glam::vec3(a.x.min(b.x.min(c.x)), a.y.min(b.y.min(c.y)), a.z.min(b.z.min(c.z)));
-            let maxv = glam::vec3(a.x.max(b.x.max(c.x)), a.y.max(b.y.max(c.y)), a.z.max(b.z.max(c.z)));
-            let xi0 = minv.x.floor().max(0.0) as u32; let yi0 = minv.y.floor().max(0.0) as u32; let zi0 = minv.z.floor().max(0.0) as u32;
-            let xi1 = maxv.x.ceil().min((dims.x - 1) as f32) as u32; let yi1 = maxv.y.ceil().min((dims.y - 1) as f32) as u32; let zi1 = maxv.z.ceil().min((dims.z - 1) as f32) as u32;
-            for z in zi0..=zi1 { for y in yi0..=yi1 { for x in xi0..=xi1 {
-                let center = glam::vec3(x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5);
-                if tri_intersects_box(a, b, c, center, 0.5) { surf[idx(x, y, z)] = 1; }
-            }}}
+            let a = to_vox(a_w);
+            let b = to_vox(b_w);
+            let c = to_vox(c_w);
+            let minv = glam::vec3(
+                a.x.min(b.x.min(c.x)),
+                a.y.min(b.y.min(c.y)),
+                a.z.min(b.z.min(c.z)),
+            );
+            let maxv = glam::vec3(
+                a.x.max(b.x.max(c.x)),
+                a.y.max(b.y.max(c.y)),
+                a.z.max(b.z.max(c.z)),
+            );
+            let xi0 = minv.x.floor().max(0.0) as u32;
+            let yi0 = minv.y.floor().max(0.0) as u32;
+            let zi0 = minv.z.floor().max(0.0) as u32;
+            let xi1 = maxv.x.ceil().min((dims.x - 1) as f32) as u32;
+            let yi1 = maxv.y.ceil().min((dims.y - 1) as f32) as u32;
+            let zi1 = maxv.z.ceil().min((dims.z - 1) as f32) as u32;
+            for z in zi0..=zi1 {
+                for y in yi0..=yi1 {
+                    for x in xi0..=xi1 {
+                        let center = glam::vec3(x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5);
+                        if tri_intersects_box(a, b, c, center, 0.5) {
+                            surf[idx(x, y, z)] = 1;
+                        }
+                    }
+                }
+            }
         }
         // Fill interior
         let grid = voxelize_surface_fill(meta, &surf, self.destruct_cfg.close_surfaces);
         // Seed colliders
-        let dims = grid.dims(); let csz = grid.meta().chunk; let nx = dims.x.div_ceil(csz.x); let ny = dims.y.div_ceil(csz.y); let nz = dims.z.div_ceil(csz.z);
+        let dims = grid.dims();
+        let csz = grid.meta().chunk;
+        let nx = dims.x.div_ceil(csz.x);
+        let ny = dims.y.div_ceil(csz.y);
+        let nz = dims.z.div_ceil(csz.z);
         let mut colliders = Vec::new();
-        for cz in 0..nz { for cy in 0..ny { for cx in 0..nx {
-            if let Some(sc) = chunkcol::build_chunk_collider(&grid, glam::UVec3::new(cx,cy,cz)) { colliders.push(sc); }
-        }}}
+        for cz in 0..nz {
+            for cy in 0..ny {
+                for cx in 0..nx {
+                    if let Some(sc) =
+                        chunkcol::build_chunk_collider(&grid, glam::UVec3::new(cx, cy, cz))
+                    {
+                        colliders.push(sc);
+                    }
+                }
+            }
+        }
         let static_index = Some(chunkcol::rebuild_static_index(&colliders));
-        crate::gfx::RuinVox { grid, chunk_queue: server_core::destructible::queue::ChunkQueue::new(), queue_len: 0, colliders, static_index }
+        crate::gfx::RuinVox {
+            grid,
+            chunk_queue: server_core::destructible::queue::ChunkQueue::new(),
+            queue_len: 0,
+            colliders,
+            static_index,
+        }
     }
 
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
-        if !self.ruin_voxels.contains_key(&ruin_idx) {
+        if !self.destr_voxels.contains_key(&ruin_idx) {
             self.hide_ruins_instance(ruin_idx);
             // Prefer real-mesh voxelization when available
             let mut rv = if self.destruct_meshes_cpu.is_empty() {
@@ -403,25 +479,21 @@ impl Renderer {
                 }
             }
             rv.queue_len = rv.chunk_queue.len();
-            while self
-                .ruin_voxels
-                .get(&ruin_idx)
-                .map(|rv2| rv2.queue_len)
-                .unwrap_or(0)
-                > 0
-            {
+            // Burst a few batches to ensure visibility; avoid clippy infinite-loop lint
+            for _ in 0..64 {
+                if rv.queue_len == 0 { break; }
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
-            self.ruin_voxels.insert(ruin_idx, rv);
+            self.destr_voxels.insert(ruin_idx, rv);
         }
-        self.ruin_voxels.get_mut(&ruin_idx).unwrap()
+        self.destr_voxels.get_mut(&ruin_idx).unwrap()
     }
 
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
         if budget == 0 {
             return;
         }
-        let Some(rv) = self.ruin_voxels.get_mut(&ruin_idx) else {
+        let Some(rv) = self.destr_voxels.get_mut(&ruin_idx) else {
             return;
         };
         let chunks = rv.chunk_queue.pop_budget(budget);
@@ -481,14 +553,14 @@ impl Renderer {
     }
 
     fn process_all_ruin_queues(&mut self) {
-        if self.ruin_voxels.is_empty() {
+        if self.destr_voxels.is_empty() {
             return;
         }
         let mut remaining = self.destruct_cfg.max_chunk_remesh.max(1);
         if remaining == 0 {
             return;
         }
-        let keys: Vec<usize> = self.ruin_voxels.keys().copied().collect();
+        let keys: Vec<usize> = self.destr_voxels.keys().copied().collect();
         let n = keys.len();
         if n == 0 {
             return;
@@ -497,13 +569,13 @@ impl Renderer {
         while remaining > 0 {
             let ri = keys[idx % n];
             let before = self
-                .ruin_voxels
+                .destr_voxels
                 .get(&ri)
                 .map(|rv| rv.queue_len)
                 .unwrap_or(0);
             self.process_one_ruin_vox(ri, 1);
             let after = self
-                .ruin_voxels
+                .destr_voxels
                 .get(&ri)
                 .map(|rv| rv.queue_len)
                 .unwrap_or(0);
@@ -511,7 +583,7 @@ impl Renderer {
                 remaining = remaining.saturating_sub(1);
             }
             idx += 1;
-            if self.ruin_voxels.values().all(|rv| rv.queue_len == 0) {
+            if self.destr_voxels.values().all(|rv| rv.queue_len == 0) {
                 break;
             }
         }
@@ -674,7 +746,7 @@ impl Renderer {
         let _ = self.get_or_spawn_ruin_proxy(ruin_idx);
         // Carve at current surface via DDA along segment
         let (out_opt, dirty_opt) = {
-            if let Some(rv) = self.ruin_voxels.get_mut(&ruin_idx) {
+            if let Some(rv) = self.destr_voxels.get_mut(&ruin_idx) {
                 let grid = &mut rv.grid;
                 let seg = p1 - p0;
                 let len = seg.length();
@@ -729,7 +801,7 @@ impl Renderer {
             if let Some(dirty) = dirty_opt
                 && !dirty.is_empty()
             {
-                if let Some(rv2) = self.ruin_voxels.get_mut(&ruin_idx) {
+                if let Some(rv2) = self.destr_voxels.get_mut(&ruin_idx) {
                     rv2.chunk_queue.enqueue_many(dirty);
                     rv2.queue_len = rv2.chunk_queue.len();
                 }

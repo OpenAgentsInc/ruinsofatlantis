@@ -320,7 +320,7 @@ pub struct Renderer {
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
     // Multi‑proxy: one voxel proxy per destructible instance
-    ruin_voxels: HashMap<usize, VoxProxy>,
+    destr_voxels: HashMap<usize, VoxProxy>,
     // Per-frame metrics for overlay
     vox_last_chunks: usize,
     vox_queue_len: usize,

@@ -3,12 +3,12 @@
 //! - `new_core` contains the full constructor body (moved here).
 //! - `new_renderer` remains a thin wrapper used by `gfx::Renderer::new`.
 
+use crate::gfx::asset_path;
 use anyhow::Context;
 #[cfg(not(target_arch = "wasm32"))]
 use data_runtime::zone::load_zone_manifest;
 use data_runtime::{loader as data_loader, zone::ZoneManifest};
 use ra_assets::skinning::load_gltf_skinned;
-use crate::gfx::asset_path;
 use rand::Rng as _;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
 use glam::{DVec3, UVec3};
@@ -27,8 +27,8 @@ use winit::window::Window;
 // Bring parent gfx modules into scope so the moved body compiles unchanged.
 use crate::gfx::types::{Globals, Model, VertexSkinned};
 use crate::gfx::{
-    anim, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks,
-    ruins, scene, sky, terrain, ui, util, zombies,
+    anim, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks, ruins, scene,
+    sky, terrain, ui, util, zombies,
 };
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
@@ -1447,7 +1447,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_onepath_ui: None,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
-        ruin_voxels: std::collections::HashMap::new(),
+        destr_voxels: std::collections::HashMap::new(),
         destruct_meshes_cpu: Vec::new(),
         destruct_instances: Vec::new(),
         voxel_model_bg,
@@ -1626,7 +1626,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 renderer.destruct_instances.push(di);
             }
         } else {
-            log::warn!("destructibles: failed to load ruins.gltf CPU mesh; falling back to box proxy when needed");
+            log::warn!(
+                "destructibles: failed to load ruins.gltf CPU mesh; falling back to box proxy when needed"
+            );
         }
     }
 
