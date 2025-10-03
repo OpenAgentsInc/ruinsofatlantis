@@ -12,6 +12,7 @@ use crate::gfx::types::{Instance, InstanceSkin};
 use ecs_core::{RenderKind, Transform, World};
 use ra_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
+use ra_assets::gltf::load_gltf_mesh;
 
 pub struct SceneBuild {
     #[allow(dead_code)]
@@ -29,6 +30,9 @@ pub struct SceneBuild {
     pub wizard_instances_cpu: Vec<InstanceSkin>,
     /// Index of the player character (PC) among wizards; others are NPCs.
     pub pc_index: usize,
+    // Generic destructibles registry
+    pub destruct_meshes_cpu: Vec<crate::gfx::DestructMeshCpu>,
+    pub destruct_instances: Vec<crate::gfx::DestructInstance>,
 }
 
 pub fn build_demo_scene(
@@ -224,7 +228,7 @@ pub fn build_demo_scene(
         wizard_count: wiz_instances.len() as u32,
         ruins_instances,
         ruins_count: ruin_instances.len() as u32,
-        ruins_instances_cpu: ruin_instances,
+        ruins_instances_cpu: ruin_instances.clone(),
         joints_per_wizard,
         wizard_anim_index,
         wizard_time_offset,
@@ -232,6 +236,83 @@ pub fn build_demo_scene(
         wizard_models,
         wizard_instances_cpu: wiz_instances,
         pc_index: 0,
+        // Seed destructible registry: mark all ruins as destructible using ruins.gltf
+        destruct_meshes_cpu: {
+            // Load ruins mesh CPU once
+            let path = crate::gfx::asset_path("assets/models/ruins.gltf");
+            let mut v = Vec::new();
+            if let Ok(cpu) = load_gltf_mesh(&path) {
+                // local AABB
+                let mut lmin = glam::Vec3::splat(f32::INFINITY);
+                let mut lmax = glam::Vec3::splat(f32::NEG_INFINITY);
+                for vert in &cpu.vertices {
+                    let p = glam::Vec3::from(vert.pos);
+                    lmin = lmin.min(p);
+                    lmax = lmax.max(p);
+                }
+                v.push(crate::gfx::DestructMeshCpu {
+                    positions: cpu.vertices.iter().map(|vv| vv.pos).collect(),
+                    indices: cpu.indices.iter().map(|&i| i as u32).collect(),
+                    local_min: [lmin.x, lmin.y, lmin.z],
+                    local_max: [lmax.x, lmax.y, lmax.z],
+                });
+            } else {
+                // Mesh load failed; keep empty and let runtime fall back to AABB proxy
+            }
+            v
+        },
+        destruct_instances: {
+            let mut insts = Vec::new();
+            if !ruin_instances.clone().is_empty() {
+                // Compute world-space AABB per ruins instance
+                // For world AABB we can derive from local_min/max if mesh present; else set a small box
+                let (lm, l_max) = if let Some(dm) = 
+                    // shadow borrow ends at if scope
+                    {
+                        // hack: re-load path to fetch same local AABB; safe as tiny cost in builder
+                        let path = crate::gfx::asset_path("assets/models/ruins.gltf");
+                        if let Ok(cpu) = load_gltf_mesh(&path) {
+                            let mut lmin = glam::Vec3::splat(f32::INFINITY);
+                            let mut lmax = glam::Vec3::splat(f32::NEG_INFINITY);
+                            for vert in &cpu.vertices {
+                                let p = glam::Vec3::from(vert.pos);
+                                lmin = lmin.min(p);
+                                lmax = lmax.max(p);
+                            }
+                            Some(([lmin.x, lmin.y, lmin.z], [lmax.x, lmax.y, lmax.z]))
+                        } else { None }
+                    }
+                {
+                    (glam::Vec3::from(dm.0), glam::Vec3::from(dm.1))
+                } else {
+                    (glam::vec3(-3.0, -0.2, -3.0), glam::vec3(3.0, 2.8, 3.0))
+                };
+                for (i, inst) in ruin_instances.iter().enumerate() {
+                    let model = glam::Mat4::from_cols_array_2d(&inst.model);
+                    let corners = [
+                        glam::vec3(lm.x,lm.y,lm.z), glam::vec3(l_max.x,lm.y,lm.z),
+                        glam::vec3(lm.x,l_max.y,lm.z), glam::vec3(l_max.x,l_max.y,lm.z),
+                        glam::vec3(lm.x,lm.y,l_max.z), glam::vec3(l_max.x,lm.y,l_max.z),
+                        glam::vec3(lm.x,l_max.y,l_max.z), glam::vec3(l_max.x,l_max.y,l_max.z),
+                    ];
+                    let mut wmin = glam::Vec3::splat(f32::INFINITY);
+                    let mut wmax = glam::Vec3::splat(f32::NEG_INFINITY);
+                    for c in corners.iter() {
+                        let wc = model.transform_point3(*c);
+                        wmin = wmin.min(wc);
+                        wmax = wmax.max(wc);
+                    }
+                    insts.push(crate::gfx::DestructInstance {
+                        mesh_id: 0,
+                        model,
+                        source: crate::gfx::DestructSource::Ruins(i),
+                        world_min: [wmin.x, wmin.y, wmin.z],
+                        world_max: [wmax.x, wmax.y, wmax.z],
+                    });
+                }
+            }
+            insts
+        },
     }
 }
 

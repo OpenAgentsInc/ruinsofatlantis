@@ -143,6 +143,7 @@ impl Renderer {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn segment_hits_ruins(&self, p0: glam::Vec3, p1: glam::Vec3) -> Option<(usize, f32)> {
         if self.ruins_instances_cpu.is_empty() {
             return None;
@@ -177,6 +178,7 @@ impl Renderer {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn segment_hits_any_proxy(&self, p0: glam::Vec3, p1: glam::Vec3) -> Option<(usize, f32)> {
         if self.destr_voxels.is_empty() {
             return None;
@@ -230,8 +232,122 @@ impl Renderer {
         hit
     }
 
+    // Combined selector: proxies first (nearest), then any destructible instance (cached AABBs)
+    fn find_destructible_hit(
+        &self,
+        p0: glam::Vec3,
+        p1: glam::Vec3,
+    ) -> Option<(crate::gfx::DestructibleId, f32)> {
+        let pad = 0.25f32;
+        // 1) proxies first
+        let mut best: Option<(crate::gfx::DestructibleId, f32)> = None;
+        let d = p1 - p0;
+        for (did, vp) in &self.destr_voxels {
+            let (bmin, bmax) = Self::grid_world_aabb(&vp.grid);
+            let bmin = bmin - glam::Vec3::splat(pad);
+            let bmax = bmax + glam::Vec3::splat(pad);
+            let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok = true;
+            for i in 0..3 {
+                let s = p0[i]; let dirc = d[i]; let minb = bmin[i]; let maxb = bmax[i];
+                if dirc.abs() < 1e-6 { if s < minb || s > maxb { ok = false; break; } }
+                else { let inv = 1.0/dirc; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin=tmin.max(t0); tmax=tmax.min(t1); if tmin>tmax { ok=false; break; } }
+            }
+            if ok && best.is_none_or(|(_, tb)| tmin < tb) { best = Some((*did, tmin)); }
+        }
+        if best.is_some() { return best; }
+        // 2) instances fallback (skip any with an existing proxy)
+        for (i, di) in self.destruct_instances.iter().enumerate() {
+            let did = crate::gfx::DestructibleId(i);
+            if self.destr_voxels.contains_key(&did) { continue; }
+            let bmin = glam::Vec3::from(di.world_min) - glam::Vec3::splat(pad);
+            let bmax = glam::Vec3::from(di.world_max) + glam::Vec3::splat(pad);
+            let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok = true;
+            for i in 0..3 {
+                let s = p0[i]; let dirc = d[i]; let minb=bmin[i]; let maxb=bmax[i];
+                if dirc.abs() < 1e-6 { if s<minb || s>maxb { ok=false; break; } }
+                else { let inv=1.0/dirc; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin=tmin.max(t0); tmax=tmax.min(t1); if tmin>tmax { ok=false; break; } }
+            }
+            if ok && best.is_none_or(|(_, tb)| tmin < tb) { best = Some((did, tmin)); }
+        }
+        best
+    }
+
+    fn get_or_spawn_proxy(&mut self, did: crate::gfx::DestructibleId) -> &mut crate::gfx::VoxProxy {
+        // For now, reuse ruins-specific spawner; generic builder can be added later
+        self.get_or_spawn_ruin_proxy(did.0)
+    }
+
+    fn explode_fireball_against_destructible(
+        &mut self,
+        owner: Option<usize>,
+        p0: glam::Vec3,
+        p1: glam::Vec3,
+        did: crate::gfx::DestructibleId,
+        radius: f32,
+        damage: i32,
+    ) {
+        self.explode_fireball_at(owner, p1, radius, damage);
+        let seed0 = self.destruct_cfg.seed; let impact0 = self.impact_id; let max_debris0 = self.destruct_cfg.max_debris;
+        let vp = self.get_or_spawn_proxy(did);
+        let seg = p1 - p0; let len = seg.length(); if len < 1e-6 { return; }
+        let vm = vp.grid.voxel_m().0 as f32; let (gmin, gmax) = Self::grid_world_aabb(&vp.grid);
+        // segment entry
+        let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok=true;
+        for i in 0..3 { let s=p0[i]; let dirc=seg[i]; let minb=gmin[i]; let maxb=gmax[i]; if dirc.abs()<1e-6 { if s<minb||s>maxb { ok=false; break; } } else { let inv=1.0/dirc; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin=tmin.max(t0); tmax=tmax.min(t1); if tmin>tmax { ok=false; break; } } }
+        if !ok { return; }
+        let p_entry = p0 + seg * (tmin + (vm * 1e-3) / len);
+        if let Some(hit) = server_core::destructible::raycast_voxels(
+            &vp.grid,
+            glam::DVec3::new(p_entry.x as f64, p_entry.y as f64, p_entry.z as f64),
+            glam::DVec3::new(seg.x as f64, seg.y as f64, seg.z as f64).normalize(),
+            core_units::Length::meters(len as f64 + (vm as f64) * 4.0),
+        ) {
+            let vc = glam::DVec3::new(hit.voxel.x as f64 + 0.5, hit.voxel.y as f64 + 0.5, hit.voxel.z as f64 + 0.5);
+            let impact = vp.grid.origin_m() + vc * vp.grid.voxel_m().0;
+            let out = {
+                let g = &mut self.get_or_spawn_proxy(did).grid;
+                server_core::destructible::carve_and_spawn_debris(
+                    g,
+                    impact,
+                    core_units::Length::meters((radius * 0.25) as f64),
+                    seed0 ^ impact0,
+                    impact0,
+                    max_debris0,
+                )
+            };
+            self.impact_id = self.impact_id.wrapping_add(1);
+            // Pop dirty chunks without holding a mutable borrow across updates
+            let dirty = {
+                let vp2 = self.get_or_spawn_proxy(did);
+                vp2.grid.pop_dirty_chunks(usize::MAX)
+            };
+            if !dirty.is_empty() {
+                let updates: Vec<_> = {
+                    let vp2 = self.get_or_spawn_proxy(did);
+                    dirty.iter().filter_map(|c| chunkcol::build_chunk_collider(&vp2.grid, *c)).collect()
+                };
+                if !updates.is_empty() {
+                    chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
+                    let idx = chunkcol::rebuild_static_index(&self.chunk_colliders);
+                    self.static_index = Some(idx);
+                }
+                let vp2 = self.get_or_spawn_proxy(did);
+                vp2.chunk_queue.enqueue_many(dirty);
+                vp2.queue_len = vp2.chunk_queue.len();
+            }
+            for (i, p) in out.positions_m.iter().enumerate() {
+                if (self.debris.len() as u32) >= self.debris_capacity { break; }
+                let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                let vel = out.velocities_mps.get(i).map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32)).unwrap_or(glam::Vec3::Y * 2.5);
+                self.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+            }
+        }
+        self.process_all_ruin_queues();
+    }
+
     fn build_ruin_proxy_from_aabb(
         &self,
+        ruin_idx: usize,
         bmin: glam::Vec3,
         bmax: glam::Vec3,
     ) -> crate::gfx::RuinVox {
@@ -255,7 +371,7 @@ impl Renderer {
             (center.z - 0.5 * dims.z as f32 * vm) as f64,
         );
         let meta = voxel_proxy::VoxelProxyMeta {
-            object_id: voxel_proxy::GlobalId(2),
+            object_id: voxel_proxy::GlobalId(1000u64 + ruin_idx as u64),
             origin_m: origin,
             voxel_m: core_units::Length::meters(vm as f64),
             dims,
@@ -302,7 +418,7 @@ impl Renderer {
         // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
         if self.destruct_meshes_cpu.is_empty() {
             let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
-            return self.build_ruin_proxy_from_aabb(bmin, bmax);
+            return self.build_ruin_proxy_from_aabb(ruin_idx, bmin, bmax);
         }
         let mesh = &self.destruct_meshes_cpu[0];
         let m = glam::Mat4::from_cols_array_2d(&self.ruins_instances_cpu[ruin_idx].model);
@@ -339,7 +455,7 @@ impl Renderer {
         };
         let origin = glam::DVec3::new(bmin.x as f64, bmin.y as f64, bmin.z as f64);
         let meta = VoxelProxyMeta {
-            object_id: voxel_proxy::GlobalId(2),
+            object_id: voxel_proxy::GlobalId(1000u64 + ruin_idx as u64),
             origin_m: origin,
             voxel_m: core_units::Length::meters(vm as f64),
             dims,
@@ -492,7 +608,7 @@ impl Renderer {
             // Prefer real-mesh voxelization when available
             let mut rv = if self.destruct_meshes_cpu.is_empty() {
                 let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
-                self.build_ruin_proxy_from_aabb(bmin, bmax)
+                self.build_ruin_proxy_from_aabb(ruin_idx, bmin, bmax)
             } else {
                 self.build_ruin_proxy_from_mesh(ruin_idx)
             };
@@ -766,6 +882,7 @@ impl Renderer {
         // If not handled by an existing grid, do nothing here; we only voxelize on explicit ruin hit.
     }
 
+    #[allow(dead_code)]
     fn explode_fireball_against_ruin(
         &mut self,
         owner: Option<usize>,
@@ -1242,28 +1359,12 @@ impl Renderer {
                 if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } = pr.kind {
                     let p0 = pr.pos - pr.vel * dt;
                     let p1 = pr.pos;
-                    // 1) collide vs existing voxel proxies first
-                    if let Some((ri, _t)) = self.segment_hits_any_proxy(p0, p1) {
-                        self.explode_fireball_against_ruin(
+                    if let Some((did, _t)) = self.find_destructible_hit(p0, p1) {
+                        self.explode_fireball_against_destructible(
                             pr.owner_wizard,
                             p0,
                             p1,
-                            ri,
-                            radius,
-                            damage,
-                        );
-                        self.projectiles.swap_remove(i);
-                        continue;
-                    }
-                    // 2) collide vs mesh ruins and spawn proxy on hit
-                    if let Some((ri, _t)) = self.segment_hits_ruins(p0, p1) {
-                        self.explode_fireball_on_segment(pr.owner_wizard, p0, p1, radius, damage);
-                        // Ensure voxel proxy points at this ruin (switch if needed) and carve via DDA
-                        self.explode_fireball_against_ruin(
-                            pr.owner_wizard,
-                            p0,
-                            p1,
-                            ri,
+                            did,
                             radius,
                             damage,
                         );
