@@ -27,6 +27,19 @@ In‑world interactions, not toggles. If a thing exists in the world—player, N
 
 No pay‑to‑win. Players cannot spend real money to gain character power or gameplay advantages. You cannot buy levels, stats, gear power, spells, skill points, or combat bonuses with cash. Monetization, where present, focuses on cosmetics, account services, or QoL that do not affect combat power or competitive fairness. We may consider an official real‑money marketplace in the future (e.g., escrowed player‑to‑player trading), but it will not introduce exclusive power, progression skips, or superior items for money.
 
+## Design Pillars
+
+- Freedom of action
+  - Cast while moving; projectiles are simulated; line‑of‑sight governs validity, not hard range cutoffs. Systems prefer physical causality over arbitrary toggles.
+- Low‑friction play
+  - Auto‑loot, minimal HUD by default, no monetization nags. Common actions flow with few clicks and limited mode switching.
+- Readable power fantasy
+  - Fewer, bigger spells with clear consequences and sane numbers. Progression is explainable at a glance.
+- World respect
+  - Avoid glowy waypoints. Prefer diegetic guidance (landmarks, scouts, signs). Mounts/NPCs behave believably.
+- Tactical positioning matters
+  - Enemies can hit each other; friendly fire exists; destruction changes cover and lines. Position and timing beat raw stat inflation.
+
 ## Game Mechanics
 
 Built on Dungeons & Dragons 5th Edition (SRD): iconic classes, races, spells, monsters, and d20 combat—fully implemented and tuned for a dangerous, persistent MMO world.
@@ -47,6 +60,108 @@ Players can earn coin and reputation by repairing damage in the world using SRD 
   - A brawl breaks a tavern door. A player with Carpenter’s Tools repairs it in‑world, earning 5 cp and +2 reputation with the Dock Ward. A wizard accompanying them uses Mending to fix cracked lantern glass for a small bonus.
 - Simulator note
   - Repairs are environment events the sim can schedule (restore object integrity, clear hazards), not combat stats. Policies can choose to prioritize repairs during lulls or after encounters.
+
+### Combat & Casting Principles
+
+- Line‑of‑Sight casting
+  - Targeted spells succeed if the raycast has LoS to the aim point or target. “Out of range” does not invalidate a valid LoS shot; range instead affects travel time and optional falloff.
+- Cast while moving
+  - You can move during casts. Sprinting applies small tradeoffs (e.g., +10–20% cast time, minor cone spread). Channels break under heavy disruption.
+- Fewer, heavier spells
+  - Four core combat slots plus one ultimate. Longer cooldowns (8–25s core; 60–120s ultimate) with high impact (stagger, elemental status, destructible interaction). Cantrips bias toward mobility/utility over DPS spam.
+- Friendly fire and physical lanes
+  - Projectiles collide with allies/enemies. AI avoids firing through allies at short range; players can bait enemy fire.
+- Default tunings (initial targets)
+  - Projectile falloff: −20% damage per 30 m beyond effective range; no hard stop.
+  - Moving‑cast penalty: +15% cast time; +10% cooldown; +10% spread for cone/bolt spells.
+
+### Spells, Focus, and Resource Feel
+
+- Focus resource
+  - A light resource that drains while sprint‑casting and refills quickly when steady. Movement and damage taken reduce Focus; landing precise hits restores a small amount.
+- Cooldowns as primary gate
+  - Core cooldowns 10–18 s; ultimate 60–120 s. Big casts have big consequences and readable wind‑ups.
+- Voxel interaction
+  - Spell ranks and Focus spent scale destructible effects (e.g., carve radius, ignite/soak, brittle/freeze) where appropriate.
+
+### Damage, Progression, and XP
+
+- Grounded numbers
+  - Early hits land at 10–60 damage, not thousands. Prefer tiers (Common/Elite/Boss) and resists over inflated health pools.
+- XP from combat and adventures
+  - Every enemy awards XP scaled by difficulty and streak/milestone bonuses. Quests/dungeons act as multipliers, not sole sources.
+- School proficiency
+  - Using a school (Fire, Frost, Force, etc.) grants small utility bonuses (e.g., −5% cooldown, +1 chain target, +0.2 s slow). Caps per region avoid grind; story beats grant bumps.
+
+### Input & UI
+
+- Hybrid cursor mode
+  - Hold a modifier (e.g., Alt/RB) to unlock the cursor for UI; otherwise remain in mouselook.
+- Immersion Mode
+  - Optional preset hides waypoints, quest arrows, damage numbers, and any store/live‑ops panels. Off by default; toggle in HUD settings.
+- Readable feedback
+  - Small hit markers (off by default), concise status icons (Burning/Frigid/Stagger), and an on‑demand combat log. Plain‑language descriptions throughout.
+
+### Navigation & Wayfinding
+
+- No glowy waypoints
+  - Use diegetic guidance: smoke plumes, flocking birds, NPC scouts, footprints, rune whispers, and strong landmarks. Offer a map as an inspectable “paper” item rather than a permanent overlay.
+- Guide NPCs
+  - Players can ask a Guide to escort them to a site; the Guide physically leads, choosing interesting, safe(ish) routes and pausing at hazards.
+
+### Mounts & Social Etiquette
+
+- Believable mounts
+  - Whistle summons from stables/nearby; mount runs to you; mount/dismount animations; no pop‑in beneath feet.
+- Settlement manners
+  - Auto‑dismount in town volumes and near authorities; some dialogues refuse while mounted; guards will bark if you ride indoors.
+
+### Loot & Economy
+
+- Auto‑loot magnet
+  - Auto‑pickup within ~2.5–4 m with rarity filters; expand radius while a key is held. No click‑spam.
+- Fair, transparent rewards
+  - Published loot tables; pity timers for extreme rares; bind‑on‑equip where it supports a healthy player economy. No monetized multipliers in core loops.
+
+### Boss & Encounter Design
+
+- Positioning and lanes
+  - Enemies can hit each other; destructible cover and friendly fire create tactical play. Boss immunity windows are short and clearly telegraphed.
+- Break bars & phases
+  - Encounters use stability/break mechanics and phase transitions instead of sponge HP. Ultimates interact strongly with break bars (e.g., deplete ~35–45% when well‑timed) rather than deleting health.
+
+### Visual Direction
+
+- Readability first
+  - Fewer details, clearer shapes, strong silhouettes. Effects communicate gameplay (color = element; shape = area; duration = linger). Triplanar texture for voxels and stylized materials for clarity.
+
+### Onboarding & Opening (Micro‑Sandbox)
+
+- First 10–15 minutes
+  - A compact space with two spells, one movement tool, a Guide NPC, and a destructible combat set piece. Teaches LoS casting, moving casts, friendly‑fire baiting, cover destruction, mount call, and Guide request. Rewards a third spell and first proficiency point upon completion.
+
+### Stats & Clarity
+
+- Plain‑language stats
+  - Stat cards explain exactly what each stat does and show before/after deltas. Keep core stats ≤ 6. Hover for effects (e.g., “+1 Control: +4% slow duration, +3% stun resist”).
+
+### Monetization Principles
+
+- Cosmetics and QoL only
+  - No loot boxes, no pay‑to‑win, no power gating. Cosmetics (dyes, pets, emotes), account services, and non‑combat QoL only. Paid expansions may add zones/dungeons/campaigns; base arcs remain accessible.
+
+### Player Experience Acceptance (Initial Targets)
+
+- Casting with clear LoS succeeds regardless of distance; travel time and falloff apply.
+- Casting while moving feels responsive; sprinting changes cast feel but not availability.
+- Auto‑loot by proximity works; minimal clicking.
+- Enemies can strike each other; players can bait friendly fire.
+- Early‑game numbers are grounded and legible; damage spam is optional or off.
+- Mobs grant meaningful XP; school proficiency advances utility.
+- No glowy waypoints; a Guide NPC can physically lead you.
+- Mount arrives believably; towns enforce etiquette.
+- Boss ultimates drive phase changes rather than single‑press kills.
+- HUD “Immersion Mode” hides non‑diegetic clutter (waypoints, sales).
 
 ## SRD Usage and Attribution
 
