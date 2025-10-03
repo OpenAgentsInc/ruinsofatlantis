@@ -246,28 +246,88 @@ impl Renderer {
             let (bmin, bmax) = Self::grid_world_aabb(&vp.grid);
             let bmin = bmin - glam::Vec3::splat(pad);
             let bmax = bmax + glam::Vec3::splat(pad);
-            let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok = true;
+            let mut tmin = 0.0f32;
+            let mut tmax = 1.0f32;
+            let mut ok = true;
             for i in 0..3 {
-                let s = p0[i]; let dirc = d[i]; let minb = bmin[i]; let maxb = bmax[i];
-                if dirc.abs() < 1e-6 { if s < minb || s > maxb { ok = false; break; } }
-                else { let inv = 1.0/dirc; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin=tmin.max(t0); tmax=tmax.min(t1); if tmin>tmax { ok=false; break; } }
+                let s = p0[i];
+                let dirc = d[i];
+                let minb = bmin[i];
+                let maxb = bmax[i];
+                if dirc.abs() < 1e-6 {
+                    if s < minb || s > maxb {
+                        ok = false;
+                        break;
+                    }
+                } else {
+                    let inv = 1.0 / dirc;
+                    let mut t0 = (minb - s) * inv;
+                    let mut t1 = (maxb - s) * inv;
+                    if t0 > t1 {
+                        core::mem::swap(&mut t0, &mut t1);
+                    }
+                    tmin = tmin.max(t0);
+                    tmax = tmax.min(t1);
+                    if tmin > tmax {
+                        ok = false;
+                        break;
+                    }
+                }
             }
-            if ok && best.is_none_or(|(_, tb)| tmin < tb) { best = Some((*did, tmin)); }
+            if ok && best.is_none_or(|(_, tb)| tmin < tb) {
+                best = Some((*did, tmin));
+            }
         }
-        if best.is_some() { return best; }
+        if best.is_some() {
+            if let Some((did, t)) = best {
+                log::info!("[destruct] select(proxy) did={:?} t={:.3}", did, t);
+            }
+            return best;
+        }
         // 2) instances fallback (skip any with an existing proxy)
         for (i, di) in self.destruct_instances.iter().enumerate() {
             let did = crate::gfx::DestructibleId(i);
-            if self.destr_voxels.contains_key(&did) { continue; }
+            if self.destr_voxels.contains_key(&did) {
+                continue;
+            }
             let bmin = glam::Vec3::from(di.world_min) - glam::Vec3::splat(pad);
             let bmax = glam::Vec3::from(di.world_max) + glam::Vec3::splat(pad);
-            let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok = true;
+            let mut tmin = 0.0f32;
+            let mut tmax = 1.0f32;
+            let mut ok = true;
             for i in 0..3 {
-                let s = p0[i]; let dirc = d[i]; let minb=bmin[i]; let maxb=bmax[i];
-                if dirc.abs() < 1e-6 { if s<minb || s>maxb { ok=false; break; } }
-                else { let inv=1.0/dirc; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin=tmin.max(t0); tmax=tmax.min(t1); if tmin>tmax { ok=false; break; } }
+                let s = p0[i];
+                let dirc = d[i];
+                let minb = bmin[i];
+                let maxb = bmax[i];
+                if dirc.abs() < 1e-6 {
+                    if s < minb || s > maxb {
+                        ok = false;
+                        break;
+                    }
+                } else {
+                    let inv = 1.0 / dirc;
+                    let mut t0 = (minb - s) * inv;
+                    let mut t1 = (maxb - s) * inv;
+                    if t0 > t1 {
+                        core::mem::swap(&mut t0, &mut t1);
+                    }
+                    tmin = tmin.max(t0);
+                    tmax = tmax.min(t1);
+                    if tmin > tmax {
+                        ok = false;
+                        break;
+                    }
+                }
             }
-            if ok && best.is_none_or(|(_, tb)| tmin < tb) { best = Some((did, tmin)); }
+            if ok && best.is_none_or(|(_, tb)| tmin < tb) {
+                best = Some((did, tmin));
+            }
+        }
+        if let Some((did, t)) = best {
+            log::info!("[destruct] select(instance) did={:?} t={:.3}", did, t);
+        } else {
+            log::debug!("[destruct] select: no hit on proxies or instances");
         }
         best
     }
@@ -287,22 +347,76 @@ impl Renderer {
         damage: i32,
     ) {
         self.explode_fireball_at(owner, p1, radius, damage);
-        let seed0 = self.destruct_cfg.seed; let impact0 = self.impact_id; let max_debris0 = self.destruct_cfg.max_debris;
+        let seed0 = self.destruct_cfg.seed;
+        let impact0 = self.impact_id;
+        let max_debris0 = self.destruct_cfg.max_debris;
         let vp = self.get_or_spawn_proxy(did);
-        let seg = p1 - p0; let len = seg.length(); if len < 1e-6 { return; }
-        let vm = vp.grid.voxel_m().0 as f32; let (gmin, gmax) = Self::grid_world_aabb(&vp.grid);
+        let dims = vp.grid.dims();
+        log::info!(
+            "[destruct] carve: did={:?} grid dims={}x{}x{} vm={:.3}",
+            did, dims.x, dims.y, dims.z, vp.grid.voxel_m().0 as f32
+        );
+        let seg = p1 - p0;
+        let len = seg.length();
+        if len < 1e-6 {
+            log::warn!("[destruct] carve: zero-length segment; skipping");
+            return;
+        }
+        let vm = vp.grid.voxel_m().0 as f32;
+        let (gmin, gmax) = Self::grid_world_aabb(&vp.grid);
         // segment entry
-        let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok=true;
-        for i in 0..3 { let s=p0[i]; let dirc=seg[i]; let minb=gmin[i]; let maxb=gmax[i]; if dirc.abs()<1e-6 { if s<minb||s>maxb { ok=false; break; } } else { let inv=1.0/dirc; let mut t0=(minb-s)*inv; let mut t1=(maxb-s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin=tmin.max(t0); tmax=tmax.min(t1); if tmin>tmax { ok=false; break; } } }
-        if !ok { return; }
+        let mut tmin = 0.0f32;
+        let mut tmax = 1.0f32;
+        let mut ok = true;
+        for i in 0..3 {
+            let s = p0[i];
+            let dirc = seg[i];
+            let minb = gmin[i];
+            let maxb = gmax[i];
+            if dirc.abs() < 1e-6 {
+                if s < minb || s > maxb {
+                    ok = false;
+                    break;
+                }
+            } else {
+                let inv = 1.0 / dirc;
+                let mut t0 = (minb - s) * inv;
+                let mut t1 = (maxb - s) * inv;
+                if t0 > t1 {
+                    core::mem::swap(&mut t0, &mut t1);
+                }
+                tmin = tmin.max(t0);
+                tmax = tmax.min(t1);
+                if tmin > tmax {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if !ok {
+            log::warn!("[destruct] carve: no segment–AABB entry");
+            return;
+        }
         let p_entry = p0 + seg * (tmin + (vm * 1e-3) / len);
+        log::debug!(
+            "[destruct] carve: AABB entry t={:.3} p_entry=({:.2},{:.2},{:.2})",
+            tmin, p_entry.x, p_entry.y, p_entry.z
+        );
         if let Some(hit) = server_core::destructible::raycast_voxels(
             &vp.grid,
             glam::DVec3::new(p_entry.x as f64, p_entry.y as f64, p_entry.z as f64),
             glam::DVec3::new(seg.x as f64, seg.y as f64, seg.z as f64).normalize(),
             core_units::Length::meters(len as f64 + (vm as f64) * 4.0),
         ) {
-            let vc = glam::DVec3::new(hit.voxel.x as f64 + 0.5, hit.voxel.y as f64 + 0.5, hit.voxel.z as f64 + 0.5);
+            log::info!(
+                "[destruct] carve: DDA hit voxel=({}, {}, {})",
+                hit.voxel.x, hit.voxel.y, hit.voxel.z
+            );
+            let vc = glam::DVec3::new(
+                hit.voxel.x as f64 + 0.5,
+                hit.voxel.y as f64 + 0.5,
+                hit.voxel.z as f64 + 0.5,
+            );
             let impact = vp.grid.origin_m() + vc * vp.grid.voxel_m().0;
             let out = {
                 let g = &mut self.get_or_spawn_proxy(did).grid;
@@ -322,9 +436,18 @@ impl Renderer {
                 vp2.grid.pop_dirty_chunks(usize::MAX)
             };
             if !dirty.is_empty() {
+                log::info!(
+                    "[destruct] carve: did={:?} enq dirty={} debris+{}",
+                    did,
+                    dirty.len(),
+                    out.positions_m.len()
+                );
                 let updates: Vec<_> = {
                     let vp2 = self.get_or_spawn_proxy(did);
-                    dirty.iter().filter_map(|c| chunkcol::build_chunk_collider(&vp2.grid, *c)).collect()
+                    dirty
+                        .iter()
+                        .filter_map(|c| chunkcol::build_chunk_collider(&vp2.grid, *c))
+                        .collect()
                 };
                 if !updates.is_empty() {
                     chunkcol::swap_in_updates(&mut self.chunk_colliders, updates);
@@ -334,15 +457,35 @@ impl Renderer {
                 let vp2 = self.get_or_spawn_proxy(did);
                 vp2.chunk_queue.enqueue_many(dirty);
                 vp2.queue_len = vp2.chunk_queue.len();
+                log::debug!(
+                    "[destruct] queue: did={:?} len={} (post-enqueue)",
+                    did, vp2.queue_len
+                );
             }
             for (i, p) in out.positions_m.iter().enumerate() {
-                if (self.debris.len() as u32) >= self.debris_capacity { break; }
+                if (self.debris.len() as u32) >= self.debris_capacity {
+                    break;
+                }
                 let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
-                let vel = out.velocities_mps.get(i).map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32)).unwrap_or(glam::Vec3::Y * 2.5);
-                self.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+                let vel = out
+                    .velocities_mps
+                    .get(i)
+                    .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                    .unwrap_or(glam::Vec3::Y * 2.5);
+                self.debris.push(crate::gfx::Debris {
+                    pos,
+                    vel,
+                    age: 0.0,
+                    life: 2.5,
+                });
             }
+        } else {
+            log::warn!("[destruct] carve: DDA found no solid along segment inside grid");
         }
+        let before = self.voxel_meshes.len();
         self.process_all_ruin_queues();
+        let after = self.voxel_meshes.len();
+        log::info!("[destruct] mesh upload: chunks {} → {}", before, after);
     }
 
     fn build_ruin_proxy_from_aabb(
@@ -404,6 +547,10 @@ impl Renderer {
             }
         }
         let static_index = Some(chunkcol::rebuild_static_index(&colliders));
+        log::info!(
+            "[destruct] proxy(box) ruin={} dims={}x{}x{} vm={:.3}",
+            ruin_idx, dims.x, dims.y, dims.z, vm
+        );
         crate::gfx::RuinVox {
             grid,
             chunk_queue: server_core::destructible::queue::ChunkQueue::new(),
@@ -417,6 +564,7 @@ impl Renderer {
     fn build_ruin_proxy_from_mesh(&self, ruin_idx: usize) -> crate::gfx::RuinVox {
         // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
         if self.destruct_meshes_cpu.is_empty() {
+            log::warn!("[destruct] no CPU mesh; falling back to AABB proxy for ruin {}", ruin_idx);
             let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
             return self.build_ruin_proxy_from_aabb(ruin_idx, bmin, bmax);
         }
@@ -430,6 +578,11 @@ impl Renderer {
             let c = m.transform_point3(glam::Vec3::from(mesh.positions[tri[2] as usize]));
             tris.push([a, b, c]);
         }
+        log::info!(
+            "[destruct] proxy(mesh) ruin={} tris={}",
+            ruin_idx,
+            tris.len()
+        );
         // World AABB from triangles
         let mut bmin = glam::Vec3::splat(f32::INFINITY);
         let mut bmax = glam::Vec3::splat(f32::NEG_INFINITY);
@@ -570,7 +723,19 @@ impl Renderer {
             }
         }
         // Fill interior
+        // Count surf hits for debug
+        let surf_hits = surf.iter().filter(|b| **b != 0).count();
         let grid = voxelize_surface_fill(meta, &surf, self.destruct_cfg.close_surfaces);
+        let solid = grid.solid_count();
+        log::info!(
+            "[destruct] voxelize: ruin={} surf_hits={} solid={} dims={}x{}x{}",
+            ruin_idx,
+            surf_hits,
+            solid,
+            grid.dims().x,
+            grid.dims().y,
+            grid.dims().z
+        );
         // Seed colliders
         let dims = grid.dims();
         let csz = grid.meta().chunk;
@@ -604,6 +769,7 @@ impl Renderer {
             .destr_voxels
             .contains_key(&crate::gfx::DestructibleId(ruin_idx))
         {
+            log::info!("[destruct] spawn proxy for ruin {}", ruin_idx);
             self.hide_ruins_instance(ruin_idx);
             // Prefer real-mesh voxelization when available
             let mut rv = if self.destruct_meshes_cpu.is_empty() {
@@ -618,23 +784,40 @@ impl Renderer {
             let nx = dims.x.div_ceil(csz.x);
             let ny = dims.y.div_ceil(csz.y);
             let nz = dims.z.div_ceil(csz.z);
+            let mut enq = 0usize;
             for cz in 0..nz {
                 for cy in 0..ny {
                     for cx in 0..nx {
                         rv.chunk_queue.enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                        enq += 1;
                     }
                 }
             }
             rv.queue_len = rv.chunk_queue.len();
-            // Burst a few batches to ensure visibility; avoid clippy infinite-loop lint
+            log::info!("[destruct] queued {} chunks for ruin {}", enq, ruin_idx);
+            // Insert proxy before bursting so meshing can find it in the map
+            self.destr_voxels
+                .insert(crate::gfx::DestructibleId(ruin_idx), rv);
+            // Burst a few batches to ensure visibility
             for _ in 0..64 {
-                if rv.queue_len == 0 {
+                if self
+                    .destr_voxels
+                    .get(&crate::gfx::DestructibleId(ruin_idx))
+                    .is_some_and(|vp| vp.queue_len == 0)
+                {
                     break;
                 }
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
-            self.destr_voxels
-                .insert(crate::gfx::DestructibleId(ruin_idx), rv);
+            let total = self
+                .voxel_meshes
+                .keys()
+                .filter(|(id, _, _, _)| id.0 == ruin_idx)
+                .count();
+            log::info!(
+                "[destruct] uploaded {} chunk meshes for ruin {} (initial)",
+                total, ruin_idx
+            );
         }
         self.destr_voxels
             .get_mut(&crate::gfx::DestructibleId(ruin_idx))
@@ -657,6 +840,8 @@ impl Renderer {
             return;
         }
         let grid = &rv.grid;
+        let mut inserted = 0usize;
+        let mut removed = 0usize;
         for c in &chunks {
             let key = (crate::gfx::DestructibleId(ruin_idx), c.x, c.y, c.z);
             let h = grid.chunk_occ_hash(*c);
@@ -668,6 +853,7 @@ impl Renderer {
                 self.voxel_meshes.remove(&key);
                 self.voxel_hashes.remove(&key);
                 rv.colliders.retain(|sc| sc.coord != *c);
+                removed += 1;
             } else {
                 let mut verts: Vec<crate::gfx::types::Vertex> =
                     Vec::with_capacity(mb.positions.len());
@@ -702,9 +888,17 @@ impl Renderer {
                     chunkcol::swap_in_updates(&mut rv.colliders, vec![sc]);
                     rv.static_index = Some(chunkcol::rebuild_static_index(&rv.colliders));
                 }
+                inserted += 1;
             }
         }
         rv.queue_len = rv.chunk_queue.len();
+        log::debug!(
+            "[destruct] meshed ruin {}: +{} / -{} (queue left={})",
+            ruin_idx,
+            inserted,
+            removed,
+            rv.queue_len
+        );
     }
 
     fn process_all_ruin_queues(&mut self) {
@@ -993,6 +1187,7 @@ impl Renderer {
         if index >= self.ruins_instances_cpu.len() {
             return;
         }
+        log::info!("[destruct] hide ruins instance {}", index);
         // Zero-scale the instance model matrix to hide it
         let mut inst = self.ruins_instances_cpu[index];
         let m = glam::Mat4::from_scale_rotation_translation(
@@ -1360,6 +1555,7 @@ impl Renderer {
                     let p0 = pr.pos - pr.vel * dt;
                     let p1 = pr.pos;
                     if let Some((did, _t)) = self.find_destructible_hit(p0, p1) {
+                        log::info!("[destruct] hit did={:?}", did);
                         self.explode_fireball_against_destructible(
                             pr.owner_wizard,
                             p0,

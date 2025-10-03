@@ -10,9 +10,9 @@ use rand_chacha::ChaCha8Rng;
 use crate::gfx::terrain::TerrainCPU;
 use crate::gfx::types::{Instance, InstanceSkin};
 use ecs_core::{RenderKind, Transform, World};
+use ra_assets::gltf::load_gltf_mesh;
 use ra_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
-use ra_assets::gltf::load_gltf_mesh;
 
 pub struct SceneBuild {
     #[allow(dead_code)]
@@ -266,7 +266,7 @@ pub fn build_demo_scene(
             if !ruin_instances.clone().is_empty() {
                 // Compute world-space AABB per ruins instance
                 // For world AABB we can derive from local_min/max if mesh present; else set a small box
-                let (lm, l_max) = if let Some(dm) = 
+                let (lm, l_max) = if let Some(dm) =
                     // shadow borrow ends at if scope
                     {
                         // hack: re-load path to fetch same local AABB; safe as tiny cost in builder
@@ -280,9 +280,10 @@ pub fn build_demo_scene(
                                 lmax = lmax.max(p);
                             }
                             Some(([lmin.x, lmin.y, lmin.z], [lmax.x, lmax.y, lmax.z]))
-                        } else { None }
-                    }
-                {
+                        } else {
+                            None
+                        }
+                    } {
                     (glam::Vec3::from(dm.0), glam::Vec3::from(dm.1))
                 } else {
                     (glam::vec3(-3.0, -0.2, -3.0), glam::vec3(3.0, 2.8, 3.0))
@@ -290,10 +291,14 @@ pub fn build_demo_scene(
                 for (i, inst) in ruin_instances.iter().enumerate() {
                     let model = glam::Mat4::from_cols_array_2d(&inst.model);
                     let corners = [
-                        glam::vec3(lm.x,lm.y,lm.z), glam::vec3(l_max.x,lm.y,lm.z),
-                        glam::vec3(lm.x,l_max.y,lm.z), glam::vec3(l_max.x,l_max.y,lm.z),
-                        glam::vec3(lm.x,lm.y,l_max.z), glam::vec3(l_max.x,lm.y,l_max.z),
-                        glam::vec3(lm.x,l_max.y,l_max.z), glam::vec3(l_max.x,l_max.y,l_max.z),
+                        glam::vec3(lm.x, lm.y, lm.z),
+                        glam::vec3(l_max.x, lm.y, lm.z),
+                        glam::vec3(lm.x, l_max.y, lm.z),
+                        glam::vec3(l_max.x, l_max.y, lm.z),
+                        glam::vec3(lm.x, lm.y, l_max.z),
+                        glam::vec3(l_max.x, lm.y, l_max.z),
+                        glam::vec3(lm.x, l_max.y, l_max.z),
+                        glam::vec3(l_max.x, l_max.y, l_max.z),
                     ];
                     let mut wmin = glam::Vec3::splat(f32::INFINITY);
                     let mut wmax = glam::Vec3::splat(f32::NEG_INFINITY);

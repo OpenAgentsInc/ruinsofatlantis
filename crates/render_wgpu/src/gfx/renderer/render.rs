@@ -551,6 +551,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         // Voxel chunk meshes (if any)
         if !r.voxel_meshes.is_empty() {
+            log::debug!("[draw] voxel meshes: {} chunks", r.voxel_meshes.len());
             let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
