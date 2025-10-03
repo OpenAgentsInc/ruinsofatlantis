@@ -3,6 +3,7 @@
 //! - `new_core` contains the full constructor body (moved here).
 //! - `new_renderer` remains a thin wrapper used by `gfx::Renderer::new`.
 
+use crate::gfx::asset_path;
 use anyhow::Context;
 #[cfg(not(target_arch = "wasm32"))]
 use data_runtime::zone::load_zone_manifest;
@@ -26,8 +27,8 @@ use winit::window::Window;
 // Bring parent gfx modules into scope so the moved body compiles unchanged.
 use crate::gfx::types::{Globals, Model, VertexSkinned};
 use crate::gfx::{
-    anim, asset_path, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks,
-    ruins, scene, sky, terrain, ui, util, zombies,
+    anim, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks, ruins, scene,
+    sky, terrain, ui, util, zombies,
 };
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
@@ -1446,7 +1447,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_onepath_ui: None,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
-        ruin_voxels: std::collections::HashMap::new(),
+        destr_voxels: std::collections::HashMap::new(),
+        destruct_meshes_cpu: scene_build.destruct_meshes_cpu,
+        destruct_instances: scene_build.destruct_instances,
         voxel_model_bg,
         debris_vb,
         debris_ib,
@@ -1602,6 +1605,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         renderer.dk_count = 0;
         renderer.dk_id = None;
     }
+
+    // Note: generic destructibles should be provided by SceneBuild.
 
     Ok(renderer)
 }
