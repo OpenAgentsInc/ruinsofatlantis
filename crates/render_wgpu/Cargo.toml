@@ -38,6 +38,7 @@ core_materials = { version = "0.1.0", path = "../core_materials" }
 web-sys = { version = "0.3.70", features = ["Window", "Location"] }
 png = "0.17"
 half = "2"
+env_logger = "0.11.5"
 
 [dev-dependencies]
 sha2 = "0.10.9"

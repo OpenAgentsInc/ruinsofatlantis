@@ -363,7 +363,8 @@ impl ApplicationHandler for App {
                             log::info!("[onepath] reset block");
                         }
                     }
-                    PhysicalKey::Code(KeyCode::KeyC) => { // force carve fallback path
+                    PhysicalKey::Code(KeyCode::KeyC) => {
+                        // force carve fallback path
                         if pressed {
                             let pre = state.vox_queue_len;
                             let pre_debris = state.debris.len();
@@ -397,14 +398,23 @@ impl ApplicationHandler for App {
                                             .get(i)
                                             .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
                                             .unwrap_or(glam::Vec3::Y * 2.5);
-                                        state.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+                                        state.debris.push(crate::gfx::Debris {
+                                            pos,
+                                            vel,
+                                            age: 0.0,
+                                            life: 2.5,
+                                        });
                                     }
                                 }
                             }
                             self.script.shot = true;
                             self.script.carved = state.vox_queue_len > pre;
                             self.script.saved = false;
-                            log::info!("[onepath] forced center carve enq={} debris+{}", state.vox_queue_len - pre, state.debris.len().saturating_sub(pre_debris));
+                            log::info!(
+                                "[onepath] forced center carve enq={} debris+{}",
+                                state.vox_queue_len - pre,
+                                state.debris.len().saturating_sub(pre_debris)
+                            );
                         }
                     }
                     PhysicalKey::Code(KeyCode::KeyP) => {
@@ -439,7 +449,7 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
     let bytes_per_pixel = 8u32; // RGBA16F
     let unpadded = w * bytes_per_pixel;
     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-    let padded = unpadded.div_ceil(align);
+    let padded = unpadded.div_ceil(align) * align;
     let buf_size = (padded * h) as u64;
     let readback = r.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vox_onepath-readback"),

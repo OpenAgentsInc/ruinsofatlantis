@@ -4942,6 +4942,7 @@ dependencies = [
  "core_units",
  "data_runtime",
  "ecs_core",
+ "env_logger",
  "glam 0.30.8",
  "gltf",
  "half",
