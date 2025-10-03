@@ -1,4 +1,15 @@
 //! Client glue: input state and a simple third‑person controller.
+//!
+//! Scaffolds added for replication and GPU upload coordination live in
+//! `replication`, `upload`, and `systems` modules.
+
+#![deny(warnings, clippy::all, clippy::pedantic)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::missing_panics_doc,
+    clippy::missing_errors_doc,
+    clippy::struct_excessive_bools
+)]
 
 pub mod input {
     #[derive(Default, Debug, Clone, Copy)]
@@ -26,6 +37,7 @@ pub mod controller {
         pub yaw: f32,
     }
     impl PlayerController {
+        #[must_use]
         pub fn new(initial_pos: Vec3) -> Self {
             Self {
                 pos: initial_pos,
@@ -63,3 +75,10 @@ pub mod controller {
         x
     }
 }
+
+/// Replication apply scaffolding and buffers.
+pub mod replication;
+/// Placeholder for client-side systems (prediction/lag-comp/etc.).
+pub mod systems;
+/// Mesh upload interface used by renderer or client runtime integration.
+pub mod upload;

@@ -1,5 +1,7 @@
 # 95A — Phase 0: Preflight Hygiene and Feature Gates
 
+Status: COMPLETE (landed; CI enforces both default and feature configs)
+
 Labels: refactor, cleanup, tech-debt
 Depends on: Epic #95 (ECS/server-authoritative)
 
@@ -104,3 +106,36 @@ Acceptance
 - Feature build: legacy behavior restored.
 - CI green for both configurations.
 - `cargo test` passes for both default and feature builds.
+
+---
+
+## Addendum — Implementation Summary (95A landed)
+
+What was implemented to satisfy 95A:
+
+- Feature flags (render_wgpu)
+  - Added `[features]` with `default = []` and:
+    - `legacy_client_carve` — gates client‑side voxel carve/collider/mesh/debris
+    - `vox_onepath_demo` — gates demo module and helpers; `[[bin]] vox_onepath` now `required-features = ["vox_onepath_demo"]`
+    - `destruct_debug` — gates verbose destructible logging
+- Feature flags (server_core)
+  - Added `destruct_debug` to mirror renderer logging control.
+- Demo and client mutation gating
+  - `crates/render_wgpu/src/gfx/vox_onepath.rs` compiled only under `vox_onepath_demo`; re‑export guarded in `gfx/mod.rs`.
+  - In `renderer/update.rs`:
+    - Demo helpers (`process_voxel_queues`, `build_voxel_grid_for_ruins`, `reset_voxel_and_replay`, `seed_voxel_chunk_colliders`) are behind `vox_onepath_demo` with no‑op stubs when disabled.
+    - Client mutation paths (`explode_fireball_against_destructible`, `explode_fireball_against_ruin`, ruin proxy spawn/mesh/colliders queue work) are behind `legacy_client_carve`.
+    - Call‑sites guarded; default build still shows explosion visuals on hits without mutating voxels.
+- Logging
+  - Added `destruct_log!` macro gated by `destruct_debug`; replaced high‑frequency `info!/debug!` destructible logs.
+- Tests
+  - Added unit tests for math helpers used in selection/collision: `Renderer::ray_box_intersect` and `segment_hits_circle_xz` (no WGPU).
+  - Added a default‑build feature sanity test (`crates/render_wgpu/tests/feature_flags.rs`) that asserts the mutation/demo features are disabled by default (test itself is gated to only run in no‑feature builds).
+- CI / Pre‑push
+  - Extended `xtask ci` to exercise both configurations:
+    - Default/no‑features: `check`, `clippy -D warnings`, `test` for `render_wgpu`.
+    - Feature combo `vox_onepath_demo,legacy_client_carve,destruct_debug`: `clippy -D warnings`, `test`, and build `vox_onepath` bin.
+  - Pre‑push hook (already calling `cargo xtask ci`) now covers these checks.
+- Verification
+  - Both default and feature builds pass `clippy -D warnings` and `cargo test`.
+  - Demo bin builds only when `vox_onepath_demo` is enabled.
