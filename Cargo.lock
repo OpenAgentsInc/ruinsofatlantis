@@ -2139,7 +2139,11 @@ dependencies = [
 name = "ecs_core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "core_materials",
  "glam 0.30.8",
+ "serde",
+ "voxel_proxy",
 ]
 
 [[package]]

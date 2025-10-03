@@ -65,3 +65,5 @@ impl Default for World {
         Self::new()
     }
 }
+pub mod components;
+pub use components::*;

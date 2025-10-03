@@ -1,5 +1,7 @@
 # 95B — Scaffolds: client_core and net_core crates
 
+Status: COMPLETE (scaffolds landed; CI enforces clippy/tests)
+
 Labels: infrastructure, networking
 Depends on: Epic #95 (ECS/server-authoritative)
 
@@ -47,3 +49,21 @@ Tasks
 
 Acceptance
 - Workspace builds with `client_core` and `net_core` present; clippy/tests green.
+
+---
+
+## Addendum — Implementation Summary (95B landed)
+
+What was implemented:
+- client_core
+  - Added strict lints with targeted allows.
+  - New modules: `replication` (buffer stub + test), `upload` (ChunkMeshEntry + MeshUpload trait + test), `systems` (placeholder + test).
+  - Wired modules in `lib.rs`; annotated `PlayerController::new` with `#[must_use]`.
+- net_core (new crate)
+  - Added `snapshot.rs` with `SnapshotEncode`/`SnapshotDecode`, `EntityHeader`, and `ChunkMeshDelta` (naive encode/decode + roundtrip test).
+  - Added `apply.rs` (`ReplicationApply` stub) and `interest.rs` (`InterestProvider` stub).
+  - Strict lints, crate smoke test.
+- Workspace
+  - Added `crates/net_core` to workspace members so CI covers it.
+- CI
+  - Existing `xtask ci` remains green; new crates now participate in clippy/tests.
