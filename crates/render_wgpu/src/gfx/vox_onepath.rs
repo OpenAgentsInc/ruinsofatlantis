@@ -120,12 +120,12 @@ impl ApplicationHandler for App {
             vox_offset: None,
         };
 
-        // Build a procedural voxel block grid (64x32x64), origin 6m forward.
+        // Build a procedural voxel block grid (64x32x64), origin 2m forward.
         let dims = UVec3::new(64, 32, 64);
         let vm = renderer.destruct_cfg.voxel_size_m;
         let meta = VoxelProxyMeta {
             object_id: GlobalId(1),
-            origin_m: DVec3::new(0.0, 0.0, 6.0),
+            origin_m: DVec3::new(0.0, 0.0, 2.0),
             voxel_m: vm,
             dims,
             chunk: renderer.destruct_cfg.chunk,
@@ -147,6 +147,8 @@ impl ApplicationHandler for App {
         let nz = dims.z.div_ceil(csz.z);
         renderer.voxel_grid = Some(grid.clone());
         renderer.voxel_grid_initial = Some(grid);
+        // Mark as vox_onepath so we use naive mesher + burst remesh from the first premesh
+        renderer.vox_onepath_ui = Some((false, false, false));
         for cz in 0..nz {
             for cy in 0..ny {
                 for cx in 0..nx {
@@ -159,13 +161,8 @@ impl ApplicationHandler for App {
         renderer.impact_id = 0;
         renderer.vox_queue_len = renderer.chunk_queue.len();
 
-        // Pre-mesh synchronously so the first frame shows geometry
-        let saved_budget = renderer.destruct_cfg.max_chunk_remesh;
-        renderer.destruct_cfg.max_chunk_remesh = 64;
-        while renderer.vox_queue_len > 0 {
-            renderer.process_voxel_queues();
-        }
-        renderer.destruct_cfg.max_chunk_remesh = saved_budget;
+        // For the demo, force-rebuild all chunk meshes immediately so the first frame shows geometry
+        force_remesh_all(&mut renderer);
 
         // Hide NPCs/wizards completely for a clean demo
         renderer.server.npcs.clear();
@@ -207,6 +204,96 @@ impl ApplicationHandler for App {
                         wgpu::SurfaceError::OutOfMemory => el.exit(),
                         e => eprintln!("render error: {e:?}"),
                     }
+                }
+
+                // Auto-carve once on the first frame so no input is required
+                if !self.script.shot {
+                    let aspect = state.size.width as f32 / state.size.height.max(1) as f32;
+                    let (off, look) = camera_sys::compute_local_orbit_offsets(
+                        state.cam_distance,
+                        state.cam_orbit_yaw,
+                        state.cam_orbit_pitch,
+                        state.cam_lift,
+                        state.cam_look_height,
+                    );
+                    let (cam, _g) = camera_sys::third_person_follow(
+                        &mut state.cam_follow,
+                        state.scene_inputs.pos(),
+                        glam::Quat::IDENTITY,
+                        off,
+                        look,
+                        aspect,
+                        0.0,
+                    );
+                    let p0 = cam.eye;
+                    let p1 = if let Some(ref grid) = state.voxel_grid {
+                        let vm = grid.voxel_m().0 as f32;
+                        let dims = grid.dims();
+                        let origin = grid.origin_m();
+                        let center = glam::vec3(
+                            (origin.x as f32) + (dims.x as f32 * vm * 0.5),
+                            (origin.y as f32) + (dims.y as f32 * vm * 0.5),
+                            (origin.z as f32) + (dims.z as f32 * vm * 0.5),
+                        );
+                        let dir = (center - p0).normalize_or_zero();
+                        p0 + dir * 10.0
+                    } else {
+                        p0 + glam::Vec3::Z
+                    };
+                    let pre = state.vox_queue_len;
+                    let pre_debris = state.debris.len();
+                    state.try_voxel_impact(p0, p1);
+                    if state.vox_queue_len == pre {
+                        // Minimal fallback: carve a small sphere at grid center
+                        if let Some(ref mut grid) = state.voxel_grid {
+                            let vm = grid.voxel_m().0;
+                            let d = grid.dims();
+                            let o = grid.origin_m();
+                            let center = DVec3::new(
+                                o.x + vm * (d.x as f64 * 0.5),
+                                o.y + vm * (d.y as f64 * 0.5),
+                                o.z + vm * (d.z as f64 * 0.5),
+                            );
+                            let out = server_core::destructible::carve_and_spawn_debris(
+                                grid,
+                                center,
+                                core_units::Length::meters(0.30),
+                                state.destruct_cfg.seed,
+                                state.impact_id,
+                                state.destruct_cfg.max_debris,
+                            );
+                            state.impact_id = state.impact_id.wrapping_add(1);
+                            let enq = grid.pop_dirty_chunks(usize::MAX);
+                            state.chunk_queue.enqueue_many(enq);
+                            state.vox_queue_len = state.chunk_queue.len();
+                            for (i, p) in out.positions_m.iter().enumerate() {
+                                if (state.debris.len() as u32) < state.debris_capacity {
+                                    let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                                    let vel = out
+                                        .velocities_mps
+                                        .get(i)
+                                        .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                                        .unwrap_or(glam::Vec3::Y * 2.5);
+                                    state.debris.push(crate::gfx::Debris {
+                                        pos,
+                                        vel,
+                                        age: 0.0,
+                                        life: 2.5,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    // Immediately rebuild all chunk meshes for the demo
+                    force_remesh_all(state);
+                    self.script.shot = true;
+                    self.script.carved = state.vox_queue_len > pre;
+                    self.script.saved = false;
+                    log::info!(
+                        "[onepath] auto carve enq={} debris+{}",
+                        state.vox_queue_len - pre,
+                        state.debris.len().saturating_sub(pre_debris)
+                    );
                 }
 
                 // When remesh queue drains, save a screenshot once.
@@ -355,6 +442,8 @@ impl ApplicationHandler for App {
                                     state.debris.len().saturating_sub(pre_debris)
                                 );
                             }
+                            // Demo-only: rebuild all chunk meshes immediately so the change is visible next frame
+                            force_remesh_all(state);
                             // end fallback
                             self.script.shot = true;
                             self.script.carved = state.vox_queue_len > pre;
@@ -412,6 +501,8 @@ impl ApplicationHandler for App {
                                     }
                                 }
                             }
+                            // Demo-only: rebuild all chunk meshes immediately
+                            force_remesh_all(state);
                             self.script.shot = true;
                             self.script.carved = state.vox_queue_len > pre;
                             self.script.saved = false;
@@ -531,12 +622,12 @@ fn save_screenshot(r: &mut Renderer, path: &PathBuf) -> Result<()> {
 }
 
 fn reset_to_block(renderer: &mut Renderer) {
-    // Procedural voxel block grid 6m ahead
+    // Procedural voxel block grid 2m ahead
     let dims = UVec3::new(64, 32, 64);
     let vm = renderer.destruct_cfg.voxel_size_m;
     let meta = VoxelProxyMeta {
         object_id: GlobalId(1),
-        origin_m: DVec3::new(0.0, 0.0, 4.0),
+        origin_m: DVec3::new(0.0, 0.0, 2.0),
         voxel_m: vm,
         dims,
         chunk: renderer.destruct_cfg.chunk,
@@ -556,29 +647,65 @@ fn reset_to_block(renderer: &mut Renderer) {
     renderer.debris_count = 0;
     renderer.voxel_grid = Some(grid.clone());
     renderer.voxel_grid_initial = Some(grid);
-    // Enqueue all chunks
-    let dims = renderer.voxel_grid.as_ref().unwrap().dims();
-    let csz = renderer.voxel_grid.as_ref().unwrap().meta().chunk;
+    renderer.vox_onepath_ui = Some((false, false, false));
+    // Demo-only: rebuild all chunk meshes immediately
+    force_remesh_all(renderer);
+}
+
+// Demo-only: rebuild all chunk meshes from the CPU grid immediately and upload to GPU
+fn force_remesh_all(r: &mut Renderer) {
+    use wgpu::util::DeviceExt as _;
+    let Some(grid) = r.voxel_grid.as_ref() else { return; };
+
+    // Clear existing GPU meshes and hashes so we don't draw stale buffers
+    r.voxel_meshes.clear();
+    r.voxel_hashes.clear();
+
+    // Iterate every chunk and build a fresh mesh with the simple (naive) mesher
+    let dims = grid.dims();
+    let csz = grid.meta().chunk;
     let nx = dims.x.div_ceil(csz.x);
     let ny = dims.y.div_ceil(csz.y);
     let nz = dims.z.div_ceil(csz.z);
-    renderer.chunk_queue = server_core::destructible::queue::ChunkQueue::new();
+
     for cz in 0..nz {
         for cy in 0..ny {
             for cx in 0..nx {
-                renderer
-                    .chunk_queue
-                    .enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                let c = glam::UVec3::new(cx, cy, cz);
+                let mb = voxel_mesh::naive_mesh_chunk(grid, c);
+
+                // Interleave to match gfx::types::Vertex { pos, nrm }
+                let mut verts: Vec<crate::gfx::types::Vertex> =
+                    Vec::with_capacity(mb.positions.len());
+                for (i, p) in mb.positions.iter().enumerate() {
+                    let n = mb.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
+                    verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
+                }
+
+                let vb = r.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("vox_onepath-chunk-vb"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+                let ib = r.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("vox_onepath-chunk-ib"),
+                    contents: bytemuck::cast_slice(&mb.indices),
+                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                });
+
+                r.voxel_meshes.insert(
+                    (cx, cy, cz),
+                    crate::gfx::VoxelChunkMesh {
+                        vb,
+                        ib,
+                        idx: mb.indices.len() as u32,
+                    },
+                );
             }
         }
     }
-    renderer.impact_id = 0;
-    renderer.vox_queue_len = renderer.chunk_queue.len();
-    // Pre-mesh synchronously
-    let saved_budget = renderer.destruct_cfg.max_chunk_remesh;
-    renderer.destruct_cfg.max_chunk_remesh = 64;
-    while renderer.vox_queue_len > 0 {
-        renderer.process_voxel_queues();
-    }
-    renderer.destruct_cfg.max_chunk_remesh = saved_budget;
+
+    // Overlay counters: no queued work when we rebuild synchronously
+    r.vox_last_chunks = 0;
+    r.vox_queue_len = 0;
 }

@@ -823,8 +823,7 @@ impl Renderer {
                 // Skip meshing if occupancy hash hasn't changed
                 let key = (c.x, c.y, c.z);
                 let h = grid.chunk_occ_hash(*c);
-                if self.vox_onepath_ui.is_none()
-                    && self.voxel_hashes.get(&key).copied() == Some(h)
+                if self.vox_onepath_ui.is_none() && self.voxel_hashes.get(&key).copied() == Some(h)
                 {
                     skipped += 1;
                     continue;
@@ -841,13 +840,21 @@ impl Renderer {
                     // Evict cached hash so future solidification can't be skipped
                     self.voxel_hashes.remove(&key);
                 } else {
-                    let vb = self
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("voxel-chunk-vb"),
-                            contents: bytemuck::cast_slice(&mb.positions),
-                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                        });
+                    // Interleave positions + normals to match types::Vertex layout
+                    let mut verts: Vec<crate::gfx::types::Vertex> = Vec::with_capacity(mb.positions.len());
+                    for (i, p) in mb.positions.iter().enumerate() {
+                        let n = mb
+                            .normals
+                            .get(i)
+                            .copied()
+                            .unwrap_or([0.0, 1.0, 0.0]);
+                        verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
+                    }
+                    let vb = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("voxel-chunk-vb"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
                     let ib = self
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {

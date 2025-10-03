@@ -257,7 +257,8 @@ pub fn naive_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
         let nn = [n.x, n.y, n.z];
         mesh.normals.extend_from_slice(&[nn, nn, nn, nn]);
         // CCW
-        mesh.indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+        mesh.indices
+            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     };
     for z in zr.clone() {
         for y in yr.clone() {
