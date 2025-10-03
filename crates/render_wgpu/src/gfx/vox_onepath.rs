@@ -282,87 +282,110 @@ impl ApplicationHandler for App {
                                 p0 + (cam.target - cam.eye).normalize_or_zero() * 10.0
                             };
                             let pre = state.vox_queue_len;
-                            let pre_debris = state.debris.len();
+                            let _pre_debris = state.debris.len();
                             log::info!("[onepath] carve attempt from p0={:?} -> p1={:?}", p0, p1);
                             state.try_voxel_impact(p0, p1);
-                            // Fallback: if nothing enqueued, carve near the camera-facing surface
+                            // Fallback: if nothing enqueued, raycast into the current grid along the camera ray
                             if state.vox_queue_len == pre
                                 && let Some(ref mut grid) = state.voxel_grid
                             {
-                                let vm = grid.voxel_m().0 as f32;
-                                // Carve on the filled block, not the whole grid
-                                let o = grid.origin_m();
-                                let bmin = glam::vec3(
-                                    o.x as f32 + 16.0 * vm,
-                                    o.y as f32 + 0.0 * vm,
-                                    o.z as f32 + 16.0 * vm,
-                                );
-                                let bmax = glam::vec3(
-                                    o.x as f32 + 48.0 * vm,
-                                    o.y as f32 + 20.0 * vm,
-                                    o.z as f32 + 48.0 * vm,
-                                );
-                                // Pick a fresh impact on the camera-facing face each press
-                                // RNG derived from base seed + impact counter so impacts differ
-                                let mut rng = state.destruct_cfg.seed
-                                    ^ state.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
-                                let u = rand01(&mut rng);
-                                let v = rand01(&mut rng);
-                                let px = lerp(bmin.x + vm, bmax.x - vm, u);
-                                let py = lerp(bmin.y + vm, bmax.y - vm, v);
-                                // Gradually push deeper as impacts accumulate so we eventually chew through
-                                let layer = (state.impact_id % 16) as f32; // 0..15
-                                let depth = (0.6 + 0.8 * (layer / 15.0)) * vm; // ~0.6..1.4 voxels inward
-                                let pz = bmin.z + depth; // near Z face toward camera
-                                let center = DVec3::new(px as f64, py as f64, pz as f64);
-                                // Per-impact randomization (deterministic): radius, debris budget, seed
-                                let radius_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
-                                let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
-                                let max_debris_hit =
-                                    ((state.destruct_cfg.max_debris as f32 * debris_scale).round()
-                                        as u32)
-                                        .max(8);
-                                let seed = splitmix64(&mut rng);
-                                let out = server_core::destructible::carve_and_spawn_debris(
-                                    grid,
-                                    center,
-                                    core_units::Length::meters(radius_m),
-                                    seed,
-                                    state.impact_id,
-                                    max_debris_hit as usize,
-                                );
-                                state.impact_id = state.impact_id.wrapping_add(1);
-                                // enqueue dirty chunks
-                                let enq = grid.pop_dirty_chunks(usize::MAX);
-                                state.chunk_queue.enqueue_many(enq);
-                                state.vox_queue_len = state.chunk_queue.len();
-                                // immediate remesh so the change is visible next frame
-                                force_remesh_all(state);
-                                // stash debris
-                                for (i, p) in out.positions_m.iter().enumerate() {
-                                    if (state.debris.len() as u32) < state.debris_capacity {
-                                        let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
-                                        let vel = out
-                                            .velocities_mps
-                                            .get(i)
-                                            .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
-                                            .unwrap_or(glam::Vec3::Y * 2.5);
-                                        state.debris.push(crate::gfx::Debris {
-                                            pos,
-                                            vel,
-                                            age: 0.0,
-                                            life: 2.5,
-                                        });
+                                let dir = (p1 - p0).normalize_or_zero();
+                                if dir.length_squared() > 1e-6 {
+                                    // Use the shared DDA in server_core to find the first solid along the ray
+                                    let origin = DVec3::new(p0.x as f64, p0.y as f64, p0.z as f64);
+                                    let dir_m = DVec3::new(dir.x as f64, dir.y as f64, dir.z as f64);
+                                    // Max length: diagonal of the grid AABB
+                                    let vm = grid.voxel_m().0 as f32;
+                                    let d = grid.dims();
+                                    let ext = glam::vec3(d.x as f32 * vm, d.y as f32 * vm, d.z as f32 * vm);
+                                    let max_len = ext.length() as f64;
+                                    let max_len_m = core_units::Length::meters(max_len);
+                                    if let Some(hit) = server_core::destructible::raycast_voxels(grid, origin, dir_m, max_len_m) {
+                                        let o = grid.origin_m();
+                                        let vm = grid.voxel_m().0;
+                                        let vc = DVec3::new(
+                                            hit.voxel.x as f64 + 0.5,
+                                            hit.voxel.y as f64 + 0.5,
+                                            hit.voxel.z as f64 + 0.5,
+                                        );
+                                        let impact = o + vc * vm;
+                                        // Per‑press jitter for variety
+                                        let mut rng = state.destruct_cfg.seed
+                                            ^ state.impact_id.wrapping_mul(0xD2B7_4407_B1CE_6E93);
+                                        let radius_m = (0.26 + 0.22 * rand01(&mut rng)) as f64;
+                                        let seed = splitmix64(&mut rng);
+                                        // First impact at current surface
+                                        let mut total_debris = 0usize;
+                                        let out = server_core::destructible::carve_and_spawn_debris(
+                                            grid,
+                                            impact,
+                                            core_units::Length::meters(radius_m),
+                                            seed,
+                                            state.impact_id,
+                                            state.destruct_cfg.max_debris,
+                                        );
+                                        state.impact_id = state.impact_id.wrapping_add(1);
+                                        total_debris += out.positions_m.len();
+                                        let mut start = glam::vec3(impact.x as f32, impact.y as f32, impact.z as f32)
+                                            + dir * (radius_m as f32 * 0.9);
+                                        // Optional: drill a few steps deeper along the same ray this press
+                                        let drill_steps = 4usize;
+                                        for _ in 0..drill_steps {
+                                            if let Some(next) = server_core::destructible::raycast_voxels(
+                                                grid,
+                                                DVec3::new(start.x as f64, start.y as f64, start.z as f64),
+                                                dir_m,
+                                                max_len_m,
+                                            ) {
+                                                let vc2 = DVec3::new(
+                                                    next.voxel.x as f64 + 0.5,
+                                                    next.voxel.y as f64 + 0.5,
+                                                    next.voxel.z as f64 + 0.5,
+                                                );
+                                                let impact2 = o + vc2 * vm;
+                                                let r2 = (0.24 + 0.20 * rand01(&mut rng)) as f64;
+                                                let seed2 = splitmix64(&mut rng);
+                                                let out2 = server_core::destructible::carve_and_spawn_debris(
+                                                    grid,
+                                                    impact2,
+                                                    core_units::Length::meters(r2),
+                                                    seed2,
+                                                    state.impact_id,
+                                                    state.destruct_cfg.max_debris,
+                                                );
+                                                state.impact_id = state.impact_id.wrapping_add(1);
+                                                total_debris += out2.positions_m.len();
+                                                start = glam::vec3(impact2.x as f32, impact2.y as f32, impact2.z as f32)
+                                                    + dir * (r2 as f32 * 1.25);
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        // enqueue & show immediately
+                                        let enq = grid.pop_dirty_chunks(usize::MAX);
+                                        state.chunk_queue.enqueue_many(enq);
+                                        state.vox_queue_len = state.chunk_queue.len();
+                                        force_remesh_all(state);
+                                        // debris instances
+                                        for (i, p) in out.positions_m.iter().enumerate() {
+                                            if (state.debris.len() as u32) < state.debris_capacity {
+                                                let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
+                                                let vel = out
+                                                    .velocities_mps
+                                                    .get(i)
+                                                    .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
+                                                    .unwrap_or(glam::Vec3::Y * 2.5);
+                                                state.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+                                            }
+                                        }
+                                        log::info!(
+                                            "[onepath] raycast fallback hit r={:.2} debris+{}",
+                                            radius_m,
+                                            total_debris
+                                        );
                                     }
                                 }
-                                log::info!(
-                                    "[onepath] fallback carve at center enq={} debris+{}",
-                                    state.vox_queue_len - pre,
-                                    state.debris.len().saturating_sub(pre_debris)
-                                );
                             }
-                            // Demo-only: rebuild all chunk meshes immediately so the change is visible next frame
-                            force_remesh_all(state);
                             // end fallback
                             // Rebuild meshes regardless of whether the raycast hit or we used fallback
                             force_remesh_all(state);
