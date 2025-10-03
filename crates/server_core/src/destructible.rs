@@ -272,6 +272,8 @@ pub mod config {
         pub material: MaterialId,
         pub max_debris: usize,
         pub max_chunk_remesh: usize,
+        pub collider_budget_per_tick: usize,
+        pub aabb_pad_m: f64,
         pub close_surfaces: bool,
         pub profile: bool,
         pub seed: u64,
@@ -295,6 +297,8 @@ pub mod config {
                 material: find_material_id("stone").unwrap_or(MaterialId(0)),
                 max_debris: 3000,
                 max_chunk_remesh: 3,
+                collider_budget_per_tick: 2,
+                aabb_pad_m: 0.25,
                 close_surfaces: false,
                 profile: false,
                 seed: 0xC0FFEE,
@@ -313,12 +317,29 @@ pub mod config {
     }
 
     impl DestructibleConfig {
+        fn apply_file_defaults(&mut self) {
+            if let Ok(file) = data_runtime::configs::destructible::load_default() {
+                // Apply sensible clamped defaults from file
+                if file.voxel_size_m > 0.0 {
+                    self.voxel_size_m = Length::meters(file.voxel_size_m);
+                }
+                self.chunk = UVec3::new(file.chunk[0], file.chunk[1], file.chunk[2]);
+                self.aabb_pad_m = file.aabb_pad_m;
+                self.max_chunk_remesh = file.max_remesh_per_tick;
+                self.collider_budget_per_tick = file.collider_budget_per_tick;
+                self.max_debris = file.max_debris;
+                self.max_carve_chunks = Some(file.max_carve_chunks);
+                self.close_surfaces = file.close_surfaces;
+                self.seed = file.seed;
+            }
+        }
         pub fn from_args<I, S>(args: I) -> Self
         where
             I: IntoIterator<Item = S>,
             S: AsRef<str>,
         {
             let mut cfg = Self::default();
+            cfg.apply_file_defaults();
             let mut any_vox_flag = false;
             let mut it = args.into_iter();
             use std::sync::{
@@ -468,6 +489,19 @@ pub mod config {
             #[cfg(not(target_arch = "wasm32"))]
             if !any_vox_flag && cfg.voxel_model.is_none() {
                 cfg.demo_grid = true;
+            }
+            // Log effective configuration once
+            {
+                let seed = cfg.seed;
+                eprintln!(
+                    "[destructible] cfg: voxel={:.2}m chunk={}^3 pad={:.2}m budgets(remesh={},colliders={}) debris={} seed=0x{seed:08X}",
+                    f64::from(cfg.voxel_size_m),
+                    cfg.chunk.x,
+                    cfg.aabb_pad_m,
+                    cfg.max_chunk_remesh,
+                    cfg.collider_budget_per_tick,
+                    cfg.max_debris
+                );
             }
             cfg
         }

@@ -13,3 +13,5 @@ core_units = { version = "0.1.0", path = "../core_units" }
 glam = "0.30"
 rand = "0.9.2"
 voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
+data_runtime = { version = "0.1.0", path = "../data_runtime" }
+log = "0.4.28"

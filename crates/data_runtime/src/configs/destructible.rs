@@ -40,8 +40,12 @@ fn data_root() -> PathBuf {
 }
 
 fn clamp(mut cfg: DestructibleConfigFile) -> DestructibleConfigFile {
-    if cfg.voxel_size_m < 0.02 { cfg.voxel_size_m = 0.02; }
-    if cfg.max_remesh_per_tick > 256 { cfg.max_remesh_per_tick = 256; }
+    if cfg.voxel_size_m < 0.02 {
+        cfg.voxel_size_m = 0.02;
+    }
+    if cfg.max_remesh_per_tick > 256 {
+        cfg.max_remesh_per_tick = 256;
+    }
     cfg
 }
 
@@ -51,8 +55,7 @@ pub fn load_default() -> Result<DestructibleConfigFile> {
     if !path.is_file() {
         return Ok(DestructibleConfigFile::default());
     }
-    let txt = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let txt = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     let parsed: DestructibleConfigFile = toml::from_str(&txt).context("parse TOML")?;
     Ok(clamp(parsed))
 }
@@ -67,4 +70,3 @@ mod tests {
         assert!(cfg.chunk[0] >= 8);
     }
 }
-

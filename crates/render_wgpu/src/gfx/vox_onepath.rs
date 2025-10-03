@@ -206,6 +206,8 @@ impl ApplicationHandler for App {
             material: core_materials::find_material_id("stone").unwrap(),
             max_debris: 250,
             max_chunk_remesh: 3,
+            collider_budget_per_tick: 2,
+            aabb_pad_m: 0.25,
             close_surfaces: false,
             profile: false,
             seed: 12345,
