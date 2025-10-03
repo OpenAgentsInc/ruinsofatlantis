@@ -36,7 +36,7 @@ No pay‑to‑win. Players cannot spend real money to gain character power or ga
 - Readable power fantasy
   - Fewer, bigger spells with clear consequences and sane numbers. Progression is explainable at a glance.
 - World respect
-  - Avoid glowy waypoints. Prefer diegetic guidance (landmarks, scouts, signs). Mounts/NPCs behave believably.
+  - Avoid glowy waypoints. Prefer in‑world guidance (landmarks, scouts, signs). Mounts/NPCs behave believably.
 - Tactical positioning matters
   - Enemies can hit each other; friendly fire exists; destruction changes cover and lines. Position and timing beat raw stat inflation.
 
@@ -160,7 +160,7 @@ Players can earn coin and reputation by repairing damage in the world using SRD 
 ### Navigation & Wayfinding
 
 - No glowy waypoints
-  - Use diegetic guidance: smoke plumes, flocking birds, NPC scouts, footprints, rune whispers, and strong landmarks. Offer a map as an inspectable “paper” item rather than a permanent overlay.
+  - Use in‑world guidance: smoke plumes, flocking birds, NPC scouts, footprints, rune whispers, and strong landmarks. Offer a map as an inspectable “paper” item rather than a permanent overlay.
 - Guide NPCs
   - Players can ask a Guide to escort them to a site; the Guide physically leads, choosing interesting, safe(ish) routes and pausing at hazards.
 
@@ -216,7 +216,7 @@ Players can earn coin and reputation by repairing damage in the world using SRD 
 - No glowy waypoints; a Guide NPC can physically lead you.
 - Mount arrives believably; towns enforce etiquette.
 - Boss ultimates drive phase changes rather than single‑press kills.
-- HUD “Immersion Mode” hides non‑diegetic clutter (waypoints, sales).
+- HUD “Immersion Mode” hides out‑of‑world UI clutter (waypoints, sales).
 
 ## SRD Usage and Attribution
 
@@ -888,7 +888,7 @@ Concrete recommendation
 **Player Experience.**
 
 * Zones feel alive and consistent: changes persist across sessions.
-* Travel uses diegetic **connectors** (gates, docks, caves); brief hand‑off between zones.
+* Travel uses in‑world **connectors** (gates, docks, caves); brief hand‑off between zones.
 
 **Core Concepts.**
 
