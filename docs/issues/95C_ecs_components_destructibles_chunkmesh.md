@@ -29,6 +29,27 @@ Components
 Tasks
 - [ ] Implement components with derives (`Debug`, `Clone`, `Default` where useful) and rustdoc for mutability/ownership (server vs client).
 - [ ] Unit test creates a `ChunkMesh` with a single entry and verifies indexing.
+ - [ ] Add serde + hashing where replication will need it:
+   ```rust
+   #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+   pub struct DestructibleId(pub u64);
+   pub type ChunkKey = (u32,u32,u32);
+   ```
+ - [ ] Provide a helper for consistent keys:
+   ```rust
+   pub fn chunk_key(did: DestructibleId, c: glam::UVec3) -> (DestructibleId, u32,u32,u32) { (did, c.x, c.y, c.z) }
+   ```
+ - [ ] MeshCpu invariants and validation:
+   ```rust
+   impl MeshCpu {
+       pub fn validate(&self) -> anyhow::Result<()> {
+           anyhow::ensure!(self.positions.len() == self.normals.len(), "pos/normal len mismatch");
+           anyhow::ensure!(self.indices.len() % 3 == 0, "indices not multiple of 3");
+           Ok(())
+       }
+   }
+   ```
 
 Acceptance
 - Components available to `server_core`/`client_core`/`render_wgpu`; unit test passes.
+ - All new types derive `serde::{Serialize,Deserialize}` (optionally behind a `replication` feature if you prefer a lean default).
