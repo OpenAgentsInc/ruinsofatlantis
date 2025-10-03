@@ -4,7 +4,7 @@
 //! authoritative mutation for `VoxelProxy` and emits `ChunkDirty`/`ChunkMesh`
 //! updates; the client consumes `ChunkMesh` for GPU upload.
 
-use glam::{DVec3, UVec3};
+use glam::{DVec3, UVec3, Vec3};
 use std::collections::HashMap;
 
 /// Opaque entity identifier (server-assigned). Stable across replication.
@@ -83,6 +83,52 @@ pub type ChunkKey = (u32, u32, u32);
 /// Helper to build stable keys for per-destructible chunk maps.
 pub fn chunk_key(did: DestructibleId, c: UVec3) -> (DestructibleId, u32, u32, u32) {
     (did, c.x, c.y, c.z)
+}
+
+/// Health component for damage/death application.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Health {
+    pub hp: i32,
+    pub max: i32,
+}
+
+/// Team affiliation (used for friendly fire and aggro).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Team {
+    pub id: u32,
+}
+
+/// Collision shape for broad/narrow collision in server systems.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub enum CollisionShape {
+    Sphere {
+        center: Vec3,
+        radius: f32,
+    },
+    CapsuleY {
+        center: Vec3,
+        radius: f32,
+        half_height: f32,
+    },
+    Aabb {
+        min: Vec3,
+        max: Vec3,
+    },
+}
+
+/// Projectile component for authoritative integration and collision.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Projectile {
+    pub radius_m: f32,
+    pub damage: i32,
+    pub life_s: f32,
+    pub owner: EntityId,
+    pub pos: Vec3,
+    pub vel: Vec3,
 }
 
 #[cfg(test)]

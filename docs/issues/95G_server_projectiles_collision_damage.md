@@ -41,4 +41,20 @@ Tests
 
 Acceptance
 - Server tick produces deterministic hits and damage based on SpecDb; destructible hits enqueue `CarveRequest` for 95E.
- - Client still renders projectile visuals (prediction ok), and reconciles on hits once replication arrives.
+- Client still renders projectile visuals (prediction ok), and reconciles on hits once replication arrives.
+
+---
+
+## Addendum — Implementation Summary (95G partial)
+
+- server_core::systems
+  - Added `systems/projectiles.rs` with:
+    - `integrate(projectiles, dt)` returning segments.
+    - `collide_and_damage(..)` testing sphere hits for entities and AABB hits for destructibles, emitting `CarveRequest`.
+  - Unit tests:
+    - Sphere target loses hp deterministically when crossed by a segment.
+    - Destructible AABB emits a `CarveRequest` with expected `did` and radius.
+- ecs_core::components extended with:
+  - `Projectile`, `CollisionShape`, `Health`, and `Team` components.
+- Data specs for projectiles (95D portion) are TBD; current tests embed projectile params directly.
+Status: PARTIAL (ProjectileIntegrate + simple Collision + Damage landed with tests; data specs TBD)
