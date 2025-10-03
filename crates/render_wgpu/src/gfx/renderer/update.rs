@@ -11,6 +11,7 @@ use ra_assets::types::AnimClip;
 use rand::Rng as _;
 // use destructible via fully-qualified path
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
+use voxel_proxy::{voxelize_surface_fill, VoxelProxyMeta};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
@@ -177,10 +178,14 @@ impl Renderer {
 
     #[inline]
     fn segment_hits_any_proxy(&self, p0: glam::Vec3, p1: glam::Vec3) -> Option<(usize, f32)> {
-        if self.ruin_voxels.is_empty() { return None; }
+        if self.ruin_voxels.is_empty() {
+            return None;
+        }
         let d = p1 - p0;
         let seg_len = d.length();
-        if seg_len < 1e-6 { return None; }
+        if seg_len < 1e-6 {
+            return None;
+        }
         let dir = d / seg_len;
         let mut best: Option<(usize, f32)> = None;
         for (ri, rv) in &self.ruin_voxels {
@@ -188,13 +193,20 @@ impl Renderer {
             if let Some((t, _)) = Self::ray_box_intersect(p0, dir, bmin, bmax)
                 && t <= seg_len
             {
-                match best { Some((_, tb)) if t >= tb => {}, _ => best = Some((*ri, t)) }
+                match best {
+                    Some((_, tb)) if t >= tb => {}
+                    _ => best = Some((*ri, t)),
+                }
             }
         }
         best
     }
 
-    fn build_ruin_proxy_from_aabb(&self, bmin: glam::Vec3, bmax: glam::Vec3) -> crate::gfx::RuinVox {
+    fn build_ruin_proxy_from_aabb(
+        &self,
+        bmin: glam::Vec3,
+        bmax: glam::Vec3,
+    ) -> crate::gfx::RuinVox {
         let center = (bmin + bmax) * 0.5;
         let size = (bmax - bmin).max(glam::Vec3::splat(0.5));
         // Coarsen voxel size until cells <= ~400k
@@ -223,14 +235,30 @@ impl Renderer {
             material: self.destruct_cfg.material,
         };
         let mut grid = voxel_proxy::VoxelGrid::new(meta);
-        for z in 0..dims.z { for y in 0..dims.y { for x in 0..dims.x { grid.set(x,y,z,true); }}}
+        for z in 0..dims.z {
+            for y in 0..dims.y {
+                for x in 0..dims.x {
+                    grid.set(x, y, z, true);
+                }
+            }
+        }
         // Colliders
         let csz = grid.meta().chunk;
-        let nx = dims.x.div_ceil(csz.x); let ny = dims.y.div_ceil(csz.y); let nz = dims.z.div_ceil(csz.z);
+        let nx = dims.x.div_ceil(csz.x);
+        let ny = dims.y.div_ceil(csz.y);
+        let nz = dims.z.div_ceil(csz.z);
         let mut colliders = Vec::new();
-        for cz in 0..nz { for cy in 0..ny { for cx in 0..nx {
-            if let Some(sc) = chunkcol::build_chunk_collider(&grid, glam::UVec3::new(cx,cy,cz)) { colliders.push(sc); }
-        }}}
+        for cz in 0..nz {
+            for cy in 0..ny {
+                for cx in 0..nx {
+                    if let Some(sc) =
+                        chunkcol::build_chunk_collider(&grid, glam::UVec3::new(cx, cy, cz))
+                    {
+                        colliders.push(sc);
+                    }
+                }
+            }
+        }
         let static_index = Some(chunkcol::rebuild_static_index(&colliders));
         crate::gfx::RuinVox {
             grid,
@@ -241,17 +269,147 @@ impl Renderer {
         }
     }
 
+    // Build a proxy using the actual ruins mesh triangles transformed by the instance model
+    fn build_ruin_proxy_from_mesh(&self, ruin_idx: usize) -> crate::gfx::RuinVox {
+        // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
+        if self.destruct_meshes_cpu.is_empty() {
+            let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
+            return self.build_ruin_proxy_from_aabb(bmin, bmax);
+        }
+        let mesh = &self.destruct_meshes_cpu[0];
+        let m = glam::Mat4::from_cols_array_2d(&self.ruins_instances_cpu[ruin_idx].model);
+        // Transform positions to world
+        let mut tris: Vec<[glam::Vec3; 3]> = Vec::with_capacity(mesh.indices.len() / 3);
+        for tri in mesh.indices.chunks_exact(3) {
+            let a = m.transform_point3(glam::Vec3::from(mesh.positions[tri[0] as usize]));
+            let b = m.transform_point3(glam::Vec3::from(mesh.positions[tri[1] as usize]));
+            let c = m.transform_point3(glam::Vec3::from(mesh.positions[tri[2] as usize]));
+            tris.push([a, b, c]);
+        }
+        // World AABB from triangles
+        let mut bmin = glam::Vec3::splat(f32::INFINITY);
+        let mut bmax = glam::Vec3::splat(f32::NEG_INFINITY);
+        for [a, b, c] in &tris {
+            bmin = bmin.min(*a).min(*b).min(*c);
+            bmax = bmax.max(*a).max(*b).max(*c);
+        }
+        let mrg = 0.10;
+        bmin -= glam::Vec3::splat(mrg);
+        bmax += glam::Vec3::splat(mrg);
+        // Grid sizing with clamp
+        let size = (bmax - bmin).max(glam::Vec3::splat(0.5));
+        let mut vm = self.destruct_cfg.voxel_size_m.0 as f32;
+        const MAX_CELLS: u64 = 400_000;
+        let dims = loop {
+            let dx = ((size.x / vm).ceil().max(1.0) as u32).max(12);
+            let dy = ((size.y / vm).ceil().max(1.0) as u32).max(12);
+            let dz = ((size.z / vm).ceil().max(1.0) as u32).max(12);
+            if (dx as u64) * (dy as u64) * (dz as u64) <= MAX_CELLS {
+                break glam::UVec3::new(dx, dy, dz);
+            }
+            vm *= 1.25;
+        };
+        let origin = glam::DVec3::new(bmin.x as f64, bmin.y as f64, bmin.z as f64);
+        let meta = VoxelProxyMeta {
+            object_id: voxel_proxy::GlobalId(2),
+            origin_m: origin,
+            voxel_m: core_units::Length::meters(vm as f64),
+            dims,
+            chunk: self.destruct_cfg.chunk.min(dims.max(glam::UVec3::splat(1))),
+            material: self.destruct_cfg.material,
+        };
+        // Mark surface hits by tri-box SAT in voxel space
+        let mut surf = vec![0u8; (dims.x * dims.y * dims.z) as usize];
+        let idx = |x: u32, y: u32, z: u32| -> usize { (x + y * dims.x + z * dims.x * dims.y) as usize };
+        #[inline]
+        fn tri_intersects_box(a: glam::Vec3, b: glam::Vec3, c: glam::Vec3, center: glam::Vec3, half: f32) -> bool {
+            let v0 = a - center; let v1 = b - center; let v2 = c - center;
+            let e0 = v1 - v0; let e1 = v2 - v1; let e2 = v0 - v2;
+            let h = glam::Vec3::splat(half);
+            let axes = [
+                glam::Vec3::new(0.0, -e0.z, e0.y), glam::Vec3::new(0.0, -e1.z, e1.y), glam::Vec3::new(0.0, -e2.z, e2.y),
+                glam::Vec3::new(e0.z, 0.0, -e0.x), glam::Vec3::new(e1.z, 0.0, -e1.x), glam::Vec3::new(e2.z, 0.0, -e2.x),
+                glam::Vec3::new(-e0.y, e0.x, 0.0), glam::Vec3::new(-e1.y, e1.x, 0.0), glam::Vec3::new(-e2.y, e2.x, 0.0),
+            ];
+            for ax in axes.iter() {
+                if ax.length_squared() > 1e-12 {
+                    let p0 = v0.dot(*ax); let p1 = v1.dot(*ax); let p2 = v2.dot(*ax);
+                    let r = h.x * ax.x.abs() + h.y * ax.y.abs() + h.z * ax.z.abs();
+                    let minp = p0.min(p1.min(p2)); let maxp = p0.max(p1.max(p2));
+                    if minp > r || maxp < -r { return false; }
+                }
+            }
+            let minv = glam::Vec3::new(
+                v0.x.min(v1.x.min(v2.x)), v0.y.min(v1.y.min(v2.y)), v0.z.min(v1.z.min(v2.z)),
+            );
+            let maxv = glam::Vec3::new(
+                v0.x.max(v1.x.max(v2.x)), v0.y.max(v1.y.max(v2.y)), v0.z.max(v1.z.max(v2.z)),
+            );
+            if minv.x > h.x || maxv.x < -h.x { return false; }
+            if minv.y > h.y || maxv.y < -h.y { return false; }
+            if minv.z > h.z || maxv.z < -h.z { return false; }
+            let n = e0.cross(e1);
+            let d = -n.dot(v0);
+            let rb = h.x * n.x.abs() + h.y * n.y.abs() + h.z * n.z.abs();
+            let s = n.dot(glam::Vec3::ZERO) + d; // plane at origin
+            s.abs() <= rb
+        }
+        // Transform triangles to voxel space
+        let to_vox = |p: glam::Vec3| glam::vec3((p.x - bmin.x) / vm, (p.y - bmin.y) / vm, (p.z - bmin.z) / vm);
+        for [a_w, b_w, c_w] in tris.into_iter() {
+            let a = to_vox(a_w); let b = to_vox(b_w); let c = to_vox(c_w);
+            let minv = glam::vec3(a.x.min(b.x.min(c.x)), a.y.min(b.y.min(c.y)), a.z.min(b.z.min(c.z)));
+            let maxv = glam::vec3(a.x.max(b.x.max(c.x)), a.y.max(b.y.max(c.y)), a.z.max(b.z.max(c.z)));
+            let xi0 = minv.x.floor().max(0.0) as u32; let yi0 = minv.y.floor().max(0.0) as u32; let zi0 = minv.z.floor().max(0.0) as u32;
+            let xi1 = maxv.x.ceil().min((dims.x - 1) as f32) as u32; let yi1 = maxv.y.ceil().min((dims.y - 1) as f32) as u32; let zi1 = maxv.z.ceil().min((dims.z - 1) as f32) as u32;
+            for z in zi0..=zi1 { for y in yi0..=yi1 { for x in xi0..=xi1 {
+                let center = glam::vec3(x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5);
+                if tri_intersects_box(a, b, c, center, 0.5) { surf[idx(x, y, z)] = 1; }
+            }}}
+        }
+        // Fill interior
+        let grid = voxelize_surface_fill(meta, &surf, self.destruct_cfg.close_surfaces);
+        // Seed colliders
+        let dims = grid.dims(); let csz = grid.meta().chunk; let nx = dims.x.div_ceil(csz.x); let ny = dims.y.div_ceil(csz.y); let nz = dims.z.div_ceil(csz.z);
+        let mut colliders = Vec::new();
+        for cz in 0..nz { for cy in 0..ny { for cx in 0..nx {
+            if let Some(sc) = chunkcol::build_chunk_collider(&grid, glam::UVec3::new(cx,cy,cz)) { colliders.push(sc); }
+        }}}
+        let static_index = Some(chunkcol::rebuild_static_index(&colliders));
+        crate::gfx::RuinVox { grid, chunk_queue: server_core::destructible::queue::ChunkQueue::new(), queue_len: 0, colliders, static_index }
+    }
+
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
         if !self.ruin_voxels.contains_key(&ruin_idx) {
             self.hide_ruins_instance(ruin_idx);
-            let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
-            let mut rv = self.build_ruin_proxy_from_aabb(bmin, bmax);
+            // Prefer real-mesh voxelization when available
+            let mut rv = if self.destruct_meshes_cpu.is_empty() {
+                let (bmin, bmax) = self.ruin_world_aabb(ruin_idx);
+                self.build_ruin_proxy_from_aabb(bmin, bmax)
+            } else {
+                self.build_ruin_proxy_from_mesh(ruin_idx)
+            };
             // Enqueue all chunks and mesh once for immediate appearance
-            let dims = rv.grid.dims(); let csz = rv.grid.meta().chunk;
-            let nx = dims.x.div_ceil(csz.x); let ny = dims.y.div_ceil(csz.y); let nz = dims.z.div_ceil(csz.z);
-            for cz in 0..nz { for cy in 0..ny { for cx in 0..nx { rv.chunk_queue.enqueue_many([glam::UVec3::new(cx,cy,cz)]); }}}
+            let dims = rv.grid.dims();
+            let csz = rv.grid.meta().chunk;
+            let nx = dims.x.div_ceil(csz.x);
+            let ny = dims.y.div_ceil(csz.y);
+            let nz = dims.z.div_ceil(csz.z);
+            for cz in 0..nz {
+                for cy in 0..ny {
+                    for cx in 0..nx {
+                        rv.chunk_queue.enqueue_many([glam::UVec3::new(cx, cy, cz)]);
+                    }
+                }
+            }
             rv.queue_len = rv.chunk_queue.len();
-            while self.ruin_voxels.get(&ruin_idx).map(|rv2| rv2.queue_len).unwrap_or(0) > 0 {
+            while self
+                .ruin_voxels
+                .get(&ruin_idx)
+                .map(|rv2| rv2.queue_len)
+                .unwrap_or(0)
+                > 0
+            {
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
             self.ruin_voxels.insert(ruin_idx, rv);
@@ -260,37 +418,58 @@ impl Renderer {
     }
 
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
-        if budget == 0 { return; }
-        let Some(rv) = self.ruin_voxels.get_mut(&ruin_idx) else { return; };
+        if budget == 0 {
+            return;
+        }
+        let Some(rv) = self.ruin_voxels.get_mut(&ruin_idx) else {
+            return;
+        };
         let chunks = rv.chunk_queue.pop_budget(budget);
-        if chunks.is_empty() { rv.queue_len = rv.chunk_queue.len(); return; }
+        if chunks.is_empty() {
+            rv.queue_len = rv.chunk_queue.len();
+            return;
+        }
         let grid = &rv.grid;
         for c in &chunks {
             let key = (ruin_idx, c.x, c.y, c.z);
             let h = grid.chunk_occ_hash(*c);
-            if self.voxel_hashes.get(&key).copied() == Some(h) { continue; }
+            if self.voxel_hashes.get(&key).copied() == Some(h) {
+                continue;
+            }
             let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
             if mb.indices.is_empty() {
                 self.voxel_meshes.remove(&key);
                 self.voxel_hashes.remove(&key);
                 rv.colliders.retain(|sc| sc.coord != *c);
             } else {
-                let mut verts: Vec<crate::gfx::types::Vertex> = Vec::with_capacity(mb.positions.len());
+                let mut verts: Vec<crate::gfx::types::Vertex> =
+                    Vec::with_capacity(mb.positions.len());
                 for (i, p) in mb.positions.iter().enumerate() {
                     let n = mb.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
                     verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
                 }
-                let vb = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("voxel-chunk-vb"),
-                    contents: bytemuck::cast_slice(&verts),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                });
-                let ib = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("voxel-chunk-ib"),
-                    contents: bytemuck::cast_slice(&mb.indices),
-                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                });
-                self.voxel_meshes.insert(key, crate::gfx::VoxelChunkMesh { vb, ib, idx: mb.indices.len() as u32 });
+                let vb = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("voxel-chunk-vb"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
+                let ib = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("voxel-chunk-ib"),
+                        contents: bytemuck::cast_slice(&mb.indices),
+                        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                    });
+                self.voxel_meshes.insert(
+                    key,
+                    crate::gfx::VoxelChunkMesh {
+                        vb,
+                        ib,
+                        idx: mb.indices.len() as u32,
+                    },
+                );
                 self.voxel_hashes.insert(key, h);
                 if let Some(sc) = chunkcol::build_chunk_collider(grid, *c) {
                     chunkcol::swap_in_updates(&mut rv.colliders, vec![sc]);
@@ -302,21 +481,39 @@ impl Renderer {
     }
 
     fn process_all_ruin_queues(&mut self) {
-        if self.ruin_voxels.is_empty() { return; }
+        if self.ruin_voxels.is_empty() {
+            return;
+        }
         let mut remaining = self.destruct_cfg.max_chunk_remesh.max(1);
-        if remaining == 0 { return; }
+        if remaining == 0 {
+            return;
+        }
         let keys: Vec<usize> = self.ruin_voxels.keys().copied().collect();
         let n = keys.len();
-        if n == 0 { return; }
+        if n == 0 {
+            return;
+        }
         let mut idx = 0usize;
         while remaining > 0 {
             let ri = keys[idx % n];
-            let before = self.ruin_voxels.get(&ri).map(|rv| rv.queue_len).unwrap_or(0);
+            let before = self
+                .ruin_voxels
+                .get(&ri)
+                .map(|rv| rv.queue_len)
+                .unwrap_or(0);
             self.process_one_ruin_vox(ri, 1);
-            let after = self.ruin_voxels.get(&ri).map(|rv| rv.queue_len).unwrap_or(0);
-            if after < before { remaining = remaining.saturating_sub(1); }
+            let after = self
+                .ruin_voxels
+                .get(&ri)
+                .map(|rv| rv.queue_len)
+                .unwrap_or(0);
+            if after < before {
+                remaining = remaining.saturating_sub(1);
+            }
             idx += 1;
-            if self.ruin_voxels.values().all(|rv| rv.queue_len == 0) { break; }
+            if self.ruin_voxels.values().all(|rv| rv.queue_len == 0) {
+                break;
+            }
         }
     }
 
@@ -514,14 +711,24 @@ impl Renderer {
                             );
                             let dirty = grid.pop_dirty_chunks(usize::MAX);
                             (Some(out), Some(dirty))
-                        } else { (None, None) }
-                    } else { (None, None) }
-                } else { (None, None) }
-            } else { (None, None) }
+                        } else {
+                            (None, None)
+                        }
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            }
         };
         if let Some(out) = out_opt {
             self.impact_id = self.impact_id.wrapping_add(1);
-            if let Some(dirty) = dirty_opt && !dirty.is_empty() {
+            if let Some(dirty) = dirty_opt
+                && !dirty.is_empty()
+            {
                 if let Some(rv2) = self.ruin_voxels.get_mut(&ruin_idx) {
                     rv2.chunk_queue.enqueue_many(dirty);
                     rv2.queue_len = rv2.chunk_queue.len();
@@ -529,14 +736,21 @@ impl Renderer {
                 self.process_one_ruin_vox(ruin_idx, 32);
             }
             for (i, p) in out.positions_m.iter().enumerate() {
-                if (self.debris.len() as u32) >= self.debris_capacity { break; }
+                if (self.debris.len() as u32) >= self.debris_capacity {
+                    break;
+                }
                 let pos = glam::vec3(p.x as f32, p.y as f32, p.z as f32);
                 let vel = out
                     .velocities_mps
                     .get(i)
                     .map(|v| glam::vec3(v.x as f32, v.y as f32, v.z as f32))
                     .unwrap_or(glam::Vec3::Y * 2.5);
-                self.debris.push(crate::gfx::Debris { pos, vel, age: 0.0, life: 2.5 });
+                self.debris.push(crate::gfx::Debris {
+                    pos,
+                    vel,
+                    age: 0.0,
+                    life: 2.5,
+                });
             }
         }
     }
@@ -913,7 +1127,14 @@ impl Renderer {
                     let p1 = pr.pos;
                     // 1) collide vs existing voxel proxies first
                     if let Some((ri, _t)) = self.segment_hits_any_proxy(p0, p1) {
-                        self.explode_fireball_against_ruin(pr.owner_wizard, p0, p1, ri, radius, damage);
+                        self.explode_fireball_against_ruin(
+                            pr.owner_wizard,
+                            p0,
+                            p1,
+                            ri,
+                            radius,
+                            damage,
+                        );
                         self.projectiles.swap_remove(i);
                         continue;
                     }
@@ -1504,8 +1725,7 @@ impl Renderer {
                 // Skip meshing if occupancy hash hasn't changed
                 let key = (0usize, c.x, c.y, c.z);
                 let h = grid.chunk_occ_hash(*c);
-                if self.vox_onepath_ui.is_none()
-                    && self.voxel_hashes.get(&key).copied() == Some(h)
+                if self.vox_onepath_ui.is_none() && self.voxel_hashes.get(&key).copied() == Some(h)
                 {
                     skipped += 1;
                     continue;

@@ -8,6 +8,7 @@ use anyhow::Context;
 use data_runtime::zone::load_zone_manifest;
 use data_runtime::{loader as data_loader, zone::ZoneManifest};
 use ra_assets::skinning::load_gltf_skinned;
+use crate::gfx::asset_path;
 use rand::Rng as _;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
 use glam::{DVec3, UVec3};
@@ -26,7 +27,7 @@ use winit::window::Window;
 // Bring parent gfx modules into scope so the moved body compiles unchanged.
 use crate::gfx::types::{Globals, Model, VertexSkinned};
 use crate::gfx::{
-    anim, asset_path, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks,
+    anim, camera_sys, foliage, fx, gbuffer, hiz, material, npcs, pipeline, rocks,
     ruins, scene, sky, terrain, ui, util, zombies,
 };
 
@@ -1447,6 +1448,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
         ruin_voxels: std::collections::HashMap::new(),
+        destruct_meshes_cpu: Vec::new(),
+        destruct_instances: Vec::new(),
         voxel_model_bg,
         debris_vb,
         debris_ib,
@@ -1601,6 +1604,30 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         renderer.zombie_count = 0;
         renderer.dk_count = 0;
         renderer.dk_id = None;
+    }
+
+    // Seed generic destructibles registry from ruins instances (extensible)
+    {
+        use ra_assets::gltf::load_gltf_mesh;
+        let path = asset_path("assets/models/ruins.gltf");
+        if let Ok(cpu) = load_gltf_mesh(&path) {
+            let mesh = crate::gfx::DestructMeshCpu {
+                positions: cpu.vertices.iter().map(|v| v.pos).collect(),
+                indices: cpu.indices.iter().map(|&i| i as u32).collect(),
+            };
+            renderer.destruct_meshes_cpu.push(mesh);
+            // Map every ruins instance as a destructible instance for mesh id 0
+            for (i, inst) in renderer.ruins_instances_cpu.iter().enumerate() {
+                let di = crate::gfx::DestructInstance {
+                    mesh_id: 0,
+                    model: glam::Mat4::from_cols_array_2d(&inst.model),
+                    source: crate::gfx::DestructSource::Ruins(i),
+                };
+                renderer.destruct_instances.push(di);
+            }
+        } else {
+            log::warn!("destructibles: failed to load ruins.gltf CPU mesh; falling back to box proxy when needed");
+        }
     }
 
     Ok(renderer)

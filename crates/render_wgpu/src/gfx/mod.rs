@@ -319,8 +319,8 @@ pub struct Renderer {
     voxel_grid: Option<VoxelGrid>,
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
-    // Multi‑proxy: one voxel proxy per ruin (main scene path)
-    ruin_voxels: HashMap<usize, RuinVox>,
+    // Multi‑proxy: one voxel proxy per destructible instance
+    ruin_voxels: HashMap<usize, VoxProxy>,
     // Per-frame metrics for overlay
     vox_last_chunks: usize,
     vox_queue_len: usize,
@@ -333,8 +333,7 @@ pub struct Renderer {
     // Deterministic debris seeding counter
     impact_id: u64,
 
-    // Voxel chunk GPU meshes (keyed by chunk coord)
-    // Multi‑ruin voxel meshes; key includes ruin id
+    // Voxel chunk GPU meshes (keyed by destructible id + chunk coord)
     voxel_meshes: HashMap<(usize, u32, u32, u32), VoxelChunkMesh>,
     voxel_hashes: HashMap<(usize, u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
@@ -348,6 +347,10 @@ pub struct Renderer {
     debris_count: u32,
     debris: Vec<Debris>,
     debris_model_bg: wgpu::BindGroup,
+
+    // Destructibles registry (CPU mesh + instances)
+    destruct_meshes_cpu: Vec<DestructMeshCpu>,
+    destruct_instances: Vec<DestructInstance>,
 
     // Demo helpers
     voxel_grid_initial: Option<VoxelGrid>,
@@ -406,14 +409,38 @@ pub struct VoxelChunkMesh {
     pub idx: u32,
 }
 
-// Per‑ruin voxel proxy container
-pub struct RuinVox {
+// Generic destructible mesh (CPU triangles)
+#[derive(Clone)]
+pub struct DestructMeshCpu {
+    pub positions: Vec<[f32; 3]>,
+    pub indices: Vec<u32>,
+}
+
+// Source of a destructible instance (which instancing buffer to hide)
+#[derive(Clone, Copy)]
+pub enum DestructSource {
+    Ruins(usize),
+}
+
+// A destructible instance present in the scene
+#[derive(Clone)]
+pub struct DestructInstance {
+    pub mesh_id: usize,
+    pub model: glam::Mat4,
+    pub source: DestructSource,
+}
+
+// Per‑destructible voxel proxy container
+pub struct VoxProxy {
     pub grid: voxel_proxy::VoxelGrid,
     pub chunk_queue: server_core::destructible::queue::ChunkQueue,
     pub queue_len: usize,
     pub colliders: Vec<chunkcol::StaticChunk>,
     pub static_index: Option<collision_static::StaticIndex>,
 }
+
+// Back-compat alias for code paths that still refer to RuinVox
+pub type RuinVox = VoxProxy;
 
 struct Debris {
     pos: glam::Vec3,
