@@ -1606,31 +1606,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         renderer.dk_id = None;
     }
 
-    // Seed generic destructibles registry from ruins instances (extensible)
-    {
-        use ra_assets::gltf::load_gltf_mesh;
-        let path = asset_path("assets/models/ruins.gltf");
-        if let Ok(cpu) = load_gltf_mesh(&path) {
-            let mesh = crate::gfx::DestructMeshCpu {
-                positions: cpu.vertices.iter().map(|v| v.pos).collect(),
-                indices: cpu.indices.iter().map(|&i| i as u32).collect(),
-            };
-            renderer.destruct_meshes_cpu.push(mesh);
-            // Map every ruins instance as a destructible instance for mesh id 0
-            for (i, inst) in renderer.ruins_instances_cpu.iter().enumerate() {
-                let di = crate::gfx::DestructInstance {
-                    mesh_id: 0,
-                    model: glam::Mat4::from_cols_array_2d(&inst.model),
-                    source: crate::gfx::DestructSource::Ruins(i),
-                };
-                renderer.destruct_instances.push(di);
-            }
-        } else {
-            log::warn!(
-                "destructibles: failed to load ruins.gltf CPU mesh; falling back to box proxy when needed"
-            );
-        }
-    }
+    // Note: generic destructibles should be provided by SceneBuild.
 
     Ok(renderer)
 }

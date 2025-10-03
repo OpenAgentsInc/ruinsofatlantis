@@ -999,7 +999,7 @@ fn force_remesh_all(r: &mut Renderer) {
                     });
 
                 r.voxel_meshes.insert(
-                    (0usize, cx, cy, cz),
+                    (crate::gfx::DestructibleId(0), cx, cy, cz),
                     crate::gfx::VoxelChunkMesh {
                         vb,
                         ib,

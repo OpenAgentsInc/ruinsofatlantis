@@ -186,20 +186,23 @@ impl Renderer {
         if seg_len < 1e-6 {
             return None;
         }
-        let dir = d / seg_len;
-        let mut best: Option<(usize, f32)> = None;
+        // Segment vs AABB (padded) selection
+        let mut hit: Option<(usize, f32)> = None;
         for (ri, rv) in &self.destr_voxels {
             let (bmin, bmax) = Self::grid_world_aabb(&rv.grid);
-            if let Some((t, _)) = Self::ray_box_intersect(p0, dir, bmin, bmax)
-                && t <= seg_len
-            {
-                match best {
-                    Some((_, tb)) if t >= tb => {}
-                    _ => best = Some((*ri, t)),
-                }
+            let pad = 0.25f32;
+            let bmin = bmin - glam::Vec3::splat(pad);
+            let bmax = bmax + glam::Vec3::splat(pad);
+            // slab test
+            let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok = true;
+            for i in 0..3 {
+                let s = p0[i]; let dirc = d[i]; let minb = bmin[i]; let maxb = bmax[i];
+                if dirc.abs() < 1e-6 { if s < minb || s > maxb { ok = false; break; } }
+                else { let inv = 1.0/dirc; let mut t0 = (minb - s)*inv; let mut t1 = (maxb - s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin = tmin.max(t0); tmax = tmax.min(t1); if tmin > tmax { ok = false; break; } }
             }
+            if ok { hit = Some((ri.0, tmin)); break; }
         }
-        best
+        hit
     }
 
     fn build_ruin_proxy_from_aabb(
@@ -456,7 +459,7 @@ impl Renderer {
     }
 
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
-        if !self.destr_voxels.contains_key(&ruin_idx) {
+        if !self.destr_voxels.contains_key(&crate::gfx::DestructibleId(ruin_idx)) {
             self.hide_ruins_instance(ruin_idx);
             // Prefer real-mesh voxelization when available
             let mut rv = if self.destruct_meshes_cpu.is_empty() {
@@ -481,19 +484,21 @@ impl Renderer {
             rv.queue_len = rv.chunk_queue.len();
             // Burst a few batches to ensure visibility; avoid clippy infinite-loop lint
             for _ in 0..64 {
-                if rv.queue_len == 0 { break; }
+                if rv.queue_len == 0 {
+                    break;
+                }
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
-            self.destr_voxels.insert(ruin_idx, rv);
+            self.destr_voxels.insert(crate::gfx::DestructibleId(ruin_idx), rv);
         }
-        self.destr_voxels.get_mut(&ruin_idx).unwrap()
+        self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)).unwrap()
     }
 
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
         if budget == 0 {
             return;
         }
-        let Some(rv) = self.destr_voxels.get_mut(&ruin_idx) else {
+        let Some(rv) = self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)) else {
             return;
         };
         let chunks = rv.chunk_queue.pop_budget(budget);
@@ -503,7 +508,7 @@ impl Renderer {
         }
         let grid = &rv.grid;
         for c in &chunks {
-            let key = (ruin_idx, c.x, c.y, c.z);
+            let key = (crate::gfx::DestructibleId(ruin_idx), c.x, c.y, c.z);
             let h = grid.chunk_occ_hash(*c);
             if self.voxel_hashes.get(&key).copied() == Some(h) {
                 continue;
@@ -560,7 +565,7 @@ impl Renderer {
         if remaining == 0 {
             return;
         }
-        let keys: Vec<usize> = self.destr_voxels.keys().copied().collect();
+        let keys: Vec<crate::gfx::DestructibleId> = self.destr_voxels.keys().copied().collect();
         let n = keys.len();
         if n == 0 {
             return;
@@ -573,7 +578,7 @@ impl Renderer {
                 .get(&ri)
                 .map(|rv| rv.queue_len)
                 .unwrap_or(0);
-            self.process_one_ruin_vox(ri, 1);
+            self.process_one_ruin_vox(ri.0, 1);
             let after = self
                 .destr_voxels
                 .get(&ri)
@@ -746,7 +751,7 @@ impl Renderer {
         let _ = self.get_or_spawn_ruin_proxy(ruin_idx);
         // Carve at current surface via DDA along segment
         let (out_opt, dirty_opt) = {
-            if let Some(rv) = self.destr_voxels.get_mut(&ruin_idx) {
+            if let Some(rv) = self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)) {
                 let grid = &mut rv.grid;
                 let seg = p1 - p0;
                 let len = seg.length();
@@ -801,7 +806,7 @@ impl Renderer {
             if let Some(dirty) = dirty_opt
                 && !dirty.is_empty()
             {
-                if let Some(rv2) = self.destr_voxels.get_mut(&ruin_idx) {
+                if let Some(rv2) = self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)) {
                     rv2.chunk_queue.enqueue_many(dirty);
                     rv2.queue_len = rv2.chunk_queue.len();
                 }
@@ -1795,7 +1800,7 @@ impl Renderer {
             let mut skipped = 0usize;
             for c in &chunks {
                 // Skip meshing if occupancy hash hasn't changed
-                let key = (0usize, c.x, c.y, c.z);
+                let key = (crate::gfx::DestructibleId(0), c.x, c.y, c.z);
                 let h = grid.chunk_occ_hash(*c);
                 if self.vox_onepath_ui.is_none() && self.voxel_hashes.get(&key).copied() == Some(h)
                 {
@@ -1808,7 +1813,7 @@ impl Renderer {
                     voxel_mesh::greedy_mesh_chunk(grid, *c)
                 };
                 if mb.indices.is_empty() {
-                    self.voxel_meshes.remove(&(0usize, c.x, c.y, c.z));
+                    self.voxel_meshes.remove(&(crate::gfx::DestructibleId(0), c.x, c.y, c.z));
                     // Also drop any stale chunk collider so debris-vs-world avoids dead volumes
                     self.chunk_colliders.retain(|sc| sc.coord != *c);
                     // Evict cached hash so future solidification can't be skipped
@@ -1836,7 +1841,7 @@ impl Renderer {
                             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                         });
                     self.voxel_meshes.insert(
-                        (0usize, c.x, c.y, c.z),
+                        (crate::gfx::DestructibleId(0), c.x, c.y, c.z),
                         crate::gfx::VoxelChunkMesh {
                             vb,
                             ib,

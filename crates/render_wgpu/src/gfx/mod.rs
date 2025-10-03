@@ -320,7 +320,7 @@ pub struct Renderer {
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
     // Multi‑proxy: one voxel proxy per destructible instance
-    destr_voxels: HashMap<usize, VoxProxy>,
+    destr_voxels: HashMap<DestructibleId, VoxProxy>,
     // Per-frame metrics for overlay
     vox_last_chunks: usize,
     vox_queue_len: usize,
@@ -334,8 +334,8 @@ pub struct Renderer {
     impact_id: u64,
 
     // Voxel chunk GPU meshes (keyed by destructible id + chunk coord)
-    voxel_meshes: HashMap<(usize, u32, u32, u32), VoxelChunkMesh>,
-    voxel_hashes: HashMap<(usize, u32, u32, u32), u64>,
+    voxel_meshes: HashMap<(DestructibleId, u32, u32, u32), VoxelChunkMesh>,
+    voxel_hashes: HashMap<(DestructibleId, u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
     // Debris (instanced cubes)
@@ -350,6 +350,7 @@ pub struct Renderer {
 
     // Destructibles registry (CPU mesh + instances)
     destruct_meshes_cpu: Vec<DestructMeshCpu>,
+    #[allow(dead_code)]
     destruct_instances: Vec<DestructInstance>,
 
     // Demo helpers
@@ -414,6 +415,8 @@ pub struct VoxelChunkMesh {
 pub struct DestructMeshCpu {
     pub positions: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
+    pub local_min: [f32; 3],
+    pub local_max: [f32; 3],
 }
 
 // Source of a destructible instance (which instancing buffer to hide)
@@ -428,6 +431,8 @@ pub struct DestructInstance {
     pub mesh_id: usize,
     pub model: glam::Mat4,
     pub source: DestructSource,
+    pub world_min: [f32; 3],
+    pub world_max: [f32; 3],
 }
 
 // Per‑destructible voxel proxy container
@@ -3327,3 +3332,6 @@ impl Renderer {
         }
     } */
 }
+// Typed id for destructible instances
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct DestructibleId(pub usize);
