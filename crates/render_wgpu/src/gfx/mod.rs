@@ -216,6 +216,7 @@ pub struct Renderer {
     dk_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
+    ruins_instances_cpu: Vec<types::Instance>,
 
     // FX buffers
     fx_instances: wgpu::Buffer,

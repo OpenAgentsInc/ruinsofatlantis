@@ -1380,6 +1380,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         zombie_instances_cpu,
         ruins_instances: scene_build.ruins_instances,
         ruins_count: scene_build.ruins_count,
+        ruins_instances_cpu: scene_build.ruins_instances_cpu,
         fx_instances,
         _fx_capacity: fx_capacity,
         fx_count,
