@@ -61,6 +61,61 @@ Players can earn coin and reputation by repairing damage in the world using SRD 
 - Simulator note
   - Repairs are environment events the sim can schedule (restore object integrity, clear hazards), not combat stats. Policies can choose to prioritize repairs during lulls or after encounters.
 
+### Dynamic World Events & World Bosses
+
+- Emergent events
+  - AI‑driven raids, sea monster attacks, faction ambushes, and environmental crises trigger from world state (over‑harvest, faction imbalance, weather), not fixed timers. Events can escalate when ignored.
+- World bosses
+  - Roaming or slumbering titans (krakens, leviathans, elemental colossi) appear dynamically and scale participation. Failure can strengthen them; success unlocks temporary boons, questlines, or caches.
+- Impactful outcomes
+  - Towns and outposts can be besieged, occupied, or liberated; NPCs may flee or return; markets fluctuate briefly. Player action visibly changes local state until recovery.
+- Community play
+  - Nearby players receive lightweight rally prompts; ad‑hoc cooperation is encouraged without hard scheduling. Progress is shared by contribution.
+
+### Player Housing & Settlements
+
+- Private homes
+  - Claim plots in housing districts (coast, islands, underwater domes). Customize with furniture, trophies, and style kits. Benefits are convenience‑only (rested XP, storage, crafting benches, small gardens) to preserve non‑P2W.
+- Open‑world placement
+  - Homes exist in the world (in designated districts/frontiers) to form neighborhoods. Visitation permitted with privacy controls. Frontier capacity expands with population.
+- Guild halls & settlements
+  - Guilds can establish upgradable halls or freeports with defenses, vendors, and member buffs. These can attract dynamic events (e.g., raids) and tie into faction politics.
+- Safeguards
+  - Placement rules avoid griefing and maintain sightlines/performance; decay timers and upkeep are time‑based (not cash‑based).
+
+### Crafting, Professions, and Economy
+
+- Gathering professions
+  - Mining, Herbalism, Fishing, Salvaging, Foraging—oceanic resources (pearls, corals, vent metals, abyssal fungi) with regional scarcity encourage trade and exploration.
+- Crafting lines
+  - Smithing/Armoring, Carpentry/Shipwright, Alchemy/Cooking, Enchanting/Inscription. Recipes discovered via exploration, faction favor, or experimentation.
+- Player‑driven markets
+  - Posted contracts and local auctioneers in hubs; no global instant delivery. Caravans and shipping create economic gameplay; piracy risk informs routes.
+- Repair & durability
+  - Items wear under stress; repairable via professions and SRD tools. Catastrophic failure is rare; mastery reduces costs.
+- Economy guardrails
+  - Bind‑on‑equip/pickup used judiciously. No monetized multipliers. Transparent drop tables and sinks (repairs, housing upkeep) stabilize currency.
+
+### Seafaring & Naval Play
+
+- Navigation & exploration
+  - Chart courses across currents and storms; respect travel as gameplay. Reaching new islands requires seamanship and preparation.
+- Naval combat & piracy
+  - Ship‑to‑ship and ship‑to‑monster encounters; PvP piracy with in‑world consequences (bounties, faction loss). Counterplay via escorts and bounty hunting.
+- Underwater content
+  - Diving kits, spells, or crafted submersibles enable trench ruins and deep Atlantis expeditions. Extends our underwater combat rules with traversal tools and pressure hazards.
+
+### Lessons From Classic MMOs (Design Stance)
+
+- Community & challenge
+  - Meaningful penalties, tough dungeons, and teamwork are virtues—difficulty comes from the world, not UI friction. We provide information and readable mechanics.
+- Class identity matters
+  - Preserve distinct fantasies and class‑specific quests. Avoid homogenizing roles; balance by encounter and utility, not identical kits.
+- Balanced QoL
+  - Offer modern conveniences only when they don’t erode immersion (e.g., in‑world LFG boards/tavern posts; no teleport‑to‑dungeon menu). Travel and discovery remain core.
+- Continuous improvement
+  - In‑client surveys, PTR for major drops, and telemetry‑informed tuning while staying true to tenets. Candid patch notes explain “what” and “why.”
+
 ### Combat & Casting Principles
 
 - Line‑of‑Sight casting
