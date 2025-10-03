@@ -39,6 +39,7 @@ mod sky;
 pub mod terrain;
 mod ui;
 mod util;
+pub mod vox_onepath;
 mod zombies;
 
 use data_runtime::spell::SpellSpec;
@@ -324,6 +325,8 @@ pub struct Renderer {
     vox_remesh_ms_last: f32,
     vox_collider_ms_last: f32,
     vox_skipped_last: usize,
+    // One-path demo status (optional): (ray, carve, mesh)
+    vox_onepath_ui: Option<(bool, bool, bool)>,
     // Deterministic debris seeding counter
     impact_id: u64,
 
@@ -407,6 +410,10 @@ struct Debris {
 }
 
 impl Renderer {
+    #[inline]
+    pub fn is_vox_onepath(&self) -> bool {
+        self.vox_onepath_ui.is_some()
+    }
     // moved: wrap_angle -> renderer/update.rs
     fn any_zombies_alive(&self) -> bool {
         self.server.npcs.iter().any(|n| n.alive)

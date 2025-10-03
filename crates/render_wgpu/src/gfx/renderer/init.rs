@@ -1434,6 +1434,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_remesh_ms_last: 0.0,
         vox_collider_ms_last: 0.0,
         vox_skipped_last: 0,
+        vox_onepath_ui: None,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
         voxel_model_bg,

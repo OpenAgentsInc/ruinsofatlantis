@@ -1749,9 +1749,14 @@ impl Hud {
 
     /// Append a single-line perf overlay in the top-left corner.
     pub fn append_perf_text(&mut self, surface_w: u32, surface_h: u32, text: &str) {
+        self.append_perf_text_line(surface_w, surface_h, text, 0);
+    }
+
+    /// Append a perf text line with an explicit line index (0 = top line).
+    pub fn append_perf_text_line(&mut self, surface_w: u32, surface_h: u32, text: &str, line: u32) {
         // Slight shadow for readability
         let x = 10.0f32;
-        let y = 24.0f32;
+        let y = 24.0f32 + (line as f32) * 18.0; // 18px line height
         self.push_text_line(
             surface_w,
             surface_h,

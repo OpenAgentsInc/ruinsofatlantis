@@ -661,7 +661,11 @@ impl Renderer {
                 grid.origin_m().z as f32,
             );
             let gmax = gmin
-                + glam::vec3(dims.x as f32 * vm_f, dims.y as f32 * vm_f, dims.z as f32 * vm_f);
+                + glam::vec3(
+                    dims.x as f32 * vm_f,
+                    dims.y as f32 * vm_f,
+                    dims.z as f32 * vm_f,
+                );
             let aabb_min = gmin - glam::Vec3::splat(0.25 * vm_f);
             let aabb_max = gmax + glam::Vec3::splat(0.25 * vm_f);
             let mut tmin = 0.0f32;
@@ -803,8 +807,13 @@ impl Renderer {
         }
     }
 
-    fn process_voxel_queues(&mut self) {
-        let budget = self.destruct_cfg.max_chunk_remesh.max(1);
+    pub fn process_voxel_queues(&mut self) {
+        // In the one‑path demo, burst‑remesh to make cuts instantly visible
+        let budget = if self.vox_onepath_ui.is_some() {
+            64
+        } else {
+            self.destruct_cfg.max_chunk_remesh.max(1)
+        };
         let chunks = self.chunk_queue.pop_budget(budget);
         if let Some(grid) = self.voxel_grid.as_ref() {
             let t0 = Instant::now();
@@ -814,11 +823,16 @@ impl Renderer {
                 // Skip meshing if occupancy hash hasn't changed
                 let key = (c.x, c.y, c.z);
                 let h = grid.chunk_occ_hash(*c);
-                if self.voxel_hashes.get(&key).copied() == Some(h) {
+                if self.vox_onepath_ui.is_none() && self.voxel_hashes.get(&key).copied() == Some(h)
+                {
                     skipped += 1;
                     continue;
                 }
-                let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
+                let mb = if self.vox_onepath_ui.is_some() {
+                    voxel_mesh::naive_mesh_chunk(grid, *c)
+                } else {
+                    voxel_mesh::greedy_mesh_chunk(grid, *c)
+                };
                 if mb.indices.is_empty() {
                     self.voxel_meshes.remove(&(c.x, c.y, c.z));
                     // Also drop any stale chunk collider so debris-vs-world avoids dead volumes
@@ -826,11 +840,18 @@ impl Renderer {
                     // Evict cached hash so future solidification can't be skipped
                     self.voxel_hashes.remove(&key);
                 } else {
+                    // Interleave positions + normals to match types::Vertex layout
+                    let mut verts: Vec<crate::gfx::types::Vertex> =
+                        Vec::with_capacity(mb.positions.len());
+                    for (i, p) in mb.positions.iter().enumerate() {
+                        let n = mb.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
+                        verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
+                    }
                     let vb = self
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("voxel-chunk-vb"),
-                            contents: bytemuck::cast_slice(&mb.positions),
+                            contents: bytemuck::cast_slice(&verts),
                             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                         });
                     let ib = self

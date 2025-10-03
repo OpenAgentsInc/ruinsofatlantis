@@ -231,6 +231,82 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
     mesh
 }
 
+/// Naive mesher for a single chunk: emits each boundary face (solid next to empty)
+/// as two triangles. This is simple and robust for demos.
+pub fn naive_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
+    let (xr, yr, zr) = grid.chunk_bounds_voxels(chunk);
+    let vm = grid.meta().voxel_m.0 as f32;
+    let origin_world = grid.meta().origin_m.as_vec3();
+    let offset = glam::Vec3::new(xr.start as f32, yr.start as f32, zr.start as f32);
+    let origin = origin_world + offset * vm;
+    let mut mesh = MeshBuffers::default();
+    let dims = grid.meta().dims;
+    let add_face = |mesh: &mut MeshBuffers,
+                    p0: glam::Vec3,
+                    p1: glam::Vec3,
+                    p2: glam::Vec3,
+                    p3: glam::Vec3,
+                    n: glam::Vec3| {
+        let base = mesh.positions.len() as u32;
+        mesh.positions.extend_from_slice(&[
+            [p0.x, p0.y, p0.z],
+            [p1.x, p1.y, p1.z],
+            [p2.x, p2.y, p2.z],
+            [p3.x, p3.y, p3.z],
+        ]);
+        let nn = [n.x, n.y, n.z];
+        mesh.normals.extend_from_slice(&[nn, nn, nn, nn]);
+        // CCW
+        mesh.indices
+            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+    };
+    for z in zr.clone() {
+        for y in yr.clone() {
+            for x in xr.clone() {
+                if !grid.is_solid(x, y, z) {
+                    continue;
+                }
+                let wx = origin.x + (x - xr.start) as f32 * vm;
+                let wy = origin.y + (y - yr.start) as f32 * vm;
+                let wz = origin.z + (z - zr.start) as f32 * vm;
+                let v000 = glam::Vec3::new(wx, wy, wz);
+                let vx1 = v000 + glam::Vec3::new(vm, 0.0, 0.0);
+                let vy1 = v000 + glam::Vec3::new(0.0, vm, 0.0);
+                let vz1 = v000 + glam::Vec3::new(0.0, 0.0, vm);
+                let v110 = v000 + glam::Vec3::new(vm, vm, 0.0);
+                let v101 = v000 + glam::Vec3::new(vm, 0.0, vm);
+                let v011 = v000 + glam::Vec3::new(0.0, vm, vm);
+                let v111 = v000 + glam::Vec3::new(vm, vm, vm);
+                // -X face if x==0 or neighbor empty
+                if x == 0 || !grid.is_solid(x - 1, y, z) {
+                    add_face(&mut mesh, v000, vz1, v011, vy1, glam::Vec3::NEG_X);
+                }
+                // +X face
+                if x + 1 >= dims.x || !grid.is_solid(x + 1, y, z) {
+                    add_face(&mut mesh, vx1, v110, v111, v101, glam::Vec3::X);
+                }
+                // -Y face
+                if y == 0 || !grid.is_solid(x, y - 1, z) {
+                    add_face(&mut mesh, v000, vx1, v101, vz1, glam::Vec3::NEG_Y);
+                }
+                // +Y face
+                if y + 1 >= dims.y || !grid.is_solid(x, y + 1, z) {
+                    add_face(&mut mesh, vy1, v011, v111, v110, glam::Vec3::Y);
+                }
+                // -Z face
+                if z == 0 || !grid.is_solid(x, y, z - 1) {
+                    add_face(&mut mesh, v000, vy1, v110, vx1, glam::Vec3::NEG_Z);
+                }
+                // +Z face
+                if z + 1 >= dims.z || !grid.is_solid(x, y, z + 1) {
+                    add_face(&mut mesh, vz1, v101, v111, v011, glam::Vec3::Z);
+                }
+            }
+        }
+    }
+    mesh
+}
+
 fn plane_dims(axis: u32, d: UVec3) -> (u32, u32, u32, UVec3, UVec3, UVec3) {
     match axis {
         // (w,h,ld)
