@@ -978,7 +978,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     }
 
     // In the main scene, avoid seeding a demo voxel grid unless explicitly requested
-    if std::env::var("RA_VOX_DEMO").map(|v| v != "1").unwrap_or(true) {
+    if std::env::var("RA_VOX_DEMO")
+        .map(|v| v != "1")
+        .unwrap_or(true)
+    {
         dcfg.demo_grid = false;
     }
 
