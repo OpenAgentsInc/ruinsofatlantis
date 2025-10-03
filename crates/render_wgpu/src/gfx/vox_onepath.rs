@@ -302,46 +302,20 @@ impl ApplicationHandler for App {
                                     o.y as f32 + 20.0 * vm,
                                     o.z as f32 + 48.0 * vm,
                                 );
-                                // Aim toward block center to define entry direction
-                                let bcenter = (bmin + bmax) * 0.5;
-                                let dir = (bcenter - p0).normalize_or_zero();
-                                // Slab intersection against the block AABB to get front face
-                                let mut tmin = 0.0f32;
-                                let mut tmax = 1.0e6f32;
-                                for i in 0..3 {
-                                    let s = p0[i];
-                                    let d = dir[i];
-                                    let (minb, maxb) = (bmin[i], bmax[i]);
-                                    if d.abs() < 1e-6 {
-                                        if s < minb || s > maxb {
-                                            tmin = 1.0e9;
-                                            break;
-                                        }
-                                    } else {
-                                        let inv = 1.0 / d;
-                                        let mut t0 = (minb - s) * inv;
-                                        let mut t1 = (maxb - s) * inv;
-                                        if t0 > t1 {
-                                            core::mem::swap(&mut t0, &mut t1);
-                                        }
-                                        tmin = tmin.max(t0);
-                                        tmax = tmax.min(t1);
-                                        if tmin > tmax {
-                                            tmin = 1.0e9;
-                                            break;
-                                        }
-                                    }
-                                }
-                                // Entry point plus a small inward offset
-                                let hit = if tmin.is_finite() && tmin < 1.0e8 {
-                                    p0 + dir * (tmin + vm * 0.6)
-                                } else {
-                                    bcenter
-                                };
-                                let center = DVec3::new(hit.x as f64, hit.y as f64, hit.z as f64);
-                                // Per-impact randomization (deterministic): radius, debris budget, seed
+                                // Pick a fresh impact on the camera-facing face each press
+                                // RNG derived from base seed + impact counter so impacts differ
                                 let mut rng = state.destruct_cfg.seed
                                     ^ state.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                                let u = rand01(&mut rng);
+                                let v = rand01(&mut rng);
+                                let px = lerp(bmin.x + vm, bmax.x - vm, u);
+                                let py = lerp(bmin.y + vm, bmax.y - vm, v);
+                                // Gradually push deeper as impacts accumulate so we eventually chew through
+                                let layer = (state.impact_id % 16) as f32; // 0..15
+                                let depth = (0.6 + 0.8 * (layer / 15.0)) * vm; // ~0.6..1.4 voxels inward
+                                let pz = bmin.z + depth; // near Z face toward camera
+                                let center = DVec3::new(px as f64, py as f64, pz as f64);
+                                // Per-impact randomization (deterministic): radius, debris budget, seed
                                 let radius_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
                                 let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
                                 let max_debris_hit =
@@ -362,6 +336,8 @@ impl ApplicationHandler for App {
                                 let enq = grid.pop_dirty_chunks(usize::MAX);
                                 state.chunk_queue.enqueue_many(enq);
                                 state.vox_queue_len = state.chunk_queue.len();
+                                // immediate remesh so the change is visible next frame
+                                force_remesh_all(state);
                                 // stash debris
                                 for (i, p) in out.positions_m.iter().enumerate() {
                                     if (state.debris.len() as u32) < state.debris_capacity {

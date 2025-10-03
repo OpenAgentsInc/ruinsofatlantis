@@ -729,7 +729,8 @@ impl Renderer {
             let impact = o + vc * vm;
             // Demo: jitter radius per impact when in vox_onepath mode; otherwise use default
             let mut radius = if is_demo {
-                let mut rng = self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let mut rng =
+                    self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
                 let r_m = lerp(0.22, 0.45, rand01(&mut rng)) as f64;
                 core_units::Length::meters(r_m)
             } else {
@@ -775,7 +776,8 @@ impl Renderer {
             );
             // Demo: vary seed and per-impact debris cap in vox_onepath mode
             let (seed, max_debris_hit) = if is_demo {
-                let mut rng = self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0xA24B_A1AC_B9F1_3F7B);
+                let mut rng =
+                    self.destruct_cfg.seed ^ self.impact_id.wrapping_mul(0xA24B_A1AC_B9F1_3F7B);
                 let debris_scale = lerp(0.60, 1.40, rand01(&mut rng));
                 let cap = ((self.destruct_cfg.max_debris as f32 * debris_scale).round() as u32)
                     .max(8) as usize;
