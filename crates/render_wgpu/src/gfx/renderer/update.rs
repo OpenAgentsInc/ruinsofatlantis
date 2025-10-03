@@ -343,6 +343,7 @@ impl Renderer {
         p0: glam::Vec3,
         p1: glam::Vec3,
         did: crate::gfx::DestructibleId,
+        t_hit: f32,
         radius: f32,
         damage: i32,
     ) {
@@ -367,53 +368,20 @@ impl Renderer {
             return;
         }
         let vm = vp.grid.voxel_m().0 as f32;
-        let (gmin, gmax) = Self::grid_world_aabb(&vp.grid);
-        // segment entry
-        let mut tmin = 0.0f32;
-        let mut tmax = 1.0f32;
-        let mut ok = true;
-        for i in 0..3 {
-            let s = p0[i];
-            let dirc = seg[i];
-            let minb = gmin[i];
-            let maxb = gmax[i];
-            if dirc.abs() < 1e-6 {
-                if s < minb || s > maxb {
-                    ok = false;
-                    break;
-                }
-            } else {
-                let inv = 1.0 / dirc;
-                let mut t0 = (minb - s) * inv;
-                let mut t1 = (maxb - s) * inv;
-                if t0 > t1 {
-                    core::mem::swap(&mut t0, &mut t1);
-                }
-                tmin = tmin.max(t0);
-                tmax = tmax.min(t1);
-                if tmin > tmax {
-                    ok = false;
-                    break;
-                }
-            }
-        }
-        if !ok {
-            log::warn!("[destruct] carve: no segment–AABB entry");
-            return;
-        }
-        let p_entry = p0 + seg * (tmin + (vm * 1e-3) / len);
+        // Use hit t from selector (computed vs padded AABB); step a tiny epsilon inward
+        let eps_n = (vm * 1e-3) / len.max(1e-6);
+        let p_entry = p0 + seg * (t_hit + eps_n);
         log::debug!(
-            "[destruct] carve: AABB entry t={:.3} p_entry=({:.2},{:.2},{:.2})",
-            tmin,
-            p_entry.x,
-            p_entry.y,
-            p_entry.z
+            "[destruct] carve: entry t={:.3} p_entry=({:.2},{:.2},{:.2})",
+            t_hit, p_entry.x, p_entry.y, p_entry.z
         );
+        // Give DDA enough distance to find first shell: radius + a few voxels
+        let dda_max = radius.max(vm * 2.0) + vm * 8.0;
         if let Some(hit) = server_core::destructible::raycast_voxels(
             &vp.grid,
             glam::DVec3::new(p_entry.x as f64, p_entry.y as f64, p_entry.z as f64),
             glam::DVec3::new(seg.x as f64, seg.y as f64, seg.z as f64).normalize(),
-            core_units::Length::meters(len as f64 + (vm as f64) * 4.0),
+            core_units::Length::meters(dda_max as f64),
         ) {
             log::info!(
                 "[destruct] carve: DDA hit voxel=({}, {}, {})",
@@ -490,7 +458,10 @@ impl Renderer {
                 });
             }
         } else {
-            log::warn!("[destruct] carve: DDA found no solid along segment inside grid");
+            log::warn!(
+                "[destruct] carve: DDA found no solid (dda_max={:.2}m, vm={:.3}m)",
+                dda_max, vm
+            );
         }
         let before = self.voxel_meshes.len();
         self.process_all_ruin_queues();
@@ -1575,13 +1546,14 @@ impl Renderer {
                 if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } = pr.kind {
                     let p0 = pr.pos - pr.vel * dt;
                     let p1 = pr.pos;
-                    if let Some((did, _t)) = self.find_destructible_hit(p0, p1) {
+                    if let Some((did, t)) = self.find_destructible_hit(p0, p1) {
                         log::info!("[destruct] hit did={:?}", did);
                         self.explode_fireball_against_destructible(
                             pr.owner_wizard,
                             p0,
                             p1,
                             did,
+                            t,
                             radius,
                             damage,
                         );
