@@ -12,17 +12,20 @@ Out of Scope (this epic)
 ## Current Snapshot (repo‑aware)
 
 - Renderer (`crates/render_wgpu`)
-  - `gfx/renderer/update.rs` integrates input, projectiles, collisions, destructible carving, debris, per‑chunk meshing/collider rebuilds, and draws.
-  - Destructible spawn: mesh‑based voxelization (`build_*_proxy_from_mesh`), chunk dirty queues, VB/IB uploads; logs added.
+  - `crates/render_wgpu/src/gfx/renderer/update.rs` integrates input, projectile integrate/explode, destructible selection (`find_destructible_hit`), carve/mutate (`explode_fireball_against_destructible`), per‑chunk meshing (`process_one_ruin_vox`, `process_all_ruin_queues`), collider rebuilds, debris sim (`update_debris`), and demo voxel world (`process_voxel_queues`).
+  - Destructible spawn helpers: `get_or_spawn_ruin_proxy`, `build_ruin_proxy_from_mesh`, `build_ruin_proxy_from_aabb`, and instance hiding `hide_ruins_instance`.
+  - Spell constants hard‑coded in `spawn_fireball` and explosion visuals in `explode_fireball_at`.
+  - `crates/render_wgpu/src/gfx/renderer/init.rs` contains VB/IB upload logic and optional demo voxel grid creation; `crates/render_wgpu/src/gfx/renderer/render.rs` draws voxel chunk meshes via the lit pipeline.
+  - `crates/render_wgpu/src/gfx/scene.rs` seeds a destructible registry for ruins (CPU triangles + cached world AABBs) on the client.
 - Voxel core
   - `crates/voxel_proxy`: `VoxelGrid`, flood‑fill voxelizer, `carve_sphere`, dirty‑chunk tracking, occupancy hash, `VoxelProxyMeta { GlobalId, voxel_m, dims, chunk, material }`.
   - `crates/voxel_mesh`: per‑chunk greedy mesher with tests (normals/winding, boundary ownership).
 - Destructible helpers
-  - `crates/server_core/src/destructible.rs`: `raycast_voxels`, `carve_and_spawn_debris`, `queue::ChunkQueue`, and `config::DestructibleConfig` with CLI flags.
+  - `crates/server_core/src/destructible.rs`: `raycast_voxels`, `carve_and_spawn_debris`, `queue::ChunkQueue`, and `config::DestructibleConfig::from_args` (CLI flags: `--voxel-size`, `--chunk-size`, `--mat`, `--max-debris`, `--max-chunk-remesh`, `--close-surfaces`, `--debris-vs-world`, `--seed`, `--voxel-demo`, `--voxel-model`, `--vox-tiles-per-meter`, `--max-carve-chunks`, …).
 - ECS
   - `crates/ecs_core`: minimal ECS (entities, transforms, render kinds) used by scene assembly; no full gameplay scheduling yet.
 - Data
-  - `crates/data_runtime`: schemas and loaders for content; not yet hosting projectile/spec/budget configs.
+  - `crates/data_runtime`: schemas/loaders (`loader.rs`), `specdb.rs` indexes spells/classes/monsters. No destructible/projectile runtime config yet.
 
 Pain points (from code)
 - Renderer mutates world state and owns gameplay queues (projectiles/destructibles/meshing/colliders/debris).
@@ -67,6 +70,22 @@ Replication (local loop first)
 
 ---
 
+## Detailed mapping (current → target)
+
+- From `crates/render_wgpu/src/gfx/renderer/update.rs` (gameplay currently on client):
+  - Selection: `find_destructible_hit(p0,p1)` → move to `server_core::systems::destructible::selector` (proxies/instances via ECS registry).
+  - Carve: `explode_fireball_against_destructible(owner,p0,p1,did,t_hit,radius,damage)` → split into `DestructibleRaycastSystem` (entry/dda only) and `VoxelCarveSystem` (carve + dirty + debris bookkeeping).
+  - Meshing/colliders: `process_one_ruin_vox` / `process_all_ruin_queues` and calls to `chunkcol::*` → move to `GreedyMeshSystem`/`ColliderRebuildSystem` (server jobs). Renderer keeps only a new `voxel_upload.rs` to consume replicated `ChunkMesh`.
+  - Spawn/hide: `get_or_spawn_ruin_proxy`, `build_ruin_proxy_from_mesh|aabb`, `hide_ruins_instance` → move into server scene build (`server_core::scene_build.rs`), and replicate `VoxelProxyMeta`/`ChunkMesh` to client.
+  - Debris: keep visual debris on client; server can optionally own authoritative debris later.
+
+- Hard‑coded constants to data/config:
+  - Replace `spawn_fireball` constants and melee/zombie numbers in `crates/server_core/src/lib.rs` with `data_runtime` SpecDb/config.
+  - Centralize destructible budgets (max remesh/colliders, debris caps) under `data_runtime` and allow CLI overrides via `DestructibleConfig`.
+
+- Scene build responsibility:
+  - `crates/render_wgpu/src/gfx/scene.rs` should stop loading GLTF for destructibles; instead consume a server‑built registry via replication. New `server_core::scene_build.rs` builds `Destructible` + `VoxelProxyMeta` from data‑driven tags.
+
 ## Phase 1 — ECS‑first Destructible Carve (2–3 PRs)
 
 1.1 Components & Config
@@ -90,13 +109,14 @@ Replication (local loop first)
 - Files to add/touch:
   - `crates/server_core/src/systems/mod.rs`
   - `crates/server_core/src/systems/destructible.rs`
-  - `crates/server_core/src/collision_static/chunks.rs` (move or mirror builder from renderer)
+  - `crates/server_core/src/collision_static/chunks.rs` (mirror builder from renderer)
   - `crates/server_core/src/tick.rs` (fixed‑dt scheduler and system run order)
 
 1.3 Client Changes (renderer stop mutating)
 - In `crates/render_wgpu/src/gfx/renderer/update.rs`:
   - Feature‑gate carve/mutate path behind `legacy_client_carve` (default off): guard calls to `explode_fireball_against_destructible`, collider rebuilds, and dirty‑chunk meshing.
-  - Add a new `UploadMeshesSystem` call site that reads replicated `ChunkMesh` and uploads VB/IB (reuse existing upload code paths — currently in `process_voxel_queues` → factor into a helper `upload_chunk_mesh((did,c), MeshCpu)` in `renderer/init.rs` or a new `renderer/voxel_upload.rs`).
+  - Factor VB/IB upload code from `process_one_ruin_vox` into a helper `voxel_upload::upload_chunk_mesh(key, mb)` in a new module `crates/render_wgpu/src/gfx/renderer/voxel_upload.rs`.
+  - Add a thin entry that consumes replicated `ChunkMesh` and calls `voxel_upload::upload_chunk_mesh`.
 - Add `client_core` crate:
   - `crates/client_core/src/replication.rs` — apply messages into ECS world: update/add `VoxelProxy`, `ChunkMesh`.
   - `crates/client_core/src/upload.rs` — transform `ChunkMesh` → GPU uploads via a trait implemented by the renderer host (pass a callback/closure or channel of upload jobs).
@@ -190,6 +210,16 @@ Acceptance
   - `crates/client_core/{src/replication.rs,src/upload.rs,src/lib.rs}`
   - `crates/net_core/{src/snapshot.rs,src/apply.rs}`
   - `crates/data_runtime/src/specs/{projectiles.rs,destructible.rs}`
+  - `crates/render_wgpu/src/gfx/renderer/voxel_upload.rs`
+
+---
+
+## Phase 0 — Preflight hygiene (low‑risk)
+
+- Ensure demo paths are feature‑gated:
+  - `process_voxel_queues` and demo grid builders in `crates/render_wgpu/src/gfx/renderer/update.rs` compile only under a dev/demo feature (e.g., `vox_onepath`).
+- Consolidate destructible logs behind a `destruct_debug` feature to reduce default verbosity after stabilization.
+- Extract and unit‑test the upload helper in `renderer/voxel_upload.rs` using `voxel_mesh` CPU outputs to validate normals/winding.
 
 ---
 
