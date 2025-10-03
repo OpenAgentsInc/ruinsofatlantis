@@ -194,13 +194,38 @@ impl Renderer {
             let bmin = bmin - glam::Vec3::splat(pad);
             let bmax = bmax + glam::Vec3::splat(pad);
             // slab test
-            let mut tmin = 0.0f32; let mut tmax = 1.0f32; let mut ok = true;
+            let mut tmin = 0.0f32;
+            let mut tmax = 1.0f32;
+            let mut ok = true;
             for i in 0..3 {
-                let s = p0[i]; let dirc = d[i]; let minb = bmin[i]; let maxb = bmax[i];
-                if dirc.abs() < 1e-6 { if s < minb || s > maxb { ok = false; break; } }
-                else { let inv = 1.0/dirc; let mut t0 = (minb - s)*inv; let mut t1 = (maxb - s)*inv; if t0>t1 { core::mem::swap(&mut t0,&mut t1);} tmin = tmin.max(t0); tmax = tmax.min(t1); if tmin > tmax { ok = false; break; } }
+                let s = p0[i];
+                let dirc = d[i];
+                let minb = bmin[i];
+                let maxb = bmax[i];
+                if dirc.abs() < 1e-6 {
+                    if s < minb || s > maxb {
+                        ok = false;
+                        break;
+                    }
+                } else {
+                    let inv = 1.0 / dirc;
+                    let mut t0 = (minb - s) * inv;
+                    let mut t1 = (maxb - s) * inv;
+                    if t0 > t1 {
+                        core::mem::swap(&mut t0, &mut t1);
+                    }
+                    tmin = tmin.max(t0);
+                    tmax = tmax.min(t1);
+                    if tmin > tmax {
+                        ok = false;
+                        break;
+                    }
+                }
             }
-            if ok { hit = Some((ri.0, tmin)); break; }
+            if ok {
+                hit = Some((ri.0, tmin));
+                break;
+            }
         }
         hit
     }
@@ -459,7 +484,10 @@ impl Renderer {
     }
 
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
-        if !self.destr_voxels.contains_key(&crate::gfx::DestructibleId(ruin_idx)) {
+        if !self
+            .destr_voxels
+            .contains_key(&crate::gfx::DestructibleId(ruin_idx))
+        {
             self.hide_ruins_instance(ruin_idx);
             // Prefer real-mesh voxelization when available
             let mut rv = if self.destruct_meshes_cpu.is_empty() {
@@ -489,16 +517,22 @@ impl Renderer {
                 }
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
-            self.destr_voxels.insert(crate::gfx::DestructibleId(ruin_idx), rv);
+            self.destr_voxels
+                .insert(crate::gfx::DestructibleId(ruin_idx), rv);
         }
-        self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)).unwrap()
+        self.destr_voxels
+            .get_mut(&crate::gfx::DestructibleId(ruin_idx))
+            .unwrap()
     }
 
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
         if budget == 0 {
             return;
         }
-        let Some(rv) = self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)) else {
+        let Some(rv) = self
+            .destr_voxels
+            .get_mut(&crate::gfx::DestructibleId(ruin_idx))
+        else {
             return;
         };
         let chunks = rv.chunk_queue.pop_budget(budget);
@@ -751,7 +785,10 @@ impl Renderer {
         let _ = self.get_or_spawn_ruin_proxy(ruin_idx);
         // Carve at current surface via DDA along segment
         let (out_opt, dirty_opt) = {
-            if let Some(rv) = self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)) {
+            if let Some(rv) = self
+                .destr_voxels
+                .get_mut(&crate::gfx::DestructibleId(ruin_idx))
+            {
                 let grid = &mut rv.grid;
                 let seg = p1 - p0;
                 let len = seg.length();
@@ -806,7 +843,10 @@ impl Renderer {
             if let Some(dirty) = dirty_opt
                 && !dirty.is_empty()
             {
-                if let Some(rv2) = self.destr_voxels.get_mut(&crate::gfx::DestructibleId(ruin_idx)) {
+                if let Some(rv2) = self
+                    .destr_voxels
+                    .get_mut(&crate::gfx::DestructibleId(ruin_idx))
+                {
                     rv2.chunk_queue.enqueue_many(dirty);
                     rv2.queue_len = rv2.chunk_queue.len();
                 }
@@ -1813,7 +1853,8 @@ impl Renderer {
                     voxel_mesh::greedy_mesh_chunk(grid, *c)
                 };
                 if mb.indices.is_empty() {
-                    self.voxel_meshes.remove(&(crate::gfx::DestructibleId(0), c.x, c.y, c.z));
+                    self.voxel_meshes
+                        .remove(&(crate::gfx::DestructibleId(0), c.x, c.y, c.z));
                     // Also drop any stale chunk collider so debris-vs-world avoids dead volumes
                     self.chunk_colliders.retain(|sc| sc.coord != *c);
                     // Evict cached hash so future solidification can't be skipped
