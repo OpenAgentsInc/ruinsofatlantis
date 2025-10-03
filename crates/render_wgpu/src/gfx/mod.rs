@@ -336,6 +336,10 @@ pub struct Renderer {
 
     // Voxel chunk GPU meshes (keyed by destructible id + chunk coord)
     voxel_meshes: HashMap<(DestructibleId, u32, u32, u32), VoxelChunkMesh>,
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     voxel_hashes: HashMap<(DestructibleId, u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
@@ -344,18 +348,34 @@ pub struct Renderer {
     debris_ib: wgpu::Buffer,
     debris_index_count: u32,
     debris_instances: wgpu::Buffer,
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     debris_capacity: u32,
     debris_count: u32,
     debris: Vec<Debris>,
     debris_model_bg: wgpu::BindGroup,
 
     // Destructibles registry (CPU mesh + instances)
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     destruct_meshes_cpu: Vec<DestructMeshCpu>,
     #[allow(dead_code)]
     destruct_instances: Vec<DestructInstance>,
 
     // Demo helpers
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     voxel_grid_initial: Option<VoxelGrid>,
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     recent_impacts: Vec<(glam::DVec3, f64)>,
     demo_hint_until: Option<f32>,
 

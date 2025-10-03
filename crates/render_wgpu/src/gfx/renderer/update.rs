@@ -2,20 +2,31 @@
 
 // use Debris via fully-qualified path
 use crate::gfx::Renderer;
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use crate::gfx::chunkcol;
 use crate::gfx::types::{Instance, InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 use crate::server_ext::CollideProjectiles;
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
 // use destructible via fully-qualified path
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(
+    any(feature = "legacy_client_carve", feature = "vox_onepath_demo"),
+    not(target_arch = "wasm32")
+))]
 use std::time::Instant;
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    any(feature = "legacy_client_carve", feature = "vox_onepath_demo"),
+    target_arch = "wasm32"
+))]
 use web_time::Instant;
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use wgpu::util::DeviceExt;
 
 // Opt-in logging for destructible workflows
@@ -29,6 +40,10 @@ macro_rules! destruct_log {
 
 // Tiny deterministic RNG for demo variations (no external deps)
 #[inline]
+#[cfg_attr(
+    not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")),
+    allow(dead_code)
+)]
 fn splitmix64(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
@@ -38,12 +53,20 @@ fn splitmix64(state: &mut u64) -> u64 {
 }
 
 #[inline]
+#[cfg_attr(
+    not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")),
+    allow(dead_code)
+)]
 fn rand01(s: &mut u64) -> f32 {
     let r = splitmix64(s);
     ((r >> 40) as u32) as f32 / (1u32 << 24) as f32
 }
 
 #[inline]
+#[cfg_attr(
+    not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")),
+    allow(dead_code)
+)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -288,8 +311,8 @@ impl Renderer {
             }
         }
         if best.is_some() {
-            if let Some((did, t)) = best {
-                destruct_log!("[destruct] select(proxy) did={:?} t={:.3}", did, t);
+            if let Some((_did, _t)) = best {
+                destruct_log!("[destruct] select(proxy) did={:?} t={:.3}", _did, _t);
             }
             return best;
         }
@@ -333,8 +356,8 @@ impl Renderer {
                 best = Some((did, tmin));
             }
         }
-        if let Some((did, t)) = best {
-            destruct_log!("[destruct] select(instance) did={:?} t={:.3}", did, t);
+        if let Some((_did, _t)) = best {
+            destruct_log!("[destruct] select(instance) did={:?} t={:.3}", _did, _t);
         } else {
             destruct_log!("[destruct] select: no hit on proxies or instances");
         }
@@ -485,6 +508,7 @@ impl Renderer {
         log::info!("[destruct] mesh upload: chunks {} → {}", before, after);
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     fn build_ruin_proxy_from_aabb(
         &self,
         ruin_idx: usize,
@@ -562,6 +586,7 @@ impl Renderer {
     }
 
     // Build a proxy using the actual ruins mesh triangles transformed by the instance model
+    #[cfg(feature = "legacy_client_carve")]
     fn build_ruin_proxy_from_mesh(&self, ruin_idx: usize) -> crate::gfx::RuinVox {
         // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
         if self.destruct_meshes_cpu.is_empty() {
@@ -976,7 +1001,7 @@ impl Renderer {
     fn explode_fireball_on_segment(
         &mut self,
         owner: Option<usize>,
-        p0: glam::Vec3,
+        _p0: glam::Vec3,
         p1: glam::Vec3,
         radius: f32,
         damage: i32,
@@ -1198,6 +1223,7 @@ impl Renderer {
         }
     }
 
+    #[cfg(feature = "legacy_client_carve")]
     fn hide_ruins_instance(&mut self, index: usize) {
         if index >= self.ruins_instances_cpu.len() {
             return;
@@ -1570,22 +1596,26 @@ impl Renderer {
                 if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } = pr.kind {
                     let p0 = pr.pos - pr.vel * dt;
                     let p1 = pr.pos;
-                    if let Some((did, t)) = self.find_destructible_hit(p0, p1) {
-                        destruct_log!("[destruct] hit did={:?}", did);
+                    if let Some((_did, _t)) = self.find_destructible_hit(p0, p1) {
+                        destruct_log!("[destruct] hit did={:?}", _did);
                         #[cfg(feature = "legacy_client_carve")]
                         {
                             self.explode_fireball_against_destructible(
                                 pr.owner_wizard,
                                 p0,
                                 p1,
-                                did,
-                                t,
+                                _did,
+                                _t,
                                 radius,
                                 damage,
                             );
                             self.projectiles.swap_remove(i);
                             continue;
                         }
+                        // Default: still show explosion visuals on destructible hit
+                        self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
+                        self.projectiles.swap_remove(i);
+                        continue;
                     }
                     let mut exploded = false;
                     // collide against any alive NPC cylinder in XZ
@@ -2631,9 +2661,13 @@ impl Renderer {
 // No-op stubs for demo helpers when vox_onepath_demo is disabled
 #[cfg(not(feature = "vox_onepath_demo"))]
 impl Renderer {
+    #[allow(dead_code)]
     pub fn process_voxel_queues(&mut self) {}
+    #[allow(dead_code)]
     fn build_voxel_grid_for_ruins(&mut self, _center: glam::Vec3, _half_extent: glam::Vec3) {}
+    #[allow(dead_code)]
     pub(crate) fn reset_voxel_and_replay(&mut self) {}
+    #[allow(dead_code)]
     fn seed_voxel_chunk_colliders(&mut self, _grid: &voxel_proxy::VoxelGrid) {}
 }
 
@@ -2746,5 +2780,80 @@ mod tests {
         let p0 = glam::vec3(-2.0, 0.5, 0.0);
         let p1 = glam::vec3(2.0, 0.5, 0.0);
         assert!(segment_hits_circle_xz(p0, p1, c, 0.5));
+    }
+
+    #[test]
+    fn ray_box_hits_from_outside() {
+        // Ray along +X hits a unit AABB centered at origin
+        let p0 = glam::vec3(-10.0, 0.5, 0.0);
+        let dir = glam::vec3(1.0, 0.0, 0.0);
+        let bmin = glam::vec3(-1.0, -1.0, -1.0);
+        let bmax = glam::vec3(1.0, 1.0, 1.0);
+
+        let (t_enter, t_exit) = Renderer::ray_box_intersect(p0, dir, bmin, bmax).expect("hit");
+        assert!(t_enter > 0.0, "enter should be ahead of origin");
+        assert!(t_exit > t_enter, "exit should be after enter");
+
+        let hit = p0 + dir * t_enter;
+        // Inside AABB with small tolerance
+        assert!(hit.x >= bmin.x - 1e-4 && hit.x <= bmax.x + 1e-4);
+        assert!(hit.y >= bmin.y - 1e-4 && hit.y <= bmax.y + 1e-4);
+        assert!(hit.z >= bmin.z - 1e-4 && hit.z <= bmax.z + 1e-4);
+    }
+
+    #[test]
+    fn ray_box_parallel_miss() {
+        // Ray is parallel to X axis and AABB is out of its Y slab -> miss
+        let p0 = glam::vec3(-10.0, 2.1, 0.0);
+        let dir = glam::vec3(1.0, 0.0, 0.0);
+        let bmin = glam::vec3(-1.0, -1.0, -1.0);
+        let bmax = glam::vec3(1.0, 1.0, 1.0);
+
+        assert!(Renderer::ray_box_intersect(p0, dir, bmin, bmax).is_none());
+    }
+
+    #[test]
+    fn ray_box_starting_inside() {
+        // Starting inside should clamp t_enter to 0
+        let p0 = glam::vec3(0.0, 0.0, 0.0);
+        let dir = glam::vec3(1.0, 0.0, 0.0);
+        let bmin = glam::vec3(-1.0, -1.0, -1.0);
+        let bmax = glam::vec3(1.0, 1.0, 1.0);
+
+        let (t_enter, t_exit) = Renderer::ray_box_intersect(p0, dir, bmin, bmax).expect("hit");
+        assert!(t_enter.abs() < 1e-6, "starts inside => t_enter ~= 0");
+        assert!(t_exit > 0.0);
+    }
+
+    #[test]
+    fn segment_circle_hits_cases() {
+        let c = glam::vec3(0.0, 0.0, 0.0);
+        // Cross the center
+        assert!(segment_hits_circle_xz(
+            glam::vec3(-2.0, 0.0, 0.0),
+            glam::vec3(2.0, 0.0, 0.0),
+            c,
+            0.5
+        ));
+        // Graze just inside
+        assert!(segment_hits_circle_xz(
+            glam::vec3(-1.0, 0.0, 0.49),
+            glam::vec3(1.0, 0.0, 0.49),
+            c,
+            0.5
+        ));
+        // Miss just outside
+        assert!(!segment_hits_circle_xz(
+            glam::vec3(-1.0, 0.0, 0.6),
+            glam::vec3(1.0, 0.0, 0.6),
+            c,
+            0.5
+        ));
+    }
+
+    #[test]
+    fn destruct_log_compiles() {
+        // Should compile in both modes; no logger required in tests.
+        destruct_log!("destructible test {}", 42);
     }
 }

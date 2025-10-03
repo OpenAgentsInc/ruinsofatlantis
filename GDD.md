@@ -25,6 +25,8 @@ RoA embraces old‑school difficulty. Travel and logistics matter, resources are
 
 In‑world interactions, not toggles. If a thing exists in the world—player, NPC, door, ship—you can use the same verbs on it: look, talk, trade, shove, steal, heal, curse, or strike. We do not add out‑of‑world switches like “PvP Enabled/Disabled” or invulnerability bubbles. Safety and norms are enforced in‑world (laws, wards, factions, guard response, bounties), not by breaking the simulation.
 
+No pay‑to‑win. Players cannot spend real money to gain character power or gameplay advantages. You cannot buy levels, stats, gear power, spells, skill points, or combat bonuses with cash. Monetization, where present, focuses on cosmetics, account services, or QoL that do not affect combat power or competitive fairness. We may consider an official real‑money marketplace in the future (e.g., escrowed player‑to‑player trading), but it will not introduce exclusive power, progression skips, or superior items for money.
+
 ## Game Mechanics
 
 Built on Dungeons & Dragons 5th Edition (SRD): iconic classes, races, spells, monsters, and d20 combat—fully implemented and tuned for a dangerous, persistent MMO world.
