@@ -337,6 +337,7 @@ impl Renderer {
         self.get_or_spawn_ruin_proxy(did.0)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn explode_fireball_against_destructible(
         &mut self,
         owner: Option<usize>,
@@ -373,7 +374,10 @@ impl Renderer {
         let p_entry = p0 + seg * (t_hit + eps_n);
         log::debug!(
             "[destruct] carve: entry t={:.3} p_entry=({:.2},{:.2},{:.2})",
-            t_hit, p_entry.x, p_entry.y, p_entry.z
+            t_hit,
+            p_entry.x,
+            p_entry.y,
+            p_entry.z
         );
         // Give DDA enough distance to find first shell: radius + a few voxels
         let dda_max = radius.max(vm * 2.0) + vm * 8.0;
@@ -460,7 +464,8 @@ impl Renderer {
         } else {
             log::warn!(
                 "[destruct] carve: DDA found no solid (dda_max={:.2}m, vm={:.3}m)",
-                dda_max, vm
+                dda_max,
+                vm
             );
         }
         let before = self.voxel_meshes.len();
