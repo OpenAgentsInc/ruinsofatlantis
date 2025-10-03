@@ -79,6 +79,7 @@ fn ray_box_intersect(
 }
 
 /// Snap a world-space point to the nearest solid voxel center within a search radius (in voxels).
+#[allow(dead_code)]
 fn snap_to_nearest_solid(
     grid: &voxel_proxy::VoxelGrid,
     p_ws: glam::Vec3,
@@ -448,8 +449,8 @@ impl ApplicationHandler for App {
                                                 impact.y as f32,
                                                 impact.z as f32,
                                             ) + dir * (radius_m as f32 * 0.9);
-                                        // Optional: drill a few steps deeper along the same ray this press (keep small to avoid full tunneling)
-                                        let drill_steps = 1usize;
+                                            // Optional: drill a few steps deeper along the same ray this press (keep small to avoid full tunneling)
+                                            let drill_steps = 1usize;
                                             for _ in 0..drill_steps {
                                                 if let Some(next) =
                                                     server_core::destructible::raycast_voxels(
@@ -469,7 +470,8 @@ impl ApplicationHandler for App {
                                                         next.voxel.z as f64 + 0.5,
                                                     );
                                                     let impact2 = o + vc2 * vm;
-                                                    let r2 = (0.22 + 0.18 * rand01(&mut rng)) as f64;
+                                                    let r2 =
+                                                        (0.22 + 0.18 * rand01(&mut rng)) as f64;
                                                     let seed2 = splitmix64(&mut rng);
                                                     let out2 = server_core::destructible::carve_and_spawn_debris(
                                                     grid,
