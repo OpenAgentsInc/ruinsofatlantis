@@ -293,15 +293,23 @@ impl ApplicationHandler for App {
                                     let d = dir[i];
                                     let (minb, maxb) = (bmin[i], bmax[i]);
                                     if d.abs() < 1e-6 {
-                                        if s < minb || s > maxb { tmin = 1.0e9; break; }
+                                        if s < minb || s > maxb {
+                                            tmin = 1.0e9;
+                                            break;
+                                        }
                                     } else {
                                         let inv = 1.0 / d;
                                         let mut t0 = (minb - s) * inv;
                                         let mut t1 = (maxb - s) * inv;
-                                        if t0 > t1 { core::mem::swap(&mut t0, &mut t1); }
+                                        if t0 > t1 {
+                                            core::mem::swap(&mut t0, &mut t1);
+                                        }
                                         tmin = tmin.max(t0);
                                         tmax = tmax.min(t1);
-                                        if tmin > tmax { tmin = 1.0e9; break; }
+                                        if tmin > tmax {
+                                            tmin = 1.0e9;
+                                            break;
+                                        }
                                     }
                                 }
                                 // Entry point plus a small inward offset
@@ -528,7 +536,7 @@ fn reset_to_block(renderer: &mut Renderer) {
     let vm = renderer.destruct_cfg.voxel_size_m;
     let meta = VoxelProxyMeta {
         object_id: GlobalId(1),
-        origin_m: DVec3::new(0.0, 0.0, 6.0),
+        origin_m: DVec3::new(0.0, 0.0, 4.0),
         voxel_m: vm,
         dims,
         chunk: renderer.destruct_cfg.chunk,

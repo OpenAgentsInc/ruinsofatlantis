@@ -808,7 +808,12 @@ impl Renderer {
     }
 
     pub fn process_voxel_queues(&mut self) {
-        let budget = self.destruct_cfg.max_chunk_remesh.max(1);
+        // In the one‑path demo, burst‑remesh to make cuts instantly visible
+        let budget = if self.vox_onepath_ui.is_some() {
+            64
+        } else {
+            self.destruct_cfg.max_chunk_remesh.max(1)
+        };
         let chunks = self.chunk_queue.pop_budget(budget);
         if let Some(grid) = self.voxel_grid.as_ref() {
             let t0 = Instant::now();
@@ -818,11 +823,17 @@ impl Renderer {
                 // Skip meshing if occupancy hash hasn't changed
                 let key = (c.x, c.y, c.z);
                 let h = grid.chunk_occ_hash(*c);
-                if self.voxel_hashes.get(&key).copied() == Some(h) {
+                if self.vox_onepath_ui.is_none()
+                    && self.voxel_hashes.get(&key).copied() == Some(h)
+                {
                     skipped += 1;
                     continue;
                 }
-                let mb = voxel_mesh::greedy_mesh_chunk(grid, *c);
+                let mb = if self.vox_onepath_ui.is_some() {
+                    voxel_mesh::naive_mesh_chunk(grid, *c)
+                } else {
+                    voxel_mesh::greedy_mesh_chunk(grid, *c)
+                };
                 if mb.indices.is_empty() {
                     self.voxel_meshes.remove(&(c.x, c.y, c.z));
                     // Also drop any stale chunk collider so debris-vs-world avoids dead volumes
