@@ -60,29 +60,32 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         .map(|n| n.name().unwrap_or("").to_string())
         .collect();
 
-    // Find first mesh primitive with joints/weights and its skin via the node
+    // Find first skinned node and gather ALL its primitives (UBC has multi-material parts).
     let mut skin_opt: Option<gltf::Skin> = None;
     let mut verts: Vec<VertexSkinCPU> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
+    // Track a plausible baseColor texture from the largest contributing primitive.
+    let mut best_tex_pixels: Option<(Vec<u8>, u32, u32)> = None;
+    let mut best_tex_srbg = true;
+    let mut best_vert_count: usize = 0;
 
     'outer: for node in doc.nodes() {
-        if node.skin().is_none() {
+        let Some(skin) = node.skin() else {
             continue;
-        }
+        };
+        skin_opt = Some(skin);
         if let Some(mesh) = node.mesh() {
-            if let Some(skin) = node.skin() {
-                skin_opt = Some(skin);
-            }
             for prim in mesh.primitives() {
                 let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
                 let pos_it = reader.read_positions();
                 let nrm_it = reader.read_normals();
                 let joints_it = reader.read_joints(0);
                 let weights_it = reader.read_weights(0);
-
+                // Accumulate non-Draco primitives with skinning
                 if let (Some(pos_it), Some(nrm_it), Some(joints_it), Some(weights_it)) =
                     (pos_it, nrm_it, joints_it, weights_it)
                 {
+                    let base = verts.len() as u32;
                     let pos: Vec<[f32; 3]> = pos_it.collect();
                     let nrm: Vec<[f32; 3]> = nrm_it.collect();
                     let uv_set = prim
@@ -130,6 +133,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                             })
                             .collect(),
                     };
+                    // Append vertices
                     for i in 0..pos.len() {
                         verts.push(VertexSkinCPU {
                             pos: pos[i],
@@ -139,6 +143,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                             uv: uv[i],
                         });
                     }
+                    // Append (rebased) indices or synthesize if absent
                     let idx_u32: Vec<u32> = match reader.read_indices() {
                         Some(ReadIndices::U16(it)) => it.map(|v| v as u32).collect(),
                         Some(ReadIndices::U32(it)) => it.collect(),
@@ -146,13 +151,51 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                         None => (0..pos.len() as u32).collect(),
                     };
                     for i in idx_u32 {
-                        if i > u16::MAX as u32 {
-                            bail!("wizard indices exceed u16");
+                        let v = i + base;
+                        if v > u16::MAX as u32 {
+                            bail!("indices exceed u16 after rebase: {}", v);
                         }
-                        indices.push(i as u16);
+                        indices.push(v as u16);
                     }
-                    break 'outer;
+                    // Track a plausible base color texture from the largest contributing primitive
+                    if pos.len() > best_vert_count
+                        && let Some(texinfo) = prim
+                            .material()
+                            .pbr_metallic_roughness()
+                            .base_color_texture()
+                    {
+                        let tex = texinfo.texture();
+                        let img_idx = tex.source().index();
+                        if let Some(img) = images.get(img_idx) {
+                            // Convert to RGBA8
+                            let (w, h) = (img.width, img.height);
+                            let pixels = match img.format {
+                                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                gltf::image::Format::R8G8B8 => {
+                                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                    for c in img.pixels.chunks_exact(3) {
+                                        out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                    }
+                                    out
+                                }
+                                gltf::image::Format::R8 => {
+                                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                    for &r in &img.pixels {
+                                        out.extend_from_slice(&[r, r, r, 255]);
+                                    }
+                                    out
+                                }
+                                _ => img.pixels.clone(),
+                            };
+                            best_tex_pixels = Some((pixels, w, h));
+                            best_tex_srbg = true;
+                            best_vert_count = pos.len();
+                        }
+                    }
                 } else if prim.extension_value("KHR_draco_mesh_compression").is_some() {
+                    // Decode Draco skinned primitive, then rebase last indices by previous vertex count.
+                    let idx_start = indices.len();
+                    let vtx_start = verts.len();
                     decode_draco_skinned_primitive(
                         &doc,
                         &buffers,
@@ -160,11 +203,20 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                         &mut verts,
                         &mut indices,
                     )?;
-                    break 'outer;
-                } else {
-                    continue;
+                    let added_idx = indices.len().saturating_sub(idx_start);
+                    if added_idx > 0 {
+                        let base = vtx_start as u32;
+                        for item in indices.iter_mut().skip(idx_start) {
+                            let v = *item as u32 + base;
+                            *item = u16::try_from(v).map_err(|_| {
+                                anyhow::anyhow!("rebased draco index {} exceeds u16", v)
+                            })?;
+                        }
+                    }
                 }
             }
+            // We only take the first skinned node; stop here.
+            break 'outer;
         }
     }
 
@@ -345,45 +397,15 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         );
     }
 
-    // Base color texture (optional)
+    // Base color texture (optional): choose the largest contributing primitive's texture if available
     let mut base_color_texture = None;
-    if let Some(material) = doc
-        .meshes()
-        .next()
-        .and_then(|m| m.primitives().next())
-        .map(|p| p.material())
-        && let Some(texinfo) = material.pbr_metallic_roughness().base_color_texture()
-    {
-        let tex = texinfo.texture();
-        let img_idx = tex.source().index();
-        if let Some(img) = images.get(img_idx) {
-            // Convert to RGBA8
-            let (w, h) = (img.width, img.height);
-            let pixels = match img.format {
-                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
-                gltf::image::Format::R8G8B8 => {
-                    let mut out = Vec::with_capacity((w * h * 4) as usize);
-                    for c in img.pixels.chunks_exact(3) {
-                        out.extend_from_slice(&[c[0], c[1], c[2], 255]);
-                    }
-                    out
-                }
-                gltf::image::Format::R8 => {
-                    let mut out = Vec::with_capacity((w * h * 4) as usize);
-                    for &r in &img.pixels {
-                        out.extend_from_slice(&[r, r, r, 255]);
-                    }
-                    out
-                }
-                _ => img.pixels.clone(),
-            };
-            base_color_texture = Some(TextureCPU {
-                pixels,
-                width: w,
-                height: h,
-                srgb: true,
-            });
-        }
+    if let Some((pixels, w, h)) = best_tex_pixels {
+        base_color_texture = Some(TextureCPU {
+            pixels,
+            width: w,
+            height: h,
+            srgb: best_tex_srbg,
+        });
     }
 
     // Identify useful nodes for VFX
