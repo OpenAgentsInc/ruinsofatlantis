@@ -168,6 +168,11 @@ pub struct Renderer {
     wizard_vb: wgpu::Buffer,
     wizard_ib: wgpu::Buffer,
     wizard_index_count: u32,
+    // PC (player) skinned geometry (UBC male)
+    pc_vb: Option<wgpu::Buffer>,
+    pc_ib: Option<wgpu::Buffer>,
+    pc_index_count: u32,
+    pc_instances: Option<wgpu::Buffer>,
     // Zombie skinned geometry
     zombie_vb: wgpu::Buffer,
     zombie_ib: wgpu::Buffer,
@@ -232,6 +237,13 @@ pub struct Renderer {
     joints_per_wizard: u32,
     wizard_models: Vec<glam::Mat4>,
     wizard_instances_cpu: Vec<InstanceSkin>,
+    // PC skinning palette (UBC male)
+    pc_palettes_buf: Option<wgpu::Buffer>,
+    pc_palettes_bg: Option<wgpu::BindGroup>,
+    pc_joints: u32,
+    pc_cpu: Option<SkinnedMeshCPU>,
+    pc_mat_bg: Option<wgpu::BindGroup>,
+    pc_prev_pos: glam::Vec3,
     // Zombies
     zombie_palettes_buf: wgpu::Buffer,
     zombie_palettes_bg: wgpu::BindGroup,

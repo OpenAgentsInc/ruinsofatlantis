@@ -830,6 +830,142 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let _zombie_tex_view = zmat.texture_view;
     let _zombie_sampler = zmat.sampler;
 
+    // PC (UBC male) assets: load model + merge animation library
+    let (
+        pc_vb,
+        pc_ib,
+        pc_index_count,
+        pc_joints,
+        pc_mat_bg,
+        pc_cpu,
+        pc_instances,
+        pc_palettes_buf,
+        pc_palettes_bg,
+    ) = {
+        use crate::gfx::types::{InstanceSkin, VertexSkinned};
+        use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+        let ubc_path = super::super::asset_path("assets/models/ubc/godot/Superhero_Male.gltf");
+        let cpu_pc = match load_gltf_skinned(&ubc_path) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                log::warn!(
+                    "PC: failed to load UBC male at {:?}: {e:?}. Falling back to wizard rig for PC.",
+                    ubc_path
+                );
+                None
+            }
+        };
+        if let Some(mut cpu_pc) = cpu_pc {
+            if !cpu_pc.animations.is_empty() {
+                log::info!(
+                    target: "model_viewer",
+                    "PC: UBC male loaded: verts={}, indices={}, joints={}",
+                    cpu_pc.vertices.len(),
+                    cpu_pc.indices.len(),
+                    cpu_pc.joints_nodes.len()
+                );
+            }
+            // Merge universal animation library if present
+            let lib_path = super::super::asset_path("assets/anims/universal/AnimationLibrary.glb");
+            if lib_path.exists() {
+                if let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path) {
+                    log::warn!(
+                        "PC: failed to merge animation library at {:?}: {e:?}",
+                        lib_path
+                    );
+                } else {
+                    log::info!(
+                        "PC: merged GLTF animations from {:?} ({} clips)",
+                        lib_path,
+                        cpu_pc.animations.len()
+                    );
+                }
+            }
+            // Build VB/IB for PC if loaded
+            if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
+                (None, None, 0u32, 0u32, None, None, None, None, None)
+            } else {
+                let verts: Vec<VertexSkinned> = cpu_pc
+                    .vertices
+                    .iter()
+                    .map(|v| VertexSkinned {
+                        pos: v.pos,
+                        nrm: v.nrm,
+                        uv: v.uv,
+                        joints: v.joints,
+                        weights: v.weights,
+                    })
+                    .collect();
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("pc-ubc-vb"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("pc-ubc-ib"),
+                    contents: bytemuck::cast_slice(&cpu_pc.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+                let index_count = cpu_pc.indices.len() as u32;
+                let joints = cpu_pc.joints_nodes.len() as u32;
+                let pc_mat =
+                    material::create_wizard_material(&device, &queue, &material_bgl, &cpu_pc);
+                // Instance at initial PC position
+                let pc_initial_pos = {
+                    let m = scene_build.wizard_models[scene_build.pc_index];
+                    let c = m.to_cols_array();
+                    glam::vec3(c[12], c[13], c[14])
+                };
+                let m = glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::IDENTITY,
+                    pc_initial_pos,
+                );
+                let inst_cpu = InstanceSkin {
+                    model: m.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    selected: 1.0,
+                    palette_base: 0,
+                    _pad_inst: [0; 3],
+                };
+                let inst_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("pc-ubc-instance"),
+                    contents: bytemuck::bytes_of(&inst_cpu),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+                // Palette buffer (single instance)
+                let pc_pal_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("pc-ubc-palettes"),
+                    size: (joints as usize * 64) as u64,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                let pc_pal_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("pc-ubc-palettes-bg"),
+                    layout: &palettes_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: pc_pal_buf.as_entire_binding(),
+                    }],
+                });
+                (
+                    Some(vb),
+                    Some(ib),
+                    index_count,
+                    joints,
+                    Some(pc_mat.bind_group),
+                    Some(cpu_pc),
+                    Some(inst_buf),
+                    Some(pc_pal_buf),
+                    Some(pc_pal_bg),
+                )
+            }
+        } else {
+            // Disable separate PC rig: yield Nones from this block
+            (None, None, 0u32, 0u32, None, None, None, None, None)
+        }
+    };
+
     // Death Knight assets (skinned, single instance)
     let dk_assets =
         super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
@@ -1364,6 +1500,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_vb,
         wizard_ib,
         wizard_index_count,
+        pc_vb,
+        pc_ib,
+        pc_index_count,
+        pc_instances,
         dk_vb,
         dk_ib,
         dk_index_count,
@@ -1407,6 +1547,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         quad_vb,
         palettes_buf,
         palettes_bg,
+        pc_palettes_buf,
+        pc_palettes_bg,
         joints_per_wizard: scene_build.joints_per_wizard,
         wizard_models,
         wizard_instances_cpu,
@@ -1532,6 +1674,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         dk_cpu,
         dk_time_offset: (0..dk_count as usize).map(|_| 0.0f32).collect(),
         dk_id: Some(dk_id),
+        pc_joints,
+        pc_cpu,
+        pc_mat_bg,
+        pc_prev_pos: pc_initial_pos,
         zombie_palettes_buf,
         zombie_palettes_bg,
         zombie_joints,

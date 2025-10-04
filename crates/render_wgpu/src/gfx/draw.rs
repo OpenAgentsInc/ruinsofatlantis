@@ -9,17 +9,34 @@ impl Renderer {
         if self.wizard_index_count == 0 {
             return;
         }
-        let stride = std::mem::size_of::<crate::gfx::types::InstanceSkin>() as u64;
-        let offset = (self.pc_index as u64) * stride;
         rpass.set_pipeline(&self.wizard_pipeline);
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-        rpass.set_bind_group(2, &self.palettes_bg, &[]);
-        rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
-        rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
-        rpass.set_vertex_buffer(1, self.wizard_instances.slice(offset..offset + stride));
-        rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
-        rpass.draw_indexed(0..self.wizard_index_count, 0, 0..1);
+        // Prefer PC (UBC) resources when available
+        if let (Some(pc_pal_bg), Some(pc_mat_bg), Some(pc_vb), Some(pc_ib), Some(pc_inst)) = (
+            self.pc_palettes_bg.as_ref(),
+            self.pc_mat_bg.as_ref(),
+            self.pc_vb.as_ref(),
+            self.pc_ib.as_ref(),
+            self.pc_instances.as_ref(),
+        ) {
+            rpass.set_bind_group(2, pc_pal_bg, &[]);
+            rpass.set_bind_group(3, pc_mat_bg, &[]);
+            rpass.set_vertex_buffer(0, pc_vb.slice(..));
+            rpass.set_vertex_buffer(1, pc_inst.slice(..));
+            rpass.set_index_buffer(pc_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.pc_index_count, 0, 0..1);
+        } else {
+            // Fallback: draw PC from wizard rig
+            let stride = std::mem::size_of::<crate::gfx::types::InstanceSkin>() as u64;
+            let offset = (self.pc_index as u64) * stride;
+            rpass.set_bind_group(2, &self.palettes_bg, &[]);
+            rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
+            rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
+            rpass.set_vertex_buffer(1, self.wizard_instances.slice(offset..offset + stride));
+            rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..1);
+        }
     }
     pub(crate) fn draw_wizards(&self, rpass: &mut wgpu::RenderPass<'_>) {
         rpass.set_pipeline(&self.wizard_pipeline);
@@ -28,9 +45,34 @@ impl Renderer {
         rpass.set_bind_group(2, &self.palettes_bg, &[]);
         rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
         rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
-        rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
         rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
-        rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
+        // If PC uses a separate rig, skip the PC instance in the wizard draw by splitting draws
+        if self.pc_vb.is_some() {
+            let stride = std::mem::size_of::<crate::gfx::types::InstanceSkin>() as u64;
+            // Draw [0, pc_index)
+            if self.pc_index > 0 {
+                let first_count = self.pc_index as u32;
+                rpass.set_vertex_buffer(
+                    1,
+                    self.wizard_instances
+                        .slice(..(self.pc_index as u64) * stride),
+                );
+                rpass.draw_indexed(0..self.wizard_index_count, 0, 0..first_count);
+            }
+            // Draw (pc_index, wizard_count]
+            if (self.pc_index as u32) < self.wizard_count {
+                let remain = self.wizard_count.saturating_sub(self.pc_index as u32 + 1);
+                if remain > 0 {
+                    let off = ((self.pc_index + 1) as u64) * stride;
+                    rpass.set_vertex_buffer(1, self.wizard_instances.slice(off..));
+                    rpass.draw_indexed(0..self.wizard_index_count, 0, 0..remain);
+                }
+            }
+        } else {
+            // No separate PC rig: draw all wizards together
+            rpass.set_vertex_buffer(1, self.wizard_instances.slice(..));
+            rpass.draw_indexed(0..self.wizard_index_count, 0, 0..self.wizard_count);
+        }
     }
 
     pub(crate) fn draw_particles(&self, rpass: &mut wgpu::RenderPass<'_>) {

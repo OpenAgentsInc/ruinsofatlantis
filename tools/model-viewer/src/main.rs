@@ -1364,7 +1364,8 @@ async fn run(cli: Cli) -> Result<()> {
                         // Filter out unwanted clips
                         names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
                         names.sort();
-                        **anim = AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
+                        **anim =
+                            AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
                         *anims = names;
                         *time = 0.0;
                         *active_index = 0;

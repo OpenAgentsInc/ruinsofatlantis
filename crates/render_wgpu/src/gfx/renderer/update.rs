@@ -1330,12 +1330,18 @@ impl Renderer {
         let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
         let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
         self.wizard_models[self.pc_index] = m;
+        // Keep wizard instance CPU/model updated for UI and compatibility
         let mut inst = self.wizard_instances_cpu[self.pc_index];
         inst.model = m.to_cols_array_2d();
         self.wizard_instances_cpu[self.pc_index] = inst;
         let offset = (self.pc_index * std::mem::size_of::<InstanceSkin>()) as u64;
         self.queue
             .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+        // Also update PC (UBC) instance buffer when present
+        if let Some(pc_inst) = self.pc_instances.as_ref() {
+            self.queue
+                .write_buffer(pc_inst, 0, bytemuck::bytes_of(&inst));
+        }
     }
 
     pub(crate) fn update_wizard_palettes(&mut self, time_global: f32) {
@@ -1346,21 +1352,16 @@ impl Renderer {
         let joints = self.joints_per_wizard as usize;
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
         for i in 0..(self.wizard_count as usize) {
-            let clip = self.select_clip(self.wizard_anim_index[i]);
-            let palette = if self.pc_alive
-                && i == self.pc_index
-                && self.pc_index < self.wizard_count as usize
-            {
-                if let Some(start) = self.pc_anim_start {
-                    let lt = (time_global - start).clamp(0.0, clip.duration.max(0.0));
-                    anim::sample_palette(&self.skinned_cpu, clip, lt)
-                } else {
-                    anim::sample_palette(&self.skinned_cpu, clip, time_global)
+            // If the PC uses a separate rig, keep the PC's wizard palette identity to avoid junk
+            if i == self.pc_index && self.pc_vb.is_some() {
+                for _ in 0..self.joints_per_wizard {
+                    mats.push(glam::Mat4::IDENTITY);
                 }
-            } else {
-                let t = time_global + self.wizard_time_offset[i];
-                anim::sample_palette(&self.skinned_cpu, clip, t)
-            };
+                continue;
+            }
+            let clip = self.select_clip(self.wizard_anim_index[i]);
+            let t = time_global + self.wizard_time_offset[i];
+            let palette = anim::sample_palette(&self.skinned_cpu, clip, t);
             mats.extend(palette);
         }
         // Upload as raw f32x16
@@ -1370,6 +1371,77 @@ impl Renderer {
         }
         self.queue
             .write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
+    }
+
+    pub(crate) fn update_pc_palette(&mut self, time_global: f32) {
+        // Only if separate PC rig is loaded
+        let (pc_cpu, pc_pal_buf) = match (self.pc_cpu.as_ref(), self.pc_palettes_buf.as_ref()) {
+            (Some(c), Some(b)) => (c, b),
+            _ => return,
+        };
+        let joints = self.pc_joints as usize;
+        // Movement detection
+        let current_pos = {
+            let m = self
+                .wizard_models
+                .get(self.pc_index)
+                .copied()
+                .unwrap_or(glam::Mat4::IDENTITY);
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
+        let moving = (current_pos - self.pc_prev_pos).length_squared() > 1e-4;
+        // Attack when casting
+        let is_casting = self.pc_anim_start.is_some();
+        // Fuzzy clip lookup like zombies/DK
+        let pick = |subs: &[&str]| -> Option<String> {
+            let lows: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
+            for name in pc_cpu.animations.keys() {
+                let low = name.to_lowercase();
+                if lows.iter().any(|s| low.contains(s)) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
+        let lookup = if is_casting {
+            pick(&["attack", "cast", "shoot", "swing", "slash"]) // prefer attack/cast
+                .or_else(|| pick(&["punch", "hit"]))
+        } else if moving {
+            pick(&["run", "jog", "walk", "move"]) // prefer faster then slower
+        } else {
+            pick(&["idle", "stand", "wait"]) // idle-like
+        }
+        .or_else(|| pc_cpu.animations.keys().next().cloned());
+
+        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(joints);
+        if let Some(name) = lookup
+            && let Some(clip) = pc_cpu.animations.get(&name)
+        {
+            // Respect local casting timeline if present
+            let t = if is_casting {
+                if let Some(start) = self.pc_anim_start {
+                    (time_global - start).max(0.0)
+                } else {
+                    time_global
+                }
+            } else {
+                time_global
+            };
+            mats.extend(anim::sample_palette(pc_cpu, clip, t));
+        }
+        if mats.is_empty() {
+            for _ in 0..joints {
+                mats.push(glam::Mat4::IDENTITY);
+            }
+        }
+        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(joints);
+        for m in mats {
+            raw.push(m.to_cols_array());
+        }
+        self.queue
+            .write_buffer(pc_pal_buf, 0, bytemuck::cast_slice(&raw));
+        self.pc_prev_pos = current_pos;
     }
 
     pub(crate) fn select_clip(&self, idx: usize) -> &AnimClip {

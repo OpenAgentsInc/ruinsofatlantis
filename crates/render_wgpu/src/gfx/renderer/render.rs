@@ -285,6 +285,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.process_pc_cast(t);
     // Update wizard skinning palettes on CPU then upload
     r.update_wizard_palettes(t);
+    // Update PC (UBC) palette if separate rig is active
+    r.update_pc_palette(t);
     // Zombie AI/movement on server; then update local transforms and palettes
     {
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(r.wizard_count as usize);
