@@ -1770,6 +1770,10 @@ impl Hud {
     }
 
     /// Append a simple center reticle (crosshair) using the bar pipeline.
+    ///
+    /// Reticle draw is currently disabled at call sites; keep this helper
+    /// available for future re-enable without shipping the overlay.
+    #[allow(dead_code)]
     pub fn append_reticle(&mut self, surface_w: u32, surface_h: u32) {
         let cx = surface_w as f32 * 0.5;
         let cy = surface_h as f32 * 0.5;

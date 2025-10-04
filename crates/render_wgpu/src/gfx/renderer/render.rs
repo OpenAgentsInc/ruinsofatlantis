@@ -1045,9 +1045,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.hud.reset();
         }
         // Draw a minimal reticle when in mouselook
+        // (disabled per request; keeping code for potential re‑enable)
+        /*
         if r.controller_state.mode() == ecs_core::components::ControllerMode::Mouselook {
             r.hud.append_reticle(r.size.width, r.size.height);
         }
+        */
         if r.hud_model.perf_enabled() {
             let ms = dt * 1000.0;
             let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };
