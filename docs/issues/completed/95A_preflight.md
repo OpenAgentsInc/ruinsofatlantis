@@ -139,3 +139,4 @@ What was implemented to satisfy 95A:
 - Verification
   - Both default and feature builds pass `clippy -D warnings` and `cargo test`.
   - Demo bin builds only when `vox_onepath_demo` is enabled.
+

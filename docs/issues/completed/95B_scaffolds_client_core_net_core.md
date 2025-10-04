@@ -67,3 +67,4 @@ What was implemented:
   - Added `crates/net_core` to workspace members so CI covers it.
 - CI
   - Existing `xtask ci` remains green; new crates now participate in clippy/tests.
+
