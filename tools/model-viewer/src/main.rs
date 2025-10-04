@@ -215,6 +215,12 @@ struct LibAnim {
     path: std::path::PathBuf,
 }
 
+#[derive(Clone)]
+struct LibModel {
+    name: String,
+    path: std::path::PathBuf,
+}
+
 fn scan_anim_library() -> Vec<LibAnim> {
     let mut out: Vec<LibAnim> = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();
@@ -230,6 +236,50 @@ fn scan_anim_library() -> Vec<LibAnim> {
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
+}
+
+fn scan_model_library() -> Vec<LibModel> {
+    let mut out: Vec<LibModel> = Vec::new();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let repo_root = cwd;
+    let candidates = [repo_root.join("assets/models")];
+    for dir in candidates.iter().filter(|p| p.exists()) {
+        collect_model_files(dir, 0, 4, &mut out);
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+fn collect_model_files(
+    dir: &std::path::Path,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<LibModel>,
+) {
+    if depth > max_depth {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if p.is_dir() {
+            collect_model_files(&p, depth + 1, max_depth, out);
+            continue;
+        }
+        if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+            let ext_l = ext.to_ascii_lowercase();
+            if ext_l == "gltf" || ext_l == "glb" {
+                let name = p
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                out.push(LibModel { name, path: p });
+            }
+        }
+    }
 }
 
 fn collect_anim_files(
@@ -453,6 +503,10 @@ struct Cli {
     /// Save a one-frame PNG snapshot and exit.
     #[arg(long)]
     snapshot: Option<PathBuf>,
+
+    /// UI scale for text (1.0 = default). Lower to see more lines.
+    #[arg(long, default_value_t = 1.0)]
+    ui_scale: f32,
 }
 
 #[repr(C)]
@@ -705,6 +759,8 @@ async fn run(cli: Cli) -> Result<()> {
 
     // Animation library (scan assets/anims/* and optional env var FBX_LIB_DIR)
     let lib_anims: Vec<LibAnim> = scan_anim_library();
+    // Model library (scan assets/models/*)
+    let lib_models: Vec<LibModel> = scan_model_library();
 
     // Pipeline
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1265,7 +1321,8 @@ async fn run(cli: Cli) -> Result<()> {
                 let mut text_verts_label: Vec<UiVertex> = Vec::new();
                 let label = vec!["AUTO ROTATE".to_string()];
                 let label_start = (m + s + 8.0, m);
-                build_text_quads(&label, label_start, (width as f32, height as f32), &mut text_verts_label, [0.85, 0.85, 0.9, 1.0], 3.0);
+                let label_cell = 3.0 * cli.ui_scale.max(0.25);
+                build_text_quads(&label, label_start, (width as f32, height as f32), &mut text_verts_label, [0.85, 0.85, 0.9, 1.0], label_cell);
                 if !text_verts_label.is_empty() {
                     let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-label"), contents: bytemuck::cast_slice(&text_verts_label), usage: wgpu::BufferUsages::VERTEX });
                     rpass.set_pipeline(&ui_pipe);
@@ -1285,7 +1342,7 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
                 if !lines.is_empty() {
-                    let anim_cell: f32 = 6.0; // smaller animation text
+                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25); // animation list text
                     let start_px = (m, m + s + 8.0);
                     build_text_quads(&lines, start_px, (width as f32, height as f32), &mut text_verts, [0.9, 0.9, 0.95, 1.0], anim_cell);
                     let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-text"), contents: bytemuck::cast_slice(&text_verts), usage: wgpu::BufferUsages::VERTEX });
@@ -1294,14 +1351,35 @@ async fn run(cli: Cli) -> Result<()> {
                     rpass.draw(0..(text_verts.len() as u32), 0..1);
                 }
 
+                // Model library list
+                if !lib_models.is_empty() {
+                    let mut model_lines: Vec<String> = vec!["MODELS:".to_string()];
+                    for (i, mentry) in lib_models.iter().enumerate() {
+                        model_lines.push(format!("{}: {}", i + 1, mentry.name.to_uppercase()));
+                    }
+                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                    let base_y = m + s + 8.0;
+                    let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
+                    let y_offset = base_y + anim_lines * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
+                    let mut model_text: Vec<UiVertex> = Vec::new();
+                    build_text_quads(&model_lines, (m, y_offset), (width as f32, height as f32), &mut model_text, [0.8,0.9,0.95,1.0], anim_cell);
+                    if !model_text.is_empty() {
+                        let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-models"), contents: bytemuck::cast_slice(&model_text), usage: wgpu::BufferUsages::VERTEX });
+                        rpass.set_pipeline(&ui_pipe);
+                        rpass.set_vertex_buffer(0, tvb.slice(..));
+                        rpass.draw(0..(model_text.len() as u32), 0..1);
+                    }
+                }
+
                 // Library animations (if any)
                 if !lib_anims.is_empty() {
                     let mut lib_lines: Vec<String> = vec!["LIBRARY:".to_string()];
                     for (i, a) in lib_anims.iter().enumerate() { lib_lines.push(format!("{}: {}", i + 1, a.name.to_uppercase())); }
-                    let anim_cell: f32 = 6.0;
+                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
                     let base_y = m + s + 8.0;
-                    let model_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
-                    let y_offset = base_y + model_lines * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
+                    let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
+                    let model_lines = if lib_models.is_empty() { 0.0 } else { lib_models.len() as f32 + 1.0 };
+                    let y_offset = base_y + (anim_lines + model_lines) * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
                     let mut lib_text: Vec<UiVertex> = Vec::new();
                     build_text_quads(&lib_lines, (m, y_offset), (width as f32, height as f32), &mut lib_text, [0.8,0.85,0.95,1.0], anim_cell);
                     if !lib_text.is_empty() {
@@ -1449,6 +1527,27 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                         }
             }
+            // Model entries click handling (replace base model)
+            if !lib_models.is_empty() {
+                let s: f32 = 20.0; let m: f32 = 16.0;
+                let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                let base_y = m + s + 8.0;
+                let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
+                let y_offset = base_y + anim_lines * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
+                for (i, entry) in lib_models.clone().into_iter().enumerate() {
+                    let text = format!("{}: {}", i + 1, entry.name.to_uppercase());
+                    let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
+                    let tx0 = m; let ty0 = y_offset + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0);
+                    let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
+                    if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
+                        if let Ok(gpu) = load_model(&entry.path, &device, &queue, &mat_bgl, &skin_bgl) {
+                            model_gpu = Some(gpu);
+                        }
+                        break;
+                    }
+                }
+            }
+
             // Library entries click handling (merge into loaded model)
             if let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, anim, base, .. } = gpu
@@ -1466,8 +1565,19 @@ async fn run(cli: Cli) -> Result<()> {
                     if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
                         let ext = a.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
                         if ext == "gltf" || ext == "glb" {
-                            // Replace current model with the selected library model (more intuitive)
-                            if let Ok(new_gpu) = load_model(&a.path, &device, &queue, &mat_bgl, &skin_bgl) { replace_new = Some(new_gpu); }
+                            // Prefer merging GLTF animations into the current model
+                            match merge_gltf_animations(base, &a.path) {
+                                Ok(_n) => {
+                                    let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
+                                    *anim = Box::new(AnimData::from_skinned(base, &new_names));
+                                    *anims = new_names; *time = 0.0; *active_index = 0;
+                                    log::info!("viewer: merged GLTF animations from {}", a.path.display());
+                                }
+                                Err(e) => {
+                                    log::warn!("viewer: merge GLTF animations failed ({}), replacing model", e);
+                                    if let Ok(new_gpu) = load_model(&a.path, &device, &queue, &mat_bgl, &skin_bgl) { replace_new = Some(new_gpu); }
+                                }
+                            }
                         } else if ext == "fbx" {
                             // Merge FBX as animations into current model
                             if merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }

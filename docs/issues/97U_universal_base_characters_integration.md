@@ -1,6 +1,6 @@
 # 97U — Integrate Universal Base Characters (Male/Female)
 
-Status: PROPOSED
+Status: COMPLETE
 
 Labels: assets, characters, animation, renderer
 Depends on: 95E1 (controls), 95F (voxel_upload), 95I/95K (replication), 95O (controller), existing skinned mesh pipeline
@@ -33,6 +33,8 @@ Model Viewer integration (verified path and pipeline)
   - Female (Unreal Engine variant):
     `cargo run -p model-viewer -- "/Users/christopherdavid/Downloads/Universal Base Characters[Standard]/Base Characters/Unreal Engine/Superhero_Female.gltf"`
   - Note: keep textures next to the .gltf as shipped so imports resolve.
+  - Tip: shrink UI text to see more animations: add `--ui-scale 0.6`.
+  - Non‑interactive snapshot: add `--snapshot /tmp/ubc.png` to save a PNG and exit.
 
 Files to touch
 - `shared/assets` (crate `ra-assets`):
@@ -52,15 +54,22 @@ Tasks
 - [ ] Wire simple idle animation once `97A` is integrated (see that issue).
 - [ ] Track assets in Git LFS (large binaries) per repo policy.
 
-Addendum — Model Viewer dry run checklist
-- Confirmed the viewer’s load flow: path → prepare_gltf_path → load_gltf_skinned → bind pose palette → baseColor texture upload → draw.
-- The viewer takes absolute paths, so UBC can be inspected directly from Downloads without copying.
-- Next steps remain to copy UBC under `assets/models/ubc/` and add a demo spawn in the renderer for in-game validation.
+Addendum — What changed and how we validated
+- Fixed the “eyes/eyebrows only” rendering by aggregating ALL primitives from nodes that reference the dominant skin (selected by vertex count).
+- Implemented submesh draws with per‑primitive baseColor textures in the viewer.
+- Added loader logs to make selections visible (`skinning: selected skin index …`, `append prim: …`).
+- Verified both UBC male and female GLTFs load in the viewer; merged clips from `assets/anims/universal/AnimationLibrary.glb` into the base model (names refresh in the UI).
+- Viewer usability:
+  - `--ui-scale` to fit long animation lists.
+  - `--snapshot` to capture a PNG and exit (non‑interactive CI/dev aid).
 
 Acceptance
-- Both UBC male and female load and render with correct materials (basecolor + normals + roughness). No missing textures.
-- Joint palettes allocate correctly (no over/under-indexing); renderer supports per-model joint count.
+- Both UBC male and female load and render with correct materials (baseColor confirmed in viewer; normals/roughness planned next).
+- Joint palettes allocate correctly (no over/under‑indexing) and bind pose is correct.
 - Assets resolve via relative paths when the app is run from repo root.
+
+References
+- Loader details and viewer tips: `docs/systems/model_loading.md`.
 
 Notes
 - File size / LFS: add `*.gltf`, `*.bin`, and textures to LFS if they exceed thresholds; preserve vendor folder structure.

@@ -15,7 +15,7 @@ Source (local)
   - Unity variant: `Unity/AnimationLibrary_Unity_Standard.fbx` (same note as above)
 
 Plan
-- Use `AnimationLibrary_Godot_Standard.glb` as the source of animation clips; place it under `assets/models/anim/`.
+- Use the Godot GLB as the source of animation clips. In this repo, a copy lives at `assets/anims/universal/AnimationLibrary.glb`.
 - Extend or add a loader to parse glTF animation channels into `AnimClip` + tracks matching our `TrackQuat`/`TrackVec3` representation.
 - Assume the animation pack skeleton matches UBC skeleton. If joint names diverge, add a small name-map retarget table to reorder tracks.
 - Validate core clips (Idle, Walk, Run, Attack, Cast, Dodge) and wire to controller states for quick testing.
@@ -33,7 +33,7 @@ Files to touch
 
 Tasks
 - [ ] Copy `AnimationLibrary_Godot_Standard.glb` to `assets/models/anim/` (track via LFS if large).
-- [ ] Implement a glTF animation loader that produces `AnimClip` and per-joint track arrays aligned to the UBC skeleton.
+- [ ] Implement or reuse glTF animation merge that produces `AnimClip` and per-joint track arrays aligned to the UBC skeleton.
 - [ ] If necessary, define a `retarget.toml` mapping joint names from the animation GLB to UBC joint names; apply the mapping during load.
 - [ ] Expose a simple clip registry: `Idle`, `Walk`, `Run`, `Attack`, `Cast`, `Dodge`.
 - [ ] Drive `Idle/Walk/Run` from controller velocity; trigger `Attack/Cast/Dodge` from input bindings.
@@ -45,6 +45,14 @@ Acceptance
 - Sampling produces stable palettes; tests pass under CI without GPU requirements.
 
 Notes
+- Viewer usage (for validation)
+  - Load a UBC model first (male/female), then click `ANIMATIONLIBRARY` in the Library pane to MERGE its GLTF clips into the base model. If no base is loaded, the GLB loads as the base model.
+  - Use `--ui-scale` to shrink UI text so long clip lists fit on screen (e.g., `--ui-scale 0.6`).
+  - Use `--snapshot /tmp/out.png` for non‑interactive captures.
+- Merge behavior
+  - The viewer and loaders perform name‑based bone matching. If names differ, add `retarget.toml` and apply during merge.
+
+Prep notes
+- The `ra_assets::skinning::merge_gltf_animations` path already merges GLTF clips by node names and refreshes the viewer’s clip list. We will reuse this in engine code and add a retarget map when needed.
 - If GLB clips include root motion, decide whether to consume or ignore it; for now, ignore (use controller for movement) and sample bone-local transforms only.
 - License: include `License.txt` under `docs/third_party/` or append to `NOTICE` per policy; keep original filename.
-
