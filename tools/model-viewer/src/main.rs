@@ -354,12 +354,25 @@ struct AnimData {
     base_s: Vec<Vec3>,
     joints_nodes: Vec<usize>,
     inverse_bind: Vec<Mat4>,
+    node_names: Vec<String>,
+    corr_mask: Option<Vec<bool>>, // optional head/neck correction mask
+    corr_quat: glam::Quat,        // quaternion applied to masked nodes
     // Ordered clips parallel to displayed anims
     clips: Vec<ra_assets::AnimClip>,
 }
 
 impl AnimData {
-    fn from_skinned(sk: &SkinnedMeshCPU, ordered_names: &[String]) -> Self {
+    fn norm_bone_name(s: &str) -> String {
+        let mut out = s.to_lowercase();
+        for pref in ["def-", "rig|", "rig/", "rig:", "armature|", "armature/", "armature:", "skeleton|", "skeleton/", "skeleton:"] {
+            if out.starts_with(pref) { out = out.trim_start_matches(pref).to_string(); }
+            out = out.replace(pref, "");
+        }
+        out = out.replace([' ', '_', '-', '.', '|'], "");
+        out.replace("hips", "pelvis").replace("forearm", "lowerarm").replace("shoulder", "clavicle").replace("shin", "calf")
+    }
+
+    fn from_skinned_with_options(sk: &SkinnedMeshCPU, ordered_names: &[String], head_pitch_deg: f32) -> Self {
         let mut clips = Vec::new();
         for name in ordered_names {
             if let Some(c) = sk.animations.get(name) {
@@ -374,6 +387,15 @@ impl AnimData {
                 });
             }
         }
+        let corr_q = glam::Quat::from_rotation_x(head_pitch_deg.to_radians());
+        let corr_mask = if head_pitch_deg.abs() > 0.001 {
+            let mut mask = vec![false; sk.parent.len()];
+            for (i, n) in sk.node_names.iter().enumerate() {
+                let nn = Self::norm_bone_name(n);
+                if nn == "head" || nn == "neck" { mask[i] = true; }
+            }
+            Some(mask)
+        } else { None };
         Self {
             parent: sk.parent.clone(),
             base_t: sk.base_t.clone(),
@@ -381,8 +403,14 @@ impl AnimData {
             base_s: sk.base_s.clone(),
             joints_nodes: sk.joints_nodes.clone(),
             inverse_bind: sk.inverse_bind.clone(),
+            node_names: sk.node_names.clone(),
+            corr_mask,
+            corr_quat: corr_q,
             clips,
         }
+    }
+    fn from_skinned(sk: &SkinnedMeshCPU, ordered_names: &[String]) -> Self {
+        Self::from_skinned_with_options(sk, ordered_names, 0.0)
     }
 
     fn sample_palette(&self, clip_idx: usize, t: f32) -> Vec<[[f32; 4]; 4]> {
@@ -402,6 +430,12 @@ impl AnimData {
             }
             for (idx, sr) in st {
                 ls[*idx] = sample_vec3(sr, t);
+            }
+        }
+        // Apply optional correction to head/neck rotations
+        if let Some(mask) = &self.corr_mask {
+            for (i, m) in mask.iter().enumerate() {
+                if *m { lr[i] = self.corr_quat * lr[i]; }
             }
         }
         // globals
@@ -512,6 +546,11 @@ struct Cli {
     /// When provided with `path`, the clips are merged on load and the animation list is refreshed.
     #[arg(long)]
     anim_lib: Option<PathBuf>,
+
+    /// Pitch correction in degrees to apply to head/neck bones (positive pitches up).
+    /// Useful for rigs whose head rests pitched down in all clips.
+    #[arg(long, default_value_t = 0.0)]
+    head_pitch_deg: f32,
 }
 
 #[repr(C)]
@@ -1065,7 +1104,7 @@ async fn run(cli: Cli) -> Result<()> {
                 names.sort();
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
-                let anim = Box::new(AnimData::from_skinned(&base, &names));
+                let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg));
                 Ok(ModelGpu::Skinned {
                     vb,
                     ib,
@@ -1206,7 +1245,7 @@ async fn run(cli: Cli) -> Result<()> {
                     if merged_ok {
                         let mut names: Vec<String> = base.animations.keys().cloned().collect();
                         names.sort();
-                        **anim = AnimData::from_skinned(&base, &names);
+                        **anim = AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
                         *anims = names;
                         *time = 0.0;
                         *active_index = 0;
@@ -1634,7 +1673,7 @@ async fn run(cli: Cli) -> Result<()> {
                             match merge_gltf_animations(base, &a.path) {
                                 Ok(_n) => {
                                     let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
-                                    *anim = Box::new(AnimData::from_skinned(base, &new_names));
+                                    *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, cli.head_pitch_deg));
                                     *anims = new_names; *time = 0.0; *active_index = 0;
                                     log::info!("viewer: merged GLTF animations from {}", a.path.display());
                                 }
@@ -1648,7 +1687,7 @@ async fn run(cli: Cli) -> Result<()> {
                             if merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
                             // refresh AnimData and UI list
                             let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
-                            *anim = Box::new(AnimData::from_skinned(base, &new_names));
+                            *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, cli.head_pitch_deg));
                             *anims = new_names;
                             *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
                         }

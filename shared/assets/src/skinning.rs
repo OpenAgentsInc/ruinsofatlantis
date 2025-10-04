@@ -613,6 +613,7 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
 }
 
 fn normalize_bone_name(s: &str) -> String {
+    // Lowercase and strip common rig prefixes and separators, then normalize digits and synonyms.
     let mut out = s.to_lowercase();
     for pref in [
         "mixamorig:",
@@ -621,14 +622,46 @@ fn normalize_bone_name(s: &str) -> String {
         "armature:",
         "skeleton|",
         "skeleton/",
+        "skeleton:",
+        "def-",
+        "rig|",
+        "rig/",
+        "rig:",
     ] {
         if out.starts_with(pref) {
             out = out.trim_start_matches(pref).to_string();
         }
         out = out.replace(pref, "");
     }
-    out = out.replace([' ', '_', '-'], "");
-    out
+    // Remove common separator characters entirely
+    out = out.replace([' ', '_', '-', '.', '|'], "");
+    // Synonyms between libraries (best‑effort)
+    out = out.replace("hips", "pelvis");
+    out = out.replace("forearm", "lowerarm");
+    out = out.replace("shoulder", "clavicle");
+    out = out.replace("shin", "calf");
+    // Collapse numeric runs to remove leading zeros (e.g., spine.003 -> spine3, spine_01 -> spine1)
+    let mut collapsed = String::with_capacity(out.len());
+    let mut i = 0;
+    let b = out.as_bytes();
+    while i < b.len() {
+        if b[i].is_ascii_digit() {
+            let start = i;
+            while i < b.len() && b[i].is_ascii_digit() {
+                i += 1;
+            }
+            let num_str = &out[start..i];
+            if let Ok(val) = num_str.parse::<u32>() {
+                collapsed.push_str(&val.to_string());
+            } else {
+                collapsed.push_str(num_str);
+            }
+            continue;
+        }
+        collapsed.push(b[i] as char);
+        i += 1;
+    }
+    collapsed
 }
 
 /// Merge animation clips from an FBX file into an existing skinned mesh by node-name mapping.
