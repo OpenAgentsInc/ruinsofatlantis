@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 ecs_core = { version = "0.1.0", path = "../ecs_core" }
 glam = "0.30"
+net_core = { version = "0.1.0", path = "../net_core" }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
 

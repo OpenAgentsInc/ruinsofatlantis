@@ -1,4 +1,4 @@
-//! net_core: snapshot schema + in-proc replication plumbing (scaffold)
+//! `net_core`: snapshot schema + in-proc replication plumbing (scaffold)
 //!
 //! Scope
 //! - Defines minimal snapshot encode/decode traits and stub messages
@@ -9,6 +9,7 @@
 #![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
 pub mod apply;
+pub mod channel;
 pub mod interest;
 pub mod snapshot;
 

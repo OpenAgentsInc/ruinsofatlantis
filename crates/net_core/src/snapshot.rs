@@ -37,21 +37,21 @@ impl SnapshotEncode for ChunkMeshDelta {
         out.extend_from_slice(&self.chunk.0.to_le_bytes());
         out.extend_from_slice(&self.chunk.1.to_le_bytes());
         out.extend_from_slice(&self.chunk.2.to_le_bytes());
-        let npos = self.positions.len() as u32;
+        let npos = u32::try_from(self.positions.len()).expect("positions len fits u32");
         out.extend_from_slice(&npos.to_le_bytes());
         for p in &self.positions {
             for c in p {
                 out.extend_from_slice(&c.to_le_bytes());
             }
         }
-        let nnrm = self.normals.len() as u32;
+        let nnrm = u32::try_from(self.normals.len()).expect("normals len fits u32");
         out.extend_from_slice(&nnrm.to_le_bytes());
         for n in &self.normals {
             for c in n {
                 out.extend_from_slice(&c.to_le_bytes());
             }
         }
-        let nidx = self.indices.len() as u32;
+        let nidx = u32::try_from(self.indices.len()).expect("indices len fits u32");
         out.extend_from_slice(&nidx.to_le_bytes());
         for i in &self.indices {
             out.extend_from_slice(&i.to_le_bytes());
@@ -61,7 +61,7 @@ impl SnapshotEncode for ChunkMeshDelta {
 
 impl SnapshotDecode for ChunkMeshDelta {
     fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
-        use anyhow::{Context, bail};
+        use anyhow::bail;
         fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
             if inp.len() < N {
                 anyhow::bail!("short read");
