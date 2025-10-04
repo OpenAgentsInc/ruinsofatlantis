@@ -587,9 +587,19 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
                 t_tracks.insert(di, tr.clone());
             }
         }
+        // Rotation retarget: bring source local rotations into target local space by
+        // applying the delta from source rest onto target rest.
         for (i, rr) in &clip.r_tracks {
             if let Some(di) = map_idx(i) {
-                r_tracks.insert(di, rr.clone());
+                let src_rest = other.base_r[*i];
+                let tgt_rest = base.base_r[di];
+                let mut new_rr = rr.clone();
+                for q in &mut new_rr.values {
+                    let delta = src_rest.inverse() * (*q);
+                    let ret = (tgt_rest * delta).normalize();
+                    *q = ret;
+                }
+                r_tracks.insert(di, new_rr);
             }
         }
         for (i, sr) in &clip.s_tracks {

@@ -414,8 +414,15 @@ impl AnimData {
                 let nn = Self::norm_bone_name(n);
                 let is_head = nn == "head";
                 let is_neck = nn.starts_with("neck");
-                let is_upper_spine = nn.starts_with("spine") && (nn.ends_with("3") || nn.ends_with("03") || nn.ends_with("2") || nn.ends_with("02") || nn.contains("upper"));
-                if is_head || is_neck || is_upper_spine { mask[i] = true; }
+                let is_upper_spine = nn.starts_with("spine")
+                    && (nn.ends_with("3")
+                        || nn.ends_with("03")
+                        || nn.ends_with("2")
+                        || nn.ends_with("02")
+                        || nn.contains("upper"));
+                if is_head || is_neck || is_upper_spine {
+                    mask[i] = true;
+                }
             }
             Some(mask)
         } else {
