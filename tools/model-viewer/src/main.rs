@@ -1163,55 +1163,49 @@ async fn run(cli: Cli) -> Result<()> {
                 }
             }
             // If an animation library is provided, and the model is skinned, merge now.
-            if let (
-                Some(lib_path),
-                Some(ModelGpu::Skinned {
-                    base,
-                    anim,
-                    anims,
-                    time,
-                    active_index,
-                    ..
-                }),
-            ) = (cli.anim_lib.as_ref(), (&mut gpu).as_mut())
-            {
-                let ext = lib_path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("")
-                    .to_ascii_lowercase();
-                let mut merged_ok = false;
-                if ext == "gltf" || ext == "glb" {
-                    if let Ok(n) = merge_gltf_animations(base, lib_path) {
-                        merged_ok = n > 0;
-                        log::info!(
-                            "viewer: merged {} GLTF animations from {}",
-                            n,
-                            lib_path.display()
-                        );
-                    }
-                } else if ext == "fbx" {
-                    if merge_fbx_animations(base, lib_path).is_ok() {
-                        merged_ok = true;
-                        log::info!("viewer: merged FBX animations from {}", lib_path.display());
-                    } else if let Some(conv) = try_convert_fbx_to_gltf(lib_path) {
-                        if let Ok(n) = merge_gltf_animations(base, &conv) {
+            if let Some(lib_path) = cli.anim_lib.as_ref() {
+                if let ModelGpu::Skinned { base, anim, anims, time, active_index, .. } = &mut gpu {
+                    let ext = lib_path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    let mut merged_ok = false;
+                    if ext == "gltf" || ext == "glb" {
+                        if let Ok(n) = merge_gltf_animations(base.as_mut(), lib_path) {
                             merged_ok = n > 0;
                             log::info!(
-                                "viewer: merged {} animations from converted {}",
+                                "viewer: merged {} GLTF animations from {}",
                                 n,
-                                conv.display()
+                                lib_path.display()
                             );
                         }
+                    } else if ext == "fbx" {
+                        if merge_fbx_animations(base.as_mut(), lib_path).is_ok() {
+                            merged_ok = true;
+                            log::info!(
+                                "viewer: merged FBX animations from {}",
+                                lib_path.display()
+                            );
+                        } else if let Some(conv) = try_convert_fbx_to_gltf(lib_path) {
+                            if let Ok(n) = merge_gltf_animations(base.as_mut(), &conv) {
+                                merged_ok = n > 0;
+                                log::info!(
+                                    "viewer: merged {} animations from converted {}",
+                                    n,
+                                    conv.display()
+                                );
+                            }
+                        }
                     }
-                }
-                if merged_ok {
-                    let mut names: Vec<String> = base.animations.keys().cloned().collect();
-                    names.sort();
-                    *anim = Box::new(AnimData::from_skinned(base, &names));
-                    *anims = names;
-                    *time = 0.0;
-                    *active_index = 0;
+                    if merged_ok {
+                        let mut names: Vec<String> = base.animations.keys().cloned().collect();
+                        names.sort();
+                        **anim = AnimData::from_skinned(&base, &names);
+                        *anims = names;
+                        *time = 0.0;
+                        *active_index = 0;
+                    }
                 }
             }
             model_gpu = Some(gpu);
