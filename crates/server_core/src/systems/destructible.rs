@@ -5,6 +5,8 @@ use crate::destructible::config::DestructibleConfig;
 use ecs_core::components::{CarveRequest, ChunkDirty, ChunkMesh, MeshCpu};
 use glam::UVec3;
 use voxel_proxy::VoxelGrid;
+use metrics::{counter, gauge, histogram};
+use std::time::Instant;
 
 /// Apply a carve request to the grid and enqueue dirty chunks.
 pub fn voxel_carve(
@@ -13,6 +15,7 @@ pub fn voxel_carve(
     cfg: &DestructibleConfig,
     dirty: &mut ChunkDirty,
 ) -> usize {
+    let t0 = Instant::now();
     let _ = carve_and_spawn_debris(
         grid,
         req.center_m,
@@ -24,6 +27,10 @@ pub fn voxel_carve(
     let enq = grid.pop_dirty_chunks(usize::MAX);
     let n = enq.len();
     dirty.0.extend(enq);
+    // Telemetry: count requests and gauge queue length
+    counter!("voxel.carve_requests_total", 1);
+    gauge!("voxel.queue_len", dirty.0.len() as f64);
+    histogram!("voxel.carve.ms", t0.elapsed().as_secs_f64() * 1000.0);
     n
 }
 
@@ -37,6 +44,7 @@ pub fn greedy_mesh_budget(
     if budget == 0 || dirty.0.is_empty() {
         return 0;
     }
+    let t0 = Instant::now();
     // Use a deterministic queue to pop a fixed budget
     let mut q = ChunkQueue::new();
     q.enqueue_many(std::mem::take(&mut dirty.0));
@@ -59,6 +67,10 @@ pub fn greedy_mesh_budget(
             processed += 1;
         }
     }
+    if processed > 0 {
+        counter!("voxel.chunks_meshed_total", processed as u64);
+    }
+    histogram!("voxel.mesh.ms", t0.elapsed().as_secs_f64() * 1000.0);
     processed
 }
 
@@ -74,6 +86,7 @@ pub fn collider_rebuild_budget(
     if budget == 0 || chunks.is_empty() {
         return 0;
     }
+    let t0 = Instant::now();
     let take = budget.min(chunks.len());
     let mut updates = Vec::new();
     for c in chunks.iter().copied().take(take) {
@@ -85,6 +98,8 @@ pub fn collider_rebuild_budget(
         swap_in_updates(store, updates);
         *static_index = Some(rebuild_static_index(store));
     }
+    counter!("voxel.colliders_rebuilt_total", take as u64);
+    histogram!("voxel.collider.ms", t0.elapsed().as_secs_f64() * 1000.0);
     take
 }
 

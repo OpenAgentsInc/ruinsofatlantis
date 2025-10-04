@@ -23,6 +23,15 @@ pub fn init_telemetry(cfg: &data_runtime::configs::telemetry::TelemetryCfg) -> R
         let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
         let _ = builder.with_http_listener(addr).install();
     }
+    // One-line effective config for operator visibility
+    tracing::info!(
+        target: "telemetry",
+        log_level = ?cfg.log_level,
+        json_logs = ?cfg.json_logs,
+        metrics_addr = ?cfg.metrics_addr,
+        otlp_endpoint = ?cfg.otlp_endpoint,
+        trace_sample = ?cfg.trace_sample,
+        "telemetry initialized"
+    );
     Ok(TelemetryGuard)
 }
-

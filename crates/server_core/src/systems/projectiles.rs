@@ -1,10 +1,13 @@
 //! Authoritative projectile integration and simple collision helpers.
 
 use ecs_core::components::{CarveRequest, CollisionShape, EntityId, Health, Projectile, InputCommand};
+use metrics::{counter, histogram};
+use std::time::Instant;
 use glam::{Vec3};
 
 /// Integrate projectiles forward by `dt` seconds; returns list of (index, p0, p1).
 pub fn integrate(projectiles: &mut [Projectile], dt: f32) -> Vec<(usize, Vec3, Vec3)> {
+    let t0 = Instant::now();
     let mut segs = Vec::with_capacity(projectiles.len());
     for (i, p) in projectiles.iter_mut().enumerate() {
         if p.life_s <= 0.0 {
@@ -16,6 +19,7 @@ pub fn integrate(projectiles: &mut [Projectile], dt: f32) -> Vec<(usize, Vec3, V
         let p1 = p.pos;
         segs.push((i, p0, p1));
     }
+    histogram!("projectile.integrate.ms", t0.elapsed().as_secs_f64() * 1000.0);
     segs
 }
 
@@ -63,6 +67,11 @@ pub fn collide_and_damage(
     destructs: &[(ecs_core::components::DestructibleId, Vec3, Vec3)],
     out_carves: &mut Vec<CarveRequest>,
 ) {
+    let t0 = Instant::now();
+    let mut hits_total: u64 = 0;
+    let mut hits_npc: u64 = 0;
+    let mut hits_player: u64 = 0; // reserved for future
+    let mut hits_destruct: u64 = 0;
     for (pi, p0, p1) in segs.iter().copied() {
         let pr = projectiles[pi];
         // Entities first
@@ -71,6 +80,8 @@ pub fn collide_and_damage(
                 CollisionShape::Sphere { center, radius } => {
                     if segment_sphere_hit(p0, p1, center, radius) {
                         h.hp = (h.hp - pr.damage).max(0);
+                        hits_total += 1;
+                        hits_npc += 1;
                     }
                 }
                 CollisionShape::CapsuleY { .. } => {
@@ -90,9 +101,16 @@ pub fn collide_and_damage(
                     seed: 0,
                     impact_id: 0,
                 });
+                hits_total += 1;
+                hits_destruct += 1;
             }
         }
     }
+    counter!("projectile.hits_total", hits_total);
+    if hits_npc > 0 { counter!("projectile.hits_total", hits_npc, "kind" => "npc"); }
+    if hits_player > 0 { counter!("projectile.hits_total", hits_player, "kind" => "player"); }
+    if hits_destruct > 0 { counter!("projectile.hits_total", hits_destruct, "kind" => "destructible"); }
+    histogram!("projectile.collide.ms", t0.elapsed().as_secs_f64() * 1000.0);
 }
 
 /// Map an `InputCommand` to a projectile spec name used by the db.
