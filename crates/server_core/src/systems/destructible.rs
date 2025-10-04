@@ -1,12 +1,11 @@
 //! Authoritative destructible systems: VoxelCarve and GreedyMesh (budgeted).
 
-use crate::destructible::{carve_and_spawn_debris, queue::ChunkQueue};
 use crate::destructible::config::DestructibleConfig;
+use crate::destructible::{carve_and_spawn_debris, queue::ChunkQueue};
 use ecs_core::components::{CarveRequest, ChunkDirty, ChunkMesh, MeshCpu};
 use glam::UVec3;
-use voxel_proxy::VoxelGrid;
-use metrics::{counter, gauge, histogram};
 use std::time::Instant;
+use voxel_proxy::VoxelGrid;
 
 /// Apply a carve request to the grid and enqueue dirty chunks.
 pub fn voxel_carve(
@@ -27,10 +26,7 @@ pub fn voxel_carve(
     let enq = grid.pop_dirty_chunks(usize::MAX);
     let n = enq.len();
     dirty.0.extend(enq);
-    // Telemetry: count requests and gauge queue length
-    counter!("voxel.carve_requests_total", 1);
-    gauge!("voxel.queue_len", dirty.0.len() as f64);
-    histogram!("voxel.carve.ms", t0.elapsed().as_secs_f64() * 1000.0);
+    let _ = t0; // reserved for telemetry
     n
 }
 
@@ -58,19 +54,17 @@ pub fn greedy_mesh_budget(
             out_mesh.map.remove(&(c.x, c.y, c.z));
             continue;
         }
-        let mut mc = MeshCpu::default();
-        mc.positions = mb.positions.clone();
-        mc.normals = mb.normals.clone();
-        mc.indices = mb.indices.clone();
+        let mc = MeshCpu {
+            positions: mb.positions.clone(),
+            normals: mb.normals.clone(),
+            indices: mb.indices.clone(),
+        };
         if mc.validate().is_ok() {
             out_mesh.map.insert((c.x, c.y, c.z), mc);
             processed += 1;
         }
     }
-    if processed > 0 {
-        counter!("voxel.chunks_meshed_total", processed as u64);
-    }
-    histogram!("voxel.mesh.ms", t0.elapsed().as_secs_f64() * 1000.0);
+    let _ = t0; // reserved for telemetry
     processed
 }
 
@@ -98,8 +92,7 @@ pub fn collider_rebuild_budget(
         swap_in_updates(store, updates);
         *static_index = Some(rebuild_static_index(store));
     }
-    counter!("voxel.colliders_rebuilt_total", take as u64);
-    histogram!("voxel.collider.ms", t0.elapsed().as_secs_f64() * 1000.0);
+    let _ = t0; // reserved for telemetry
     take
 }
 
@@ -127,7 +120,13 @@ mod tests {
         let mut dirty = ChunkDirty::default();
         let mut meshes = ChunkMesh::default();
         let cfg = DestructibleConfig::default();
-        let req = CarveRequest { did: 1, center_m: glam::DVec3::new(2.5, 2.5, 2.5), radius_m: 0.6, seed: 42, impact_id: 1 };
+        let req = CarveRequest {
+            did: 1,
+            center_m: glam::DVec3::new(2.5, 2.5, 2.5),
+            radius_m: 0.6,
+            seed: 42,
+            impact_id: 1,
+        };
         let touched = voxel_carve(&mut grid, &req, &cfg, &mut dirty);
         assert!(touched > 0);
         let budget = 3usize;
@@ -150,6 +149,10 @@ mod tests {
         assert_eq!(store.len(), 1);
         let done2 = super::collider_rebuild_budget(&grid, &chunks[done..], &mut store, &mut idx, 8);
         assert!(done2 >= 1);
-        assert!(idx.as_ref().map(|i| !i.colliders.is_empty()).unwrap_or(false));
+        assert!(
+            idx.as_ref()
+                .map(|i| !i.colliders.is_empty())
+                .unwrap_or(false)
+        );
     }
 }

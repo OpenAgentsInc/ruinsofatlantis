@@ -7,9 +7,8 @@
 use glam::Vec3;
 pub mod destructible;
 pub mod jobs;
-pub mod systems {
-    pub mod npc;
-}
+pub mod scene_build;
+pub mod systems;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NpcId(pub u32);

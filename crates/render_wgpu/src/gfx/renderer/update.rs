@@ -502,12 +502,14 @@ impl Renderer {
             );
         }
         let before = self.voxel_meshes.len();
+        #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
         self.process_all_ruin_queues();
         let after = self.voxel_meshes.len();
         log::info!("[destruct] mesh upload: chunks {} → {}", before, after);
     }
 
     #[cfg(feature = "legacy_client_carve")]
+    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
     fn build_ruin_proxy_from_aabb(
         &self,
         ruin_idx: usize,
@@ -586,6 +588,7 @@ impl Renderer {
 
     // Build a proxy using the actual ruins mesh triangles transformed by the instance model
     #[cfg(feature = "legacy_client_carve")]
+    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
     fn build_ruin_proxy_from_mesh(&self, ruin_idx: usize) -> crate::gfx::RuinVox {
         // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
         if self.destruct_meshes_cpu.is_empty() {
@@ -793,6 +796,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "legacy_client_carve")]
+    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
         if !self
             .destr_voxels
@@ -858,6 +862,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "legacy_client_carve")]
+    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
         if budget == 0 {
             return;
@@ -922,6 +927,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "legacy_client_carve")]
+    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
     fn process_all_ruin_queues(&mut self) {
         if self.destr_voxels.is_empty() {
             return;
@@ -1210,6 +1216,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "legacy_client_carve")]
+    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
     fn hide_ruins_instance(&mut self, index: usize) {
         if index >= self.ruins_instances_cpu.len() {
             return;
