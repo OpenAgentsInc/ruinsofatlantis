@@ -1484,7 +1484,8 @@ async fn run(cli: Cli) -> Result<()> {
                 // Panel backdrop for readability
                 let panel_x0 = -1.0 + (m - 8.0) * 2.0 / (width as f32);
                 let panel_y0 = 1.0 - (m - 8.0) * 2.0 / (height as f32);
-                let panel_w = ((width as f32).min(520.0)).max(360.0);
+                // Panel width adjusted to comfortably fit three short control rows and multi-column lists
+                let panel_w = (520.0_f32 * cli.ui_scale.max(0.6)).min(width as f32 - 2.0*m).max(420.0);
                 let panel_h = (height as f32 - 2.0 * m).min(height as f32 * 0.9);
                 let panel_x1 = -1.0 + (m - 8.0 + panel_w) * 2.0 / (width as f32);
                 let panel_y1 = 1.0 - (m - 8.0 + panel_h) * 2.0 / (height as f32);
@@ -1594,8 +1595,10 @@ async fn run(cli: Cli) -> Result<()> {
                 {
                     let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
                     let _glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
+                    // Space list clearly below head controls using label metrics
+                    let label_row_h = 7.0 * label_cell + label_cell * 2.0;
                     let header_h = glyph_h + line_gap;
-                    let anim_header_y = head_y + glyph_h + line_gap + 12.0;
+                    let anim_header_y = head_y + label_row_h + 14.0;
                     let available_h = (height as f32) - anim_header_y - 16.0;
                     let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
                     let col_w = 260.0 * cli.ui_scale.max(0.5);
@@ -1620,8 +1623,8 @@ async fn run(cli: Cli) -> Result<()> {
                         model_lines.push(format!("{}: {}", i + 1, mentry.name.to_uppercase()));
                     }
                     let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
-                    let base_y = m + s + 8.0;
-                    let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
+                    let base_y = head_y + 7.0*label_cell + label_cell*2.0 + 14.0;
+                    let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { (anims.len() as f32 / 2.0).ceil() + 1.0 } else { 0.0 };
                     let y_offset = base_y + anim_lines * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
                     let mut model_text: Vec<UiVertex> = Vec::new();
                     build_text_quads(&model_lines, (m, y_offset), (width as f32, height as f32), &mut model_text, [0.8,0.9,0.95,1.0], anim_cell);
