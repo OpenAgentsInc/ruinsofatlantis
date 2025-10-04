@@ -1202,8 +1202,16 @@ async fn run(cli: Cli) -> Result<()> {
                 names.sort();
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
-                let pitch = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg) };
-                if pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", pitch); }
+                let pitch = match orient_mode {
+                    0 => 0.0,
+                    2 => 45.0,
+                    3 => 60.0,
+                    4 => 70.0,
+                    _ => default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg),
+                };
+                if pitch.abs() > 0.001 {
+                    log::info!("viewer: head pitch correction {} deg", pitch);
+                }
                 let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, pitch));
                 Ok(ModelGpu::Skinned {
                     vb,
@@ -1461,21 +1469,36 @@ async fn run(cli: Cli) -> Result<()> {
                     occlusion_query_set: None,
                     timestamp_writes: None,
                 });
-                // Build a tiny checkbox from 2 triangles (outline + fill when on)
+                // Build a tiny checkbox from 2 triangles (outline + fill when on) and a soft panel background
                 let s: f32 = 20.0; // px
                 let m: f32 = 16.0; // margin px
+                // Panel backdrop for readability
+                let panel_x0 = -1.0 + (m - 8.0) * 2.0 / (width as f32);
+                let panel_y0 = 1.0 - (m - 8.0) * 2.0 / (height as f32);
+                let panel_w = ((width as f32).min(520.0)).max(360.0);
+                let panel_h = (height as f32 - 2.0 * m).min(height as f32 * 0.9);
+                let panel_x1 = -1.0 + (m - 8.0 + panel_w) * 2.0 / (width as f32);
+                let panel_y1 = 1.0 - (m - 8.0 + panel_h) * 2.0 / (height as f32);
+                let mut verts: Vec<UiVertex> = vec![
+                    UiVertex { pos: [panel_x0, panel_y0], color: [0.08, 0.09, 0.12, 0.88] },
+                    UiVertex { pos: [panel_x1, panel_y0], color: [0.08, 0.09, 0.12, 0.88] },
+                    UiVertex { pos: [panel_x1, panel_y1], color: [0.08, 0.09, 0.12, 0.88] },
+                    UiVertex { pos: [panel_x0, panel_y0], color: [0.08, 0.09, 0.12, 0.88] },
+                    UiVertex { pos: [panel_x1, panel_y1], color: [0.08, 0.09, 0.12, 0.88] },
+                    UiVertex { pos: [panel_x0, panel_y1], color: [0.08, 0.09, 0.12, 0.88] },
+                ];
                 let x0 = -1.0 + m * 2.0 / (width as f32);
                 let y0 = 1.0 - m * 2.0 / (height as f32);
                 let x1 = -1.0 + (m + s) * 2.0 / (width as f32);
                 let y1 = 1.0 - (m + s) * 2.0 / (height as f32);
-                let mut verts: Vec<UiVertex> = vec![
+                verts.extend_from_slice(&[
                     UiVertex { pos: [x0, y0], color: [0.15, 0.15, 0.18, 1.0] },
                     UiVertex { pos: [x1, y0], color: [0.15, 0.15, 0.18, 1.0] },
                     UiVertex { pos: [x1, y1], color: [0.15, 0.15, 0.18, 1.0] },
                     UiVertex { pos: [x0, y0], color: [0.15, 0.15, 0.18, 1.0] },
                     UiVertex { pos: [x1, y1], color: [0.15, 0.15, 0.18, 1.0] },
                     UiVertex { pos: [x0, y1], color: [0.15, 0.15, 0.18, 1.0] },
-                ];
+                ]);
                 if autorotate {
                     let pad = 4.0;
                     let ix0 = -1.0 + (m + pad) * 2.0 / (width as f32);
@@ -1539,22 +1562,27 @@ async fn run(cli: Cli) -> Result<()> {
                     rpass.set_vertex_buffer(0, tvb.slice(..));
                     rpass.draw(0..(orient_text.len() as u32), 0..1);
                 }
-                // Anim list text (if any)
+                // Anim list text (multi-column)
                 let mut text_verts: Vec<UiVertex> = Vec::new();
-                let mut lines: Vec<String> = Vec::new();
                 if let Some(ref gpu) = model_gpu
                     && let ModelGpu::Skinned { anims, .. } = gpu
                     && !anims.is_empty()
                 {
-                    lines.push("ANIMATIONS:".to_string());
+                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                    let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
+                    let header_h = glyph_h + line_gap;
+                    let anim_header_y = m + s + 8.0 + header_h + 8.0;
+                    let available_h = (height as f32) - anim_header_y - 16.0;
+                    let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
+                    let col_w = 260.0 * cli.ui_scale.max(0.5);
+                    build_text_quads(&vec!["ANIMATIONS:".to_string()], (m, anim_header_y - header_h), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
                     for (i, name) in anims.iter().enumerate() {
-                        lines.push(format!("{}: {}", i + 1, name.to_uppercase()));
+                        let col = i / rows_per_col;
+                        let row = i % rows_per_col;
+                        let x = m + (col as f32) * col_w;
+                        let y = anim_header_y + (row as f32) * (glyph_h + line_gap);
+                        build_text_quads(&vec![format!("{}: {}", i + 1, name.to_uppercase())], (x, y), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
                     }
-                }
-                if !lines.is_empty() {
-                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25); // animation list text
-                    let start_px = (m, m + s + 8.0);
-                    build_text_quads(&lines, start_px, (width as f32, height as f32), &mut text_verts, [0.9, 0.9, 0.95, 1.0], anim_cell);
                     let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-text"), contents: bytemuck::cast_slice(&text_verts), usage: wgpu::BufferUsages::VERTEX });
                     rpass.set_pipeline(&ui_pipe);
                     rpass.set_vertex_buffer(0, tvb.slice(..));
@@ -1738,27 +1766,27 @@ async fn run(cli: Cli) -> Result<()> {
                     *time = 0.0;
                 }
             }
-            // Animation buttons (skinned): click lines under header
+            // Animation buttons (skinned): click lines under header (multi-column)
             if let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
                 && !anims.is_empty()
             {
-                let list_x = m;
-                let list_y = m + s + 8.0;
-                // Match the text layout used for drawing (scaled by --ui-scale)
                 let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
-                let glyph_w = 5.0 * anim_cell;
-                let glyph_h = 7.0 * anim_cell;
-                // Header line occupies first row; buttons start at i=1
+                let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
+                let header_h = glyph_h + line_gap;
+                let anim_header_y = m + s + 8.0 + header_h + 8.0;
+                let available_h = (height as f32) - anim_header_y - 16.0;
+                let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
+                let col_w = 260.0 * cli.ui_scale.max(0.5);
                 for (i, name) in anims.iter().enumerate() {
-                    let text = format!("{}: {}", i + 1, name.to_uppercase());
-                    let tx0 = list_x;
-                    let ty0 = list_y + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0); // +1 to skip header
-                    let tw = text.len() as f32 * (glyph_w + anim_cell);
+                    let col = i / rows_per_col;
+                    let row = i % rows_per_col;
+                    let tx0 = m + (col as f32) * col_w;
+                    let ty0 = anim_header_y + (row as f32) * (glyph_h + line_gap);
+                    let tw = (name.len() as f32 + 4.0) * (5.0*anim_cell + anim_cell);
                     let th = glyph_h;
                     if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
-                        *active_index = i;
-                        *time = 0.0;
+                        *active_index = i; *time = 0.0;
                     }
                 }
             }
