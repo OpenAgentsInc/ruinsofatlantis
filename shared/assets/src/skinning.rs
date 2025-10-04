@@ -64,6 +64,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     let mut skin_opt: Option<gltf::Skin> = None;
     let mut verts: Vec<VertexSkinCPU> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
+    let mut submeshes: Vec<crate::types::SubmeshCPU> = Vec::new();
     // Track a plausible baseColor texture from the largest contributing primitive.
     let mut best_tex_pixels: Option<(Vec<u8>, u32, u32)> = None;
     let mut best_tex_srbg = true;
@@ -150,13 +151,59 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                         Some(ReadIndices::U8(it)) => it.map(|v| v as u32).collect(),
                         None => (0..pos.len() as u32).collect(),
                     };
+                    let mut added = 0u32;
+                    let start_index = indices.len() as u32;
                     for i in idx_u32 {
                         let v = i + base;
                         if v > u16::MAX as u32 {
                             bail!("indices exceed u16 after rebase: {}", v);
                         }
                         indices.push(v as u16);
+                        added += 1;
                     }
+                    // Record submesh range and per-primitive baseColor
+                    let base_tex = if let Some(texinfo) = prim
+                        .material()
+                        .pbr_metallic_roughness()
+                        .base_color_texture()
+                    {
+                        let tex = texinfo.texture();
+                        let img_idx = tex.source().index();
+                        images.get(img_idx).map(|img| {
+                            let (w, h) = (img.width, img.height);
+                            let pixels = match img.format {
+                                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                gltf::image::Format::R8G8B8 => {
+                                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                    for c in img.pixels.chunks_exact(3) {
+                                        out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                    }
+                                    out
+                                }
+                                gltf::image::Format::R8 => {
+                                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                    for &r in &img.pixels {
+                                        out.extend_from_slice(&[r, r, r, 255]);
+                                    }
+                                    out
+                                }
+                                _ => img.pixels.clone(),
+                            };
+                            TextureCPU {
+                                pixels,
+                                width: w,
+                                height: h,
+                                srgb: true,
+                            }
+                        })
+                    } else {
+                        None
+                    };
+                    submeshes.push(crate::types::SubmeshCPU {
+                        start: start_index,
+                        count: added,
+                        base_color_texture: base_tex,
+                    });
                     // Track a plausible base color texture from the largest contributing primitive
                     if pos.len() > best_vert_count
                         && let Some(texinfo) = prim
@@ -212,6 +259,49 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                                 anyhow::anyhow!("rebased draco index {} exceeds u16", v)
                             })?;
                         }
+                        // Record submesh for Draco primitive
+                        let base_tex = if let Some(texinfo) = prim
+                            .material()
+                            .pbr_metallic_roughness()
+                            .base_color_texture()
+                        {
+                            let tex = texinfo.texture();
+                            let img_idx = tex.source().index();
+                            images.get(img_idx).map(|img| {
+                                let (w, h) = (img.width, img.height);
+                                let pixels = match img.format {
+                                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                    gltf::image::Format::R8G8B8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for c in img.pixels.chunks_exact(3) {
+                                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                        }
+                                        out
+                                    }
+                                    gltf::image::Format::R8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for &r in &img.pixels {
+                                            out.extend_from_slice(&[r, r, r, 255]);
+                                        }
+                                        out
+                                    }
+                                    _ => img.pixels.clone(),
+                                };
+                                TextureCPU {
+                                    pixels,
+                                    width: w,
+                                    height: h,
+                                    srgb: true,
+                                }
+                            })
+                        } else {
+                            None
+                        };
+                        submeshes.push(crate::types::SubmeshCPU {
+                            start: idx_start as u32,
+                            count: added_idx as u32,
+                            base_color_texture: base_tex,
+                        });
                     }
                 }
             }
@@ -432,6 +522,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         base_s,
         animations,
         base_color_texture,
+        submeshes,
         node_names,
         hand_right_node,
         root_node,

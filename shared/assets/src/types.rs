@@ -49,11 +49,19 @@ pub struct AnimClip {
     pub s_tracks: HashMap<usize, TrackVec3>,
 }
 
+#[derive(Clone)]
 pub struct TextureCPU {
     pub pixels: Vec<u8>,
     pub width: u32,
     pub height: u32,
     pub srgb: bool,
+}
+
+#[derive(Clone)]
+pub struct SubmeshCPU {
+    pub start: u32,
+    pub count: u32,
+    pub base_color_texture: Option<TextureCPU>,
 }
 
 pub struct SkinnedMeshCPU {
@@ -67,6 +75,7 @@ pub struct SkinnedMeshCPU {
     pub base_s: Vec<Vec3>,
     pub animations: HashMap<String, AnimClip>,
     pub base_color_texture: Option<TextureCPU>,
+    pub submeshes: Vec<SubmeshCPU>,
     pub node_names: Vec<String>,
     pub hand_right_node: Option<usize>,
     pub root_node: Option<usize>,
