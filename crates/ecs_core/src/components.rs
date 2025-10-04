@@ -151,6 +151,40 @@ pub struct Team {
     pub id: u32,
 }
 
+/// Linear velocity for movement integration (server-side).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Velocity {
+    pub lin: Vec3,
+}
+
+impl Default for Velocity {
+    fn default() -> Self {
+        Self { lin: Vec3::ZERO }
+    }
+}
+
+/// NPC parameters and transient cooldowns (server-side AI/melee).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Npc {
+    pub radius: f32,
+    pub speed_mps: f32,
+    pub damage: i32,
+    pub attack_cooldown_s: f32,
+}
+
+impl Default for Npc {
+    fn default() -> Self {
+        Self {
+            radius: 0.9,
+            speed_mps: 2.0,
+            damage: 5,
+            attack_cooldown_s: 0.0,
+        }
+    }
+}
+
 /// Collision shape for broad/narrow collision in server systems.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]

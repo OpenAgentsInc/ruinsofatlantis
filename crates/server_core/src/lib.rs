@@ -6,6 +6,9 @@
 
 use glam::Vec3;
 pub mod destructible;
+pub mod systems {
+    pub mod npc;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NpcId(pub u32);
