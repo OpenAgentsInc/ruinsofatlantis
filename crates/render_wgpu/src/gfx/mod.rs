@@ -377,6 +377,10 @@ pub struct Renderer {
     #[allow(dead_code)]
     destruct_instances: Vec<DestructInstance>,
 
+    // --- Replication (local loop) ---
+    repl_rx: Option<net_core::channel::Rx>,
+    repl_buf: client_core::replication::ReplicationBuffer,
+
     // Demo helpers
     #[cfg_attr(
         not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
@@ -488,6 +492,11 @@ struct Debris {
 }
 
 impl Renderer {
+    /// Attach a replication receiver to the renderer; deltas will be drained
+    /// and applied each frame before scene updates.
+    pub fn set_replication_rx(&mut self, rx: net_core::channel::Rx) {
+        self.repl_rx = Some(rx);
+    }
     #[inline]
     pub fn is_vox_onepath(&self) -> bool {
         self.vox_onepath_ui.is_some()

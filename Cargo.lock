@@ -5220,6 +5220,7 @@ dependencies = [
  "half",
  "hw-skymodel",
  "log",
+ "net_core",
  "png 0.17.16",
  "pollster",
  "ra-assets",

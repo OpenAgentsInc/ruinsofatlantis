@@ -10,6 +10,7 @@ pub mod graph;
 pub mod init;
 pub mod passes;
 pub mod render;
+pub mod replication;
 pub mod resize;
 pub mod upload_adapter;
 pub mod voxel_upload;

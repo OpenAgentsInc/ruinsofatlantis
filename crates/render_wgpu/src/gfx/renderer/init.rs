@@ -1467,6 +1467,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         destr_voxels: std::collections::HashMap::new(),
         destruct_meshes_cpu: scene_build.destruct_meshes_cpu,
         destruct_instances: scene_build.destruct_instances,
+        repl_rx: None,
+        repl_buf: Default::default(),
         voxel_model_bg,
         debris_vb,
         debris_ib,
