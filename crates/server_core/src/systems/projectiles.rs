@@ -1,6 +1,6 @@
 //! Authoritative projectile integration and simple collision helpers.
 
-use ecs_core::components::{CarveRequest, CollisionShape, EntityId, Health, Projectile};
+use ecs_core::components::{CarveRequest, CollisionShape, EntityId, Health, Projectile, InputCommand};
 use glam::{Vec3};
 
 /// Integrate projectiles forward by `dt` seconds; returns list of (index, p0, p1).
@@ -95,6 +95,40 @@ pub fn collide_and_damage(
     }
 }
 
+/// Map an `InputCommand` to a projectile spec name used by the db.
+fn action_name(cmd: &InputCommand) -> Option<&'static str> {
+    match cmd {
+        InputCommand::AtWillLMB => Some("AtWillLMB"),
+        InputCommand::AtWillRMB => Some("AtWillRMB"),
+        InputCommand::EncounterQ => Some("EncounterQ"),
+        InputCommand::EncounterE => Some("EncounterE"),
+        InputCommand::EncounterR => Some("EncounterR"),
+        _ => None,
+    }
+}
+
+/// Spawn a projectile from a player's transform and look direction given an input command.
+pub fn spawn_from_command(
+    cmd: &InputCommand,
+    owner: EntityId,
+    origin: Vec3,
+    look_dir: Vec3,
+    db: &data_runtime::specs::projectiles::ProjectileSpecDb,
+) -> Option<Projectile> {
+    let name = action_name(cmd)?;
+    let spec = db.actions.get(name)?;
+    let dir = look_dir.normalize_or_zero();
+    if dir.length_squared() <= 1e-6 { return None; }
+    Some(Projectile {
+        radius_m: spec.radius_m,
+        damage: spec.damage,
+        life_s: spec.life_s,
+        owner,
+        pos: origin,
+        vel: dir * spec.speed_mps,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +158,14 @@ mod tests {
         assert!((carves[0].radius_m - 0.6).abs() < 1e-6);
         assert_eq!(carves[0].did, 1);
     }
+    #[test]
+    fn spawn_from_input_command_uses_spec() {
+        let db = data_runtime::specs::projectiles::ProjectileSpecDb::load_default().unwrap();
+        let owner = EntityId(7);
+        let origin = Vec3::new(1.0, 2.0, 3.0);
+        let dir = Vec3::Z;
+        let p = spawn_from_command(&ecs_core::components::InputCommand::AtWillLMB, owner, origin, dir, &db).expect("spawn");
+        assert!(p.vel.length() > 0.0 && (p.vel.normalize() - dir).length() < 1e-4);
+        assert!(p.life_s > 0.0 && p.radius_m > 0.0);
+    }
 }
-

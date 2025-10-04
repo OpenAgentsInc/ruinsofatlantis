@@ -336,7 +336,8 @@ impl Renderer {
                     // Mirror controller yaw/pitch into existing orbit fields for camera system.
                     // Positive pitch (mouse up) should tilt the orbit camera UP. Our orbit helper's
                     // X rotation tilts down for positive angles, so negate the controller pitch here.
-                    self.cam_orbit_yaw = wrap_angle(self.controller_state.camera.yaw);
+                    // Also invert yaw sign so mouse-right turns camera right in the orbit system.
+                    self.cam_orbit_yaw = wrap_angle(-self.controller_state.camera.yaw);
                     let orbit_pitch = -self.controller_state.camera.pitch;
                     self.cam_orbit_pitch = orbit_pitch.clamp(-1.2, 1.2);
                     // Keep player facing in sync with camera yaw so character faces mouselook

@@ -12,6 +12,9 @@ pub mod scenario;
 pub mod specdb;
 pub mod spell;
 pub mod zone;
+pub mod specs {
+    pub mod projectiles;
+}
 pub mod configs {
     pub mod destructible;
     pub mod input_camera;
