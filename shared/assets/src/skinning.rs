@@ -60,7 +60,35 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         .map(|n| n.name().unwrap_or("").to_string())
         .collect();
 
-    // Find first skinned node and gather ALL its primitives (UBC has multi-material parts).
+    // Choose the dominant skin by vertex count (UBC splits geometry across nodes sharing one skin)
+    let mut best_skin_index: Option<usize> = None;
+    let mut best_skin_vertices: usize = 0;
+    for node in doc.nodes() {
+        if let (Some(skin), Some(mesh)) = (node.skin(), node.mesh()) {
+            let mut vtx = 0usize;
+            for prim in mesh.primitives() {
+                let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                if let Some(pos) = reader.read_positions() {
+                    vtx += pos.size_hint().0;
+                }
+            }
+            if vtx > best_skin_vertices {
+                best_skin_vertices = vtx;
+                best_skin_index = Some(skin.index());
+            }
+        }
+    }
+    if let Some(idx) = best_skin_index {
+        log::info!(
+            "skinning: selected skin index {} ({} verts)",
+            idx,
+            best_skin_vertices
+        );
+    } else {
+        log::warn!("skinning: no skins found; attempting rigid fallback");
+    }
+
+    // Gather ALL primitives from nodes that reference the chosen skin (UBC is multi‑material)
     let mut skin_opt: Option<gltf::Skin> = None;
     let mut verts: Vec<VertexSkinCPU> = Vec::new();
     let mut indices: Vec<u16> = Vec::new();
@@ -70,10 +98,15 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
     let mut best_tex_srbg = true;
     let mut best_vert_count: usize = 0;
 
-    'outer: for node in doc.nodes() {
+    for node in doc.nodes() {
         let Some(skin) = node.skin() else {
             continue;
         };
+        if let Some(sel) = best_skin_index
+            && skin.index() != sel
+        {
+            continue;
+        }
         skin_opt = Some(skin);
         if let Some(mesh) = node.mesh() {
             for prim in mesh.primitives() {
@@ -161,6 +194,12 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                         indices.push(v as u16);
                         added += 1;
                     }
+                    log::info!(
+                        "append prim: verts={} idx={} material={}",
+                        pos.len(),
+                        added,
+                        prim.material().name().unwrap_or("")
+                    );
                     // Record submesh range and per-primitive baseColor
                     let base_tex = if let Some(texinfo) = prim
                         .material()
@@ -305,8 +344,6 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     }
                 }
             }
-            // We only take the first skinned node; stop here.
-            break 'outer;
         }
     }
 

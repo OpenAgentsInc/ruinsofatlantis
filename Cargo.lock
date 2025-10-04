@@ -4977,6 +4977,7 @@ dependencies = [
  "fbxcel-dom",
  "glam 0.30.8",
  "gltf",
+ "log",
  "pollster",
  "serde",
  "serde_json",
