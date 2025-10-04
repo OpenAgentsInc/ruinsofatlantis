@@ -1014,6 +1014,8 @@ async fn run(cli: Cli) -> Result<()> {
     let mut autorotate = true;
     // Orientation correction mode: 0=None, 1=Auto, 2=45deg, 3=60deg, 4=70deg
     let mut orient_mode: u32 = 1;
+    // Current head pitch correction applied when sampling (degrees)
+    let mut head_pitch_deg_current: f32 = 0.0;
     let mut yaw: f32 = 0.0; // radians
     let mut pitch: f32 = 0.35; // radians, clamped
     let mut radius: f32 = 3.0;
@@ -1022,7 +1024,7 @@ async fn run(cli: Cli) -> Result<()> {
     let mut mouse_pos_px: (f32, f32) = (0.0, 0.0);
 
     // Helper to upload a model: called on CLI path (if provided) and Drag&Drop
-    let load_model = |path: &PathBuf,
+    let mut load_model = |path: &PathBuf,
                       device: &wgpu::Device,
                       queue: &wgpu::Queue,
                       mat_bgl: &wgpu::BindGroupLayout,
@@ -1209,9 +1211,7 @@ async fn run(cli: Cli) -> Result<()> {
                     4 => 70.0,
                     _ => default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg),
                 };
-                if pitch.abs() > 0.001 {
-                    log::info!("viewer: head pitch correction {} deg", pitch);
-                }
+                if pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", pitch); }
                 let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, pitch));
                 Ok(ModelGpu::Skinned {
                     vb,
@@ -1296,6 +1296,10 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     );
                     window.set_title(&title);
+                    // set current pitch for UI controls based on mode
+                    if let ModelGpu::Skinned { base, .. } = &gpu {
+                        head_pitch_deg_current = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, Some(p), cli.head_pitch_deg) };
+                    }
                 }
                 ModelGpu::Basic {
                     center: c, diag: d, ..
@@ -1554,13 +1558,28 @@ async fn run(cli: Cli) -> Result<()> {
                     "ORIENT: {}",
                     match orient_mode { 0=>"NONE", 1=>"AUTO", 2=>"45", 3=>"60", 4=>"70", _=>"AUTO" }
                 );
-                let orient_start = (m + s + 8.0, m + (7.0*label_cell) + (label_cell*2.0) + 4.0);
+                let orient_start = (m + s + 8.0, m + (7.0*label_cell) + (label_cell*2.0) + 8.0);
                 build_text_quads(&vec![orient_label], orient_start, (width as f32, height as f32), &mut orient_text, [0.9,0.85,0.3,1.0], label_cell);
                 if !orient_text.is_empty() {
                     let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-orient"), contents: bytemuck::cast_slice(&orient_text), usage: wgpu::BufferUsages::VERTEX });
                     rpass.set_pipeline(&ui_pipe);
                     rpass.set_vertex_buffer(0, tvb.slice(..));
                     rpass.draw(0..(orient_text.len() as u32), 0..1);
+                }
+                // Head pitch control buttons row under orientation: [-5] [+5] [RESET]
+                let mut head_text: Vec<UiVertex> = Vec::new();
+                let head_y = orient_start.1 + (7.0*label_cell) + (label_cell*2.0) + 6.0;
+                let mut x_cursor = m + s + 8.0;
+                let head_buttons = ["HEAD -5", "HEAD +5", "RESET"];
+                for b in &head_buttons {
+                    build_text_quads(&vec![(*b).to_string()], (x_cursor, head_y), (width as f32, height as f32), &mut head_text, [0.85,0.95,0.85,1.0], label_cell);
+                    x_cursor += ((*b).len() as f32) * (5.0*label_cell + label_cell) + 18.0;
+                }
+                if !head_text.is_empty() {
+                    let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-head"), contents: bytemuck::cast_slice(&head_text), usage: wgpu::BufferUsages::VERTEX });
+                    rpass.set_pipeline(&ui_pipe);
+                    rpass.set_vertex_buffer(0, tvb.slice(..));
+                    rpass.draw(0..(head_text.len() as u32), 0..1);
                 }
                 // Anim list text (multi-column)
                 let mut text_verts: Vec<UiVertex> = Vec::new();
@@ -1571,7 +1590,7 @@ async fn run(cli: Cli) -> Result<()> {
                     let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
                     let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
                     let header_h = glyph_h + line_gap;
-                    let anim_header_y = m + s + 8.0 + header_h + 8.0;
+                    let anim_header_y = head_y + glyph_h + line_gap + 12.0;
                     let available_h = (height as f32) - anim_header_y - 16.0;
                     let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
                     let col_w = 260.0 * cli.ui_scale.max(0.5);
@@ -1705,6 +1724,9 @@ async fn run(cli: Cli) -> Result<()> {
                         center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
                         let title = format!("Model Viewer — {} | anims: {}", path.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
                         window.set_title(&title);
+                        if let ModelGpu::Skinned { base, .. } = &gpu {
+                            head_pitch_deg_current = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, Some(&path), cli.head_pitch_deg) };
+                        }
                     }
                     ModelGpu::Basic { center: c, diag: d, .. } => {
                         center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
@@ -1752,7 +1774,7 @@ async fn run(cli: Cli) -> Result<()> {
             if in_box || in_label { autorotate = !autorotate; }
             // Orientation toggle area
             let ox0 = m + s + 8.0;
-            let oy0 = m + (7.0*cell) + (cell*2.0) + 4.0;
+            let oy0 = m + (7.0*cell) + (cell*2.0) + 8.0;
             let orient_text_len = match orient_mode { 0=>"ORIENT: NONE".len(), 1=>"ORIENT: AUTO".len(), 2=>"ORIENT: 45".len(), 3=>"ORIENT: 60".len(), 4=>"ORIENT: 70".len(), _=>"ORIENT: AUTO".len() } as f32;
             let ow = orient_text_len * (5.0*cell + cell);
             let oh = 7.0 * cell;
@@ -1760,11 +1782,40 @@ async fn run(cli: Cli) -> Result<()> {
                 orient_mode = (orient_mode + 1) % 5;
                 // Rebuild AnimData with new pitch
                 if let Some(ModelGpu::Skinned { anim, base, anims, time, .. }) = model_gpu.as_mut() {
-                    let pitch = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, None, cli.head_pitch_deg) };
-                    log::info!("viewer: orientation mode -> {} (pitch={} deg)", orient_mode, pitch);
-                    **anim = AnimData::from_skinned_with_options(base, anims, pitch);
+                    head_pitch_deg_current = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, None, cli.head_pitch_deg) };
+                    log::info!("viewer: orientation mode -> {} (pitch={} deg)", orient_mode, head_pitch_deg_current);
+                    **anim = AnimData::from_skinned_with_options(base, anims, head_pitch_deg_current);
                     *time = 0.0;
                 }
+            }
+
+            // Head pitch buttons: positions align with draw
+            let head_y = oy0 + (7.0*cell) + (cell*2.0) + 6.0;
+            // Compute button widths
+            let btns = [("HEAD -5", -5.0f32), ("HEAD +5", 5.0f32), ("RESET", 0.0f32)];
+            let mut x_cursor = m + s + 8.0;
+            for (label, delta) in btns {
+                let bw = (label.len() as f32) * (5.0*cell + cell);
+                let bh = 7.0 * cell;
+                if mx >= x_cursor && mx <= x_cursor + bw && my >= head_y && my <= head_y + bh {
+                    if label == "RESET" {
+                        // Reset depending on orient mode
+                        if let Some(ModelGpu::Skinned { anim, base, anims, time, .. }) = model_gpu.as_mut() {
+                            head_pitch_deg_current = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, None, cli.head_pitch_deg) };
+                            **anim = AnimData::from_skinned_with_options(base, anims, head_pitch_deg_current);
+                            *time = 0.0;
+                        }
+                    } else {
+                        if let Some(ModelGpu::Skinned { anim, base, anims, time, .. }) = model_gpu.as_mut() {
+                            head_pitch_deg_current = (head_pitch_deg_current + delta).clamp(0.0, 90.0);
+                            log::info!("viewer: head pitch adjust -> {} deg", head_pitch_deg_current);
+                            **anim = AnimData::from_skinned_with_options(base, anims, head_pitch_deg_current);
+                            *time = 0.0;
+                        }
+                    }
+                    break;
+                }
+                x_cursor += bw + 18.0;
             }
             // Animation buttons (skinned): click lines under header (multi-column)
             if let Some(gpu) = model_gpu.as_mut()
@@ -1833,9 +1884,7 @@ async fn run(cli: Cli) -> Result<()> {
                             match merge_gltf_animations(base, &a.path) {
                                 Ok(_n) => {
                                     let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
-                                    let auto_pitch = default_head_pitch_for(base, None, cli.head_pitch_deg);
-                                    if auto_pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", auto_pitch); }
-                                    *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, auto_pitch));
+                                    *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, head_pitch_deg_current));
                                     *anims = new_names; *time = 0.0; *active_index = 0;
                                     log::info!("viewer: merged GLTF animations from {}", a.path.display());
                                 }
@@ -1849,9 +1898,7 @@ async fn run(cli: Cli) -> Result<()> {
                             if merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
                             // refresh AnimData and UI list
                             let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
-                            let auto_pitch = default_head_pitch_for(base, None, cli.head_pitch_deg);
-                            if auto_pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", auto_pitch); }
-                            *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, auto_pitch));
+                            *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, head_pitch_deg_current));
                             *anims = new_names;
                             *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
                         }
