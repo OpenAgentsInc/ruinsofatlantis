@@ -20,6 +20,20 @@ Plan
 - Ensure texture references resolve (our gltf loader uses `import` and relative paths). Keep the directory structure intact.
 - Drive animations once `97A` (Animation Library) lands; for now, validate bind pose + materials.
 
+Model Viewer integration (verified path and pipeline)
+- Tool: `tools/model-viewer` (runs with `cargo run -p model-viewer -- <path-to-gltf-or-glb>`)
+- Loader path: `ra_assets::util::prepare_gltf_path` + `ra_assets::skinning::load_gltf_skinned`
+  - Accepts external absolute paths; `gltf::import` resolves images/buffers relative to the GLTF dir.
+  - Falls back to basic mesh if no joints/weights; UBC provides skinning so the skinned path is used.
+- Shaders: viewer binds a single baseColor texture (sRGB) and draws at bind pose; no normals/roughness in viewer (good enough for inspection).
+- Animations: viewer can merge additional clips via the library UI (scans `assets/anims` and optional `FBX_LIB_DIR`).
+- Usage examples (local, from repo root):
+  - Male (Godot variant):
+    `cargo run -p model-viewer -- "/Users/christopherdavid/Downloads/Universal Base Characters[Standard]/Base Characters/Godot/Superhero_Male.gltf"`
+  - Female (Unreal Engine variant):
+    `cargo run -p model-viewer -- "/Users/christopherdavid/Downloads/Universal Base Characters[Standard]/Base Characters/Unreal Engine/Superhero_Female.gltf"`
+  - Note: keep textures next to the .gltf as shipped so imports resolve.
+
 Files to touch
 - `shared/assets` (crate `ra-assets`):
   - Add a small loader to extract: skinned vertex streams (pos/norm/uv), joint indices/weights, and materials/textures into `SkinnedMeshCPU` and a `MaterialCPU` with PBR maps (basecolor/normal/roughness).
@@ -38,6 +52,11 @@ Tasks
 - [ ] Wire simple idle animation once `97A` is integrated (see that issue).
 - [ ] Track assets in Git LFS (large binaries) per repo policy.
 
+Addendum — Model Viewer dry run checklist
+- Confirmed the viewer’s load flow: path → prepare_gltf_path → load_gltf_skinned → bind pose palette → baseColor texture upload → draw.
+- The viewer takes absolute paths, so UBC can be inspected directly from Downloads without copying.
+- Next steps remain to copy UBC under `assets/models/ubc/` and add a demo spawn in the renderer for in-game validation.
+
 Acceptance
 - Both UBC male and female load and render with correct materials (basecolor + normals + roughness). No missing textures.
 - Joint palettes allocate correctly (no over/under-indexing); renderer supports per-model joint count.
@@ -46,4 +65,3 @@ Acceptance
 Notes
 - File size / LFS: add `*.gltf`, `*.bin`, and textures to LFS if they exceed thresholds; preserve vendor folder structure.
 - License: include `License_Standard.txt` under `docs/third_party/` or append to `NOTICE` per policy; keep original filename.
-
