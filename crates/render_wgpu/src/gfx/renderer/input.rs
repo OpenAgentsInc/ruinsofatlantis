@@ -253,9 +253,8 @@ impl Renderer {
                     apply = true;
                 }
                 if apply {
-                    let cfg = client_core::systems::mouselook::MouselookConfig::default();
                     client_core::systems::mouselook::apply_mouse_delta(
-                        &cfg,
+                        &self.controller_ml_cfg,
                         &mut self.controller_state,
                         dx,
                         dy,

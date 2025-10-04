@@ -1286,6 +1286,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // Build the renderer struct first so we can optionally seed the voxel chunk queue
+    // Load controller input/camera config (optional file)
+    let icfg = data_runtime::configs::input_camera::load_default().unwrap_or_default();
+    let ml_cfg = client_core::systems::mouselook::MouselookConfig {
+        sensitivity_deg_per_count: icfg.sensitivity_deg_per_count.unwrap_or(0.15),
+        invert_y: icfg.invert_y.unwrap_or(false),
+        min_pitch_deg: icfg.min_pitch_deg.unwrap_or(-80.0),
+        max_pitch_deg: icfg.max_pitch_deg.unwrap_or(80.0),
+    };
+
     let mut renderer = crate::gfx::Renderer {
         surface,
         device,
@@ -1435,6 +1444,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hud_model: Default::default(),
         controller_state: Default::default(),
         pointer_lock_request: None,
+        controller_ml_cfg: ml_cfg,
         // Destructible defaults; leave grid None until provided by a loader/demo
         destruct_cfg: dcfg,
         voxel_grid: voxel_grid.clone(),

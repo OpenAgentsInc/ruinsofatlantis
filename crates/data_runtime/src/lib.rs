@@ -14,5 +14,6 @@ pub mod spell;
 pub mod zone;
 pub mod configs {
     pub mod destructible;
+    pub mod input_camera;
     pub mod telemetry;
 }

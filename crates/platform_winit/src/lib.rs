@@ -96,12 +96,22 @@ impl ApplicationHandler for App {
         // Apply any pointer-lock request emitted by controller systems.
         if let Some(lock) = state.take_pointer_lock_request() {
             use winit::window::CursorGrabMode;
-            let _ = window.set_cursor_grab(if lock {
+            let grab_mode = if lock {
                 CursorGrabMode::Locked
             } else {
                 CursorGrabMode::None
-            });
-            window.set_cursor_visible(!lock);
+            };
+            match window.set_cursor_grab(grab_mode) {
+                Ok(()) => {
+                    window.set_cursor_visible(!lock);
+                }
+                Err(e) => {
+                    // If locking failed (e.g., WASM denied), fall back to cursor mode
+                    log::debug!("pointer lock request failed: {:?}", e);
+                    window.set_cursor_visible(true);
+                    state.set_mouselook(false);
+                }
+            }
         }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),

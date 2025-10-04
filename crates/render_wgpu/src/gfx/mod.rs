@@ -318,6 +318,8 @@ pub struct Renderer {
     controller_state: client_core::facade::controller::ControllerState,
     // Pending pointer-lock request emitted by controller systems; applied by platform
     pointer_lock_request: Option<bool>,
+    // Controller configuration (mouselook)
+    controller_ml_cfg: client_core::systems::mouselook::MouselookConfig,
 
     // --- Destructible (voxel) state ---
     destruct_cfg: DestructibleConfig,
@@ -491,6 +493,15 @@ impl Renderer {
     /// Pop a pending pointer-lock request emitted by controller systems.
     pub fn take_pointer_lock_request(&mut self) -> Option<bool> {
         self.pointer_lock_request.take()
+    }
+    /// Force controller mode (used when pointer lock fails on some platforms).
+    pub fn set_mouselook(&mut self, want: bool) {
+        self.controller_state.mode = if want {
+            ecs_core::components::ControllerMode::Mouselook
+        } else {
+            ecs_core::components::ControllerMode::Cursor
+        };
+        self.pointer_lock_request = None;
     }
     /// Handle player character death: hide visuals, disable input/casting,
     /// and keep camera in a spectator orbit around the last position.
