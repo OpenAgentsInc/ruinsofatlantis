@@ -1196,8 +1196,9 @@ async fn run(cli: Cli) -> Result<()> {
                 let (min_b, max_b) = compute_bounds(&skinned);
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
-                // Collect animation names
+                // Collect animation names (filter unwanted like pistol*)
                 let mut names: Vec<String> = skinned.animations.keys().cloned().collect();
+                names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
                 names.sort();
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
@@ -1592,7 +1593,7 @@ async fn run(cli: Cli) -> Result<()> {
                     && !anims.is_empty()
                 {
                     let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
-                    let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
+                    let _glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
                     let header_h = glyph_h + line_gap;
                     let anim_header_y = head_y + glyph_h + line_gap + 12.0;
                     let available_h = (height as f32) - anim_header_y - 16.0;
@@ -1887,7 +1888,9 @@ async fn run(cli: Cli) -> Result<()> {
                             // Prefer merging GLTF animations into the current model
                             match merge_gltf_animations(base, &a.path) {
                                 Ok(_n) => {
-                                    let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
+                                    let mut new_names: Vec<String> = base.animations.keys().cloned().collect();
+                                    new_names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
+                                    new_names.sort();
                                     *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, head_pitch_deg_current));
                                     *anims = new_names; *time = 0.0; *active_index = 0;
                                     log::info!("viewer: merged GLTF animations from {}", a.path.display());
@@ -1901,7 +1904,9 @@ async fn run(cli: Cli) -> Result<()> {
                             // Merge FBX as animations into current model
                             if merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
                             // refresh AnimData and UI list
-                            let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
+                            let mut new_names: Vec<String> = base.animations.keys().cloned().collect();
+                            new_names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
+                            new_names.sort();
                             *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, head_pitch_deg_current));
                             *anims = new_names;
                             *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
