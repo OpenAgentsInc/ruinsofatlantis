@@ -1164,7 +1164,15 @@ async fn run(cli: Cli) -> Result<()> {
             }
             // If an animation library is provided, and the model is skinned, merge now.
             if let Some(lib_path) = cli.anim_lib.as_ref() {
-                if let ModelGpu::Skinned { base, anim, anims, time, active_index, .. } = &mut gpu {
+                if let ModelGpu::Skinned {
+                    base,
+                    anim,
+                    anims,
+                    time,
+                    active_index,
+                    ..
+                } = &mut gpu
+                {
                     let ext = lib_path
                         .extension()
                         .and_then(|e| e.to_str())
@@ -1183,10 +1191,7 @@ async fn run(cli: Cli) -> Result<()> {
                     } else if ext == "fbx" {
                         if merge_fbx_animations(base.as_mut(), lib_path).is_ok() {
                             merged_ok = true;
-                            log::info!(
-                                "viewer: merged FBX animations from {}",
-                                lib_path.display()
-                            );
+                            log::info!("viewer: merged FBX animations from {}", lib_path.display());
                         } else if let Some(conv) = try_convert_fbx_to_gltf(lib_path) {
                             if let Ok(n) = merge_gltf_animations(base.as_mut(), &conv) {
                                 merged_ok = n > 0;
@@ -1567,16 +1572,24 @@ async fn run(cli: Cli) -> Result<()> {
                 && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
                 && !anims.is_empty()
             {
-                        let list_x = m; let list_y = m + s + 8.0; let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
-                        // Header line occupies first row; buttons start at i=1
-                        for (i, name) in anims.iter().enumerate() {
-                            let text = format!("{}: {}", i + 1, name.to_uppercase());
-                            let tx0 = list_x; let ty0 = list_y + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0); // +1 to skip header
-                            let tw = text.len() as f32 * (glyph_w + anim_cell); let th = glyph_h;
-                            if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
-                                *active_index = i; *time = 0.0;
-                            }
-                        }
+                let list_x = m;
+                let list_y = m + s + 8.0;
+                // Match the text layout used for drawing (scaled by --ui-scale)
+                let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                let glyph_w = 5.0 * anim_cell;
+                let glyph_h = 7.0 * anim_cell;
+                // Header line occupies first row; buttons start at i=1
+                for (i, name) in anims.iter().enumerate() {
+                    let text = format!("{}: {}", i + 1, name.to_uppercase());
+                    let tx0 = list_x;
+                    let ty0 = list_y + (i as f32 + 1.0) * (glyph_h + anim_cell * 2.0); // +1 to skip header
+                    let tw = text.len() as f32 * (glyph_w + anim_cell);
+                    let th = glyph_h;
+                    if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
+                        *active_index = i;
+                        *time = 0.0;
+                    }
+                }
             }
             // Model entries click handling (replace base model)
             if !lib_models.is_empty() {
