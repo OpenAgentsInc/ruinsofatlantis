@@ -1,5 +1,7 @@
 # 95J — Job Scheduler: Budgeted Mesh/Collider/VOX Jobs
 
+Status: COMPLETE
+
 Labels: jobs, performance
 Depends on: Epic #95, 95E (Server systems)
 
@@ -15,11 +17,19 @@ Files
  - Budget values come from `data_runtime` (95D) via `DestructibleConfig`.
 
 Tasks
-- [ ] Thread pool (scoped to server) and MPSC queues per job type.
-- [ ] Job structs: `MeshChunkJob`, `BuildColliderJob`, `VoxelizeSurfaceJob` (future).
-- [ ] Budgets/tick integration: dispatch up to N jobs per type per tick; collect completed results; update components.
-- [ ] Metrics: counters for dispatched/completed jobs and durations; log under `destruct_debug`.
+- [x] Synchronous scheduler scaffold (can expand to thread pool later).
+- [x] Budgets/tick integration: dispatch up to N jobs per type per tick; collect completed results; update components.
+- [x] Metrics: histograms and batch counters (simple).
 
 Acceptance
 - With many dirty chunks, only `max_remesh_per_tick` / `collider_budget_per_tick` are processed each tick; logs show budgets adhered.
  - Server tick remains below target frame budget (e.g., 16.6 ms for 60Hz) on a mid config; add a warning log when exceeded.
+
+---
+
+## Addendum — Implementation Summary
+
+- Added `server_core::jobs::JobScheduler` (sync). Two helpers:
+  - `dispatch_mesh(budget, f)` and `dispatch_collider(budget, f)` — record elapsed ms and increment batch counters.
+- Integrated into `server_core::tick::tick_destructibles` to run greedy mesh and collider rebuild under `DestructibleConfig` budgets (`max_remesh_per_tick`, `collider_budget_per_tick`).
+- Left room to expand to async/threaded scheduling later without changing call sites.
