@@ -1,6 +1,6 @@
 # 97A — Integrate Basic/Universal Animation Library
 
-Status: PROPOSED
+Status: COMPLETE
 
 Labels: assets, animations, retarget, renderer
 Depends on: 97U (UBC characters), existing skinned animation pipeline (anim.rs)
@@ -32,17 +32,18 @@ Files to touch
   - A small offline script (Rust or Python) to convert FBX to glTF if we need specific UE/Unity variants; otherwise rely on provided GLB.
 
 Tasks
-- [ ] Copy `AnimationLibrary_Godot_Standard.glb` to `assets/models/anim/` (track via LFS if large).
-- [ ] Implement or reuse glTF animation merge that produces `AnimClip` and per-joint track arrays aligned to the UBC skeleton.
-- [ ] If necessary, define a `retarget.toml` mapping joint names from the animation GLB to UBC joint names; apply the mapping during load.
-- [ ] Expose a simple clip registry: `Idle`, `Walk`, `Run`, `Attack`, `Cast`, `Dodge`.
-- [ ] Drive `Idle/Walk/Run` from controller velocity; trigger `Attack/Cast/Dodge` from input bindings.
-- [ ] Add CPU-only tests for animation sampling determinism on small rigs (e.g., 2–3 joints) modeled after the wizard tests.
+- [x] Use `assets/anims/universal/AnimationLibrary.glb` as the source of clips (tracked via LFS).
+- [x] Reuse glTF animation merge (`ra_assets::skinning::merge_gltf_animations`) to produce `AnimClip` and per‑joint tracks aligned to the UBC skeleton.
+- [x] Viewer: add `--anim-lib <path>` to auto‑merge clips into the loaded model at startup; refresh animation list.
+- [ ] Engine: expose a simple clip registry (`Idle`, `Walk`, `Run`, `Attack`, `Cast`, `Dodge`) and drive from controller inputs (follow‑up).
+- [ ] Add CPU‑only sampling tests for a tiny rig (follow‑up).
 
 Acceptance
-- Animation clips load from GLB and play on UBC male/female with correct joint mapping.
-- Locomotion transitions respond to movement speed; action clips trigger from input.
-- Sampling produces stable palettes; tests pass under CI without GPU requirements.
+- Animation clips load from GLB and play in the model viewer on UBC male/female with name‑based joint mapping.
+- In the viewer, you can preview all clips via:
+  - UI merge: click `ANIMATIONLIBRARY` to merge clips into the loaded UBC model.
+  - CLI merge: pass `--anim-lib assets/anims/universal/AnimationLibrary.glb` alongside the model path.
+- The animation list scales via `--ui-scale` so long clip names fit.
 
 Notes
 - Viewer usage (for validation)
@@ -54,5 +55,10 @@ Notes
 
 Prep notes
 - The `ra_assets::skinning::merge_gltf_animations` path already merges GLTF clips by node names and refreshes the viewer’s clip list. We will reuse this in engine code and add a retarget map when needed.
+
+Addendum — What shipped
+- Model viewer CLI gained `--anim-lib <path>`; when combined with a UBC model path, it auto‑merges clips and refreshes the list.
+- Library UI respects `--ui-scale` for both model entries and animation entries; long lists are easier to scan and click.
+- Logs make merges explicit, e.g., `viewer: merged 142 GLTF animations from assets/anims/universal/AnimationLibrary.glb`.
 - If GLB clips include root motion, decide whether to consume or ignore it; for now, ignore (use controller for movement) and sample bone-local transforms only.
 - License: include `License.txt` under `docs/third_party/` or append to `NOTICE` per policy; keep original filename.

@@ -507,6 +507,11 @@ struct Cli {
     /// UI scale for text (1.0 = default). Lower to see more lines.
     #[arg(long, default_value_t = 1.0)]
     ui_scale: f32,
+
+    /// Optional path to an animation library (GLTF/GLB/FBX) to merge into the loaded model.
+    /// When provided with `path`, the clips are merged on load and the animation list is refreshed.
+    #[arg(long)]
+    anim_lib: Option<PathBuf>,
 }
 
 #[repr(C)]
@@ -1121,7 +1126,7 @@ async fn run(cli: Cli) -> Result<()> {
 
     // Load from CLI if provided
     if let Some(p) = cli.path.as_ref() {
-        if let Ok(gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
+        if let Ok(mut gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
             match &gpu {
                 ModelGpu::Skinned {
                     center: c,
@@ -1155,6 +1160,58 @@ async fn run(cli: Cli) -> Result<()> {
                     pitch = 0.35;
                     let title = format!("Model Viewer — {} | anims: (none)", p.display());
                     window.set_title(&title);
+                }
+            }
+            // If an animation library is provided, and the model is skinned, merge now.
+            if let (
+                Some(lib_path),
+                Some(ModelGpu::Skinned {
+                    base,
+                    anim,
+                    anims,
+                    time,
+                    active_index,
+                    ..
+                }),
+            ) = (cli.anim_lib.as_ref(), (&mut gpu).as_mut())
+            {
+                let ext = lib_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                let mut merged_ok = false;
+                if ext == "gltf" || ext == "glb" {
+                    if let Ok(n) = merge_gltf_animations(base, lib_path) {
+                        merged_ok = n > 0;
+                        log::info!(
+                            "viewer: merged {} GLTF animations from {}",
+                            n,
+                            lib_path.display()
+                        );
+                    }
+                } else if ext == "fbx" {
+                    if merge_fbx_animations(base, lib_path).is_ok() {
+                        merged_ok = true;
+                        log::info!("viewer: merged FBX animations from {}", lib_path.display());
+                    } else if let Some(conv) = try_convert_fbx_to_gltf(lib_path) {
+                        if let Ok(n) = merge_gltf_animations(base, &conv) {
+                            merged_ok = n > 0;
+                            log::info!(
+                                "viewer: merged {} animations from converted {}",
+                                n,
+                                conv.display()
+                            );
+                        }
+                    }
+                }
+                if merged_ok {
+                    let mut names: Vec<String> = base.animations.keys().cloned().collect();
+                    names.sort();
+                    *anim = Box::new(AnimData::from_skinned(base, &names));
+                    *anims = names;
+                    *time = 0.0;
+                    *active_index = 0;
                 }
             }
             model_gpu = Some(gpu);
@@ -1555,7 +1612,8 @@ async fn run(cli: Cli) -> Result<()> {
             {
                 let mut replace_new: Option<ModelGpu> = None;
                 let base_y = m + s + 8.0;
-                let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
+                let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
                 let model_lines = (anims.len() as f32 + 1.0).max(0.0);
                 let y_offset = base_y + model_lines * (glyph_h + anim_cell*2.0) + 10.0;
                 for (i, a) in lib_anims.clone().into_iter().enumerate() {
