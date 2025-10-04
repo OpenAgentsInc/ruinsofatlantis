@@ -354,7 +354,6 @@ struct AnimData {
     base_s: Vec<Vec3>,
     joints_nodes: Vec<usize>,
     inverse_bind: Vec<Mat4>,
-    node_names: Vec<String>,
     corr_weight: Option<Vec<f32>>, // optional per-node correction weight
     corr_quat: glam::Quat,         // base correction quaternion
     // Ordered clips parallel to displayed anims
@@ -453,12 +452,12 @@ impl AnimData {
             base_s: sk.base_s.clone(),
             joints_nodes: sk.joints_nodes.clone(),
             inverse_bind: sk.inverse_bind.clone(),
-            node_names: sk.node_names.clone(),
             corr_weight,
             corr_quat: corr_q,
             clips,
         }
     }
+    #[allow(dead_code)]
     fn from_skinned(sk: &SkinnedMeshCPU, ordered_names: &[String]) -> Self {
         Self::from_skinned_with_options(sk, ordered_names, 0.0)
     }
@@ -875,7 +874,6 @@ async fn run(cli: Cli) -> Result<()> {
         Skinned {
             vb: wgpu::Buffer,
             ib: wgpu::Buffer,
-            index_count: u32,
             mats: Vec<(wgpu::BindGroup, u32, u32)>, // (bind group, start, count)
             skin_bg: wgpu::BindGroup,
             skin_buf: wgpu::Buffer,
@@ -1024,7 +1022,7 @@ async fn run(cli: Cli) -> Result<()> {
     let mut mouse_pos_px: (f32, f32) = (0.0, 0.0);
 
     // Helper to upload a model: called on CLI path (if provided) and Drag&Drop
-    let mut load_model = |path: &PathBuf,
+    let load_model = |path: &PathBuf,
                       device: &wgpu::Device,
                       queue: &wgpu::Queue,
                       mat_bgl: &wgpu::BindGroupLayout,
@@ -1062,7 +1060,6 @@ async fn run(cli: Cli) -> Result<()> {
                     contents: bytemuck::cast_slice(&skinned.indices),
                     usage: wgpu::BufferUsages::INDEX,
                 });
-                let index_count = skinned.indices.len() as u32;
                 let palette = compute_bind_pose_palette(&skinned);
                 let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("skin-palette"),
@@ -1211,12 +1208,13 @@ async fn run(cli: Cli) -> Result<()> {
                     4 => 70.0,
                     _ => default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg),
                 };
-                if pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", pitch); }
+                if pitch.abs() > 0.001 {
+                    log::info!("viewer: head pitch correction {} deg", pitch);
+                }
                 let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, pitch));
                 Ok(ModelGpu::Skinned {
                     vb,
                     ib,
-                    index_count,
                     mats,
                     skin_bg,
                     skin_buf,
@@ -1298,7 +1296,13 @@ async fn run(cli: Cli) -> Result<()> {
                     window.set_title(&title);
                     // set current pitch for UI controls based on mode
                     if let ModelGpu::Skinned { base, .. } = &gpu {
-                        head_pitch_deg_current = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, Some(p), cli.head_pitch_deg) };
+                        head_pitch_deg_current = match orient_mode {
+                            0 => 0.0,
+                            2 => 45.0,
+                            3 => 60.0,
+                            4 => 70.0,
+                            _ => default_head_pitch_for(base, Some(p), cli.head_pitch_deg),
+                        };
                     }
                 }
                 ModelGpu::Basic {
@@ -1923,7 +1927,7 @@ async fn run(cli: Cli) -> Result<()> {
             // Library entries click handling when no model is loaded: load as base model
             if model_gpu.is_none() && !lib_anims.is_empty() {
                 let base_y = m + s + 8.0;
-                let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
+                    let anim_cell = 6.0; let glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell;
                 let model_lines = 0.0f32; // no animations yet
                 let y_offset = base_y + model_lines * (glyph_h + anim_cell*2.0) + 10.0;
                 for (i, a) in lib_anims.clone().into_iter().enumerate() {
