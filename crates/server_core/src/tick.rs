@@ -2,6 +2,7 @@
 
 use crate::destructible::config::DestructibleConfig;
 use crate::systems::destructible::{collider_rebuild_budget, greedy_mesh_budget, voxel_carve};
+use crate::jobs::JobScheduler;
 use ecs_core::components::{CarveRequest, ChunkDirty, ChunkMesh};
 use glam::UVec3;
 use voxel_proxy::VoxelGrid;
@@ -30,8 +31,11 @@ pub fn tick_destructibles(
             carves_applied += 1;
         }
     }
-    // 2) Greedy mesh budgeted
-    let meshed = greedy_mesh_budget(grid, dirty, meshes, cfg.max_chunk_remesh.max(0));
+    // 2) Greedy mesh via scheduler (synchronous dispatch)
+    let sched = JobScheduler::new();
+    let meshed = sched.dispatch_mesh(cfg.max_chunk_remesh.max(0), |budget| {
+        greedy_mesh_budget(grid, dirty, meshes, budget)
+    });
     // 3) Collider budget: rebuild over a stable subset of chunk keys we have meshes for
     let mut keys: Vec<UVec3> = meshes
         .map
@@ -41,13 +45,9 @@ pub fn tick_destructibles(
         .collect();
     // Deterministic order: sort by xyz
     keys.sort_unstable_by_key(|c| (c.x, c.y, c.z));
-    let coll = collider_rebuild_budget(
-        grid,
-        &keys,
-        colliders,
-        static_index,
-        cfg.collider_budget_per_tick.max(0),
-    );
+    let coll = sched.dispatch_collider(cfg.collider_budget_per_tick.max(0), |budget| {
+        collider_rebuild_budget(grid, &keys, colliders, static_index, budget)
+    });
     (carves_applied, meshed, coll)
 }
 
@@ -99,4 +99,3 @@ mod tests {
         assert!(idx.is_some());
     }
 }
-

@@ -6,6 +6,7 @@
 
 use glam::Vec3;
 pub mod destructible;
+pub mod jobs;
 pub mod systems {
     pub mod npc;
 }
