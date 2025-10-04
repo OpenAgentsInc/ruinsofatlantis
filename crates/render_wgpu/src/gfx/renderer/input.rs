@@ -13,6 +13,24 @@ impl Renderer {
             WindowEvent::KeyboardInput { event, .. } => {
                 let pressed = event.state.is_pressed();
                 match event.physical_key {
+                    // Toggle cursor/mouselook (ALT)
+                    PhysicalKey::Code(KeyCode::AltLeft) | PhysicalKey::Code(KeyCode::AltRight) => {
+                        if pressed {
+                            let mut host_events = Vec::new();
+                            let ui = client_core::systems::cursor::UiFocus::default();
+                            client_core::systems::cursor::handle_cursor_event(
+                                &mut self.controller_state,
+                                &ui,
+                                client_core::systems::cursor::CursorEvent::Toggle,
+                                &mut host_events,
+                            );
+                            for ev in host_events {
+                                let client_core::systems::cursor::HostEvent::PointerLockRequest(b) =
+                                    ev;
+                                self.pointer_lock_request = Some(b);
+                            }
+                        }
+                    }
                     // Ignore movement/casting inputs if the PC is dead
                     PhysicalKey::Code(KeyCode::KeyW) if self.pc_alive => {
                         self.input.forward = pressed
@@ -206,25 +224,48 @@ impl Renderer {
                     if !self.rmb_down {
                         self.last_cursor_pos = None; // reset deltas
                     }
+                    // Classic profile fallback: temporary capture while RMB held
+                    let mut host_events = Vec::new();
+                    let ui = client_core::systems::cursor::UiFocus::default();
+                    client_core::systems::cursor::handle_cursor_event(
+                        &mut self.controller_state,
+                        &ui,
+                        client_core::systems::cursor::CursorEvent::MouseRight(self.rmb_down),
+                        &mut host_events,
+                    );
+                    for ev in host_events {
+                        let client_core::systems::cursor::HostEvent::PointerLockRequest(b) = ev;
+                        self.pointer_lock_request = Some(b);
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // Use previous cursor for deltas, then update to current.
-                if self.rmb_down
-                    && let Some((lx, ly)) = self.last_cursor_pos
-                {
-                    let dx = position.x - lx;
-                    let dy = position.y - ly;
-                    let sens = 0.005;
-                    // Fully sync player facing with mouse drag; keep camera behind the player
-                    let yaw_delta = dx as f32 * sens;
-                    self.player.yaw = wrap_angle(self.player.yaw - yaw_delta);
-                    // Propagate to controller so SceneInputs yaw stays in sync
+                // Compute deltas (in px) and apply to controller when appropriate.
+                let mut apply = false;
+                let (dx, dy) = if let Some((lx, ly)) = self.last_cursor_pos {
+                    ((position.x - lx) as f32, (position.y - ly) as f32)
+                } else {
+                    (0.0, 0.0)
+                };
+                // Apply in mouselook mode always; in Classic fallback apply while RMB is held.
+                use ecs_core::components::ControllerMode;
+                if self.controller_state.mode() == ControllerMode::Mouselook || self.rmb_down {
+                    apply = true;
+                }
+                if apply {
+                    let cfg = client_core::systems::mouselook::MouselookConfig::default();
+                    client_core::systems::mouselook::apply_mouse_delta(
+                        &cfg,
+                        &mut self.controller_state,
+                        dx,
+                        dy,
+                    );
+                    // Mirror controller yaw/pitch into existing orbit fields for camera system
+                    self.cam_orbit_yaw = wrap_angle(self.controller_state.camera.yaw);
+                    self.cam_orbit_pitch = self.controller_state.camera.pitch.clamp(-0.6, 1.2);
+                    // Keep player facing in sync with camera yaw for now
+                    self.player.yaw = self.cam_orbit_yaw;
                     self.scene_inputs.set_yaw(self.player.yaw);
-                    self.cam_orbit_yaw = 0.0;
-                    // Invert pitch control (mouse up pitches camera down, and vice versa)
-                    self.cam_orbit_pitch =
-                        (self.cam_orbit_pitch + dy as f32 * sens).clamp(-0.6, 1.2);
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));

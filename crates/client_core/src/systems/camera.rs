@@ -8,7 +8,12 @@ pub struct CameraRigCfg {
     pub boom_height: f32,
 }
 impl Default for CameraRigCfg {
-    fn default() -> Self { Self { boom_len: 8.5, boom_height: 1.6 } }
+    fn default() -> Self {
+        Self {
+            boom_len: 8.5,
+            boom_height: 1.6,
+        }
+    }
 }
 
 pub fn update_camera_pose(cfg: &CameraRigCfg, state: &mut ControllerState, target: glam::Vec3) {
@@ -30,4 +35,3 @@ mod tests {
         assert!(s.camera.eye.length() > 0.0);
     }
 }
-

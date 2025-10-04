@@ -1,6 +1,10 @@
-//! Client-side systems placeholder module.
+//! Client-side systems for input/controller and camera.
 //!
-//! This will eventually host prediction, interpolation, and reconciliation.
+//! Hosts lightweight, testable logic used by the renderer host.
+
+pub mod camera;
+pub mod cursor;
+pub mod mouselook;
 
 #[cfg(test)]
 mod tests {

@@ -1433,6 +1433,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         damage,
         hud,
         hud_model: Default::default(),
+        controller_state: Default::default(),
+        pointer_lock_request: None,
         // Destructible defaults; leave grid None until provided by a loader/demo
         destruct_cfg: dcfg,
         voxel_grid: voxel_grid.clone(),

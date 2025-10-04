@@ -1,5 +1,7 @@
 # 95E1 — Action Combat & Mouselook (Neverwinter‑style default)
 
+Status: PARTIAL (event bridge, pointer-lock, reticle landed)
+
 Labels: client, input, camera, UX, accessibility
 Depends on: 95B (client_core scaffold), 95E (controller/camera systems)
 Type: Feature (supplements 95E; does not replace)
@@ -71,3 +73,25 @@ Acceptance Criteria
 References
 - Community and docs describing Neverwinter’s controls patterns (reticle, LMB/RMB, Q/E, Shift/Tab, ALT for cursor).
 
+---
+
+## Addendum — Implementation Summary (current)
+
+What landed in this pass:
+- Renderer ⇄ client_core event bridge
+  - `render_wgpu::renderer::input.rs`: ALT toggles mouselook/cursor via `client_core::systems::cursor::handle_cursor_event`; RMB acts as a Classic fallback (temporary capture while held).
+  - Mouse deltas applied through `client_core::systems::mouselook::apply_mouse_delta`; controller yaw/pitch mirror into existing orbit fields for camera.
+- Pointer‑lock wiring
+  - `platform_winit`: applies `CursorGrabMode::Locked/None` and visibility based on `Renderer::take_pointer_lock_request()` after each window event.
+  - `Renderer` holds `controller_state` + `pointer_lock_request` field to coordinate requests.
+- Reticle UI
+  - `ui::Hud::append_reticle(surface_w, surface_h)` added; drawn whenever controller mode is Mouselook.
+
+Notes
+- Camera remains driven by the existing orbit system; we mirror controller yaw/pitch into those fields to minimize churn. A follow‑up can move camera pose to be derived directly from the controller facade if desired.
+- Default key: ALT toggles cursor; RMB hold engages Classic fallback.
+
+Next steps to complete 95E1
+- Add input profiling (ActionCombat vs ClassicCursor) and minor config surface (`data/config/input_camera.toml`).
+- WASM‑aware pointer‑lock denial fallback and tooltip prompt.
+- Optional camera smoothing settings via client_core camera system.

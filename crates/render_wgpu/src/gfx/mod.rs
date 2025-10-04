@@ -314,6 +314,10 @@ pub struct Renderer {
     damage: ui::DamageFloaters,
     hud: ui::Hud,
     hud_model: ux_hud::HudModel,
+    // Controller facade (client_core-owned logic)
+    controller_state: client_core::facade::controller::ControllerState,
+    // Pending pointer-lock request emitted by controller systems; applied by platform
+    pointer_lock_request: Option<bool>,
 
     // --- Destructible (voxel) state ---
     destruct_cfg: DestructibleConfig,
@@ -483,6 +487,10 @@ impl Renderer {
     // moved: wrap_angle -> renderer/update.rs
     fn any_zombies_alive(&self) -> bool {
         self.server.npcs.iter().any(|n| n.alive)
+    }
+    /// Pop a pending pointer-lock request emitted by controller systems.
+    pub fn take_pointer_lock_request(&mut self) -> Option<bool> {
+        self.pointer_lock_request.take()
     }
     /// Handle player character death: hide visuals, disable input/casting,
     /// and keep camera in a spectator orbit around the last position.
@@ -1758,6 +1766,8 @@ impl Renderer {
             damage,
             hud,
             hud_model: Default::default(),
+            controller_state: Default::default(),
+            pointer_lock_request: None,
 
             // Player/camera
             pc_index: scene_build.pc_index,

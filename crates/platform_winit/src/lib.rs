@@ -93,6 +93,16 @@ impl ApplicationHandler for App {
             return;
         }
         state.handle_window_event(&event);
+        // Apply any pointer-lock request emitted by controller systems.
+        if let Some(lock) = state.take_pointer_lock_request() {
+            use winit::window::CursorGrabMode;
+            let _ = window.set_cursor_grab(if lock {
+                CursorGrabMode::Locked
+            } else {
+                CursorGrabMode::None
+            });
+            window.set_cursor_visible(!lock);
+        }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),

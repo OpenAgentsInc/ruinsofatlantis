@@ -1769,6 +1769,37 @@ impl Hud {
         self.text_vcount = self.text_verts.len() as u32;
     }
 
+    /// Append a simple center reticle (crosshair) using the bar pipeline.
+    pub fn append_reticle(&mut self, surface_w: u32, surface_h: u32) {
+        let cx = surface_w as f32 * 0.5;
+        let cy = surface_h as f32 * 0.5;
+        // Size scaled to min dimension
+        let len = (surface_w.min(surface_h) as f32 * 0.012).clamp(6.0, 18.0);
+        let thick = 2.0f32;
+        let color = [0.95, 0.98, 1.0, 0.85];
+        // Horizontal line
+        self.push_rect(
+            surface_w,
+            surface_h,
+            cx - len,
+            cy - thick * 0.5,
+            cx + len,
+            cy + thick * 0.5,
+            color,
+        );
+        // Vertical line
+        self.push_rect(
+            surface_w,
+            surface_h,
+            cx - thick * 0.5,
+            cy - len,
+            cx + thick * 0.5,
+            cy + len,
+            color,
+        );
+        self.bars_vcount = self.bars_verts.len() as u32;
+    }
+
     pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         // Bars
         if self.bars_vcount > 0 {

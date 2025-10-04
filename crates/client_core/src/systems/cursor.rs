@@ -4,19 +4,39 @@ use crate::facade::controller::ControllerState;
 use ecs_core::components::ControllerMode;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct UiFocus { pub chat_open: bool, pub menu_open: bool }
+pub struct UiFocus {
+    pub chat_open: bool,
+    pub menu_open: bool,
+}
 
 #[derive(Clone, Copy, Debug)]
-pub enum CursorEvent { Toggle, MouseRight(bool) }
+pub enum CursorEvent {
+    Toggle,
+    MouseRight(bool),
+}
 
-pub enum HostEvent { PointerLockRequest(bool) }
+pub enum HostEvent {
+    PointerLockRequest(bool),
+}
 
-pub fn handle_cursor_event(state: &mut ControllerState, ui: &UiFocus, ev: CursorEvent, out: &mut Vec<HostEvent>) {
+pub fn handle_cursor_event(
+    state: &mut ControllerState,
+    ui: &UiFocus,
+    ev: CursorEvent,
+    out: &mut Vec<HostEvent>,
+) {
     match ev {
         CursorEvent::Toggle => {
-            if ui.chat_open || ui.menu_open { return; }
-            state.mode = match state.mode { ControllerMode::Mouselook => ControllerMode::Cursor, ControllerMode::Cursor => ControllerMode::Mouselook };
-            out.push(HostEvent::PointerLockRequest(state.mode == ControllerMode::Mouselook));
+            if ui.chat_open || ui.menu_open {
+                return;
+            }
+            state.mode = match state.mode {
+                ControllerMode::Mouselook => ControllerMode::Cursor,
+                ControllerMode::Cursor => ControllerMode::Mouselook,
+            };
+            out.push(HostEvent::PointerLockRequest(
+                state.mode == ControllerMode::Mouselook,
+            ));
         }
         CursorEvent::MouseRight(down) => {
             // Classic fallback: temporary capture while RMB held
@@ -44,4 +64,3 @@ mod tests {
         assert!(!ev.is_empty());
     }
 }
-
