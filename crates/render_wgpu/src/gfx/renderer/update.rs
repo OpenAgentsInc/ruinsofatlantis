@@ -1449,13 +1449,9 @@ impl Renderer {
 
         if let Some(want) = desired_exact {
             let chosen = lookup.as_deref().unwrap_or("");
-            if chosen != want {
-                let names: Vec<&str> = pc_cpu.animations.keys().map(|s| s.as_str()).collect();
-                log::warn!(
-                    "PC anim clip '{}' not found; available: {}",
-                    want,
-                    names.join(", ")
-                );
+            if chosen != want && !self.pc_anim_missing_warned.contains(want) {
+                self.pc_anim_missing_warned.insert(want.to_string());
+                log::warn!("PC anim clip '{}' not found; using fallback", want);
             }
         }
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(joints);

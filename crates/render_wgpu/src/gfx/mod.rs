@@ -67,7 +67,7 @@ use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use collision_static::chunks::{self as chunkcol, StaticChunk};
 use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 #[allow(unused_imports)]
 use voxel_mesh::MeshBuffers;
 use voxel_proxy::VoxelGrid;
@@ -255,6 +255,7 @@ pub struct Renderer {
     pc_mat_bg: Option<wgpu::BindGroup>,
     pc_prev_pos: glam::Vec3,
     pc_anim_cfg: data_runtime::configs::pc_animations::PcAnimCfg,
+    pc_anim_missing_warned: HashSet<String>,
     // Zombies
     zombie_palettes_buf: wgpu::Buffer,
     zombie_palettes_bg: wgpu::BindGroup,

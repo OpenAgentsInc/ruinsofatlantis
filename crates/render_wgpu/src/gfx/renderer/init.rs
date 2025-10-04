@@ -1762,6 +1762,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _sorc_tex_view,
         _sorc_sampler,
         pc_anim_cfg,
+        pc_anim_missing_warned: Default::default(),
     };
 
     // Apply default input profile from config if provided
