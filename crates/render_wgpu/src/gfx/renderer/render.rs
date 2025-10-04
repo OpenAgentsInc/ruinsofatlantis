@@ -600,6 +600,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             log::debug!("draw: wizards x{}", r.wizard_count);
             r.draw_wizards(&mut rp);
             r.draw_calls += 1;
+            // If PC uses a separate rig, draw it explicitly in addition to NPC wizards
+            if r.pc_vb.is_some() {
+                r.draw_pc_only(&mut rp);
+                r.draw_calls += 1;
+            }
         } else {
             log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
