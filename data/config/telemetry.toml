@@ -1,0 +1,8 @@
+# default telemetry settings (server)
+log_level = "info"
+json_logs = true
+# metrics_addr = "127.0.0.1:9100"
+# otlp_endpoint = "http://localhost:4317"
+trace_sample = 0.0
+enable_client = true
+

@@ -1,3 +1,5 @@
+# Client Controller: Mouselook & Action Combat
+
 > Thanks now given this structure where should I put the character controller customization like I want to toggle mouse look on and off and just evolve the character controller like where should all of that go and how should it be structured?
 
 Great question. Short answer: **put all character‑controller logic—including mouse‑look mode toggling—inside `client_core` as ECS systems and components**, and treat the renderer (`render_wgpu`) as a **thin host** that forwards raw OS input and performs **only** OS/window‑level side effects (cursor capture/visibility). That keeps gameplay/PvE logic testable and makes it easy to evolve without tangling it with graphics.
