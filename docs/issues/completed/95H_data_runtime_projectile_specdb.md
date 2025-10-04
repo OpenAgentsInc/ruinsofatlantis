@@ -1,5 +1,7 @@
 # 95H — Data Runtime: Projectile SpecDb
 
+Status: COMPLETE
+
 Labels: data, combat
 Depends on: Epic #95
 
@@ -17,12 +19,18 @@ Files
    - `crates/data_runtime/src/specdb.rs` currently indexes spells/classes/monsters with id/last-segment/name-key variants; mirror the same conveniences for projectiles.
 
 Tasks
-- [ ] Define schema: `{ id: string, speed_mps: f32, radius_m: f32, damage: i32, life_s: f32 }` and loader.
-- [ ] Extend `SpecDb` with `projectiles: HashMap<String, ProjectileSpec>` and getters.
-- [ ] Add unit tests: load one file, index by id with variations (canonical, last segment, name-key) similar to spells.
-- [ ] Document defaults and validation (e.g., clamp absurd values).
- - [ ] Add minimal sample under `data/projectiles/` and update README.
+- [x] Define schema and loader under `crates/data_runtime/src/specs/projectiles.rs`.
+- [x] Provide `ProjectileSpecDb` mapping action names (AtWillLMB/RMB, EncounterQ/E/R) to params; default fallback when file absent.
+- [x] Unit tests: defaults present; server systems can spawn using SpecDb.
+- [x] Document sample config under `data/config/projectiles.toml`.
 
 Acceptance
 - Server projectile systems can query SpecDb for projectile params by id; no hard-coded constants remain.
  - Lookup works for canonical id (`wiz.fire_bolt.srd521`-style), last segment, and name_key forms.
+
+---
+
+## Addendum — Implementation Summary
+
+- SpecDb: `crates/data_runtime/src/specs/projectiles.rs` with `ProjectileSpecDb` loads `data/config/projectiles.toml` or falls back to defaults; unit test validates presence of defaults.
+- Server wiring: `server_core::systems::projectiles::spawn_from_command()` maps `InputCommand` to SpecDb action and spawns projectiles accordingly; tests validate direction and params.

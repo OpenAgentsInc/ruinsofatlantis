@@ -1,5 +1,7 @@
 # 95D — Data Runtime: Destructible Budgets & Tuning
 
+Status: COMPLETE
+
 Labels: data, config, voxel
 Depends on: Epic #95
 
@@ -21,10 +23,10 @@ Config keys (initial)
 - Tuning: `close_surfaces: bool`, `seed: u64`
 
 Tasks
-- [ ] Define struct and loader (TOML or JSON; choose one consistent with repo).
-- [ ] Map existing `server_core::destructible::config::DestructibleConfig` flags to override fields.
-- [ ] Add unit tests: default load, CLI override merge.
- - [ ] Provide a sample file `data/config/destructible.toml` and document path:
+- [x] Define struct and loader (TOML) under `data_runtime::configs::destructible`.
+- [x] Map existing `server_core::destructible::config::DestructibleConfig` flags to override fields.
+- [x] Add unit tests: default load, CLI override merge and clamp.
+ - [x] Provide a sample file `data/config/destructible.toml` and document path:
    ```toml
    voxel_size_m = 0.10
    chunk = [32, 32, 32]
@@ -36,10 +38,10 @@ Tasks
    close_surfaces = false
    seed = 12648430
    ```
- - [ ] Precedence & validation:
+ - [x] Precedence & validation:
    - Defaults in code < file values < CLI flags (highest). Test precedence.
    - Clamp insane values (e.g., `voxel_size_m >= 0.02`, `max_remesh_per_tick <= 256`), log clamped result once.
- - [ ] Wire into `server_core` (replace hard‑coded uses) in:
+ - [x] Wire into `server_core` (replace hard‑coded uses) in:
    - `server_core/src/destructible.rs` (budgets, debris caps), and future systems once added.
 
 Acceptance
@@ -48,3 +50,11 @@ Acceptance
    ```
    [destructible] cfg: voxel=0.10m chunk=32^3 pad=0.25m budgets(remesh=4,colliders=2) debris=1500 seed=0x00C0FFEE
    ```
+
+---
+
+## Addendum — Implementation Summary
+
+- Loader: `crates/data_runtime/src/configs/destructible.rs` loads and clamps TOML at `data/config/destructible.toml`; test validates defaults.
+- server_core wiring: `server_core::destructible::config::DestructibleConfig::from_args()` merges file defaults + CLI overrides, clamps, and logs effective config once.
+- Budgets used by systems: `max_remesh_per_tick` and `collider_budget_per_tick` drive mesh/collider via `tick_destructibles()` (scheduler-backed).

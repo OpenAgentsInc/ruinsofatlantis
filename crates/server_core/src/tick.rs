@@ -98,4 +98,19 @@ mod tests {
         assert!(cols.len() <= 1);
         assert!(idx.is_some());
     }
+
+    #[test]
+    fn orchestrator_multiple_ticks_progresses() {
+        let mut grid = mk_grid(UVec3::new(32, 32, 32), UVec3::new(8, 8, 8), 0.25);
+        let cfg = DestructibleConfig { max_chunk_remesh: 2, collider_budget_per_tick: 1, ..Default::default() };
+        let mut pending = vec![CarveRequest { did: 1, center_m: glam::DVec3::new(4.0, 4.0, 4.0), radius_m: 0.8, seed: 1, impact_id: 1 }];
+        let mut dirty = ChunkDirty::default();
+        let mut meshes = ChunkMesh::default();
+        let mut cols: Vec<collision_static::chunks::StaticChunk> = Vec::new();
+        let mut idx = None;
+        let _ = tick_destructibles(&mut grid, &cfg, &mut pending, &mut dirty, &mut meshes, &mut cols, &mut idx);
+        let _ = tick_destructibles(&mut grid, &cfg, &mut pending, &mut dirty, &mut meshes, &mut cols, &mut idx);
+        assert!(!meshes.map.is_empty());
+        assert!(idx.is_some());
+    }
 }

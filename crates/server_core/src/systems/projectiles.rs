@@ -159,6 +159,9 @@ pub fn spawn_from_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn approx(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-5
+    }
     #[test]
     fn sphere_hit_applies_damage() {
         let owner = EntityId(1);
@@ -228,5 +231,27 @@ mod tests {
         .expect("spawn");
         assert!(p.vel.length() > 0.0 && (p.vel.normalize() - dir).length() < 1e-4);
         assert!(p.life_s > 0.0 && p.radius_m > 0.0);
+    }
+    #[test]
+    fn integrate_is_deterministic_over_steps() {
+        let owner = EntityId(9);
+        let mut p = Projectile {
+            radius_m: 0.1,
+            damage: 1,
+            life_s: 10.0,
+            owner,
+            pos: Vec3::new(0.0, 0.0, 0.0),
+            vel: Vec3::new(4.0, 0.0, 0.0),
+        };
+        // Single step
+        let mut a = vec![p];
+        let _ = integrate(&mut a, 0.5);
+        let single = a[0].pos;
+        // Two half-steps
+        let mut b = vec![p];
+        let _ = integrate(&mut b, 0.25);
+        let _ = integrate(&mut b, 0.25);
+        let two = b[0].pos;
+        assert!(approx(single.x, two.x) && approx(single.y, two.y) && approx(single.z, two.z));
     }
 }
