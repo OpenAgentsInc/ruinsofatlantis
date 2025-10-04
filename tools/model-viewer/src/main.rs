@@ -1361,9 +1361,10 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                     if merged_ok {
                         let mut names: Vec<String> = base.animations.keys().cloned().collect();
+                        // Filter out unwanted clips
+                        names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
                         names.sort();
-                        **anim =
-                            AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
+                        **anim = AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
                         *anims = names;
                         *time = 0.0;
                         *active_index = 0;
@@ -1598,7 +1599,8 @@ async fn run(cli: Cli) -> Result<()> {
                     // Space list clearly below head controls using label metrics
                     let label_row_h = 7.0 * label_cell + label_cell * 2.0;
                     let header_h = glyph_h + line_gap;
-                    let anim_header_y = head_y + label_row_h + 14.0;
+                    // Push list well below head controls (two label rows worth + extra padding)
+                    let anim_header_y = head_y + (2.0 * label_row_h) + 18.0;
                     let available_h = (height as f32) - anim_header_y - 16.0;
                     let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
                     let col_w = 260.0 * cli.ui_scale.max(0.5);
@@ -1832,8 +1834,8 @@ async fn run(cli: Cli) -> Result<()> {
             {
                 let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
                 let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
-                let header_h = glyph_h + line_gap;
-                let anim_header_y = m + s + 8.0 + header_h + 8.0;
+                let label_row_h = 7.0 * (3.0 * cli.ui_scale.max(0.25)) + (3.0 * cli.ui_scale.max(0.25)) * 2.0;
+                let anim_header_y = (m + (7.0*anim_cell) + (anim_cell*2.0) + 8.0) + label_row_h + 14.0;
                 let available_h = (height as f32) - anim_header_y - 16.0;
                 let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
                 let col_w = 260.0 * cli.ui_scale.max(0.5);
