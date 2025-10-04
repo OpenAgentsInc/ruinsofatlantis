@@ -135,6 +135,14 @@ impl Renderer {
                     | PhysicalKey::Code(KeyCode::ShiftRight)
                     | PhysicalKey::Code(KeyCode::Tab) => {
                         if pressed {
+                            // If dead and the user presses R, respawn instead of enqueuing an Encounter
+                            if !self.pc_alive
+                                && matches!(event.physical_key, PhysicalKey::Code(KeyCode::KeyR))
+                            {
+                                log::info!("Respawn via R key");
+                                self.respawn();
+                                return;
+                            }
                             use client_core::systems::action_bindings::{Bindings, ButtonSnapshot};
                             let mut snap = ButtonSnapshot::default();
                             match event.physical_key {
@@ -325,10 +333,13 @@ impl Renderer {
                         dx,
                         dy,
                     );
-                    // Mirror controller yaw/pitch into existing orbit fields for camera system
+                    // Mirror controller yaw/pitch into existing orbit fields for camera system.
+                    // Positive pitch (mouse up) should tilt the orbit camera UP. Our orbit helper's
+                    // X rotation tilts down for positive angles, so negate the controller pitch here.
                     self.cam_orbit_yaw = wrap_angle(self.controller_state.camera.yaw);
-                    self.cam_orbit_pitch = self.controller_state.camera.pitch.clamp(-0.6, 1.2);
-                    // Keep player facing in sync with camera yaw for now
+                    let orbit_pitch = -self.controller_state.camera.pitch;
+                    self.cam_orbit_pitch = orbit_pitch.clamp(-1.2, 1.2);
+                    // Keep player facing in sync with camera yaw so character faces mouselook
                     self.player.yaw = self.cam_orbit_yaw;
                     self.scene_inputs.set_yaw(self.player.yaw);
                 }
