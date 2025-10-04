@@ -39,6 +39,19 @@ Notes
 - The default profile is Action/Reticle (Neverwinter‑style). A Classic Cursor profile exists for fallback in browsers or accessibility; RMB hold engages temporary mouselook.
 - Pointer‑lock may be denied by the OS/browser; when denied, we fall back to cursor mode and keep the UI interactive.
 
+Config (optional)
+- `data/config/input_camera.toml` (if present) adjusts mouselook and ALT behavior.
+  Example:
+  
+  ```toml
+  sensitivity_deg_per_count = 0.12
+  invert_y = false
+  min_pitch_deg = -75
+  max_pitch_deg = 75
+  alt_hold = true           # ALT acts as hold (press=cursor, release=mouselook)
+  profile = "ActionCombat"  # or "ClassicCursor"
+  ```
+
 CLI/Env toggles
 - `--no-vsync` (or `RA_NO_VSYNC=1`): prefer Immediate present mode if supported.
 

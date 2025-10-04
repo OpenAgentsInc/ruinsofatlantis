@@ -94,4 +94,19 @@ mod tests {
         assert!(cmds.contains(&InputCommand::EncounterQ));
         assert!(cmds.contains(&InputCommand::Dodge));
     }
+
+    #[test]
+    fn rmb_emits_secondary_command() {
+        let binds = Bindings::default();
+        let mut state = ControllerState::default();
+        state.mode = ControllerMode::Mouselook;
+        let input = ButtonSnapshot {
+            rmb_pressed: true,
+            ..Default::default()
+        };
+        let mut out = InputQueue::default();
+        handle_buttons(&binds, &state, &input, &mut out);
+        let cmds: Vec<_> = out.drain().collect();
+        assert_eq!(cmds, vec![InputCommand::AtWillRMB]);
+    }
 }

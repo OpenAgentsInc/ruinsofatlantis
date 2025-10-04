@@ -12,6 +12,8 @@ pub struct InputCameraCfg {
     pub max_pitch_deg: Option<f32>,
     /// If true, ALT acts as hold-to-hold for cursor mode; otherwise toggle.
     pub alt_hold: Option<bool>,
+    /// Default input profile name: "ActionCombat" or "ClassicCursor" (optional)
+    pub profile: Option<String>,
 }
 
 impl Default for InputCameraCfg {
@@ -22,6 +24,7 @@ impl Default for InputCameraCfg {
             min_pitch_deg: Some(-80.0),
             max_pitch_deg: Some(80.0),
             alt_hold: Some(false),
+            profile: None,
         }
     }
 }
@@ -56,6 +59,9 @@ pub fn load_default() -> Result<InputCameraCfg> {
     }
     if let Ok(v) = std::env::var("ALT_HOLD") {
         cfg.alt_hold = v.parse().ok();
+    }
+    if let Ok(v) = std::env::var("INPUT_PROFILE") {
+        cfg.profile = Some(v);
     }
     Ok(cfg)
 }

@@ -1553,6 +1553,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             .unwrap_or(glam::Vec3::ZERO),
     };
 
+    // Apply default input profile from config if provided
+    let prof = crate::gfx::renderer::controls::parse_profile_name(icfg.profile.as_deref());
+    renderer.controller_state.profile = prof;
+
     // If a demo voxel grid was created, enqueue all chunks once so it renders immediately
     if let Some(ref grid) = renderer.voxel_grid {
         let dims = grid.dims();
