@@ -1390,11 +1390,36 @@ impl Renderer {
             let c = m.to_cols_array();
             glam::vec3(c[12], c[13], c[14])
         };
-        let moving = (current_pos - self.pc_prev_pos).length_squared() > 1e-4;
-        // Attack when casting
+        // Movement intent from input takes precedence over tiny position noise
+        let moving_by_input =
+            self.input.forward || self.input.backward || self.input.left || self.input.right;
+        let moving = moving_by_input || (current_pos - self.pc_prev_pos).length_squared() > 1e-4;
         let is_casting = self.pc_anim_start.is_some();
-        // Fuzzy clip lookup like zombies/DK
-        let pick = |subs: &[&str]| -> Option<String> {
+        // Desired names by situation (exact match preferred)
+        let desired_exact = if is_casting {
+            Some("Spell_Simple_Idle")
+        } else if moving && self.input.run {
+            Some("Sprint")
+        } else if moving {
+            Some("Walk")
+        } else {
+            Some("Idle")
+        };
+        // Helper: exact match then case-insensitive contains fallback
+        let find_named = |name: &str| -> Option<String> {
+            if pc_cpu.animations.contains_key(name) {
+                return Some(name.to_string());
+            }
+            let low = name.to_lowercase();
+            for k in pc_cpu.animations.keys() {
+                if k.to_lowercase().contains(&low) {
+                    return Some(k.clone());
+                }
+            }
+            None
+        };
+        // Broad fallback picker by substrings
+        let pick_any = |subs: &[&str]| -> Option<String> {
             let lows: Vec<String> = subs.iter().map(|s| s.to_lowercase()).collect();
             for name in pc_cpu.animations.keys() {
                 let low = name.to_lowercase();
@@ -1404,14 +1429,22 @@ impl Renderer {
             }
             None
         };
-        let lookup = if is_casting {
-            pick(&["attack", "cast", "shoot", "swing", "slash"]) // prefer attack/cast
-                .or_else(|| pick(&["punch", "hit"]))
-        } else if moving {
-            pick(&["run", "jog", "walk", "move"]) // prefer faster then slower
+        let lookup = if let Some(want) = desired_exact {
+            find_named(want)
         } else {
-            pick(&["idle", "stand", "wait"]) // idle-like
+            None
         }
+        .or_else(|| {
+            if is_casting {
+                pick_any(&["spell", "cast"])
+            } else if moving && self.input.run {
+                pick_any(&["sprint", "run", "jog"])
+            } else if moving {
+                pick_any(&["walk", "move"])
+            } else {
+                pick_any(&["idle", "stand", "wait"])
+            }
+        })
         .or_else(|| pc_cpu.animations.keys().next().cloned());
 
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(joints);
