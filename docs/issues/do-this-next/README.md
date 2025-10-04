@@ -3,25 +3,26 @@
 This README captures the next concrete steps to advance the server‑authoritative ECS plan. It reflects the current docs in `docs/issues/` and the completed items in `docs/issues/completed/`.
 
 Status snapshot
-- Complete: 95A (preflight/gates), 95B (client_core/net_core scaffolds), 95C (ECS components), 95E1 (mouselook/action‑combat), 95F (renderer voxel_upload), 95E (server trio), 95G (projectiles), 96 (telemetry), 95I (replication v0), 95K (client upload bridge)
-- In progress: none
-- Ready to start now: 95N (NPCs ECS server) or 95J (job scheduler)
+- Complete: 95A (preflight/gates), 95B (client_core/net_core scaffolds), 95C (ECS components), 95E1 (mouselook/action‑combat), 95F (renderer voxel_upload), 95E (server trio), 95G (projectiles), 96 (telemetry), 95I (replication v0), 95K (client upload bridge), 95J (job scheduler), 95N (NPCs), 95M (renderer cleanup)
+- In progress: 95L (server scene build)
+- Ready to start now: 95L wiring (replication) → 95O (controller/camera migration) → 95P (tests/CI expansion)
 
 Order of execution (small, parallel‑friendly PRs)
-1) 95N — NPCs into ECS (server)
-   - Move simple NPC AI into ECS components/systems; keep deterministic.
-   - Files to add/touch
-     - `crates/ecs_core` components for NPC (pos, radius, hp)
-     - `crates/server_core/src/systems/npc.rs` (AI + movement)
-   - Acceptance: existing zombie ring logic runs via ECS; tests remain deterministic.
+1) 95L — Server scene build (replication wiring)
+   - Emit `net_core::snapshot::DestructibleInstance` over `net_core::channel::Tx` once on startup.
+   - Client: apply into a small registry and build GPU visuals (no GLTF loads).
+   - Move renderer seeding fully behind legacy/demo features (already gated) and verify default path uses replication only.
 
-2) 95J — Job scheduler (budgeted)
-   - Add a tiny budgeted scheduler for server systems (carve→mesh→collider).
-   - Files to add/touch: `crates/server_core/src/schedule.rs`
-   - Acceptance: unit tests cover budget adherence.
-   - Flip statuses at the top of each issue file as work lands (e.g., “Status: COMPLETE”).
-   - Move completed issues from `docs/issues/` to `docs/issues/completed/`.
-   - Keep `src/README.md` updated with input keybindings (ALT toggle, RMB hold) and any renderer module changes.
+2) 95O — Client controller & camera migration
+   - Move `apply_pc_transform` math into `client_core::systems::controller`; renderer calls into it and only uploads GPU buffers.
+   - Keep winit plumbing in renderer; preserve input responsiveness and tests.
+
+3) 95P — Tests & CI expansion
+   - Add deterministic projectiles/collision cases and replication interest tests.
+   - Ensure `cargo deny` present locally; keep the matrix green.
+
+Notes
+- Flip statuses in each issue file as work lands (set Status, add an Addendum), and move to `docs/issues/completed/` when done.
 
 Notes & policies
 - Keybindings: avoid F1–F12. Use letters/digits and simple modifiers; ALT for cursor toggle, RMB as hold‑to‑look in Classic profile.

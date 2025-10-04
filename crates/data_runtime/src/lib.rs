@@ -15,6 +15,7 @@ pub mod zone;
 pub mod specs {
     pub mod projectiles;
 }
+pub mod scene;
 pub mod configs {
     pub mod destructible;
     pub mod input_camera;

@@ -31,6 +31,38 @@ pub fn world_aabb_from_local(
     ([wmin.x, wmin.y, wmin.z], [wmax.x, wmax.y, wmax.z])
 }
 
+/// World-space AABB for a destructible instance (server-side view).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DestructibleWorldAabb {
+    pub did: u64,
+    pub world_min: [f32; 3],
+    pub world_max: [f32; 3],
+}
+
+/// Build destructible instance world AABBs from scene declarations.
+pub fn build_destructible_instances(
+    decls: &[data_runtime::scene::destructibles::DestructibleDecl],
+) -> Vec<DestructibleWorldAabb> {
+    let mut out = Vec::with_capacity(decls.len());
+    for (i, d) in decls.iter().enumerate() {
+        let t = &d.transform;
+        let yaw = glam::Quat::from_rotation_y(t.yaw_deg.to_radians());
+        let model = glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::from(t.scale),
+            yaw,
+            glam::Vec3::from(t.translation),
+        );
+        let (wmin, wmax) =
+            world_aabb_from_local(d.local_min, d.local_max, model.to_cols_array_2d());
+        out.push(DestructibleWorldAabb {
+            did: i as u64,
+            world_min: wmin,
+            world_max: wmax,
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -47,5 +79,29 @@ mod tests {
         let c = glam::vec3(local_max[0], local_min[1], local_max[2]);
         let wc = t.transform_point3(c);
         assert!(wc.x <= wmax[0] + 1e-4 && wc.y >= wmin[1] - 1e-4);
+    }
+    #[test]
+    fn build_instances_produces_world_aabbs() {
+        let decl = data_runtime::scene::destructibles::DestructibleDecl {
+            mesh_id: 0,
+            local_min: [-1.0, -1.0, -1.0],
+            local_max: [1.0, 1.0, 1.0],
+            transform: data_runtime::scene::destructibles::TransformDecl {
+                translation: [5.0, 0.0, -2.0],
+                yaw_deg: 45.0,
+                scale: [2.0, 1.0, 1.0],
+            },
+        };
+        let inst = build_destructible_instances(&[decl]);
+        assert_eq!(inst.len(), 1);
+        let a = &inst[0];
+        // Bounds expand and translate reasonably
+        assert!(a.world_max[0] > a.world_min[0]);
+        assert!(a.world_max[2] > a.world_min[2]);
+        // Center roughly near translation in XZ plane
+        let cx = 0.5 * (a.world_min[0] + a.world_max[0]);
+        let cz = 0.5 * (a.world_min[2] + a.world_max[2]);
+        assert!((cx - 5.0).abs() < 3.0);
+        assert!((cz + 2.0).abs() < 3.0);
     }
 }

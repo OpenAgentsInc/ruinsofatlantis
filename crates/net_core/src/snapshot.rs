@@ -116,6 +116,55 @@ impl SnapshotDecode for ChunkMeshDelta {
     }
 }
 
+/// Minimal replicated record for a destructible instance's world AABB.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DestructibleInstance {
+    pub did: u64,
+    pub world_min: [f32; 3],
+    pub world_max: [f32; 3],
+}
+
+impl SnapshotEncode for DestructibleInstance {
+    fn encode(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.did.to_le_bytes());
+        for c in &self.world_min {
+            out.extend_from_slice(&c.to_le_bytes());
+        }
+        for c in &self.world_max {
+            out.extend_from_slice(&c.to_le_bytes());
+        }
+    }
+}
+
+impl SnapshotDecode for DestructibleInstance {
+    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
+            if inp.len() < N {
+                anyhow::bail!("short read");
+            }
+            let (a, b) = inp.split_at(N);
+            *inp = b;
+            let mut buf = [0u8; N];
+            buf.copy_from_slice(a);
+            Ok(buf)
+        }
+        let did = u64::from_le_bytes(take::<8>(inp)?);
+        let mut world_min = [0.0f32; 3];
+        for v in &mut world_min {
+            *v = f32::from_le_bytes(take::<4>(inp)?);
+        }
+        let mut world_max = [0.0f32; 3];
+        for v in &mut world_max {
+            *v = f32::from_le_bytes(take::<4>(inp)?);
+        }
+        Ok(Self {
+            did,
+            world_min,
+            world_max,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,5 +185,18 @@ mod tests {
         assert_eq!(d.chunk, d2.chunk);
         assert_eq!(d.positions.len(), d2.positions.len());
         assert_eq!(d.indices, d2.indices);
+    }
+    #[test]
+    fn destructible_instance_roundtrip() {
+        let d = DestructibleInstance {
+            did: 42,
+            world_min: [-1.0, 0.0, -2.0],
+            world_max: [3.0, 4.0, 5.0],
+        };
+        let mut buf = Vec::new();
+        d.encode(&mut buf);
+        let mut slice: &[u8] = &buf;
+        let d2 = DestructibleInstance::decode(&mut slice).expect("decode");
+        assert_eq!(d, d2);
     }
 }
