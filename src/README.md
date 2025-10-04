@@ -18,18 +18,26 @@ Workspace crates (added for modularization)
 - platform_winit.rs — Window/event loop integration using winit 0.30.
 
 ## Controls
-- RMB drag: orbit camera and rotate player facing
+- ALT: toggle cursor ↔ mouselook (Action/Reticle default)
+- RMB hold (Classic profile): temporarily capture pointer for camera look
+- LMB/RMB (mouselook): At‑Will abilities (client emits InputCommands)
+- Q/E/R (mouselook): Encounter abilities (client emits InputCommands)
+- Tab (mouselook): Class mechanic (client emits InputCommands)
+- RMB drag (legacy orbit): orbit camera and rotate player facing
 - Scroll: zoom in/out
 - WASD: move (A/D turn in place)
 - Shift: run
-- 1: cast Fire Bolt (PC)
-- 2: cast Magic Missile (PC)
+- 1/2/3: demo spell triggers (legacy prototype path)
 - Space: toggle sky pause (also active when PC is dead)
 - [: scrub time backward a bit; ]: forward a bit
 - - / =: halve / double time scale
 - P: toggle perf overlay (frametime, FPS, draw calls)
 - H: hide/show HUD
 - O: 5s automated orbit for screenshots
+
+Notes
+- The default profile is Action/Reticle (Neverwinter‑style). A Classic Cursor profile exists for fallback in browsers or accessibility; RMB hold engages temporary mouselook.
+- Pointer‑lock may be denied by the OS/browser; when denied, we fall back to cursor mode and keep the UI interactive.
 
 CLI/Env toggles
 - `--no-vsync` (or `RA_NO_VSYNC=1`): prefer Immediate present mode if supported.

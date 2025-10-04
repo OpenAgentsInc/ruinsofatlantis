@@ -121,6 +121,36 @@ impl Renderer {
                             }
                         }
                     }
+                    // Neverwinter-style action bindings: Q/E/R, Shift, Tab
+                    PhysicalKey::Code(KeyCode::KeyQ)
+                    | PhysicalKey::Code(KeyCode::KeyE)
+                    | PhysicalKey::Code(KeyCode::KeyR)
+                    | PhysicalKey::Code(KeyCode::ShiftLeft)
+                    | PhysicalKey::Code(KeyCode::ShiftRight)
+                    | PhysicalKey::Code(KeyCode::Tab) => {
+                        if pressed {
+                            use client_core::systems::action_bindings::{Bindings, ButtonSnapshot};
+                            let mut snap = ButtonSnapshot::default();
+                            match event.physical_key {
+                                PhysicalKey::Code(KeyCode::KeyQ) => snap.q_pressed = true,
+                                PhysicalKey::Code(KeyCode::KeyE) => snap.e_pressed = true,
+                                PhysicalKey::Code(KeyCode::KeyR) => snap.r_pressed = true,
+                                PhysicalKey::Code(KeyCode::ShiftLeft)
+                                | PhysicalKey::Code(KeyCode::ShiftRight) => {
+                                    snap.shift_pressed = true
+                                }
+                                PhysicalKey::Code(KeyCode::Tab) => snap.tab_pressed = true,
+                                _ => {}
+                            }
+                            let binds = Bindings::default();
+                            client_core::systems::action_bindings::handle_buttons(
+                                &binds,
+                                &self.controller_state,
+                                &snap,
+                                &mut self.input_queue,
+                            );
+                        }
+                    }
                     // Sky controls (pause/scrub/speed)
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {
@@ -187,7 +217,7 @@ impl Renderer {
                     }
                     // Demo blast via Fireball (3) instead of F
                     // Allow keyboard respawn as fallback when dead
-                    PhysicalKey::Code(KeyCode::KeyR) | PhysicalKey::Code(KeyCode::Enter) => {
+                    PhysicalKey::Code(KeyCode::Enter) => {
                         if pressed {
                             if !self.pc_alive {
                                 log::info!("Respawn via keyboard");
@@ -237,6 +267,19 @@ impl Renderer {
                         let client_core::systems::cursor::HostEvent::PointerLockRequest(b) = ev;
                         self.pointer_lock_request = Some(b);
                     }
+                }
+                if *button == winit::event::MouseButton::Left && state.is_pressed() {
+                    let binds = client_core::systems::action_bindings::Bindings::default();
+                    let snap = client_core::systems::action_bindings::ButtonSnapshot {
+                        lmb_pressed: true,
+                        ..Default::default()
+                    };
+                    client_core::systems::action_bindings::handle_buttons(
+                        &binds,
+                        &self.controller_state,
+                        &snap,
+                        &mut self.input_queue,
+                    );
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
