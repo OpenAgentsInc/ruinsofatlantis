@@ -264,3 +264,4 @@ Rule: If a PR changes GPU cost by ≥0.5 ms, include a perf note + capture.
 ## Security & Configuration Tips
 - Never commit secrets. Use env vars and a `.env.example`; ignore real `.env` files.
 - Prefer local config under `config/` with sample defaults; document required vars in `README.md`.
+- Telemetry: See `docs/telemetry.md` for how to use logs/metrics/traces. Enable it when working on server systems or perf/observability tasks. Configure via `data/config/telemetry.toml` or env (`LOG_LEVEL`, `METRICS_ADDR`, etc.). Client dev typically uses pretty console logs only.
