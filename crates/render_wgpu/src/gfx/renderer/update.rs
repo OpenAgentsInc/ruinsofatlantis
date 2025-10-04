@@ -26,8 +26,7 @@ use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
     target_arch = "wasm32"
 ))]
 use web_time::Instant;
-#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
-use wgpu::util::DeviceExt;
+// device buffer init now handled via voxel_upload helper
 
 // Opt-in logging for destructible workflows
 #[macro_export]
@@ -890,34 +889,20 @@ impl Renderer {
                 rv.colliders.retain(|sc| sc.coord != *c);
                 removed += 1;
             } else {
-                let mut verts: Vec<crate::gfx::types::Vertex> =
-                    Vec::with_capacity(mb.positions.len());
-                for (i, p) in mb.positions.iter().enumerate() {
-                    let n = mb.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
-                    verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
-                }
-                let vb = self
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("voxel-chunk-vb"),
-                        contents: bytemuck::cast_slice(&verts),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
-                let ib = self
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("voxel-chunk-ib"),
-                        contents: bytemuck::cast_slice(&mb.indices),
-                        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                    });
-                self.voxel_meshes.insert(
-                    key,
-                    crate::gfx::VoxelChunkMesh {
-                        vb,
-                        ib,
-                        idx: mb.indices.len() as u32,
-                    },
+                let mesh_cpu = ecs_core::components::MeshCpu {
+                    positions: mb.positions.clone(),
+                    normals: mb.normals.clone(),
+                    indices: mb.indices.clone(),
+                };
+                let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh(
+                    &self.device,
+                    crate::gfx::DestructibleId(ruin_idx),
+                    (c.x, c.y, c.z),
+                    &mesh_cpu,
+                    &mut self.voxel_meshes,
+                    &mut self.voxel_hashes,
                 );
+                // Preserve occupancy-hash skip optimization
                 self.voxel_hashes.insert(key, h);
                 if let Some(sc) = chunkcol::build_chunk_collider(grid, *c) {
                     chunkcol::swap_in_updates(&mut rv.colliders, vec![sc]);
@@ -2216,35 +2201,20 @@ impl Renderer {
                     self.voxel_hashes.remove(&key);
                 } else {
                     // Interleave positions + normals to match types::Vertex layout
-                    let mut verts: Vec<crate::gfx::types::Vertex> =
-                        Vec::with_capacity(mb.positions.len());
-                    for (i, p) in mb.positions.iter().enumerate() {
-                        let n = mb.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
-                        verts.push(crate::gfx::types::Vertex { pos: *p, nrm: n });
-                    }
-                    let vb = self
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("voxel-chunk-vb"),
-                            contents: bytemuck::cast_slice(&verts),
-                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                        });
-                    let ib = self
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("voxel-chunk-ib"),
-                            contents: bytemuck::cast_slice(&mb.indices),
-                            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                        });
-                    self.voxel_meshes.insert(
-                        (crate::gfx::DestructibleId(0), c.x, c.y, c.z),
-                        crate::gfx::VoxelChunkMesh {
-                            vb,
-                            ib,
-                            idx: mb.indices.len() as u32,
-                        },
+                    let mesh_cpu = ecs_core::components::MeshCpu {
+                        positions: mb.positions.clone(),
+                        normals: mb.normals.clone(),
+                        indices: mb.indices.clone(),
+                    };
+                    let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh(
+                        &self.device,
+                        crate::gfx::DestructibleId(0),
+                        (c.x, c.y, c.z),
+                        &mesh_cpu,
+                        &mut self.voxel_meshes,
+                        &mut self.voxel_hashes,
                     );
-                    // Cache hash after successful upload
+                    // Preserve occupancy-hash skip optimization
                     self.voxel_hashes.insert(key, h);
                 }
             }

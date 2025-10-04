@@ -1,6 +1,6 @@
 # 95E1 — Action Combat & Mouselook (Neverwinter‑style default)
 
-Status: PARTIAL (event bridge, pointer-lock, reticle landed)
+Status: IN PROGRESS (event bridge, pointer-lock, reticle landed; tests added)
 
 Labels: client, input, camera, UX, accessibility
 Depends on: 95B (client_core scaffold), 95E (controller/camera systems)
@@ -95,3 +95,8 @@ Next steps to complete 95E1
 - Add input profiling (ActionCombat vs ClassicCursor) and minor config surface (`data/config/input_camera.toml`).
 - WASM‑aware pointer‑lock denial fallback and tooltip prompt.
 - Optional camera smoothing settings via client_core camera system.
+
+Test Coverage (added)
+- `client_core/tests/mouselook.rs`: pitch clamp, invert‑Y, yaw accumulation.
+- `client_core/tests/cursor.rs`: ALT toggle pointer‑lock + Classic RMB hold capture/release.
+- `client_core/tests/camera.rs`: third‑person boom geometry sanity.

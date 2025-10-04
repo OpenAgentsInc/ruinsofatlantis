@@ -39,13 +39,15 @@ pub fn handle_cursor_event(
             ));
         }
         CursorEvent::MouseRight(down) => {
-            // Classic fallback: temporary capture while RMB held
-            if down && state.mode == ControllerMode::Cursor {
-                state.mode = ControllerMode::Mouselook;
-                out.push(HostEvent::PointerLockRequest(true));
-            } else if !down && state.mode == ControllerMode::Mouselook {
-                state.mode = ControllerMode::Cursor;
-                out.push(HostEvent::PointerLockRequest(false));
+            // Classic fallback: only in ClassicCursor profile
+            if state.profile == ecs_core::components::InputProfile::ClassicCursor {
+                if down && state.mode == ControllerMode::Cursor {
+                    state.mode = ControllerMode::Mouselook;
+                    out.push(HostEvent::PointerLockRequest(true));
+                } else if !down && state.mode == ControllerMode::Mouselook {
+                    state.mode = ControllerMode::Cursor;
+                    out.push(HostEvent::PointerLockRequest(false));
+                }
             }
         }
     }
