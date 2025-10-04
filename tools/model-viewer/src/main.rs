@@ -364,15 +364,35 @@ struct AnimData {
 impl AnimData {
     fn norm_bone_name(s: &str) -> String {
         let mut out = s.to_lowercase();
-        for pref in ["def-", "rig|", "rig/", "rig:", "armature|", "armature/", "armature:", "skeleton|", "skeleton/", "skeleton:"] {
-            if out.starts_with(pref) { out = out.trim_start_matches(pref).to_string(); }
+        for pref in [
+            "def-",
+            "rig|",
+            "rig/",
+            "rig:",
+            "armature|",
+            "armature/",
+            "armature:",
+            "skeleton|",
+            "skeleton/",
+            "skeleton:",
+        ] {
+            if out.starts_with(pref) {
+                out = out.trim_start_matches(pref).to_string();
+            }
             out = out.replace(pref, "");
         }
         out = out.replace([' ', '_', '-', '.', '|'], "");
-        out.replace("hips", "pelvis").replace("forearm", "lowerarm").replace("shoulder", "clavicle").replace("shin", "calf")
+        out.replace("hips", "pelvis")
+            .replace("forearm", "lowerarm")
+            .replace("shoulder", "clavicle")
+            .replace("shin", "calf")
     }
 
-    fn from_skinned_with_options(sk: &SkinnedMeshCPU, ordered_names: &[String], head_pitch_deg: f32) -> Self {
+    fn from_skinned_with_options(
+        sk: &SkinnedMeshCPU,
+        ordered_names: &[String],
+        head_pitch_deg: f32,
+    ) -> Self {
         let mut clips = Vec::new();
         for name in ordered_names {
             if let Some(c) = sk.animations.get(name) {
@@ -392,10 +412,14 @@ impl AnimData {
             let mut mask = vec![false; sk.parent.len()];
             for (i, n) in sk.node_names.iter().enumerate() {
                 let nn = Self::norm_bone_name(n);
-                if nn == "head" || nn == "neck" { mask[i] = true; }
+                if nn == "head" || nn == "neck" {
+                    mask[i] = true;
+                }
             }
             Some(mask)
-        } else { None };
+        } else {
+            None
+        };
         Self {
             parent: sk.parent.clone(),
             base_t: sk.base_t.clone(),
@@ -435,7 +459,9 @@ impl AnimData {
         // Apply optional correction to head/neck rotations
         if let Some(mask) = &self.corr_mask {
             for (i, m) in mask.iter().enumerate() {
-                if *m { lr[i] = self.corr_quat * lr[i]; }
+                if *m {
+                    lr[i] = self.corr_quat * lr[i];
+                }
             }
         }
         // globals
@@ -521,6 +547,31 @@ fn sample_quat(track: &ra_assets::TrackQuat, t: f32) -> glam::Quat {
         bb = -b;
     }
     a.slerp(bb, w).normalize()
+}
+
+fn default_head_pitch_for(
+    sk: &SkinnedMeshCPU,
+    model_path: Option<&std::path::Path>,
+    cli_pitch: f32,
+) -> f32 {
+    if cli_pitch.abs() > 0.001 {
+        return cli_pitch;
+    }
+    if let Some(p) = model_path {
+        if let Some(s) = p.to_str() {
+            let sl = s.to_ascii_lowercase();
+            if sl.contains("/ubc/") || sl.contains("superhero_male") || sl.contains("superhero_female") {
+                return 45.0;
+            }
+        }
+    }
+    for n in &sk.node_names {
+        let nl = n.to_ascii_lowercase();
+        if nl.contains("superhero_male") || nl.contains("superhero_female") || nl == "head" || nl == "neck" {
+            return 45.0;
+        }
+    }
+    0.0
 }
 
 #[derive(Parser, Debug)]
@@ -1104,7 +1155,11 @@ async fn run(cli: Cli) -> Result<()> {
                 names.sort();
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
-                let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg));
+                let auto_pitch = default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg);
+                if auto_pitch.abs() > 0.001 {
+                    log::info!("viewer: head pitch correction {} deg", auto_pitch);
+                }
+                let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, auto_pitch));
                 Ok(ModelGpu::Skinned {
                     vb,
                     ib,
@@ -1245,7 +1300,8 @@ async fn run(cli: Cli) -> Result<()> {
                     if merged_ok {
                         let mut names: Vec<String> = base.animations.keys().cloned().collect();
                         names.sort();
-                        **anim = AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
+                        **anim =
+                            AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
                         *anims = names;
                         *time = 0.0;
                         *active_index = 0;
@@ -1673,7 +1729,9 @@ async fn run(cli: Cli) -> Result<()> {
                             match merge_gltf_animations(base, &a.path) {
                                 Ok(_n) => {
                                     let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
-                                    *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, cli.head_pitch_deg));
+                                    let auto_pitch = default_head_pitch_for(base, None, cli.head_pitch_deg);
+                                    if auto_pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", auto_pitch); }
+                                    *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, auto_pitch));
                                     *anims = new_names; *time = 0.0; *active_index = 0;
                                     log::info!("viewer: merged GLTF animations from {}", a.path.display());
                                 }
@@ -1687,7 +1745,9 @@ async fn run(cli: Cli) -> Result<()> {
                             if merge_fbx_animations(base, &a.path).is_err() && let Some(conv) = try_convert_fbx_to_gltf(&a.path) { let _ = merge_gltf_animations(base, &conv); }
                             // refresh AnimData and UI list
                             let mut new_names: Vec<String> = base.animations.keys().cloned().collect(); new_names.sort();
-                            *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, cli.head_pitch_deg));
+                            let auto_pitch = default_head_pitch_for(base, None, cli.head_pitch_deg);
+                            if auto_pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", auto_pitch); }
+                            *anim = Box::new(AnimData::from_skinned_with_options(base, &new_names, auto_pitch));
                             *anims = new_names;
                             *time = 0.0; *active_index = anim.clips.len().saturating_sub(1);
                         }
