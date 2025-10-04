@@ -1294,6 +1294,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         min_pitch_deg: icfg.min_pitch_deg.unwrap_or(-80.0),
         max_pitch_deg: icfg.max_pitch_deg.unwrap_or(80.0),
     };
+    let alt_hold = icfg.alt_hold.unwrap_or(false);
 
     let mut renderer = crate::gfx::Renderer {
         surface,
@@ -1445,6 +1446,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         controller_state: Default::default(),
         pointer_lock_request: None,
         controller_ml_cfg: ml_cfg,
+        controller_alt_hold: alt_hold,
         // Destructible defaults; leave grid None until provided by a loader/demo
         destruct_cfg: dcfg,
         voxel_grid: voxel_grid.clone(),

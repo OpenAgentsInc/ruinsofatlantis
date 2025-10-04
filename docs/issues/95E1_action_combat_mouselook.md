@@ -1,6 +1,6 @@
 # 95E1 — Action Combat & Mouselook (Neverwinter‑style default)
 
-Status: IN PROGRESS (event bridge, pointer-lock, reticle landed; tests added)
+Status: COMPLETE (Neverwinter-style controls implemented; tests added)
 
 Labels: client, input, camera, UX, accessibility
 Depends on: 95B (client_core scaffold), 95E (controller/camera systems)
@@ -86,17 +86,17 @@ What landed in this pass:
   - `Renderer` holds `controller_state` + `pointer_lock_request` field to coordinate requests.
 - Reticle UI
   - `ui::Hud::append_reticle(surface_w, surface_h)` added; drawn whenever controller mode is Mouselook.
+  - Default Action/Reticle profile uses reticle + pointer lock; Classic profile provides RMB-hold fallback.
 
 Notes
 - Camera remains driven by the existing orbit system; we mirror controller yaw/pitch into those fields to minimize churn. A follow‑up can move camera pose to be derived directly from the controller facade if desired.
 - Default key: ALT toggles cursor; RMB hold engages Classic fallback.
 
-Next steps to complete 95E1
-- Add input profiling (ActionCombat vs ClassicCursor) and minor config surface (`data/config/input_camera.toml`).
-- WASM‑aware pointer‑lock denial fallback and tooltip prompt.
-- Optional camera smoothing settings via client_core camera system.
+Next steps
+- Optional: camera smoothing settings via client_core camera system; add UI to switch profiles at runtime.
 
 Test Coverage (added)
 - `client_core/tests/mouselook.rs`: pitch clamp, invert‑Y, yaw accumulation.
 - `client_core/tests/cursor.rs`: ALT toggle pointer‑lock + Classic RMB hold capture/release.
 - `client_core/tests/camera.rs`: third‑person boom geometry sanity.
+- `client_core/tests/action_bindings.rs` (in module): ensures Q/E/R/Shift/Tab/LMB mapping emits commands in mouselook.

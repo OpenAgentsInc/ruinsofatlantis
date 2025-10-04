@@ -10,6 +10,8 @@ pub struct InputCameraCfg {
     pub invert_y: Option<bool>,
     pub min_pitch_deg: Option<f32>,
     pub max_pitch_deg: Option<f32>,
+    /// If true, ALT acts as hold-to-hold for cursor mode; otherwise toggle.
+    pub alt_hold: Option<bool>,
 }
 
 impl Default for InputCameraCfg {
@@ -19,6 +21,7 @@ impl Default for InputCameraCfg {
             invert_y: Some(false),
             min_pitch_deg: Some(-80.0),
             max_pitch_deg: Some(80.0),
+            alt_hold: Some(false),
         }
     }
 }
@@ -50,6 +53,9 @@ pub fn load_default() -> Result<InputCameraCfg> {
     }
     if let Ok(v) = std::env::var("MAX_PITCH_DEG") {
         cfg.max_pitch_deg = v.parse().ok();
+    }
+    if let Ok(v) = std::env::var("ALT_HOLD") {
+        cfg.alt_hold = v.parse().ok();
     }
     Ok(cfg)
 }

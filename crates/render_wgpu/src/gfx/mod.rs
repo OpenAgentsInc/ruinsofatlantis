@@ -320,6 +320,8 @@ pub struct Renderer {
     pointer_lock_request: Option<bool>,
     // Controller configuration (mouselook)
     controller_ml_cfg: client_core::systems::mouselook::MouselookConfig,
+    // ALT hold behavior (true = press holds cursor mode; false = toggle)
+    controller_alt_hold: bool,
 
     // --- Destructible (voxel) state ---
     destruct_cfg: DestructibleConfig,

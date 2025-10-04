@@ -13,6 +13,7 @@ pub struct UiFocus {
 pub enum CursorEvent {
     Toggle,
     MouseRight(bool),
+    Hold(bool),
 }
 
 pub enum HostEvent {
@@ -48,6 +49,18 @@ pub fn handle_cursor_event(
                     state.mode = ControllerMode::Cursor;
                     out.push(HostEvent::PointerLockRequest(false));
                 }
+            }
+        }
+        CursorEvent::Hold(down) => {
+            if ui.chat_open || ui.menu_open {
+                return;
+            }
+            if down {
+                state.mode = ControllerMode::Cursor;
+                out.push(HostEvent::PointerLockRequest(false));
+            } else {
+                state.mode = ControllerMode::Mouselook;
+                out.push(HostEvent::PointerLockRequest(true));
             }
         }
     }

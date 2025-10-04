@@ -13,22 +13,28 @@ impl Renderer {
             WindowEvent::KeyboardInput { event, .. } => {
                 let pressed = event.state.is_pressed();
                 match event.physical_key {
-                    // Toggle cursor/mouselook (ALT)
+                    // Cursor toggle/hold (ALT)
                     PhysicalKey::Code(KeyCode::AltLeft) | PhysicalKey::Code(KeyCode::AltRight) => {
-                        if pressed {
-                            let mut host_events = Vec::new();
-                            let ui = client_core::systems::cursor::UiFocus::default();
+                        let mut host_events = Vec::new();
+                        let ui = client_core::systems::cursor::UiFocus::default();
+                        if self.controller_alt_hold {
+                            client_core::systems::cursor::handle_cursor_event(
+                                &mut self.controller_state,
+                                &ui,
+                                client_core::systems::cursor::CursorEvent::Hold(pressed),
+                                &mut host_events,
+                            );
+                        } else if pressed {
                             client_core::systems::cursor::handle_cursor_event(
                                 &mut self.controller_state,
                                 &ui,
                                 client_core::systems::cursor::CursorEvent::Toggle,
                                 &mut host_events,
                             );
-                            for ev in host_events {
-                                let client_core::systems::cursor::HostEvent::PointerLockRequest(b) =
-                                    ev;
-                                self.pointer_lock_request = Some(b);
-                            }
+                        }
+                        for ev in host_events {
+                            let client_core::systems::cursor::HostEvent::PointerLockRequest(b) = ev;
+                            self.pointer_lock_request = Some(b);
                         }
                     }
                     // Ignore movement/casting inputs if the PC is dead
@@ -266,6 +272,23 @@ impl Renderer {
                     for ev in host_events {
                         let client_core::systems::cursor::HostEvent::PointerLockRequest(b) = ev;
                         self.pointer_lock_request = Some(b);
+                    }
+                    // In mouselook, treat RMB as an action press
+                    if self.controller_state.mode()
+                        == ecs_core::components::ControllerMode::Mouselook
+                        && self.rmb_down
+                    {
+                        let binds = client_core::systems::action_bindings::Bindings::default();
+                        let snap = client_core::systems::action_bindings::ButtonSnapshot {
+                            rmb_pressed: true,
+                            ..Default::default()
+                        };
+                        client_core::systems::action_bindings::handle_buttons(
+                            &binds,
+                            &self.controller_state,
+                            &snap,
+                            &mut self.input_queue,
+                        );
                     }
                 }
                 if *button == winit::event::MouseButton::Left && state.is_pressed() {

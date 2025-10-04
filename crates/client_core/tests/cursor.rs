@@ -28,6 +28,27 @@ fn alt_toggle_switches_modes_and_emits_pointer_lock_events() {
 }
 
 #[test]
+fn alt_hold_press_release_switches_modes() {
+    let mut state = ControllerState::default();
+    state.mode = ControllerMode::Mouselook;
+    let ui = UiFocus::default();
+    let mut host_events = Vec::new();
+    handle_cursor_event(&mut state, &ui, CursorEvent::Hold(true), &mut host_events);
+    assert_eq!(state.mode, ControllerMode::Cursor);
+    assert!(matches!(
+        host_events.as_slice(),
+        [HostEvent::PointerLockRequest(false)]
+    ));
+    host_events.clear();
+    handle_cursor_event(&mut state, &ui, CursorEvent::Hold(false), &mut host_events);
+    assert_eq!(state.mode, ControllerMode::Mouselook);
+    assert!(matches!(
+        host_events.as_slice(),
+        [HostEvent::PointerLockRequest(true)]
+    ));
+}
+
+#[test]
 fn classic_profile_rmb_hold_captures_and_releases() {
     let mut state = ControllerState::default();
     state.profile = InputProfile::ClassicCursor;
