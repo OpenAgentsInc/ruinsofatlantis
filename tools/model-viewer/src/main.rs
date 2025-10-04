@@ -419,16 +419,33 @@ impl AnimData {
                         w[i] = 0.60;
                     } else if nn.ends_with("2") || nn.ends_with("02") || nn.contains("upper2") {
                         w[i] = 0.40;
-                    } else if nn.ends_with("1") || nn.ends_with("01") || nn == "spine" || nn.contains("upper1") {
+                    } else if nn.ends_with("1")
+                        || nn.ends_with("01")
+                        || nn == "spine"
+                        || nn.contains("upper1")
+                    {
                         w[i] = 0.25;
                     }
                 }
             }
-            let mut cnt_head = 0usize; let mut cnt_spine = 0usize;
-            for ww in &w { if *ww > 0.99 { cnt_head += 1; } else if *ww > 0.0 { cnt_spine += 1; } }
-            log::info!("viewer: upright correction weights — head/neck={} spine_top={}", cnt_head, cnt_spine);
+            let mut cnt_head = 0usize;
+            let mut cnt_spine = 0usize;
+            for ww in &w {
+                if *ww > 0.99 {
+                    cnt_head += 1;
+                } else if *ww > 0.0 {
+                    cnt_spine += 1;
+                }
+            }
+            log::info!(
+                "viewer: upright correction weights — head/neck={} spine_top={}",
+                cnt_head,
+                cnt_spine
+            );
             Some(w)
-        } else { None };
+        } else {
+            None
+        };
         Self {
             parent: sk.parent.clone(),
             base_t: sk.base_t.clone(),
@@ -995,6 +1012,8 @@ async fn run(cli: Cli) -> Result<()> {
     let mut diag = 1.0f32;
     // Orbit state
     let mut autorotate = true;
+    // Orientation correction mode: 0=None, 1=Auto, 2=45deg, 3=60deg, 4=70deg
+    let mut orient_mode: u32 = 1;
     let mut yaw: f32 = 0.0; // radians
     let mut pitch: f32 = 0.35; // radians, clamped
     let mut radius: f32 = 3.0;
@@ -1183,13 +1202,9 @@ async fn run(cli: Cli) -> Result<()> {
                 names.sort();
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
-                let auto_pitch = default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg);
-                if auto_pitch.abs() > 0.001 {
-                    log::info!("viewer: head pitch correction {} deg", auto_pitch);
-                }
-                let anim = Box::new(AnimData::from_skinned_with_options(
-                    &base, &names, auto_pitch,
-                ));
+                let pitch = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(&base, Some(&prepared), cli.head_pitch_deg) };
+                if pitch.abs() > 0.001 { log::info!("viewer: head pitch correction {} deg", pitch); }
+                let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, pitch));
                 Ok(ModelGpu::Skinned {
                     vb,
                     ib,
@@ -1497,7 +1512,7 @@ async fn run(cli: Cli) -> Result<()> {
                 rpass.set_vertex_buffer(0, ui_vb.slice(..));
                 rpass.draw(0..(verts.len() as u32), 0..1);
 
-                // Text overlay: label next to checkbox + list animations beneath
+                // Text overlay: label next to checkbox + orientation toggle + lists beneath
                 // Draw label next to the checkbox (always)
                 let mut text_verts_label: Vec<UiVertex> = Vec::new();
                 let label = vec!["AUTO ROTATE".to_string()];
@@ -1509,6 +1524,20 @@ async fn run(cli: Cli) -> Result<()> {
                     rpass.set_pipeline(&ui_pipe);
                     rpass.set_vertex_buffer(0, tvb.slice(..));
                     rpass.draw(0..(text_verts_label.len() as u32), 0..1);
+                }
+                // Orientation toggle text button beneath the checkbox
+                let mut orient_text: Vec<UiVertex> = Vec::new();
+                let orient_label = format!(
+                    "ORIENT: {}",
+                    match orient_mode { 0=>"NONE", 1=>"AUTO", 2=>"45", 3=>"60", 4=>"70", _=>"AUTO" }
+                );
+                let orient_start = (m + s + 8.0, m + (7.0*label_cell) + (label_cell*2.0) + 4.0);
+                build_text_quads(&vec![orient_label], orient_start, (width as f32, height as f32), &mut orient_text, [0.9,0.85,0.3,1.0], label_cell);
+                if !orient_text.is_empty() {
+                    let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-orient"), contents: bytemuck::cast_slice(&orient_text), usage: wgpu::BufferUsages::VERTEX });
+                    rpass.set_pipeline(&ui_pipe);
+                    rpass.set_vertex_buffer(0, tvb.slice(..));
+                    rpass.draw(0..(orient_text.len() as u32), 0..1);
                 }
                 // Anim list text (if any)
                 let mut text_verts: Vec<UiVertex> = Vec::new();
@@ -1683,15 +1712,32 @@ async fn run(cli: Cli) -> Result<()> {
             radius *= (1.0 - scroll * 0.001).max(0.1);
         }
         Event::WindowEvent { event: WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. }, .. } => {
-            // Toggle autorotate if clicking checkbox or its label area
+            // Toggle autorotate and orientation button
             let s: f32 = 20.0; let m: f32 = 16.0;
             let (mx, my) = mouse_pos_px;
+            // Autorotate checkbox/label
             let in_box = mx >= m && mx <= m + s && my >= m && my <= m + s;
-            // Label rect
-            let cell = 3.0; let label = "AUTO ROTATE"; let label_w = label.len() as f32 * 6.0 * cell; let label_h = 7.0 * cell;
+            let cell = 3.0 * cli.ui_scale.max(0.25);
+            let label = "AUTO ROTATE"; let label_w = label.len() as f32 * 6.0 * cell; let label_h = 7.0 * cell;
             let lx0 = m + s + 8.0; let ly0 = m; let lx1 = lx0 + label_w; let ly1 = ly0 + label_h;
             let in_label = mx >= lx0 && mx <= lx1 && my >= ly0 && my <= ly1;
             if in_box || in_label { autorotate = !autorotate; }
+            // Orientation toggle area
+            let ox0 = m + s + 8.0;
+            let oy0 = m + (7.0*cell) + (cell*2.0) + 4.0;
+            let orient_text_len = match orient_mode { 0=>"ORIENT: NONE".len(), 1=>"ORIENT: AUTO".len(), 2=>"ORIENT: 45".len(), 3=>"ORIENT: 60".len(), 4=>"ORIENT: 70".len(), _=>"ORIENT: AUTO".len() } as f32;
+            let ow = orient_text_len * (5.0*cell + cell);
+            let oh = 7.0 * cell;
+            if mx >= ox0 && mx <= ox0 + ow && my >= oy0 && my <= oy0 + oh {
+                orient_mode = (orient_mode + 1) % 5;
+                // Rebuild AnimData with new pitch
+                if let Some(ModelGpu::Skinned { anim, base, anims, time, .. }) = model_gpu.as_mut() {
+                    let pitch = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, None, cli.head_pitch_deg) };
+                    log::info!("viewer: orientation mode -> {} (pitch={} deg)", orient_mode, pitch);
+                    **anim = AnimData::from_skinned_with_options(base, anims, pitch);
+                    *time = 0.0;
+                }
+            }
             // Animation buttons (skinned): click lines under header
             if let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
