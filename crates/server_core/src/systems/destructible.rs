@@ -62,6 +62,32 @@ pub fn greedy_mesh_budget(
     processed
 }
 
+/// Rebuild up to `budget` coarse colliders for the provided chunk list and refresh the static index.
+pub fn collider_rebuild_budget(
+    grid: &VoxelGrid,
+    chunks: &[UVec3],
+    store: &mut Vec<collision_static::chunks::StaticChunk>,
+    static_index: &mut Option<collision_static::StaticIndex>,
+    budget: usize,
+) -> usize {
+    use collision_static::chunks::{build_chunk_collider, rebuild_static_index, swap_in_updates};
+    if budget == 0 || chunks.is_empty() {
+        return 0;
+    }
+    let take = budget.min(chunks.len());
+    let mut updates = Vec::new();
+    for c in chunks.iter().copied().take(take) {
+        if let Some(sc) = build_chunk_collider(grid, c) {
+            updates.push(sc);
+        }
+    }
+    if !updates.is_empty() {
+        swap_in_updates(store, updates);
+        *static_index = Some(rebuild_static_index(store));
+    }
+    take
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +120,21 @@ mod tests {
         assert!(processed <= budget);
         assert!(meshes.map.len() > 0);
     }
-}
 
+    #[test]
+    fn collider_rebuild_uses_budget() {
+        let mut grid = mk_grid(UVec3::new(16, 16, 16), UVec3::new(8, 8, 8), 1.0);
+        // mark some voxels solid across two chunks
+        grid.set(1, 1, 1, true);
+        grid.set(9, 1, 1, true);
+        let chunks = vec![UVec3::new(0, 0, 0), UVec3::new(1, 0, 0)];
+        let mut store: Vec<collision_static::chunks::StaticChunk> = Vec::new();
+        let mut idx = None;
+        let done = super::collider_rebuild_budget(&grid, &chunks, &mut store, &mut idx, 1);
+        assert_eq!(done, 1);
+        assert_eq!(store.len(), 1);
+        let done2 = super::collider_rebuild_budget(&grid, &chunks[done..], &mut store, &mut idx, 8);
+        assert!(done2 >= 1);
+        assert!(idx.as_ref().map(|i| !i.colliders.is_empty()).unwrap_or(false));
+    }
+}
