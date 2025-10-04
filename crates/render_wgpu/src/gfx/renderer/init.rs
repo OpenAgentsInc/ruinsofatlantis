@@ -1444,7 +1444,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hud,
         hud_model: Default::default(),
         controller_state: Default::default(),
-        pointer_lock_request: None,
+        // Start in mouselook by default: request pointer-lock so the OS cursor is hidden.
+        // platform_winit applies this on the next window event.
+        pointer_lock_request: Some(true),
+        pointer_locked: false,
         controller_ml_cfg: ml_cfg,
         controller_alt_hold: alt_hold,
         // Destructible defaults; leave grid None until provided by a loader/demo

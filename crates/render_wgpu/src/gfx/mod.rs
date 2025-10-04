@@ -318,6 +318,9 @@ pub struct Renderer {
     controller_state: client_core::facade::controller::ControllerState,
     // Pending pointer-lock request emitted by controller systems; applied by platform
     pointer_lock_request: Option<bool>,
+    // Actual pointer-lock state as applied by the platform (used to choose
+    // between relative mouse deltas vs. cursor movement deltas).
+    pointer_locked: bool,
     // Controller configuration (mouselook)
     controller_ml_cfg: client_core::systems::mouselook::MouselookConfig,
     // ALT hold behavior (true = press holds cursor mode; false = toggle)
@@ -496,6 +499,10 @@ impl Renderer {
     /// Pop a pending pointer-lock request emitted by controller systems.
     pub fn take_pointer_lock_request(&mut self) -> Option<bool> {
         self.pointer_lock_request.take()
+    }
+    /// Record the applied pointer-lock state (platform-controlled).
+    pub fn set_pointer_locked(&mut self, locked: bool) {
+        self.pointer_locked = locked;
     }
     /// Force controller mode (used when pointer lock fails on some platforms).
     pub fn set_mouselook(&mut self, want: bool) {

@@ -53,7 +53,8 @@ pub mod controller {
             if fwd.length_squared() <= 1e-6 {
                 fwd = Vec3::Z; // default forward if camera forward degenerates
             }
-            let right = Vec3::new(fwd.z, 0.0, -fwd.x).normalize_or_zero();
+            // Right-handed basis: right = fwd x up = (-fwd.z, 0, fwd.x)
+            let right = Vec3::new(-fwd.z, 0.0, fwd.x).normalize_or_zero();
             // Aggregate movement intent
             let mut dir = Vec3::ZERO;
             if input.forward {

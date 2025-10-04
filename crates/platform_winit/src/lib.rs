@@ -104,11 +104,13 @@ impl ApplicationHandler for App {
             match window.set_cursor_grab(grab_mode) {
                 Ok(()) => {
                     window.set_cursor_visible(!lock);
+                    state.set_pointer_locked(lock);
                 }
                 Err(e) => {
                     // If locking failed (e.g., WASM denied), fall back to cursor mode
                     log::debug!("pointer lock request failed: {:?}", e);
                     window.set_cursor_visible(true);
+                    state.set_pointer_locked(false);
                     state.set_mouselook(false);
                 }
             }
@@ -146,6 +148,22 @@ impl ApplicationHandler for App {
         }
         if let Some(win) = &self.window {
             win.request_redraw();
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        let Some(state) = &mut self.state else {
+            return;
+        };
+        if let winit::event::DeviceEvent::MouseMotion { delta: (dx, dy) } = event {
+            // Forward relative motion to the renderer. It decides whether to apply
+            // based on pointer-lock and controller mode.
+            state.handle_mouse_motion(dx as f32, dy as f32);
         }
     }
 }

@@ -201,7 +201,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let _ = camera_sys::third_person_follow(
         &mut r.cam_follow,
         pc_anchor,
-        glam::Quat::from_rotation_y(r.player.yaw),
+        glam::Quat::IDENTITY,
         off_local,
         look_local,
         aspect,
@@ -224,7 +224,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let (_cam2, mut globals) = camera_sys::third_person_follow(
         &mut r.cam_follow,
         pc_anchor,
-        glam::Quat::from_rotation_y(r.player.yaw),
+        glam::Quat::IDENTITY,
         off_local,
         look_local,
         aspect,

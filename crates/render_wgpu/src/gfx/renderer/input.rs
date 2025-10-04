@@ -323,7 +323,11 @@ impl Renderer {
                 };
                 // Apply in mouselook mode always; in Classic fallback apply while RMB is held.
                 use ecs_core::components::ControllerMode;
-                if self.controller_state.mode() == ControllerMode::Mouselook || self.rmb_down {
+                // If pointer is locked, we process relative motion via DeviceEvent::MouseMotion
+                // and ignore CursorMoved to avoid double-applying deltas.
+                if !self.pointer_locked
+                    && (self.controller_state.mode() == ControllerMode::Mouselook || self.rmb_down)
+                {
                     apply = true;
                 }
                 if apply {
@@ -350,6 +354,26 @@ impl Renderer {
                 self.input.clear();
             }
             _ => {}
+        }
+    }
+
+    /// Handle raw mouse motion deltas (used when the pointer is locked).
+    pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
+        use ecs_core::components::ControllerMode;
+        if !self.pointer_locked {
+            return; // only consume raw motion when locked
+        }
+        if self.controller_state.mode() == ControllerMode::Mouselook || self.rmb_down {
+            client_core::systems::mouselook::apply_mouse_delta(
+                &self.controller_ml_cfg,
+                &mut self.controller_state,
+                dx,
+                dy,
+            );
+            // Mirror controller yaw/pitch into orbit fields
+            self.cam_orbit_yaw = wrap_angle(-self.controller_state.camera.yaw);
+            let orbit_pitch = -self.controller_state.camera.pitch;
+            self.cam_orbit_pitch = orbit_pitch.clamp(-1.2, 1.2);
         }
     }
 }
