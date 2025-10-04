@@ -1,0 +1,8 @@
+# Exact animation clip names for the PC rig
+# These must match keys in the merged UBC + AnimationLibrary clip set.
+
+idle = "Idle"
+walk = "Walk"
+sprint = "Sprint"
+cast = "Spell_Simple_Idle"
+

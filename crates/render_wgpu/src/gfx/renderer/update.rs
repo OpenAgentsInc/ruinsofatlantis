@@ -1397,13 +1397,13 @@ impl Renderer {
         let is_casting = self.pc_anim_start.is_some();
         // Desired names by situation (exact match preferred)
         let desired_exact = if is_casting {
-            Some("Spell_Simple_Idle")
+            self.pc_anim_cfg.cast.as_deref()
         } else if moving && self.input.run {
-            Some("Sprint")
+            self.pc_anim_cfg.sprint.as_deref()
         } else if moving {
-            Some("Walk")
+            self.pc_anim_cfg.walk.as_deref()
         } else {
-            Some("Idle")
+            self.pc_anim_cfg.idle.as_deref()
         };
         // Helper: exact match then case-insensitive contains fallback
         let find_named = |name: &str| -> Option<String> {
@@ -1447,6 +1447,17 @@ impl Renderer {
         })
         .or_else(|| pc_cpu.animations.keys().next().cloned());
 
+        if let Some(want) = desired_exact {
+            let chosen = lookup.as_deref().unwrap_or("");
+            if chosen != want {
+                let names: Vec<&str> = pc_cpu.animations.keys().map(|s| s.as_str()).collect();
+                log::warn!(
+                    "PC anim clip '{}' not found; available: {}",
+                    want,
+                    names.join(", ")
+                );
+            }
+        }
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(joints);
         if let Some(name) = lookup
             && let Some(clip) = pc_cpu.animations.get(&name)

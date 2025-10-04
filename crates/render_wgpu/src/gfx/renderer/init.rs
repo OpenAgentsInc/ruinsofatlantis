@@ -874,11 +874,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                         lib_path
                     );
                 } else {
+                    let names: Vec<String> = cpu_pc.animations.keys().cloned().collect();
                     log::info!(
                         "PC: merged GLTF animations from {:?} ({} clips)",
                         lib_path,
-                        cpu_pc.animations.len()
+                        names.len()
                     );
+                    log::info!("PC: available clips: {}", names.join(", "));
                 }
             }
             // Build VB/IB for PC if loaded
@@ -1432,6 +1434,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
     let alt_hold = icfg.alt_hold.unwrap_or(false);
 
+    // Load explicit PC animation name mapping (optional)
+    let pc_anim_cfg = data_runtime::configs::pc_animations::load_default().unwrap_or_default();
+
     let mut renderer = crate::gfx::Renderer {
         surface,
         device,
@@ -1702,6 +1707,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 glam::vec3(c[12], c[13], c[14])
             })
             .unwrap_or(glam::Vec3::ZERO),
+        pc_anim_cfg,
     };
 
     // Apply default input profile from config if provided

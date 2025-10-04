@@ -244,6 +244,7 @@ pub struct Renderer {
     pc_cpu: Option<SkinnedMeshCPU>,
     pc_mat_bg: Option<wgpu::BindGroup>,
     pc_prev_pos: glam::Vec3,
+    pc_anim_cfg: data_runtime::configs::pc_animations::PcAnimCfg,
     // Zombies
     zombie_palettes_buf: wgpu::Buffer,
     zombie_palettes_bg: wgpu::BindGroup,
