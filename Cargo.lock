@@ -4008,6 +4008,7 @@ dependencies = [
  "env_logger",
  "glam 0.30.8",
  "log",
+ "png 0.17.16",
  "pollster",
  "ra-assets",
  "wgpu 26.0.1",

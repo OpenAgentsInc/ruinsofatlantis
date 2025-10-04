@@ -449,6 +449,10 @@ struct Cli {
     /// Start in wireframe if supported
     #[arg(long)]
     wireframe: bool,
+
+    /// Save a one-frame PNG snapshot and exit.
+    #[arg(long)]
+    snapshot: Option<PathBuf>,
 }
 
 #[repr(C)]
@@ -1105,6 +1109,8 @@ async fn run(cli: Cli) -> Result<()> {
         info!("Drag-and-drop a .gltf or .glb into this window");
     }
 
+    let mut snapshot_path = cli.snapshot.clone();
+    let mut snapshot_done = false;
     Ok(event_loop.run(move |event, elwt| match event {
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => elwt.exit(),
         Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
@@ -1141,10 +1147,27 @@ async fn run(cli: Cli) -> Result<()> {
             let frame = match surface.get_current_texture() { Ok(f) => f, Err(_) => { surface.configure(&device, &config); surface.get_current_texture().expect("frame") } };
             let view_tex = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
             let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("enc") });
+            // Optional offscreen target for snapshot
+            let mut snap_tex: Option<wgpu::Texture> = None;
+            let mut snap_view: Option<wgpu::TextureView> = None;
+            if snapshot_path.is_some() && !snapshot_done {
+                let t = device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("snapshot-rt"),
+                    size: wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
+                });
+                snap_view = Some(t.create_view(&wgpu::TextureViewDescriptor::default()));
+                snap_tex = Some(t);
+            }
             {
                 let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("rpass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: &view_tex, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.03, g: 0.03, b: 0.05, a: 1.0 }), store: wgpu::StoreOp::Store } })],
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment { view: if let Some(ref v) = snap_view { v } else { &view_tex }, resolve_target: None, depth_slice: None, ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.03, g: 0.03, b: 0.05, a: 1.0 }), store: wgpu::StoreOp::Store } })],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment { view: &depth_view, depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }), stencil_ops: None }),
                     occlusion_query_set: None,
                     timestamp_writes: None,
@@ -1177,7 +1200,7 @@ async fn run(cli: Cli) -> Result<()> {
                 let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("ui-pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view_tex,
+                        view: if let Some(ref v) = snap_view { v } else { &view_tex },
                         resolve_target: None,
                         depth_slice: None,
                         ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
@@ -1293,7 +1316,6 @@ async fn run(cli: Cli) -> Result<()> {
             // Snapshot support: copy swapchain to buffer and write PNG once, then exit
             if !snapshot_done {
                 if let Some(path) = snapshot_path.take() {
-                    use std::num::NonZeroU32;
                     let bpp: u32 = 4;
                     let unpadded = config.width * bpp;
                     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u32;
@@ -1305,17 +1327,26 @@ async fn run(cli: Cli) -> Result<()> {
                         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                         mapped_at_creation: false,
                     });
+                    let src = if let Some(ref tex) = snap_tex { tex.as_image_copy() } else { frame.texture.as_image_copy() };
                     enc.copy_texture_to_buffer(
-                        wgpu::ImageCopyTexture { texture: &frame.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                        wgpu::ImageCopyBuffer { buffer: &read_buf, layout: wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(NonZeroU32::new(padded).unwrap()), rows_per_image: Some(NonZeroU32::new(config.height).unwrap()) } },
+                        src,
+                        wgpu::TexelCopyBufferInfo {
+                            buffer: &read_buf,
+                            layout: wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(padded),
+                                rows_per_image: Some(config.height),
+                            },
+                        },
                         wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
                     );
                     queue.submit(Some(enc.finish()));
-                    device.poll(wgpu::Maintain::Wait);
+                    // Map and wait using a channel; submit an empty queue op to pump callbacks
                     let slice = read_buf.slice(..);
-                    let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
+                    let (tx, rx) = std::sync::mpsc::channel();
                     slice.map_async(wgpu::MapMode::Read, move |v| { let _ = tx.send(v); });
-                    let _ = futures_lite::future::block_on(rx.receive());
+                    queue.submit(std::iter::empty());
+                    let _ = rx.recv();
                     let data = slice.get_mapped_range();
                     let mut out_rgba = vec![0u8; (config.width * config.height * 4) as usize];
                     for y in 0..config.height {
