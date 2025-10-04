@@ -355,8 +355,8 @@ struct AnimData {
     joints_nodes: Vec<usize>,
     inverse_bind: Vec<Mat4>,
     node_names: Vec<String>,
-    corr_mask: Option<Vec<bool>>, // optional head/neck correction mask
-    corr_quat: glam::Quat,        // quaternion applied to masked nodes
+    corr_weight: Option<Vec<f32>>, // optional per-node correction weight
+    corr_quat: glam::Quat,         // base correction quaternion
     // Ordered clips parallel to displayed anims
     clips: Vec<ra_assets::AnimClip>,
 }
@@ -408,26 +408,27 @@ impl AnimData {
             }
         }
         let corr_q = glam::Quat::from_rotation_x(head_pitch_deg.to_radians());
-        let corr_mask = if head_pitch_deg.abs() > 0.001 {
-            let mut mask = vec![false; sk.parent.len()];
+        let corr_weight = if head_pitch_deg.abs() > 0.001 {
+            let mut w = vec![0.0f32; sk.parent.len()];
             for (i, n) in sk.node_names.iter().enumerate() {
                 let nn = Self::norm_bone_name(n);
-                let is_head = nn == "head";
-                let is_neck = nn.starts_with("neck");
-                let is_upper_spine = nn.starts_with("spine")
-                    && (nn.ends_with("3")
-                        || nn.ends_with("03")
-                        || nn.ends_with("2")
-                        || nn.ends_with("02")
-                        || nn.contains("upper"));
-                if is_head || is_neck || is_upper_spine {
-                    mask[i] = true;
+                if nn == "head" || nn.starts_with("neck") {
+                    w[i] = 1.0;
+                } else if nn.starts_with("spine") {
+                    if nn.ends_with("3") || nn.ends_with("03") || nn.contains("upper3") {
+                        w[i] = 0.60;
+                    } else if nn.ends_with("2") || nn.ends_with("02") || nn.contains("upper2") {
+                        w[i] = 0.40;
+                    } else if nn.ends_with("1") || nn.ends_with("01") || nn == "spine" || nn.contains("upper1") {
+                        w[i] = 0.25;
+                    }
                 }
             }
-            Some(mask)
-        } else {
-            None
-        };
+            let mut cnt_head = 0usize; let mut cnt_spine = 0usize;
+            for ww in &w { if *ww > 0.99 { cnt_head += 1; } else if *ww > 0.0 { cnt_spine += 1; } }
+            log::info!("viewer: upright correction weights — head/neck={} spine_top={}", cnt_head, cnt_spine);
+            Some(w)
+        } else { None };
         Self {
             parent: sk.parent.clone(),
             base_t: sk.base_t.clone(),
@@ -436,7 +437,7 @@ impl AnimData {
             joints_nodes: sk.joints_nodes.clone(),
             inverse_bind: sk.inverse_bind.clone(),
             node_names: sk.node_names.clone(),
-            corr_mask,
+            corr_weight,
             corr_quat: corr_q,
             clips,
         }
@@ -464,12 +465,12 @@ impl AnimData {
                 ls[*idx] = sample_vec3(sr, t);
             }
         }
-        // Apply optional correction to head/neck rotations
-        if let Some(mask) = &self.corr_mask {
-            for (i, m) in mask.iter().enumerate() {
-                if *m {
-                    // Apply in local space after clip rotation
-                    lr[i] = lr[i] * self.corr_quat;
+        // Apply optional correction to head/neck/upper-spine with weights
+        if let Some(weights) = &self.corr_weight {
+            for (i, w) in weights.iter().enumerate() {
+                if *w > 0.0 {
+                    let q = quat_pow(self.corr_quat, *w);
+                    lr[i] = lr[i] * q;
                 }
             }
         }
@@ -556,6 +557,17 @@ fn sample_quat(track: &ra_assets::TrackQuat, t: f32) -> glam::Quat {
         bb = -b;
     }
     a.slerp(bb, w).normalize()
+}
+
+fn quat_pow(q: glam::Quat, w: f32) -> glam::Quat {
+    if w <= 0.0 {
+        return glam::Quat::IDENTITY;
+    }
+    let (axis, angle) = q.to_axis_angle();
+    if angle.abs() < 1.0e-6 || axis.length_squared() < 1.0e-6 {
+        return q;
+    }
+    glam::Quat::from_axis_angle(axis.normalize(), angle * w)
 }
 
 fn default_head_pitch_for(
