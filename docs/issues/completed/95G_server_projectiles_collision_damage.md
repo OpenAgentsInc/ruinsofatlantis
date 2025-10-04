@@ -1,7 +1,9 @@
 # 95G — Server Systems: Projectiles, Collision, Damage
 
+Status: COMPLETE
+
 Labels: ecs, server-authoritative, combat
-Depends on: Epic #95, 95D (Projectiles SpecDb), 95C (Components)
+Depends on: Epic #95, 95C (Components)
 
 Intent
 - Implement an authoritative projectile → collision → damage pipeline. Integrate with carve by emitting `CarveRequest` on destructible hits.
@@ -45,16 +47,23 @@ Acceptance
 
 ---
 
-## Addendum — Implementation Summary (95G partial)
+## Addendum — Implementation Summary (95G COMPLETE)
 
 - server_core::systems
-  - Added `systems/projectiles.rs` with:
-    - `integrate(projectiles, dt)` returning segments.
-    - `collide_and_damage(..)` testing sphere hits for entities and AABB hits for destructibles, emitting `CarveRequest`.
+  - Implemented `systems/projectiles.rs` with:
+    - `integrate(projectiles, dt)` returning per‑projectile segments.
+    - `collide_and_damage(..)` testing segment–sphere for entities and segment–AABB for destructibles; applies damage and emits `CarveRequest` on destructible hits.
+    - `spawn_from_command(..)` mapping `InputCommand` to action name and reading parameters from the SpecDb.
   - Unit tests:
     - Sphere target loses hp deterministically when crossed by a segment.
     - Destructible AABB emits a `CarveRequest` with expected `did` and radius.
-- ecs_core::components extended with:
-  - `Projectile`, `CollisionShape`, `Health`, and `Team` components.
-- Data specs for projectiles (95D portion) are TBD; current tests embed projectile params directly.
-Status: PARTIAL (ProjectileIntegrate + simple Collision + Damage landed with tests; data specs TBD)
+    - Spawning from `InputCommand::AtWillLMB` uses SpecDb values and produces a normalized velocity along look_dir.
+- ecs_core::components
+  - Added `Projectile`, `CollisionShape`, `Health`, and `Team` components (shared for server systems/tests).
+- data_runtime::specs
+  - Added `crates/data_runtime/src/specs/projectiles.rs` with `ProjectileSpecDb` and defaults.
+  - Added repository config file at `data/config/projectiles.toml`; loader uses it if present, otherwise falls back to sensible defaults.
+  - Unit test confirms defaults are present.
+
+Notes
+- Replication/visuals remain out of scope for 95G; client continues to render predicted visuals. A lightweight replication stub will follow in 95I.
