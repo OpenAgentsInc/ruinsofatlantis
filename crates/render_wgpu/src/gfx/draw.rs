@@ -115,4 +115,19 @@ impl Renderer {
         rpass.set_index_buffer(self.dk_ib.slice(..), IndexFormat::Uint16);
         rpass.draw_indexed(0..self.dk_index_count, 0, 0..self.dk_count);
     }
+
+    pub(crate) fn draw_sorceress(&self, rpass: &mut wgpu::RenderPass<'_>) {
+        if self.sorc_count == 0 {
+            return;
+        }
+        rpass.set_pipeline(&self.wizard_pipeline);
+        rpass.set_bind_group(0, &self.globals_bg, &[]);
+        rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        rpass.set_bind_group(2, &self.sorc_palettes_bg, &[]);
+        rpass.set_bind_group(3, &self.sorc_mat_bg, &[]);
+        rpass.set_vertex_buffer(0, self.sorc_vb.slice(..));
+        rpass.set_vertex_buffer(1, self.sorc_instances.slice(..));
+        rpass.set_index_buffer(self.sorc_ib.slice(..), IndexFormat::Uint16);
+        rpass.draw_indexed(0..self.sorc_index_count, 0, 0..self.sorc_count);
+    }
 }

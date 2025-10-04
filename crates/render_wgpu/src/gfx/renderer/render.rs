@@ -331,6 +331,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     // Death Knight palettes (single instance)
     r.update_deathknight_palettes(t);
+    // Sorceress idle palettes
+    r.update_sorceress_palettes(t);
     // FX update (projectiles/particles)
     r.update_fx(t, dt);
     // Debris cubes update and upload instances
@@ -612,6 +614,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.dk_count > 0 && !r.is_vox_onepath() {
             log::debug!("draw: deathknight x{}", r.dk_count);
             r.draw_deathknight(&mut rp);
+            r.draw_calls += 1;
+        }
+        // Skinned: Sorceress (static idle)
+        if r.sorc_count > 0 && !r.is_vox_onepath() {
+            log::debug!("draw: sorceress x{}", r.sorc_count);
+            r.draw_sorceress(&mut rp);
             r.draw_calls += 1;
         }
         // Skinned: zombies

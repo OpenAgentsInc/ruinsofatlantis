@@ -36,6 +36,7 @@ mod rocks;
 mod ruins;
 mod scene;
 mod sky;
+mod sorceress;
 pub mod terrain;
 mod ui;
 mod util;
@@ -181,6 +182,10 @@ pub struct Renderer {
     dk_vb: wgpu::Buffer,
     dk_ib: wgpu::Buffer,
     dk_index_count: u32,
+    // Sorceress skinned geometry
+    sorc_vb: wgpu::Buffer,
+    sorc_ib: wgpu::Buffer,
+    sorc_index_count: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -220,6 +225,11 @@ pub struct Renderer {
     dk_count: u32,
     #[allow(dead_code)]
     dk_instances_cpu: Vec<InstanceSkin>,
+    // Sorceress instance
+    sorc_instances: wgpu::Buffer,
+    sorc_count: u32,
+    #[allow(dead_code)]
+    sorc_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
     ruins_instances_cpu: Vec<types::Instance>,
@@ -266,6 +276,14 @@ pub struct Renderer {
     dk_time_offset: Vec<f32>,
     dk_id: Option<server_core::NpcId>,
     dk_prev_pos: glam::Vec3,
+    // Sorceress
+    sorc_palettes_buf: wgpu::Buffer,
+    sorc_palettes_bg: wgpu::BindGroup,
+    sorc_joints: u32,
+    #[allow(dead_code)]
+    sorc_models: Vec<glam::Mat4>,
+    sorc_cpu: SkinnedMeshCPU,
+    sorc_time_offset: Vec<f32>,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -282,6 +300,10 @@ pub struct Renderer {
     _dk_mat_buf: wgpu::Buffer,
     _dk_tex_view: wgpu::TextureView,
     _dk_sampler: wgpu::Sampler,
+    sorc_mat_bg: wgpu::BindGroup,
+    _sorc_mat_buf: wgpu::Buffer,
+    _sorc_tex_view: wgpu::TextureView,
+    _sorc_sampler: wgpu::Sampler,
 
     // Flags
     wire_enabled: bool,
@@ -3170,6 +3192,47 @@ impl Renderer {
             .write_buffer(&self.dk_palettes_buf, 0, bytemuck::cast_slice(&raw));
         // Update previous position for next-frame movement detection
         self.dk_prev_pos = current_pos;
+    }
+
+    fn update_sorceress_palettes(&mut self, time_global: f32) {
+        if self.sorc_count == 0 {
+            return;
+        }
+        let joints = self.sorc_joints as usize;
+        // Choose Idle if present; fallback to idle-like; else any
+        let pick_idle = || -> Option<String> {
+            if self.sorc_cpu.animations.contains_key("Idle") {
+                return Some("Idle".to_string());
+            }
+            let wanted = ["idle", "stand", "wait"];
+            for name in self.sorc_cpu.animations.keys() {
+                let low = name.to_lowercase();
+                if wanted.iter().any(|s| low.contains(s)) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
+        let lookup = pick_idle().or_else(|| self.sorc_cpu.animations.keys().next().cloned());
+        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.sorc_count as usize * joints);
+        for i in 0..(self.sorc_count as usize) {
+            let t = time_global + self.sorc_time_offset.get(i).copied().unwrap_or(0.0);
+            if let Some(ref name) = lookup
+                && let Some(clip) = self.sorc_cpu.animations.get(name)
+            {
+                mats.extend(anim::sample_palette(&self.sorc_cpu, clip, t));
+                continue;
+            }
+            for _ in 0..joints {
+                mats.push(glam::Mat4::IDENTITY);
+            }
+        }
+        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
+        for m in mats {
+            raw.push(m.to_cols_array());
+        }
+        self.queue
+            .write_buffer(&self.sorc_palettes_buf, 0, bytemuck::cast_slice(&raw));
     }
 
     fn update_deathknight_from_server(&mut self) {

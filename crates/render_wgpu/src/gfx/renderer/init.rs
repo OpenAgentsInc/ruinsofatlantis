@@ -1077,6 +1077,44 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
+    // Sorceress (UBC female) — single idle instance behind the Death Knight
+    let sorc_assets =
+        super::super::sorceress::load_assets(&device).context("load sorceress assets")?;
+    let sorc_cpu = sorc_assets.cpu;
+    let sorc_vb = sorc_assets.vb;
+    let sorc_ib = sorc_assets.ib;
+    let sorc_index_count = sorc_assets.index_count;
+    let sorc_joints = sorc_cpu.joints_nodes.len() as u32;
+    let sorc_mat = material::create_wizard_material(&device, &queue, &material_bgl, &sorc_cpu);
+    let sorc_mat_bg = sorc_mat.bind_group;
+    let _sorc_mat_buf = sorc_mat.uniform_buf;
+    let _sorc_tex_view = sorc_mat.texture_view;
+    let _sorc_sampler = sorc_mat.sampler;
+    // Position: behind DK along +Z
+    let sorc_pos = {
+        let mut p = dk_spawn_pos + glam::vec3(0.0, 0.0, 35.0);
+        let (h, _n) = terrain::height_at(&terrain_cpu, p.x, p.z);
+        p.y = h;
+        p
+    };
+    let (sorc_instances, sorc_instances_cpu, sorc_models, sorc_count) =
+        super::super::sorceress::build_instance_at(&device, sorc_pos);
+    let total_sorc_mats = sorc_count as usize * sorc_joints as usize;
+    let sorc_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("sorceress-palettes"),
+        size: (total_sorc_mats * 64) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let sorc_palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("sorceress-palettes-bg"),
+        layout: &palettes_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: sorc_palettes_buf.as_entire_binding(),
+        }],
+    });
+
     // Determine asset forward offset from the zombie root node (if present).
     let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
@@ -1512,6 +1550,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         dk_vb,
         dk_ib,
         dk_index_count,
+        sorc_vb,
+        sorc_ib,
+        sorc_index_count,
         zombie_vb,
         zombie_ib,
         zombie_index_count,
@@ -1539,6 +1580,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         dk_instances,
         dk_count,
         dk_instances_cpu,
+        sorc_instances,
+        sorc_count,
+        sorc_instances_cpu,
         zombie_instances,
         zombie_count: zombie_instances_cpu.len() as u32,
         zombie_instances_cpu,
@@ -1683,6 +1727,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cpu,
         pc_mat_bg,
         pc_prev_pos: pc_initial_pos,
+        sorc_palettes_buf,
+        sorc_palettes_bg,
+        sorc_joints,
+        sorc_models: sorc_models.clone(),
+        sorc_cpu,
+        sorc_time_offset: (0..sorc_count as usize).map(|_| 0.0f32).collect(),
         zombie_palettes_buf,
         zombie_palettes_bg,
         zombie_joints,
@@ -1707,6 +1757,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 glam::vec3(c[12], c[13], c[14])
             })
             .unwrap_or(glam::Vec3::ZERO),
+        sorc_mat_bg,
+        _sorc_mat_buf,
+        _sorc_tex_view,
+        _sorc_sampler,
         pc_anim_cfg,
     };
 
