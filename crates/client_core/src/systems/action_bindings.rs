@@ -2,6 +2,7 @@
 
 use crate::facade::controller::{ControllerState, InputQueue};
 use ecs_core::components::{ControllerMode, InputCommand};
+use tracing::{debug, info};
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct ButtonSnapshot {
@@ -49,26 +50,38 @@ pub fn handle_buttons(
     if !in_action {
         return;
     }
+    let mut pushed = 0usize;
     if input.lmb_pressed {
         out.push(binds.lmb.clone());
+        pushed += 1;
     }
     if input.rmb_pressed {
         out.push(binds.rmb.clone());
+        pushed += 1;
     }
     if input.q_pressed {
         out.push(binds.q.clone());
+        pushed += 1;
     }
     if input.e_pressed {
         out.push(binds.e.clone());
+        pushed += 1;
     }
     if input.r_pressed {
         out.push(binds.r.clone());
+        pushed += 1;
     }
     if input.shift_pressed {
         out.push(binds.shift.clone());
+        pushed += 1;
     }
     if input.tab_pressed {
         out.push(binds.tab.clone());
+        pushed += 1;
+    }
+    if pushed > 0 {
+        info!(target: "controls", mode=?state.mode, profile=?state.profile, pressed=?pushed, "input commands enqueued");
+        debug!(target: "controls", lmb=input.lmb_pressed, rmb=input.rmb_pressed, q=input.q_pressed, e=input.e_pressed, r=input.r_pressed, shift=input.shift_pressed, tab=input.tab_pressed, "bindings snapshot");
     }
 }
 

@@ -2,6 +2,7 @@
 
 use crate::facade::controller::ControllerState;
 use ecs_core::components::ControllerMode;
+use tracing::info;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UiFocus {
@@ -31,10 +32,12 @@ pub fn handle_cursor_event(
             if ui.chat_open || ui.menu_open {
                 return;
             }
+            let prev = state.mode;
             state.mode = match state.mode {
                 ControllerMode::Mouselook => ControllerMode::Cursor,
                 ControllerMode::Cursor => ControllerMode::Mouselook,
             };
+            info!(target: "controls", from = ?prev, to = ?state.mode, reason = "alt_toggle");
             out.push(HostEvent::PointerLockRequest(
                 state.mode == ControllerMode::Mouselook,
             ));
@@ -44,9 +47,11 @@ pub fn handle_cursor_event(
             if state.profile == ecs_core::components::InputProfile::ClassicCursor {
                 if down && state.mode == ControllerMode::Cursor {
                     state.mode = ControllerMode::Mouselook;
+                    info!(target: "controls", to = ?state.mode, reason = "rmb_hold_begin");
                     out.push(HostEvent::PointerLockRequest(true));
                 } else if !down && state.mode == ControllerMode::Mouselook {
                     state.mode = ControllerMode::Cursor;
+                    info!(target: "controls", to = ?state.mode, reason = "rmb_hold_end");
                     out.push(HostEvent::PointerLockRequest(false));
                 }
             }
@@ -57,9 +62,11 @@ pub fn handle_cursor_event(
             }
             if down {
                 state.mode = ControllerMode::Cursor;
+                info!(target: "controls", to = ?state.mode, reason = "alt_hold_begin");
                 out.push(HostEvent::PointerLockRequest(false));
             } else {
                 state.mode = ControllerMode::Mouselook;
+                info!(target: "controls", to = ?state.mode, reason = "alt_hold_end");
                 out.push(HostEvent::PointerLockRequest(true));
             }
         }
