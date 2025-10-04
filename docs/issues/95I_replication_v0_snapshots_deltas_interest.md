@@ -1,5 +1,7 @@
 # 95I — Replication v0: Snapshots, Deltas, Interest (Local Loop)
 
+Status: PARTIAL (local channel + client apply/uploader wired; host bridge TBD)
+
 Labels: networking, replication
 Depends on: Epic #95, 95B (Scaffolds), 95E/95G (Server systems)
 
@@ -32,3 +34,20 @@ Tasks
 Acceptance
 - In a local run, carving produces `ChunkMeshDelta` messages and client reflects visible changes without client-side mutation.
  - Interest radius reduces messages when camera is far; logs include counts of sent/received deltas under a `replication_debug` feature (optional).
+
+---
+
+## Addendum — Implementation Summary (partial)
+
+- net_core
+  - Added `channel` module with an in-proc `Tx/Rx` and non-blocking `drain()`; unit test included.
+  - `snapshot::ChunkMeshDelta` encode/decode present; stricter length handling.
+- client_core
+  - `replication::ReplicationBuffer` decodes `ChunkMeshDelta` bytes and accumulates `ChunkMeshEntry` updates; `drain_mesh_updates()` provides a simple handoff.
+  - Integration test `tests/replication_local.rs` covers server-encode → channel → client-apply → uploader mock.
+- render_wgpu
+  - Implemented `client_core::upload::MeshUpload` for `Renderer` (adapter uses `voxel_upload` to VB/IB).
+
+Next
+- Host bridge: keep a `net_core::channel::Rx` on the renderer or app shell and, once per frame, drain → apply to `ReplicationBuffer` → call `MeshUpload` for each update.
+- Emit one synthetic `ChunkMeshDelta` from a dummy server tick to validate the path (no sockets yet); then consider a basic interest radius.

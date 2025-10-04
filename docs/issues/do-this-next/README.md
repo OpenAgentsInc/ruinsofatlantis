@@ -4,8 +4,8 @@ This README captures the next concrete steps to advance the server‑authoritati
 
 Status snapshot
 - Complete: 95A (preflight/gates), 95B (client_core/net_core scaffolds), 95C (ECS components), 95E1 (mouselook/action‑combat), 95F (renderer voxel_upload), 95E (server trio), 95G (projectiles), 96 (telemetry)
-- In progress: none
-- Ready to start now: 95I (replication v0)
+- In progress: 95I (replication v0 — local channel + client apply/uploader; host bridge TBD)
+- Ready to start now: bridge 95I in host, then interest
 
 Order of execution (small, parallel‑friendly PRs)
 1) 95I — Minimal Replication Path (local loop)
@@ -14,7 +14,7 @@ Order of execution (small, parallel‑friendly PRs)
    - Files to add/touch
      - `crates/net_core/src/channel.rs` (simple bounded channel)
      - `crates/client_core/src/replication.rs` (apply mesh deltas)
-     - `crates/render_wgpu/src/gfx/renderer/update.rs` (consume uploads only)
+     - `crates/render_wgpu/src/gfx/renderer/update.rs` or host: drain channel each frame and call `MeshUpload` for pending updates
    - Acceptance: a dummy server tick pushes one mesh delta that the client uploads and renders.
 
 2) Docs & Hygiene
