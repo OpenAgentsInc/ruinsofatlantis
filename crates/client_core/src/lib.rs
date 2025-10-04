@@ -44,23 +44,35 @@ pub mod controller {
                 yaw: 0.0,
             }
         }
-        pub fn update(&mut self, input: &InputState, dt: f32, _cam_forward: Vec3) {
+        pub fn update(&mut self, input: &InputState, dt: f32, cam_forward: Vec3) {
+            // Movement is camera-relative: W moves away from viewer (camera forward),
+            // S toward camera, A left, D right. Mouse does not rotate the PC.
             let speed = if input.run { 9.0 } else { 5.0 };
-            let yaw_rate = 1.8; // rad/s
-            let only_backward = input.backward && !input.left && !input.right && !input.forward;
-            if !only_backward {
-                if input.left {
-                    self.yaw = wrap_angle(self.yaw + yaw_rate * dt);
-                }
-                if input.right {
-                    self.yaw = wrap_angle(self.yaw - yaw_rate * dt);
-                }
+            // Build camera-space basis on XZ plane
+            let mut fwd = Vec3::new(cam_forward.x, 0.0, cam_forward.z).normalize_or_zero();
+            if fwd.length_squared() <= 1e-6 {
+                fwd = Vec3::Z; // default forward if camera forward degenerates
             }
-            let fwd = Vec3::new(self.yaw.sin(), 0.0, self.yaw.cos()).normalize_or_zero();
-            if input.forward && !input.backward {
-                self.pos += fwd * speed * dt;
-            } else if input.backward && !input.forward {
-                self.pos -= fwd * speed * dt;
+            let right = Vec3::new(fwd.z, 0.0, -fwd.x).normalize_or_zero();
+            // Aggregate movement intent
+            let mut dir = Vec3::ZERO;
+            if input.forward {
+                dir += fwd;
+            }
+            if input.backward {
+                dir -= fwd;
+            }
+            if input.right {
+                dir += right;
+            }
+            if input.left {
+                dir -= right;
+            }
+            if dir.length_squared() > 1e-6 {
+                let move_dir = dir.normalize();
+                self.pos += move_dir * speed * dt;
+                // Optionally rotate PC to face movement direction (not mouse/camera)
+                self.yaw = wrap_angle(move_dir.x.atan2(move_dir.z));
             }
         }
     }

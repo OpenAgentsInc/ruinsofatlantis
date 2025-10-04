@@ -340,9 +340,7 @@ impl Renderer {
                     self.cam_orbit_yaw = wrap_angle(-self.controller_state.camera.yaw);
                     let orbit_pitch = -self.controller_state.camera.pitch;
                     self.cam_orbit_pitch = orbit_pitch.clamp(-1.2, 1.2);
-                    // Keep player facing in sync with camera yaw so character faces mouselook
-                    self.player.yaw = self.cam_orbit_yaw;
-                    self.scene_inputs.set_yaw(self.player.yaw);
+                    // Do not rotate the PC from mouse movement; PC yaw follows movement (camera-relative)
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));
