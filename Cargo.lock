@@ -1628,6 +1628,7 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 name = "client_core"
 version = "0.1.0"
 dependencies = [
+ "ecs_core",
  "glam 0.30.8",
  "tracing",
  "tracing-subscriber",

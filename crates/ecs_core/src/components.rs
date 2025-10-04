@@ -85,6 +85,57 @@ pub fn chunk_key(did: DestructibleId, c: UVec3) -> (DestructibleId, u32, u32, u3
     (did, c.x, c.y, c.z)
 }
 
+/// Runtime-selectable input/controller profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InputProfile {
+    #[default]
+    ActionCombat,
+    ClassicCursor,
+}
+
+/// High-level controller mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ControllerMode {
+    #[default]
+    Mouselook,
+    Cursor,
+}
+
+/// Read-only camera pose for renderer consumption.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraPose {
+    pub eye: Vec3,
+    pub look_dir: Vec3,
+    pub up: Vec3,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+impl Default for CameraPose {
+    fn default() -> Self {
+        Self {
+            eye: Vec3::ZERO,
+            look_dir: Vec3::Z,
+            up: Vec3::Y,
+            yaw: 0.0,
+            pitch: 0.0,
+        }
+    }
+}
+
+/// Input commands emitted by the client controller; server consumes later.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum InputCommand {
+    AtWillLMB,
+    AtWillRMB,
+    EncounterQ,
+    EncounterE,
+    EncounterR,
+    Dodge,
+    ClassMechanic,
+    CursorToggle,
+}
+
 /// Health component for damage/death application.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]

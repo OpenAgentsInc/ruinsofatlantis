@@ -80,5 +80,8 @@ pub mod controller {
 pub mod replication;
 /// Placeholder for client-side systems (prediction/lag-comp/etc.).
 pub mod systems;
+pub mod facade {
+    pub mod controller;
+}
 /// Mesh upload interface used by renderer or client runtime integration.
 pub mod upload;
