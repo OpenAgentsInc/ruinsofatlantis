@@ -1290,6 +1290,64 @@ async fn run(cli: Cli) -> Result<()> {
                 }
             }
 
+            // Snapshot support: copy swapchain to buffer and write PNG once, then exit
+            if !snapshot_done {
+                if let Some(path) = snapshot_path.take() {
+                    use std::num::NonZeroU32;
+                    let bpp: u32 = 4;
+                    let unpadded = config.width * bpp;
+                    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u32;
+                    let padded = ((unpadded + align - 1) / align) * align;
+                    let read_size = (padded * config.height) as u64;
+                    let read_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("snapshot-read"),
+                        size: read_size,
+                        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
+                    enc.copy_texture_to_buffer(
+                        wgpu::ImageCopyTexture { texture: &frame.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                        wgpu::ImageCopyBuffer { buffer: &read_buf, layout: wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(NonZeroU32::new(padded).unwrap()), rows_per_image: Some(NonZeroU32::new(config.height).unwrap()) } },
+                        wgpu::Extent3d { width: config.width, height: config.height, depth_or_array_layers: 1 },
+                    );
+                    queue.submit(Some(enc.finish()));
+                    device.poll(wgpu::Maintain::Wait);
+                    let slice = read_buf.slice(..);
+                    let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
+                    slice.map_async(wgpu::MapMode::Read, move |v| { let _ = tx.send(v); });
+                    let _ = futures_lite::future::block_on(rx.receive());
+                    let data = slice.get_mapped_range();
+                    let mut out_rgba = vec![0u8; (config.width * config.height * 4) as usize];
+                    for y in 0..config.height {
+                        let src = &data[(y * padded) as usize..(y * padded + unpadded) as usize];
+                        let dst = &mut out_rgba[(y * unpadded) as usize..(y * unpadded + unpadded) as usize];
+                        if matches!(format, wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb) {
+                            for x in 0..config.width {
+                                let i = (x * 4) as usize;
+                                dst[i] = src[i + 2];
+                                dst[i + 1] = src[i + 1];
+                                dst[i + 2] = src[i + 0];
+                                dst[i + 3] = src[i + 3];
+                            }
+                        } else {
+                            dst.copy_from_slice(&src[..(unpadded as usize)]);
+                        }
+                    }
+                    drop(data);
+                    read_buf.unmap();
+                    if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+                    let file = std::fs::File::create(&path).expect("snapshot file");
+                    let mut enc_png = png::Encoder::new(file, config.width, config.height);
+                    enc_png.set_color(png::ColorType::Rgba);
+                    enc_png.set_depth(png::BitDepth::Eight);
+                    let mut writer = enc_png.write_header().unwrap();
+                    writer.write_image_data(&out_rgba).unwrap();
+                    snapshot_done = true;
+                    frame.present();
+                    elwt.exit();
+                    return;
+                }
+            }
             queue.submit(Some(enc.finish()));
             frame.present();
         }
