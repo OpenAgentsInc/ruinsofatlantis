@@ -46,8 +46,7 @@ pub fn load_default() -> Result<TelemetryCfg> {
     if let Ok(lvl) = std::env::var("LOG_LEVEL") { cfg.log_level = Some(lvl); }
     if let Ok(addr) = std::env::var("METRICS_ADDR") { cfg.metrics_addr = Some(addr); }
     if let Ok(ep) = std::env::var("OTLP_ENDPOINT") { cfg.otlp_endpoint = Some(ep); }
-    if let Ok(json) = std::env::var("JSON_LOGS").ok().and_then(|v| v.parse().ok()) { cfg.json_logs = Some(json); }
-    if let Ok(s) = std::env::var("TRACE_SAMPLE").ok().and_then(|v| v.parse().ok()) { cfg.trace_sample = Some(s); }
+    if let Some(json) = std::env::var("JSON_LOGS").ok().and_then(|v| v.parse().ok()) { cfg.json_logs = Some(json); }
+    if let Some(s) = std::env::var("TRACE_SAMPLE").ok().and_then(|v| v.parse().ok()) { cfg.trace_sample = Some(s); }
     Ok(cfg)
 }
-
