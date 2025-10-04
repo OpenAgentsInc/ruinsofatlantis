@@ -1,6 +1,6 @@
 # 95I — Replication v0: Snapshots, Deltas, Interest (Local Loop)
 
-Status: PARTIAL (local channel + client apply/uploader wired; host bridge TBD)
+Status: COMPLETE
 
 Labels: networking, replication
 Depends on: Epic #95, 95B (Scaffolds), 95E/95G (Server systems)
@@ -37,7 +37,7 @@ Acceptance
 
 ---
 
-## Addendum — Implementation Summary (partial)
+## Addendum — Implementation Summary (COMPLETE)
 
 - net_core
   - Added `channel` module with an in-proc `Tx/Rx` and non-blocking `drain()`; unit test included.
@@ -47,7 +47,7 @@ Acceptance
   - Integration test `tests/replication_local.rs` covers server-encode → channel → client-apply → uploader mock.
 - render_wgpu
   - Implemented `client_core::upload::MeshUpload` for `Renderer` (adapter uses `voxel_upload` to VB/IB).
+  - Host bridge: renderer drains `Rx` each frame, applies messages to `ReplicationBuffer`, and uploads meshes.
 
-Next
-- Host bridge: keep a `net_core::channel::Rx` on the renderer or app shell and, once per frame, drain → apply to `ReplicationBuffer` → call `MeshUpload` for each update.
-- Emit one synthetic `ChunkMeshDelta` from a dummy server tick to validate the path (no sockets yet); then consider a basic interest radius.
+Notes
+- Interest scaffold (`SphereInterest`) is included; a later pass can source camera position and filter sends.
