@@ -1630,7 +1630,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         renderer.dk_id = None;
     }
 
-    // Note: generic destructibles should be provided by SceneBuild.
+    // Note: generic destructibles should be provided by SceneBuild and replicated
+    // by the server. The local chunk-mesh delta loop is already wired via
+    // `set_replication_rx`; registry replication will be integrated next.
 
     Ok(renderer)
 }
