@@ -412,9 +412,10 @@ impl AnimData {
             let mut mask = vec![false; sk.parent.len()];
             for (i, n) in sk.node_names.iter().enumerate() {
                 let nn = Self::norm_bone_name(n);
-                if nn == "head" || nn == "neck" {
-                    mask[i] = true;
-                }
+                let is_head = nn == "head";
+                let is_neck = nn.starts_with("neck");
+                let is_upper_spine = nn.starts_with("spine") && (nn.ends_with("3") || nn.ends_with("03") || nn.ends_with("2") || nn.ends_with("02") || nn.contains("upper"));
+                if is_head || is_neck || is_upper_spine { mask[i] = true; }
             }
             Some(mask)
         } else {
@@ -460,7 +461,8 @@ impl AnimData {
         if let Some(mask) = &self.corr_mask {
             for (i, m) in mask.iter().enumerate() {
                 if *m {
-                    lr[i] = self.corr_quat * lr[i];
+                    // Apply in local space after clip rotation
+                    lr[i] = lr[i] * self.corr_quat;
                 }
             }
         }
@@ -560,14 +562,21 @@ fn default_head_pitch_for(
     if let Some(p) = model_path {
         if let Some(s) = p.to_str() {
             let sl = s.to_ascii_lowercase();
-            if sl.contains("/ubc/") || sl.contains("superhero_male") || sl.contains("superhero_female") {
+            if sl.contains("/ubc/")
+                || sl.contains("superhero_male")
+                || sl.contains("superhero_female")
+            {
                 return 45.0;
             }
         }
     }
     for n in &sk.node_names {
         let nl = n.to_ascii_lowercase();
-        if nl.contains("superhero_male") || nl.contains("superhero_female") || nl == "head" || nl == "neck" {
+        if nl.contains("superhero_male")
+            || nl.contains("superhero_female")
+            || nl == "head"
+            || nl == "neck"
+        {
             return 45.0;
         }
     }
@@ -1159,7 +1168,9 @@ async fn run(cli: Cli) -> Result<()> {
                 if auto_pitch.abs() > 0.001 {
                     log::info!("viewer: head pitch correction {} deg", auto_pitch);
                 }
-                let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, auto_pitch));
+                let anim = Box::new(AnimData::from_skinned_with_options(
+                    &base, &names, auto_pitch,
+                ));
                 Ok(ModelGpu::Skinned {
                     vb,
                     ib,
