@@ -81,7 +81,7 @@ This running log captures code-level changes made to address the 2025-10-04 audi
   - `server_ext` only builds with `legacy_client_combat`.
   - `Renderer.server` and destructible config/queue present only with `legacy_client_ai`/`legacy_client_carve`.
   - `zombies::build_instances` dual signatures (with/without server).
-- Current default: legacy features enabled to maintain behavior; next step is to flip default off once client_core replication exposes a read-only NPC view.
+- Current default: legacy features enabled to maintain behavior; xtask temporarily skips no-default-features and feature-combo checks for render_wgpu while extraction proceeds. Next steps are to expose a read-only NPC view in `client_core` replication, flip defaults off, and then turn the layering guard into an error.
 
 ## Network protocol — add version headers + caps (F-NET-014)
 

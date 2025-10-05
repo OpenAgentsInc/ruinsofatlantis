@@ -693,20 +693,24 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             bar_entries.push((head.truncate(), frac));
         }
         // Bars for alive zombies
-        #[cfg(feature = "legacy_client_ai")]
+        // Prefer replicated NPC view if present; fallback to server (legacy)
         {
             use std::collections::HashMap;
-            let mut npc_map: HashMap<u32, (i32, i32, bool, f32)> = HashMap::new();
-            for n in &r.server.npcs {
-                npc_map.insert(n.id.0, (n.hp, n.max_hp, n.alive, n.radius));
+            let mut npc_map: HashMap<u32, (i32, i32, bool)> = HashMap::new();
+            for n in &r.repl_buf.npcs {
+                npc_map.insert(n.id, (n.hp, n.max, n.alive));
+            }
+            #[cfg(feature = "legacy_client_ai")]
+            if npc_map.is_empty() {
+                for n in &r.server.npcs {
+                    npc_map.insert(n.id.0, (n.hp, n.max_hp, n.alive));
+                }
             }
             for (i, id) in r.zombie_ids.iter().enumerate() {
                 if r.destruct_cfg.vox_sandbox {
                     continue;
                 }
-                if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied()
-                    && alive
-                {
+                if let Some((hp, max_hp, alive)) = npc_map.get(id).copied() && alive {
                     let m = r
                         .zombie_models
                         .get(i)

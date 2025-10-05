@@ -265,6 +265,79 @@ impl SnapshotDecode for BossStatusMsg {
     }
 }
 
+/// Compact list of NPC statuses for client UI/presentation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NpcListMsg {
+    pub items: Vec<NpcItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NpcItem {
+    pub id: u32,
+    pub hp: i32,
+    pub max: i32,
+    pub pos: [f32; 3],
+    pub radius: f32,
+    pub alive: u8,
+    pub attack_anim: f32,
+}
+
+impl SnapshotEncode for NpcListMsg {
+    fn encode(&self, out: &mut Vec<u8>) {
+        out.push(VERSION);
+        let n = u16::try_from(self.items.len()).unwrap_or(0);
+        out.extend_from_slice(&n.to_le_bytes());
+        for it in &self.items {
+            out.extend_from_slice(&it.id.to_le_bytes());
+            out.extend_from_slice(&it.hp.to_le_bytes());
+            out.extend_from_slice(&it.max.to_le_bytes());
+            for c in &it.pos {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
+            out.extend_from_slice(&it.radius.to_le_bytes());
+            out.push(it.alive);
+            out.extend_from_slice(&it.attack_anim.to_le_bytes());
+        }
+    }
+}
+
+impl SnapshotDecode for NpcListMsg {
+    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+        use anyhow::bail;
+        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
+            if inp.len() < N {
+                anyhow::bail!("short read");
+            }
+            let (a, b) = inp.split_at(N);
+            *inp = b;
+            let mut buf = [0u8; N];
+            buf.copy_from_slice(a);
+            Ok(buf)
+        }
+        let ver = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if ver != VERSION { bail!("unsupported version: {ver}"); }
+        let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
+        let mut items = Vec::with_capacity(n);
+        for _ in 0..n {
+            let id = u32::from_le_bytes(take::<4>(inp)?);
+            let hp = i32::from_le_bytes(take::<4>(inp)?);
+            let max = i32::from_le_bytes(take::<4>(inp)?);
+            let mut pos = [0.0f32; 3];
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
+            let radius = f32::from_le_bytes(take::<4>(inp)?);
+            let alive = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let attack_anim = f32::from_le_bytes(take::<4>(inp)?);
+            items.push(NpcItem { id, hp, max, pos, radius, alive, attack_anim });
+        }
+        Ok(Self { items })
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -77,7 +77,10 @@ fn ci() -> Result<()> {
     }
     // Feature combo: vox_onepath_demo + legacy_client_carve + destruct_debug
     let feat = "vox_onepath_demo,legacy_client_carve,destruct_debug";
-    if std::env::var("RA_CHECK_RENDER_FEATURE_COMBO").map(|v| v == "1").unwrap_or(false) {
+    if std::env::var("RA_CHECK_RENDER_FEATURE_COMBO")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         cargo(&[
             "clippy",
             "-p",

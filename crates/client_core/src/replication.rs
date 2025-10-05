@@ -15,6 +15,7 @@ pub struct ReplicationBuffer {
     pub updated_chunks: usize,
     pending_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
     pub boss_status: Option<BossStatus>,
+    pub npcs: Vec<NpcView>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +50,22 @@ impl ReplicationBuffer {
                     max: bs.max,
                     pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]),
                 });
+                return true;
+            }
+            let mut slice3: &[u8] = bytes;
+            if let Ok(list) = net_core::snapshot::NpcListMsg::decode(&mut slice3) {
+                self.npcs.clear();
+                for it in list.items {
+                    self.npcs.push(NpcView {
+                        id: it.id,
+                        hp: it.hp,
+                        max: it.max,
+                        pos: glam::vec3(it.pos[0], it.pos[1], it.pos[2]),
+                        radius: it.radius,
+                        alive: it.alive != 0,
+                        attack_anim: it.attack_anim,
+                    });
+                }
                 true
             } else {
                 false
@@ -65,6 +82,17 @@ impl ReplicationBuffer {
         std::mem::swap(&mut v, &mut self.pending_mesh);
         v
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NpcView {
+    pub id: u32,
+    pub hp: i32,
+    pub max: i32,
+    pub pos: glam::Vec3,
+    pub radius: f32,
+    pub alive: bool,
+    pub attack_anim: f32,
 }
 
 #[cfg(test)]
