@@ -314,9 +314,14 @@ impl SnapshotDecode for NpcListMsg {
             buf.copy_from_slice(a);
             Ok(buf)
         }
-        let ver = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let ver = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if ver != VERSION { bail!("unsupported version: {ver}"); }
+        if ver != VERSION {
+            bail!("unsupported version: {ver}");
+        }
         let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
         let mut items = Vec::with_capacity(n);
         for _ in 0..n {
@@ -328,15 +333,25 @@ impl SnapshotDecode for NpcListMsg {
                 *v = f32::from_le_bytes(take::<4>(inp)?);
             }
             let radius = f32::from_le_bytes(take::<4>(inp)?);
-            let alive = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+            let alive = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
             *inp = &inp[1..];
             let attack_anim = f32::from_le_bytes(take::<4>(inp)?);
-            items.push(NpcItem { id, hp, max, pos, radius, alive, attack_anim });
+            items.push(NpcItem {
+                id,
+                hp,
+                max,
+                pos,
+                radius,
+                alive,
+                attack_anim,
+            });
         }
         Ok(Self { items })
     }
 }
-
 
 #[cfg(test)]
 mod tests {

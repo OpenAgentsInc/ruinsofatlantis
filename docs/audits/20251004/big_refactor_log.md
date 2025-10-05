@@ -85,6 +85,18 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 
 ## Network protocol — add version headers + caps (F-NET-014)
 
+## Replicated NPC view (client_core + net_core)
+
+- Added `NpcListMsg` to `net_core::snapshot` with a compact list of NPC items.
+- `client_core::replication::ReplicationBuffer` now decodes `NpcListMsg` into `Vec<NpcView>`.
+- `render_wgpu` prefers replicated NPC HP/max/alive for zombie bars, falling back to server (legacy).
+
+## Platform bridge for local demo replication
+
+- `platform_winit` now creates a `net_core` channel; passes `Rx` to `Renderer::set_replication_rx`.
+- Under `demo_server` feature (default), hosts a tiny in-process `server_core::ServerState` and emits `NpcListMsg` every frame.
+- Decouples renderer presentation from server ownership while preserving local demo behavior.
+
 - Files:
   - `crates/net_core/src/snapshot.rs`: added `VERSION = 1` prefix byte to all messages; decode rejects mismatches; added conservative max caps for mesh elements (`MAX_MESH_ELEMS`).
 - Rationale: Establish forward/backward compatibility hooks and bound allocations to prevent OOM on malformed inputs.

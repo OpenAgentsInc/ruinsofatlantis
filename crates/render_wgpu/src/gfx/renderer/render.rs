@@ -710,7 +710,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 if r.destruct_cfg.vox_sandbox {
                     continue;
                 }
-                if let Some((hp, max_hp, alive)) = npc_map.get(id).copied() && alive {
+                if let Some((hp, max_hp, alive)) = npc_map.get(id).copied()
+                    && alive
+                {
                     let m = r
                         .zombie_models
                         .get(i)

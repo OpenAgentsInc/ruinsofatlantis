@@ -9,8 +9,17 @@ futures-util = "0.3"
 log = "0.4"
 pollster = "0.4"
 render_wgpu = { path = "../render_wgpu" }
+net_core = { path = "../net_core" }
 wgpu = "26"
 winit = "0.30"
+
+[features]
+default = ["demo_server"]
+demo_server = ["dep:server_core"]
+
+[dependencies.server_core]
+path = "../server_core"
+optional = true
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen-futures = "0.4"

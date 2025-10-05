@@ -5,6 +5,7 @@
 
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
+use net_core::snapshot::SnapshotEncode;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -16,6 +17,10 @@ use winit::{
 struct App {
     window: Option<Window>,
     state: Option<Renderer>,
+    #[allow(dead_code)]
+    repl_tx: Option<net_core::channel::Tx>,
+    #[cfg(feature = "demo_server")]
+    demo_server: Option<server_core::ServerState>,
 }
 
 impl ApplicationHandler for App {
@@ -47,7 +52,7 @@ impl ApplicationHandler for App {
 
             // Initialize Renderer: native blocks; web spawns async.
             #[cfg(not(target_arch = "wasm32"))]
-            let state = match pollster::block_on(Renderer::new(&window)) {
+            let mut state = match pollster::block_on(Renderer::new(&window)) {
                 Ok(s) => s,
                 Err(e) => {
                     log::info!("Renderer init skipped: {e}");
@@ -55,10 +60,18 @@ impl ApplicationHandler for App {
                     return;
                 }
             };
+            // Wire a local replication channel for NPC/Boss status
+            let (tx, rx) = net_core::channel::channel();
+            state.set_replication_rx(rx);
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.window = Some(window);
+                self.repl_tx = Some(tx);
                 self.state = Some(state);
+                #[cfg(feature = "demo_server")]
+                {
+                    self.demo_server = Some(server_core::ServerState::new());
+                }
             }
 
             #[cfg(target_arch = "wasm32")]
@@ -145,6 +158,29 @@ impl ApplicationHandler for App {
                     }
                 });
             }
+        }
+        // Emit a compact replicated NPC list each frame (demo only)
+        #[cfg(feature = "demo_server")]
+        if let (Some(tx), Some(s)) = (&self.repl_tx, &self.state) {
+            // If renderer requests overlay-only mode, we still send a small list
+            let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
+            if let Some(srv) = &self.demo_server {
+                for n in &srv.npcs {
+                    items.push(net_core::snapshot::NpcItem {
+                        id: n.id.0,
+                        hp: n.hp,
+                        max: n.max_hp,
+                        pos: [n.pos.x, n.pos.y, n.pos.z],
+                        radius: n.radius,
+                        alive: if n.alive { 1 } else { 0 },
+                        attack_anim: n.attack_anim,
+                    });
+                }
+            }
+            let msg = net_core::snapshot::NpcListMsg { items };
+            let mut buf = Vec::new();
+            msg.encode(&mut buf);
+            let _ = tx.try_send(buf);
         }
         if let Some(win) = &self.window {
             win.request_redraw();
