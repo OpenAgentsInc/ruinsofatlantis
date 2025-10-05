@@ -4,6 +4,27 @@
 
 use wgpu::util::DeviceExt;
 
+fn find_clear_spawn(server: &server_core::ServerState, mut pos: glam::Vec3, my_radius: f32) -> glam::Vec3 {
+    let pad = 0.5f32;
+    let step = 3.0f32;
+    for _ in 0..32 {
+        let mut ok = true;
+        for n in &server.npcs {
+            let dx = n.pos.x - pos.x;
+            let dz = n.pos.z - pos.z;
+            let d2 = dx * dx + dz * dz;
+            let min_d = my_radius + n.radius + pad;
+            if d2 < min_d * min_d {
+                ok = false;
+                break;
+            }
+        }
+        if ok { return pos; }
+        pos.z += step;
+    }
+    pos
+}
+
 pub struct NpcGpu {
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
@@ -65,10 +86,11 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         far_count
     );
 
-    // Spawn the unique boss Nivita on the server at a default position
-    // (renderer visual will follow server-authoritative position).
-    let nivita_pos = glam::vec3(0.0, 0.6, 35.0);
-    let _ = server.spawn_nivita_unique(nivita_pos);
+    // Spawn the unique boss Nivita at a clear location (avoid zombie rings)
+    // The renderer visual will follow server-authoritative position.
+    let desired = glam::vec3(0.0, 0.6, 35.0);
+    let clear = find_clear_spawn(&server, desired, 0.9);
+    let _ = server.spawn_nivita_unique(clear);
 
     NpcGpu {
         vb,
