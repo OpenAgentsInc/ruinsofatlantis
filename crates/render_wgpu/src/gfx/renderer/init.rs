@@ -989,7 +989,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let npc_index_count = npcs.index_count;
     let npc_instances = npcs.instances;
     let npc_models = npcs.models;
-    let mut server = npcs.server;
+    let server = npcs.server;
 
     // Vegetation
     let veg = zone
