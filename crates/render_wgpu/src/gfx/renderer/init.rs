@@ -1077,19 +1077,126 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
-    // Sorceress (UBC female) — single idle instance behind the Death Knight
-    let sorc_assets =
-        super::super::sorceress::load_assets(&device).context("load sorceress assets")?;
-    let sorc_cpu = sorc_assets.cpu;
-    let sorc_vb = sorc_assets.vb;
-    let sorc_ib = sorc_assets.ib;
-    let sorc_index_count = sorc_assets.index_count;
-    let sorc_joints = sorc_cpu.joints_nodes.len() as u32;
-    let sorc_mat = material::create_wizard_material(&device, &queue, &material_bgl, &sorc_cpu);
-    let sorc_mat_bg = sorc_mat.bind_group;
-    let _sorc_mat_buf = sorc_mat.uniform_buf;
-    let _sorc_tex_view = sorc_mat.texture_view;
-    let _sorc_sampler = sorc_mat.sampler;
+    // Sorceress — single idle instance behind the Death Knight (configurable model)
+    let sorc_cfg = data_runtime::configs::sorceress::load_default().unwrap_or_default();
+    let (
+        sorc_cpu,
+        sorc_vb,
+        sorc_ib,
+        sorc_index_count,
+        sorc_joints,
+        sorc_mat_bg,
+        _sorc_mat_buf,
+        _sorc_tex_view,
+        _sorc_sampler,
+    ) = if let Some(model_rel) = sorc_cfg.model.as_deref() {
+        if let Ok(sa) = super::super::sorceress::load_assets(&device, model_rel) {
+            let joints = sa.cpu.joints_nodes.len() as u32;
+            let mat = material::create_wizard_material(&device, &queue, &material_bgl, &sa.cpu);
+            (
+                sa.cpu,
+                sa.vb,
+                sa.ib,
+                sa.index_count,
+                joints,
+                mat.bind_group,
+                mat.uniform_buf,
+                mat.texture_view,
+                mat.sampler,
+            )
+        } else {
+            log::warn!(
+                "sorceress: failed to load {}; NPC will be disabled",
+                model_rel
+            );
+            let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("sorc-empty"),
+                size: 4,
+                usage: wgpu::BufferUsages::VERTEX,
+                mapped_at_creation: false,
+            });
+            let mat = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("sorc-mat-empty"),
+                layout: &material_bgl,
+                entries: &[],
+            });
+            (
+                crate::gfx::Renderer::empty_skinned_cpu(),
+                dummy.clone(),
+                dummy,
+                0u32,
+                0u32,
+                mat,
+                device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("_"),
+                    size: 4,
+                    usage: wgpu::BufferUsages::UNIFORM,
+                    mapped_at_creation: false,
+                }),
+                device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        label: Some("_"),
+                        size: wgpu::Extent3d {
+                            width: 1,
+                            height: 1,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        view_formats: &[],
+                    })
+                    .create_view(&wgpu::TextureViewDescriptor::default()),
+                device.create_sampler(&wgpu::SamplerDescriptor::default()),
+            )
+        }
+    } else {
+        log::info!("sorceress: no model configured; NPC disabled");
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sorc-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        let mat = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("sorc-mat-empty"),
+            layout: &material_bgl,
+            entries: &[],
+        });
+        (
+            crate::gfx::Renderer::empty_skinned_cpu(),
+            dummy.clone(),
+            dummy,
+            0u32,
+            0u32,
+            mat,
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("_"),
+                size: 4,
+                usage: wgpu::BufferUsages::UNIFORM,
+                mapped_at_creation: false,
+            }),
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some("_"),
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                })
+                .create_view(&wgpu::TextureViewDescriptor::default()),
+            device.create_sampler(&wgpu::SamplerDescriptor::default()),
+        )
+    };
     // Position: behind DK along +Z
     let sorc_pos = {
         let mut p = dk_spawn_pos + glam::vec3(0.0, 0.0, 35.0);
@@ -1097,8 +1204,17 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         p.y = h;
         p
     };
-    let (sorc_instances, sorc_instances_cpu, sorc_models, sorc_count) =
-        super::super::sorceress::build_instance_at(&device, sorc_pos);
+    let (sorc_instances, sorc_instances_cpu, sorc_models, sorc_count) = if sorc_index_count > 0 {
+        super::super::sorceress::build_instance_at(&device, sorc_pos)
+    } else {
+        let b = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sorc-instances-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (b, Vec::new(), Vec::new(), 0u32)
+    };
     let total_sorc_mats = sorc_count as usize * sorc_joints as usize;
     let sorc_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("sorceress-palettes"),

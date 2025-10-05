@@ -1,10 +1,10 @@
-//! Sorceress NPC: UBC Female model, single idle instance.
+//! Sorceress NPC: load configured model (GLTF/GLB), single idle instance.
 
 use anyhow::{Context, Result};
 use wgpu::util::DeviceExt;
 
 use crate::gfx::types::{InstanceSkin, VertexSkinned};
-use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+use ra_assets::skinning::load_gltf_skinned;
 
 pub struct SorcAssets {
     pub cpu: ra_assets::types::SkinnedMeshCPU,
@@ -13,15 +13,10 @@ pub struct SorcAssets {
     pub index_count: u32,
 }
 
-pub fn load_assets(device: &wgpu::Device) -> Result<SorcAssets> {
-    let model_path = "assets/models/ubc/godot/Superhero_Female.gltf";
-    let mut cpu = load_gltf_skinned(&asset_path(model_path))
-        .with_context(|| format!("load skinned {}", model_path))?;
-    // Merge common animation library so Idle is present if missing
-    let lib = asset_path("assets/anims/universal/AnimationLibrary.glb");
-    if lib.exists() {
-        let _ = merge_gltf_animations(&mut cpu, &lib);
-    }
+pub fn load_assets(device: &wgpu::Device, model_rel: &str) -> Result<SorcAssets> {
+    let model_path = asset_path(model_rel);
+    let cpu = load_gltf_skinned(&model_path)
+        .with_context(|| format!("load skinned {}", model_path.display()))?;
     let verts: Vec<VertexSkinned> = cpu
         .vertices
         .iter()

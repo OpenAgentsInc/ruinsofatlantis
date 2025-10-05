@@ -528,6 +528,24 @@ struct Debris {
 }
 
 impl Renderer {
+    pub(crate) fn empty_skinned_cpu() -> SkinnedMeshCPU {
+        SkinnedMeshCPU {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+            joints_nodes: Vec::new(),
+            inverse_bind: Vec::new(),
+            parent: Vec::new(),
+            base_t: Vec::new(),
+            base_r: Vec::new(),
+            base_s: Vec::new(),
+            animations: Default::default(),
+            base_color_texture: None,
+            submeshes: Vec::new(),
+            node_names: Vec::new(),
+            hand_right_node: None,
+            root_node: None,
+        }
+    }
     /// Attach a replication receiver to the renderer; deltas will be drained
     /// and applied each frame before scene updates.
     pub fn set_replication_rx(&mut self, rx: net_core::channel::Rx) {

@@ -20,5 +20,6 @@ pub mod configs {
     pub mod destructible;
     pub mod input_camera;
     pub mod pc_animations;
+    pub mod sorceress;
     pub mod telemetry;
 }
