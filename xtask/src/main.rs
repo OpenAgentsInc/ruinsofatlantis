@@ -114,7 +114,9 @@ fn layering_guard() -> Result<()> {
     }
     let s = String::from_utf8_lossy(&out.stdout);
     if s.contains("server_core ") || s.contains(" server_core") {
-        eprintln!("xtask: WARN layering: render_wgpu depends on server_core (expected until extraction)");
+        eprintln!(
+            "xtask: WARN layering: render_wgpu depends on server_core (expected until extraction)"
+        );
     }
     Ok(())
 }

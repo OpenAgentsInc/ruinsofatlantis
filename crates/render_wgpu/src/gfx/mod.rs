@@ -773,26 +773,14 @@ impl Renderer {
                 resource: self.dk_palettes_buf.as_entire_binding(),
             }],
         });
-        // Spawn new DK server NPC at the DK model position
-        let dk_spawn_pos = {
-            let c = self
-                .dk_models
-                .first()
-                .copied()
-                .unwrap_or(glam::Mat4::IDENTITY)
-                .to_cols_array();
-            glam::vec3(c[12], c[13], c[14])
-        };
-        let dk_id = {
-            let id = self.server.spawn_npc(dk_spawn_pos, 2.5, 1000);
-            if let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == id) {
-                n.damage = 50;
-                n.speed = 4.0;
-            }
-            id
-        };
-        self.dk_id = Some(dk_id);
-        self.dk_prev_pos = dk_spawn_pos;
+        // Do not spawn Death Knight into server here; renderer should be presentation-only
+        self.dk_id = None;
+        if let Some(m) = self.dk_models.first().copied() {
+            let c = m.to_cols_array();
+            self.dk_prev_pos = glam::vec3(c[12], c[13], c[14]);
+        } else {
+            self.dk_prev_pos = glam::Vec3::ZERO;
+        }
 
         // 4) Clear FX
         self.projectiles.clear();

@@ -40,6 +40,22 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - `cargo test -p net_core` — OK; new tests pass.
 - xtask CI guard: added a layering check to fail if `render_wgpu` depends on `server_core`.
 
+## CI & hygiene — cargo-deny + GitHub Actions (F-CI-005)
+
+- Files:
+  - `deny.toml` at repo root: baseline advisories/bans/licenses policy.
+  - `.github/workflows/ci.yml`: runs `cargo xtask ci` on pushes and PRs against `main`.
+- Rationale: Ensure fmt/clippy/tests/schema/WGSL validation run in CI; enable dependency advisories via cargo-deny.
+- Notes: xtask already warns if cargo-deny missing; workflow installs it (non-fatal if already present).
+
+## Renderer authority hardening — remove DK spawn (F-ARCH-001)
+
+- Files:
+  - `crates/render_wgpu/src/gfx/renderer/init.rs`: removed DK `spawn_npc`; set `dk_id = None`; derived `dk_model_pos` for dependent placement.
+  - `crates/render_wgpu/src/gfx/mod.rs`: removed DK respawn-time server spawn; preserved previous-position tracking.
+- Rationale: Keep renderer presentation-only; server/app bootstrap should own entity creation.
+- Tests: render_wgpu tests pass; health bar logic handles `dk_id = None` gracefully.
+
 ## Incremental hardening — server unwrap removal (F-SIM-009)
 
 - File: `crates/server_core/src/destructible.rs`

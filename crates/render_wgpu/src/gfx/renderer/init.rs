@@ -1045,21 +1045,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Death Knight single-instance buffers and palettes
     let (dk_instances, dk_instances_cpu, dk_models, dk_count) =
         super::super::deathknight::build_instances(&device, &terrain_cpu, dk_joints);
-    // Spawn Death Knight into the server so spells collide and AI runs
-    let dk_spawn_pos = {
+    // Server authority: do not spawn Death Knight from renderer. The visual
+    // may still be present for demo scenes; dk_id remains None here.
+    let dk_id = None;
+    // Derive DK model position for dependent placements (e.g., sorceress)
+    let dk_model_pos = if dk_count > 0 {
         let c = dk_models[0].to_cols_array();
         glam::vec3(c[12], c[13], c[14])
-    };
-    let dk_id = {
-        let radius = 2.5f32; // generous cylinder radius for scaled model
-        let hp = 1000i32; // 5x previous hitpoints
-        let id = server.spawn_npc(dk_spawn_pos, radius, hp);
-        // Scale Death Knight damage 10x over a zombie (5 → 50) and double speed
-        if let Some(n) = server.npcs.iter_mut().find(|n| n.id == id) {
-            n.damage = 50;
-            n.speed = 4.0;
-        }
-        id
+    } else {
+        glam::Vec3::ZERO
     };
     let total_dk_mats = dk_count as usize * dk_joints as usize;
     let dk_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -1176,7 +1170,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
     // Position: behind DK along +Z
     let sorc_pos = {
-        let mut p = dk_spawn_pos + glam::vec3(0.0, 0.0, 35.0);
+        let mut p = dk_model_pos + glam::vec3(0.0, 0.0, 35.0);
         let (h, _n) = terrain::height_at(&terrain_cpu, p.x, p.z);
         p.y = h;
         p
@@ -1816,7 +1810,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         dk_models: dk_models.clone(),
         dk_cpu,
         dk_time_offset: (0..dk_count as usize).map(|_| 0.0f32).collect(),
-        dk_id: Some(dk_id),
+        dk_id,
         pc_joints,
         pc_cpu,
         pc_mat_bg,
