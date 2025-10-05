@@ -46,6 +46,7 @@ fn ci() -> Result<()> {
     warn_hooks();
     cargo(&["fmt", "--all"])?;
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
+    layering_guard()?;
     wgsl_validate()?;
     cargo_deny()?;
     // Build packs so golden tests can read outputs
@@ -97,6 +98,22 @@ fn ci() -> Result<()> {
         "--bin",
         "vox_onepath",
     ])?;
+    Ok(())
+}
+
+fn layering_guard() -> Result<()> {
+    // Ensure render_wgpu does not depend on server_core (layering violation)
+    let mut cmd = Command::new("cargo");
+    cmd.args(["tree", "-p", "render_wgpu"]).stdout(Stdio::piped()).stderr(Stdio::null());
+    let out = cmd.output().context("cargo tree render_wgpu")?;
+    if !out.status.success() {
+        // Not fatal; skip if tree fails for some reason
+        return Ok(());
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    if s.contains("server_core ") || s.contains(" server_core") {
+        bail!("layering guard: render_wgpu depends on server_core (violation)");
+    }
     Ok(())
 }
 

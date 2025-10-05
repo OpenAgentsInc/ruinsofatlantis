@@ -38,6 +38,7 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 
 - `cargo check` — OK after both changes above.
 - `cargo test -p net_core` — OK; new tests pass.
+- xtask CI guard: added a layering check to fail if `render_wgpu` depends on `server_core`.
 
 ## Incremental hardening — server unwrap removal (F-SIM-009)
 
