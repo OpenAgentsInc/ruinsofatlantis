@@ -25,6 +25,29 @@ fn find_clear_spawn(server: &server_core::ServerState, mut pos: glam::Vec3, my_r
     pos
 }
 
+fn push_others_from(server: &mut server_core::ServerState, boss: server_core::NpcId, pad: f32) {
+    let (bx, bz, br) = if let Some(b) = server.npcs.iter().find(|n| n.id == boss) {
+        (b.pos.x, b.pos.z, b.radius)
+    } else {
+        return;
+    };
+    for n in &mut server.npcs {
+        if n.id == boss { continue; }
+        let mut dx = n.pos.x - bx;
+        let mut dz = n.pos.z - bz;
+        let d2 = dx * dx + dz * dz;
+        let min_d = br + n.radius + pad;
+        if d2 < min_d * min_d {
+            let mut d = d2.sqrt();
+            if d < 1e-4 { dx = 1.0; dz = 0.0; d = 1e-4; }
+            dx /= d; dz /= d;
+            let push = min_d - d;
+            n.pos.x += dx * push;
+            n.pos.z += dz * push;
+        }
+    }
+}
+
 pub struct NpcGpu {
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
@@ -90,7 +113,10 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
     // The renderer visual will follow server-authoritative position.
     let desired = glam::vec3(0.0, 0.6, 35.0);
     let clear = find_clear_spawn(&server, desired, 0.9);
-    let _ = server.spawn_nivita_unique(clear);
+    if let Some(id) = server.spawn_nivita_unique(clear) {
+        // Immediately push away nearby NPCs to avoid initial overlap
+        push_others_from(&mut server, id, 0.5);
+    }
 
     NpcGpu {
         vb,
