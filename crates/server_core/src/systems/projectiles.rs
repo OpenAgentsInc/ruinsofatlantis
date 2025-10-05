@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn integrate_is_deterministic_over_steps() {
         let owner = EntityId(9);
-        let mut p = Projectile {
+        let p = Projectile {
             radius_m: 0.1,
             damage: 1,
             life_s: 10.0,

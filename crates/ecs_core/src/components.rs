@@ -136,6 +136,170 @@ pub enum InputCommand {
     CursorToggle,
 }
 
+/// Unique boss identifier (for indices/telemetry).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct BossId(pub u32);
+
+/// Boss tag containing a stable id for lookups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Boss {
+    pub id: BossId,
+}
+
+/// Display name for an entity (unique bosses, NPCs, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Name(pub String);
+
+/// Marker for entities that must be unique in a scene.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Unique;
+
+/// Armor Class component.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct ArmorClass {
+    pub ac: i32,
+}
+
+/// Saving throw modifiers by ability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct SavingThrows {
+    pub str_mod: i8,
+    pub dex_mod: i8,
+    pub con_mod: i8,
+    pub int_mod: i8,
+    pub wis_mod: i8,
+    pub cha_mod: i8,
+}
+
+/// Common damage types used for resistances and vulnerabilities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub enum DamageType {
+    Acid,
+    Bludgeoning,
+    Cold,
+    Fire,
+    Force,
+    Lightning,
+    Necrotic,
+    Piercing,
+    Poison,
+    Psychic,
+    Radiant,
+    Slashing,
+    Thunder,
+}
+
+/// Conditions for immunities and status effects (subset for MVP).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub enum Condition {
+    Blinded,
+    Charmed,
+    Deafened,
+    Frightened,
+    Grappled,
+    Incapacitated,
+    Invisible,
+    Paralyzed,
+    Petrified,
+    Poisoned,
+    Prone,
+    Restrained,
+    Stunned,
+    Unconscious,
+}
+
+/// List of damage resistances (half damage) for an entity.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Resistances {
+    pub damage: Vec<DamageType>,
+}
+
+/// List of condition immunities for an entity.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Immunities {
+    pub conditions: Vec<Condition>,
+}
+
+/// Legendary Resistances (per-day charges).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct LegendaryResistances {
+    pub per_day: u8,
+    pub remaining: u8,
+}
+
+impl LegendaryResistances {
+    pub fn new(per_day: u8) -> Self {
+        Self { per_day, remaining: per_day }
+    }
+}
+
+/// How legendary resources reset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub enum ResetRule { LongRest, PerEncounter }
+
+/// Legendary Resistances with reset rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct LegendaryResist {
+    pub per_day: u8,
+    pub left: u8,
+    pub reset: ResetRule,
+}
+
+impl LegendaryResist {
+    pub fn new(per_day: u8, reset: ResetRule) -> Self {
+        Self { per_day, left: per_day, reset }
+    }
+}
+
+/// Raw ability scores with proficiency bonus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Abilities {
+    pub str: i8,
+    pub dex: i8,
+    pub con: i8,
+    pub int: i8,
+    pub wis: i8,
+    pub cha: i8,
+    pub prof: i8,
+}
+
+/// Combined defenses: damage resistances and condition immunities.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Defenses {
+    pub resist: Vec<DamageType>,
+    pub immune: Vec<Condition>,
+}
+
+/// Spell identifier newtype.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct SpellId(pub String);
+
+/// Minimal spellbook buckets for MVP boss wiring.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+pub struct Spellbook {
+    pub cantrips: Vec<SpellId>,
+    pub level_1_3: Vec<SpellId>,
+    pub level_4_5: Vec<SpellId>,
+    pub signature: Vec<SpellId>,
+}
+
 /// Health component for damage/death application.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
@@ -231,7 +395,14 @@ mod tests {
         };
         m.validate().expect("valid tri");
         cm.map.insert(key, m.clone());
-        assert!(cm.map.get(&key).is_some());
+        assert!(cm.map.contains_key(&key));
         assert_eq!(cm.map.get(&key).unwrap().indices.len(), 3);
+    }
+
+    #[test]
+    fn legendary_resistances_init() {
+        let lr = LegendaryResistances::new(3);
+        assert_eq!(lr.per_day, 3);
+        assert_eq!(lr.remaining, 3);
     }
 }

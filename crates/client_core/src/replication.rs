@@ -14,6 +14,16 @@ use net_core::snapshot::SnapshotDecode;
 pub struct ReplicationBuffer {
     pub updated_chunks: usize,
     pending_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
+    pub boss_status: Option<BossStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BossStatus {
+    pub name: String,
+    pub ac: i32,
+    pub hp: i32,
+    pub max: i32,
+    pub pos: glam::Vec3,
 }
 
 impl ReplicationBuffer {
@@ -30,7 +40,19 @@ impl ReplicationBuffer {
             self.updated_chunks += 1;
             true
         } else {
-            false
+            let mut slice2: &[u8] = bytes; // reset since first decode may have advanced
+            if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut slice2) {
+                self.boss_status = Some(BossStatus {
+                    name: bs.name,
+                    ac: bs.ac,
+                    hp: bs.hp,
+                    max: bs.max,
+                    pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]),
+                });
+                true
+            } else {
+                false
+            }
         }
     }
 

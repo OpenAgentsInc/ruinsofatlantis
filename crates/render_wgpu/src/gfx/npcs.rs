@@ -65,6 +65,11 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         far_count
     );
 
+    // Spawn the unique boss Nivita on the server at a default position
+    // (renderer visual will follow server-authoritative position).
+    let nivita_pos = glam::vec3(0.0, 0.6, 35.0);
+    let _ = server.spawn_nivita_unique(nivita_pos);
+
     NpcGpu {
         vb,
         ib,

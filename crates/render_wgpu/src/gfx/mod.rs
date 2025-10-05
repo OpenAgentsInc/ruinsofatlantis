@@ -3270,11 +3270,40 @@ impl Renderer {
         if self.sorc_count == 0 || self.sorc_models.is_empty() {
             return;
         }
-        let mut m = self.sorc_models[0];
-        let c = m.to_cols_array();
-        let mut pos = glam::vec3(c[12], c[13], c[14]);
-        // Record previous position before applying motion so palette step sees movement
-        self.sorc_prev_pos = pos;
+        // Read previous position
+        let c_prev = self.sorc_models[0].to_cols_array();
+        let prev_pos = glam::vec3(c_prev[12], c_prev[13], c_prev[14]);
+        self.sorc_prev_pos = prev_pos;
+
+        // If server has a Nivita status, follow it (server-authoritative).
+        if let Some(status) = self.server.nivita_status() {
+            let pos = status.pos;
+            // Face nearest wizard for better presentation
+            let pc_pos = if self.pc_index < self.wizard_models.len() {
+                let cp = self.wizard_models[self.pc_index].to_cols_array();
+                glam::vec3(cp[12], cp[13], cp[14])
+            } else {
+                glam::Vec3::Z
+            };
+            let to = glam::vec3(pc_pos.x - pos.x, 0.0, pc_pos.z - pos.z);
+            let dir = if to.length_squared() > 1e-8 { to.normalize() } else { glam::Vec3::Z };
+            let yaw = dir.x.atan2(dir.z);
+            let m = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(1.0),
+                glam::Quat::from_rotation_y(yaw),
+                pos,
+            );
+            self.sorc_models[0] = m;
+            if let Some(inst) = self.sorc_instances_cpu.get_mut(0) {
+                inst.model = m.to_cols_array_2d();
+                self.queue
+                    .write_buffer(&self.sorc_instances, 0, bytemuck::bytes_of(inst));
+            }
+            return;
+        }
+
+        // Fallback: client-side slow walk toward PC
+        let mut pos = prev_pos;
         let pc_pos = if self.pc_index < self.wizard_models.len() {
             let cp = self.wizard_models[self.pc_index].to_cols_array();
             glam::vec3(cp[12], cp[13], cp[14])
@@ -3288,7 +3317,7 @@ impl Renderer {
             let step = (1.2 * dt).min(dist);
             pos += dir * step;
             let yaw = dir.x.atan2(dir.z);
-            m = glam::Mat4::from_scale_rotation_translation(
+            let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),
                 glam::Quat::from_rotation_y(yaw),
                 pos,
@@ -3300,7 +3329,6 @@ impl Renderer {
                     .write_buffer(&self.sorc_instances, 0, bytemuck::bytes_of(inst));
             }
         }
-        // Keep prev_pos as the position before this move (used by palette step)
     }
 
     fn update_deathknight_from_server(&mut self) {

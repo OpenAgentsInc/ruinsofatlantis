@@ -1115,6 +1115,19 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, hint, 3);
             }
+            // Boss status line (Nivita) — prefer replicated cache; fallback to server.
+            if let Some(bs) = r.repl_buf.boss_status.as_ref() {
+                let line = format!("Boss: {}  HP {}/{}  AC {}", bs.name, bs.hp, bs.max, bs.ac);
+                r.hud
+                    .append_perf_text_line(r.size.width, r.size.height, &line, 4);
+            } else if let Some(st) = r.server.nivita_status() {
+                let line = format!(
+                    "Boss: {}  HP {}/{}  AC {}",
+                    st.name, st.hp, st.max, st.ac
+                );
+                r.hud
+                    .append_perf_text_line(r.size.width, r.size.height, &line, 4);
+            }
         }
         // Short demo hint for first few seconds
         if !r.is_vox_onepath() && r.last_time <= r.demo_hint_until.unwrap_or(0.0) {

@@ -165,6 +165,59 @@ impl SnapshotDecode for DestructibleInstance {
     }
 }
 
+/// Minimal boss status snapshot for HUD/labels.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BossStatusMsg {
+    pub name: String,
+    pub ac: i32,
+    pub hp: i32,
+    pub max: i32,
+    pub pos: [f32; 3],
+}
+
+impl SnapshotEncode for BossStatusMsg {
+    fn encode(&self, out: &mut Vec<u8>) {
+        let n = u16::try_from(self.name.len()).unwrap_or(0);
+        out.extend_from_slice(&n.to_le_bytes());
+        out.extend_from_slice(self.name.as_bytes());
+        out.extend_from_slice(&self.ac.to_le_bytes());
+        out.extend_from_slice(&self.hp.to_le_bytes());
+        out.extend_from_slice(&self.max.to_le_bytes());
+        for c in &self.pos {
+            out.extend_from_slice(&c.to_le_bytes());
+        }
+    }
+}
+
+impl SnapshotDecode for BossStatusMsg {
+    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+        use anyhow::bail;
+        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
+            if inp.len() < N {
+                anyhow::bail!("short read");
+            }
+            let (a, b) = inp.split_at(N);
+            *inp = b;
+            let mut buf = [0u8; N];
+            buf.copy_from_slice(a);
+            Ok(buf)
+        }
+        let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
+        if inp.len() < n { bail!("short name"); }
+        let (name_bytes, rest) = inp.split_at(n);
+        *inp = rest;
+        let name = String::from_utf8(name_bytes.to_vec()).unwrap_or_default();
+        let ac = i32::from_le_bytes(take::<4>(inp)?);
+        let hp = i32::from_le_bytes(take::<4>(inp)?);
+        let max = i32::from_le_bytes(take::<4>(inp)?);
+        let mut pos = [0.0f32; 3];
+        for v in &mut pos {
+            *v = f32::from_le_bytes(take::<4>(inp)?);
+        }
+        Ok(Self { name, ac, hp, max, pos })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +251,24 @@ mod tests {
         let mut slice: &[u8] = &buf;
         let d2 = DestructibleInstance::decode(&mut slice).expect("decode");
         assert_eq!(d, d2);
+    }
+    #[test]
+    fn boss_status_roundtrip() {
+        let s = BossStatusMsg {
+            name: "Nivita".into(),
+            ac: 18,
+            hp: 220,
+            max: 250,
+            pos: [1.0, 2.0, -3.0],
+        };
+        let mut buf = Vec::new();
+        s.encode(&mut buf);
+        let mut slice: &[u8] = &buf;
+        let s2 = BossStatusMsg::decode(&mut slice).expect("decode");
+        assert_eq!(s.name, s2.name);
+        assert_eq!(s.ac, s2.ac);
+        assert_eq!(s.hp, s2.hp);
+        assert_eq!(s.max, s2.max);
+        assert_eq!(s.pos, s2.pos);
     }
 }

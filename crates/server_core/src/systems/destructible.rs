@@ -132,7 +132,7 @@ mod tests {
         let budget = 3usize;
         let processed = greedy_mesh_budget(&grid, &mut dirty, &mut meshes, budget);
         assert!(processed <= budget);
-        assert!(meshes.map.len() > 0);
+        assert!(!meshes.map.is_empty());
     }
 
     #[test]

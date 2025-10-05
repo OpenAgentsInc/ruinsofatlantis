@@ -88,6 +88,7 @@ pub fn handle_buttons(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ecs_core::InputProfile;
     #[test]
     fn pressed_buttons_emit_commands_in_mouselook() {
         let binds = Bindings::default();

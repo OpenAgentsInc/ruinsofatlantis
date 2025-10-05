@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn defaults_present() {
         let db = ProjectileSpecDb::load_default().expect("load");
-        assert!(db.actions.get("AtWillLMB").is_some());
-        assert!(db.actions.get("EncounterQ").is_some());
+        assert!(db.actions.contains_key("AtWillLMB"));
+        assert!(db.actions.contains_key("EncounterQ"));
     }
 }

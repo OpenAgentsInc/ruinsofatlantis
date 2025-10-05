@@ -1,6 +1,6 @@
 # 100: Nivita of the Undertide — Unique Boss NPC
 
-Status: Proposed
+Status: In Progress (MVP wired; server spawn + stats + log)
 
 Owners: Gameplay/Systems (server_core, sim_core, data_runtime), Graphics (render_wgpu integration)
 
@@ -153,3 +153,18 @@ Acceptance Criteria (MVP)
 Notes
 - SRD alignment: spell names reference SRD 5.2.1 terms; continue to keep `NOTICE` accurate. Custom ability “Soul Flay” is non-SRD and should be documented in `GDD.md` when implemented.
 
+Addendum (current change set)
+- ECS: added components in `ecs_core` — `Name`, `Unique`, `ArmorClass`, `SavingThrows`, `Resistances`, `Immunities`, `LegendaryResistances`, `Spellbook`, plus enums `DamageType` and `Condition`. Basic unit test for `LegendaryResistances`.
+- Data: added loader `data_runtime::configs::npc_unique` and `data/config/nivita.toml` with the proposed stats, saves, resistances, immunities, spellbook, and legendary actions.
+- Converters: added `parse_damage_type()` and `parse_condition()` in data_runtime for clean enum mapping.
+- Server: `server_core::ServerState::spawn_nivita_unique(pos)` loads config, spawns a single boss NPC with midpoint HP, radius, and speed, and stores a `NivitaStats` snapshot (Abilities/Saves/Defenses/Legendary/Spellbook). Adds `nivita_status()` for HUD/replication and logs a concise spawn line; increments `boss.nivita.spawns_total`.
+- Renderer: on init, spawns Nivita server-side at the Sorceress position and logs a one-liner with name/hp/ac. On each frame, if `nivita_status()` is present, the Sorceress visual follows the server position (server-authoritative motion); otherwise it falls back to the previous local demo walk. No gameplay mutation client-side.
+- Decoupling: moved string→enum converters into `ecs_core::parse` and removed the temporary `ecs_core` dependency from `data_runtime` to keep loaders ECS‑agnostic.
+- Spawn location: moved the actual `spawn_nivita_unique` call out of renderer init and into server bootstrap (`gfx/npcs.rs::build()`), so the renderer only reads status and follows. The server still logs spawn and counts metrics.
+- Aliases: `ecs_core::parse::parse_condition` accepts common aliases (e.g., "fear"→Frightened, "charm"→Charmed) so TOML is resilient.
+- Saves: default derivation now adds proficiency to INT/WIS/CHA when `[saves]` isn’t provided.
+
+Next Actions
+- Replicate `BossStatus` to client (thin snapshot) and surface a HUD label; keep renderer non‑authoritative.
+- Map `team` to a numeric/team table where AI expects it; attach a capsule shape when the ECS world is wired.
+- Next: optional thin replication to surface name/hp/ac in HUD; later, drive Sorceress visuals from server entity state.
