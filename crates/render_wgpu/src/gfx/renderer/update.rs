@@ -6,6 +6,7 @@ use crate::gfx::Renderer;
 use crate::gfx::chunkcol;
 use crate::gfx::types::{Instance, InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
+#[cfg(feature = "legacy_client_combat")]
 use crate::server_ext::CollideProjectiles;
 #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use glam::DVec3;
@@ -1778,6 +1779,7 @@ impl Renderer {
             }
         }
         // 2.55) Server-side collision vs NPCs (normal single-hit projectiles)
+        #[cfg(feature = "legacy_client_combat")]
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
             let hits = self

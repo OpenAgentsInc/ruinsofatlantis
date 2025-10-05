@@ -1948,7 +1948,10 @@ impl Renderer {
         // Update player transform from input (WASD) then camera follow
         self.update_player_and_camera(dt, aspect);
         // Simple AI: rotate non-PC wizards to face nearest alive zombie so firebolts aim correctly
-        self.update_wizard_ai(dt);
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            self.update_wizard_ai(dt);
+        }
         // Compute local orbit offsets (relative to PC orientation)
         // Adapt lift and look height as we zoom in so the close view
         // sits just behind and slightly above the wizard's head.
@@ -2803,6 +2806,7 @@ impl Renderer {
     }
 
     // moved: turn_towards -> renderer/update.rs
+    #[cfg(feature = "legacy_client_ai")]
     fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
         let mut delta = target - current;
         while delta > std::f32::consts::PI {
@@ -2821,6 +2825,7 @@ impl Renderer {
     }
 
     // moved: update_wizard_ai -> renderer/update.rs
+    #[cfg(feature = "legacy_client_ai")]
     fn update_wizard_ai(&mut self, dt: f32) {
         if self.wizard_count == 0 {
             return;

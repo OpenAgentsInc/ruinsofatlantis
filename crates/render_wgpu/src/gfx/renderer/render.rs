@@ -182,8 +182,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         r.player.yaw = r.scene_inputs.yaw();
         r.apply_pc_transform();
     }
-    // Simple AI: rotate non-PC wizards to face nearest alive zombie so firebolts aim correctly
-    r.update_wizard_ai(dt);
+    // Simple AI (legacy/demo only): rotate non-PC wizards
+    #[cfg(feature = "legacy_client_ai")]
+    {
+        r.update_wizard_ai(dt);
+    }
     // Compute local orbit offsets (relative to PC orientation)
     let near_d = 1.6f32;
     let far_d = 25.0f32;
@@ -712,18 +715,27 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-        // Death Knight health bar (use server HP; lower vertical offset)
-        if r.dk_count > 0
-            && !r.destruct_cfg.vox_sandbox
-            && let Some(m) = r.dk_models.first().copied()
-        {
-            let frac = if let Some(id) = r.dk_id
-                && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
+    // Death Knight health bar (use server HP; lower vertical offset)
+    if r.dk_count > 0
+        && !r.destruct_cfg.vox_sandbox
+        && let Some(m) = r.dk_models.first().copied()
+    {
+        let frac = {
+            #[cfg(feature = "legacy_client_ai")]
             {
-                (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
-            } else {
+                if let Some(id) = r.dk_id
+                    && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
+                {
+                    (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
+                } else {
+                    1.0
+                }
+            }
+            #[cfg(not(feature = "legacy_client_ai"))]
+            {
                 1.0
-            };
+            }
+        };
             let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             bar_entries.push((head.truncate(), frac));
         }

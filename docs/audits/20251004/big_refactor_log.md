@@ -56,6 +56,16 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - Rationale: Keep renderer presentation-only; server/app bootstrap should own entity creation.
 - Tests: render_wgpu tests pass; health bar logic handles `dk_id = None` gracefully.
 
+## Renderer: gate legacy gameplay under features (F-ARCH-002)
+
+- Files:
+  - `crates/render_wgpu/Cargo.toml`: added `legacy_client_ai` and `legacy_client_combat` features (off by default).
+  - `crates/render_wgpu/src/gfx/renderer/render.rs`: gated wizard AI tick behind `legacy_client_ai`.
+  - `crates/render_wgpu/src/gfx/mod.rs`: gated AI helpers behind `legacy_client_ai`.
+  - `crates/render_wgpu/src/gfx/renderer/update.rs`: gated server-side projectile/NPC collision behind `legacy_client_combat`.
+- Rationale: Ensure default builds perform no gameplay mutations from the renderer; legacy/demo behavior is opt-in.
+- Tests: clippy and tests pass with default features; existing feature tests remain valid.
+
 ## Network protocol — add version headers + caps (F-NET-014)
 
 - Files:

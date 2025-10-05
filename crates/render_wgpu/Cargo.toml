@@ -12,6 +12,10 @@ required-features = ["vox_onepath_demo"]
 default = []
 # Enables client-side voxel carve/collider/meshing/debris (legacy path)
 legacy_client_carve = []
+# Enables client-side AI updates (legacy/demo only)
+legacy_client_ai = []
+# Enables client-side combat/collision against NPCs (legacy/demo only)
+legacy_client_combat = []
 # Compiles the one-path voxel demo module and related helpers
 vox_onepath_demo = []
 # Opt-in verbose logging for destructible workflows
