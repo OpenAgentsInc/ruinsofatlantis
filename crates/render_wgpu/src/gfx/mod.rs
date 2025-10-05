@@ -66,6 +66,7 @@ use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use collision_static::chunks::{self as chunkcol, StaticChunk};
+#[cfg(feature = "legacy_client_carve")]
 use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
 use std::collections::{HashMap, HashSet};
 #[allow(unused_imports)]
@@ -264,7 +265,7 @@ pub struct Renderer {
     zombie_models: Vec<glam::Mat4>,
     zombie_cpu: SkinnedMeshCPU,
     zombie_time_offset: Vec<f32>,
-    zombie_ids: Vec<server_core::NpcId>,
+    zombie_ids: Vec<u32>,
     zombie_prev_pos: Vec<glam::Vec3>,
     // Per-instance forward-axis offsets (authoring → world). Calibrated on movement.
     zombie_forward_offsets: Vec<f32>,
@@ -275,7 +276,7 @@ pub struct Renderer {
     dk_models: Vec<glam::Mat4>,
     dk_cpu: SkinnedMeshCPU,
     dk_time_offset: Vec<f32>,
-    dk_id: Option<server_core::NpcId>,
+    dk_id: Option<u32>,
     dk_prev_pos: glam::Vec3,
     // Sorceress
     sorc_palettes_buf: wgpu::Buffer,
@@ -364,8 +365,10 @@ pub struct Renderer {
     controller_alt_hold: bool,
 
     // --- Destructible (voxel) state ---
+    #[cfg(feature = "legacy_client_carve")]
     destruct_cfg: DestructibleConfig,
     voxel_grid: Option<VoxelGrid>,
+    #[cfg(feature = "legacy_client_carve")]
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
     // Multi‑proxy: one voxel proxy per destructible instance
@@ -424,6 +427,7 @@ pub struct Renderer {
         not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
         allow(dead_code)
     )]
+    #[allow(dead_code)]
     voxel_grid_initial: Option<VoxelGrid>,
     #[cfg_attr(
         not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
@@ -466,6 +470,7 @@ pub struct Renderer {
     // No interactive death UI — we show text only.
 
     // Server state (NPCs/health)
+    #[cfg(feature = "legacy_client_ai")]
     server: server_core::ServerState,
 
     // Wizard health (including PC at pc_index)
@@ -513,6 +518,7 @@ pub struct DestructInstance {
 // Per‑destructible voxel proxy container
 pub struct VoxProxy {
     pub grid: voxel_proxy::VoxelGrid,
+    #[cfg(feature = "legacy_client_carve")]
     pub chunk_queue: server_core::destructible::queue::ChunkQueue,
     pub queue_len: usize,
     pub colliders: Vec<chunkcol::StaticChunk>,
@@ -2389,9 +2395,9 @@ impl Renderer {
         }
         // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
         use std::collections::HashMap;
-        let mut npc_map: HashMap<server_core::NpcId, (i32, i32, bool, f32)> = HashMap::new();
+        let mut npc_map: HashMap<u32, (i32, i32, bool, f32)> = HashMap::new();
         for n in &self.server.npcs {
-            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
+            npc_map.insert(n.id.0, (n.hp, n.max_hp, n.alive, n.radius));
         }
         for (i, id) in self.zombie_ids.iter().enumerate() {
             if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
@@ -2988,11 +2994,11 @@ impl Renderer {
         let joints = self.zombie_joints as usize;
         // Build quick lookup for attack state and radius using server NPCs
         use std::collections::HashMap;
-        let mut attack_map: HashMap<server_core::NpcId, bool> = HashMap::new();
-        let mut radius_map: HashMap<server_core::NpcId, f32> = HashMap::new();
+        let mut attack_map: HashMap<u32, bool> = HashMap::new();
+        let mut radius_map: HashMap<u32, f32> = HashMap::new();
         for n in &self.server.npcs {
-            attack_map.insert(n.id, n.attack_anim > 0.0);
-            radius_map.insert(n.id, n.radius);
+            attack_map.insert(n.id.0, n.attack_anim > 0.0);
+            radius_map.insert(n.id.0, n.radius);
         }
         // Wizard positions
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
@@ -3041,7 +3047,7 @@ impl Renderer {
                 .cloned()
                 .unwrap_or("__static".to_string());
             // Prioritize attack animation when the server reports it or if in melee contact
-            let zid = *self.zombie_ids.get(i).unwrap_or(&server_core::NpcId(0));
+            let zid = *self.zombie_ids.get(i).unwrap_or(&0u32);
             let mut is_attacking = attack_map.get(&zid).copied().unwrap_or(false);
             // In-contact heuristic: nearest wizard within (z_radius + wizard_r + pad)
             let z_radius = radius_map.get(&zid).copied().unwrap_or(0.95);
@@ -3169,7 +3175,7 @@ impl Renderer {
         };
         let moving = (current_pos - self.dk_prev_pos).length_squared() > 1e-4;
         let attack_now = if let Some(id) = self.dk_id
-            && let Some(n) = self.server.npcs.iter().find(|n| n.id == id)
+            && let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id)
         {
             n.attack_anim > 0.0
         } else {
@@ -3338,7 +3344,7 @@ impl Renderer {
         } else {
             return;
         };
-        let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id == id) {
+        let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id) {
             n
         } else {
             return;
@@ -3385,9 +3391,9 @@ impl Renderer {
     fn update_zombies_from_server(&mut self) {
         // Build map from id -> pos
         use std::collections::HashMap;
-        let mut pos_map: HashMap<server_core::NpcId, glam::Vec3> = HashMap::new();
+        let mut pos_map: HashMap<u32, glam::Vec3> = HashMap::new();
         for n in &self.server.npcs {
-            pos_map.insert(n.id, n.pos);
+            pos_map.insert(n.id.0, n.pos);
         }
         // Collect wizard positions to orient zombies toward nearest when stationary/attacking
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
@@ -3458,7 +3464,7 @@ impl Renderer {
                         .server
                         .npcs
                         .iter()
-                        .find(|n| n.id == *id)
+                        .find(|n| n.id.0 == *id)
                         .map(|n| n.radius)
                         .unwrap_or(0.95);
                     let wizard_r = 0.7f32;

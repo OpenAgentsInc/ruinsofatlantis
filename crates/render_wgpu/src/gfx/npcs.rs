@@ -10,11 +10,13 @@ pub struct NpcGpu {
     pub index_count: u32,
     pub instances: wgpu::Buffer,
     pub models: Vec<glam::Mat4>,
+    #[cfg(feature = "legacy_client_ai")]
     pub server: server_core::ServerState,
 }
 
 pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
     let (vb, ib, index_count) = super::mesh::create_cube(device);
+    #[cfg(feature = "legacy_client_ai")]
     let mut server = server_core::ServerState::new();
     // Keep the close/mid zombie rings; drop the extreme far ring that caused
     // distant floating health bars.
@@ -29,13 +31,17 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
     let far_count = 0usize; // remove far ring entirely
     let _far_radius = terrain_extent * 0.7;
     // Spawn rings (hp scales mildly with distance)
-    server.ring_spawn(near_count, near_radius, 20);
-    server.ring_spawn(mid1_count, mid1_radius, 25);
-    server.ring_spawn(mid2_count, mid2_radius, 30);
-    server.ring_spawn(mid3_count, mid3_radius, 35);
+    #[cfg(feature = "legacy_client_ai")]
+    {
+        server.ring_spawn(near_count, near_radius, 20);
+        server.ring_spawn(mid1_count, mid1_radius, 25);
+        server.ring_spawn(mid2_count, mid2_radius, 30);
+        server.ring_spawn(mid3_count, mid3_radius, 35);
+    }
 
     let mut instances_cpu: Vec<super::types::Instance> = Vec::new();
     let mut models: Vec<glam::Mat4> = Vec::new();
+    #[cfg(feature = "legacy_client_ai")]
     for npc in &server.npcs {
         let m = glam::Mat4::from_scale_rotation_translation(
             glam::Vec3::splat(1.2),
@@ -55,6 +61,7 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
 
+    #[cfg(feature = "legacy_client_ai")]
     log::debug!(
         "spawned {} NPCs across rings: near={}, mid1={}, mid2={}, mid3={}, far={}",
         server.npcs.len(),
@@ -74,6 +81,7 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         index_count,
         instances,
         models,
+        #[cfg(feature = "legacy_client_ai")]
         server,
     }
 }

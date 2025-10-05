@@ -19,6 +19,7 @@ use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
     any(feature = "legacy_client_carve", feature = "vox_onepath_demo"),
     not(target_arch = "wasm32")
 ))]
+#[allow(unused_imports)]
 use std::time::Instant;
 #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
@@ -387,7 +388,7 @@ impl Renderer {
         let impact0 = self.impact_id;
         let max_debris0 = self.destruct_cfg.max_debris;
         let vp = self.get_or_spawn_proxy(did);
-        let dims = vp.grid.dims();
+        let _dims = vp.grid.dims();
         destruct_log!(
             "[destruct] carve: did={:?} grid dims={}x{}x{} vm={:.3}",
             did,
@@ -821,12 +822,12 @@ impl Renderer {
             let nx = dims.x.div_ceil(csz.x);
             let ny = dims.y.div_ceil(csz.y);
             let nz = dims.z.div_ceil(csz.z);
-            let mut enq = 0usize;
+            let mut _enq = 0usize;
             for cz in 0..nz {
                 for cy in 0..ny {
                     for cx in 0..nx {
                         rv.chunk_queue.enqueue_many([glam::UVec3::new(cx, cy, cz)]);
-                        enq += 1;
+                        _enq += 1;
                     }
                 }
             }
@@ -846,7 +847,7 @@ impl Renderer {
                 }
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
-            let total = self
+            let _total = self
                 .voxel_meshes
                 .keys()
                 .filter(|(id, _, _, _)| id.0 == ruin_idx)
@@ -880,8 +881,8 @@ impl Renderer {
             return;
         }
         let grid = &rv.grid;
-        let mut inserted = 0usize;
-        let mut removed = 0usize;
+        let mut _inserted = 0usize;
+        let mut _removed = 0usize;
         for c in &chunks {
             let key = (crate::gfx::DestructibleId(ruin_idx), c.x, c.y, c.z);
             let h = grid.chunk_occ_hash(*c);
@@ -893,7 +894,7 @@ impl Renderer {
                 self.voxel_meshes.remove(&key);
                 self.voxel_hashes.remove(&key);
                 rv.colliders.retain(|sc| sc.coord != *c);
-                removed += 1;
+                _removed += 1;
             } else {
                 let mesh_cpu = ecs_core::components::MeshCpu {
                     positions: mb.positions.clone(),
@@ -914,7 +915,7 @@ impl Renderer {
                     chunkcol::swap_in_updates(&mut rv.colliders, vec![sc]);
                     rv.static_index = Some(chunkcol::rebuild_static_index(&rv.colliders));
                 }
-                inserted += 1;
+                _inserted += 1;
             }
         }
         rv.queue_len = rv.chunk_queue.len();
@@ -1801,7 +1802,7 @@ impl Renderer {
                 }
                 // Damage floater above NPC head (terrain/instance-aware)
                 // 1) Death Knight (handle first so we can despawn on fatal)
-                if self.dk_id.is_some() && self.dk_id.unwrap() == h.npc {
+                if self.dk_id.is_some() && self.dk_id.unwrap() == h.npc.0 {
                     // Spawn damage near DK head using its model matrix if present
                     if let Some(m) = self.dk_models.first().copied() {
                         let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
@@ -1815,7 +1816,7 @@ impl Renderer {
                         self.dk_count = 0;
                         self.dk_id = None;
                     }
-                } else if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc) {
+                } else if let Some(idx) = self.zombie_ids.iter().position(|id| *id == h.npc.0) {
                     let m = self
                         .zombie_models
                         .get(idx)
@@ -2519,7 +2520,7 @@ impl Renderer {
         let r2 = radius * radius;
         // Handle DK first for despawn behavior
         if let Some(dk_id) = self.dk_id
-            && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id == dk_id)
+            && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id.0 == dk_id)
             && n.alive
         {
             let dx = n.pos.x - center.x;
@@ -2620,7 +2621,7 @@ impl Renderer {
         // Generic NPCs + zombies
         let mut k = 0usize;
         while k < self.server.npcs.len() {
-            let id = self.server.npcs[k].id;
+            let id = self.server.npcs[k].id.0;
             if !self.server.npcs[k].alive {
                 k += 1;
                 continue;

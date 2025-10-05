@@ -7,6 +7,12 @@
 // Use shared crates directly under their own names.
 pub use client_core;
 pub use ecs_core;
+#[cfg(any(
+    feature = "legacy_client_ai",
+    feature = "legacy_client_combat",
+    feature = "legacy_client_carve",
+    feature = "vox_onepath_demo"
+))]
 pub use server_core;
 
 // Renderer modules live under `gfx/*` to preserve internal paths.
@@ -17,4 +23,5 @@ pub mod prelude {
 pub use gfx::*;
 
 // Renderer-specific extensions over server_core.
+#[cfg(feature = "legacy_client_combat")]
 pub mod server_ext;

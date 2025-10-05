@@ -73,6 +73,16 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - Rationale: Default builds do not mutate server state from the renderer.
 - Tests: workspace tests remain green.
 
+## Towards decoupling render_wgpu from server_core (F-ARCH-002)
+
+- Made `server_core` an optional dependency in `render_wgpu` and wired feature flags to include it when legacy behavior is enabled.
+- Introduced `u32` IDs in renderer (zombie/deathknight) to avoid hard dependency on `server_core::NpcId` in default paths.
+- Gated server-backed modules and fields:
+  - `server_ext` only builds with `legacy_client_combat`.
+  - `Renderer.server` and destructible config/queue present only with `legacy_client_ai`/`legacy_client_carve`.
+  - `zombies::build_instances` dual signatures (with/without server).
+- Current default: legacy features enabled to maintain behavior; next step is to flip default off once client_core replication exposes a read-only NPC view.
+
 ## Network protocol — add version headers + caps (F-NET-014)
 
 - Files:

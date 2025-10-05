@@ -63,6 +63,7 @@ pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
     })
 }
 
+#[cfg(feature = "legacy_client_ai")]
 pub fn build_instances(
     device: &wgpu::Device,
     terrain_cpu: &crate::gfx::terrain::TerrainCPU,
@@ -72,12 +73,12 @@ pub fn build_instances(
     wgpu::Buffer,
     Vec<InstanceSkin>,
     Vec<glam::Mat4>,
-    Vec<server_core::NpcId>,
+    Vec<u32>,
     u32,
 ) {
     let mut instances_cpu: Vec<InstanceSkin> = Vec::new();
     let mut models: Vec<glam::Mat4> = Vec::new();
-    let mut ids: Vec<server_core::NpcId> = Vec::new();
+    let mut ids: Vec<u32> = Vec::new();
     for (idx, npc) in server.npcs.iter().enumerate() {
         // Snap initial zombie spawn to terrain height
         let (h, _n) = crate::gfx::terrain::height_at(terrain_cpu, npc.pos.x, npc.pos.z);
@@ -88,7 +89,7 @@ pub fn build_instances(
             pos,
         );
         models.push(m);
-        ids.push(npc.id);
+        ids.push(npc.id.0);
         instances_cpu.push(InstanceSkin {
             model: m.to_cols_array_2d(),
             color: [1.0, 1.0, 1.0],
@@ -104,6 +105,30 @@ pub fn build_instances(
     });
     let count = instances_cpu.len() as u32;
     (instances, instances_cpu, models, ids, count)
+}
+
+#[cfg(not(feature = "legacy_client_ai"))]
+pub fn build_instances(
+    device: &wgpu::Device,
+    _terrain_cpu: &crate::gfx::terrain::TerrainCPU,
+    zombie_joints: u32,
+) -> (
+    wgpu::Buffer,
+    Vec<InstanceSkin>,
+    Vec<glam::Mat4>,
+    Vec<u32>,
+    u32,
+) {
+    let instances_cpu: Vec<InstanceSkin> = Vec::new();
+    let models: Vec<glam::Mat4> = Vec::new();
+    let ids: Vec<u32> = Vec::new();
+    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("zombie-instances"),
+        contents: bytemuck::cast_slice(&instances_cpu),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    });
+    let _ = zombie_joints;
+    (instances, instances_cpu, models, ids, 0u32)
 }
 
 pub fn forward_offset(cpu: &ra_assets::types::SkinnedMeshCPU) -> f32 {

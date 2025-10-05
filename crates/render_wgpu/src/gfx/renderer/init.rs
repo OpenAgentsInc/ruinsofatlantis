@@ -1023,9 +1023,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     );
     hud.upload_atlas(&queue);
 
-    // Zombie instances from server
+    // Zombie instances (server-backed when legacy_client_ai enabled)
+    #[cfg(feature = "legacy_client_ai")]
     let (zombie_instances, zombie_instances_cpu, zombie_models, zombie_ids, zombie_count) =
         zombies::build_instances(&device, &terrain_cpu, &server, zombie_joints);
+    #[cfg(not(feature = "legacy_client_ai"))]
+    let (zombie_instances, zombie_instances_cpu, zombie_models, zombie_ids, zombie_count) =
+        zombies::build_instances(&device, &terrain_cpu, zombie_joints);
     let total_z_mats = zombie_count as usize * zombie_joints as usize;
     let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("zombie-palettes"),

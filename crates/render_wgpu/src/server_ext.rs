@@ -1,3 +1,4 @@
+// Empty file if feature not enabled; the module is gated in lib.rs
 use server_core::{HitEvent, ServerState};
 
 /// Extension trait adding projectile collision to ServerState using the renderer's Projectile type.

@@ -693,43 +693,53 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             bar_entries.push((head.truncate(), frac));
         }
         // Bars for alive zombies
-        use std::collections::HashMap;
-        let mut npc_map: HashMap<server_core::NpcId, (i32, i32, bool, f32)> = HashMap::new();
-        for n in &r.server.npcs {
-            npc_map.insert(n.id, (n.hp, n.max_hp, n.alive, n.radius));
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            use std::collections::HashMap;
+            let mut npc_map: HashMap<u32, (i32, i32, bool, f32)> = HashMap::new();
+            for n in &r.server.npcs {
+                npc_map.insert(n.id.0, (n.hp, n.max_hp, n.alive, n.radius));
+            }
+            for (i, id) in r.zombie_ids.iter().enumerate() {
+                if r.destruct_cfg.vox_sandbox {
+                    continue;
+                }
+                if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied()
+                    && alive
+                {
+                    let m = r
+                        .zombie_models
+                        .get(i)
+                        .copied()
+                        .unwrap_or(glam::Mat4::IDENTITY);
+                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                    let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
+                    bar_entries.push((head.truncate(), frac));
+                }
+            }
         }
-        for (i, id) in r.zombie_ids.iter().enumerate() {
+        #[cfg(not(feature = "legacy_client_ai"))]
+        for _ in &r.zombie_ids {
             if r.destruct_cfg.vox_sandbox {
                 continue;
             }
-            if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied()
-                && alive
-            {
-                let m = r
-                    .zombie_models
-                    .get(i)
-                    .copied()
-                    .unwrap_or(glam::Mat4::IDENTITY);
-                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-                let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
-                bar_entries.push((head.truncate(), frac));
-            }
+            // No server data; skip zombie bars in non-legacy mode
         }
         // Death Knight health bar (use server HP; lower vertical offset)
         if r.dk_count > 0
             && !r.destruct_cfg.vox_sandbox
             && let Some(m) = r.dk_models.first().copied()
         {
-            let frac = {
-                #[cfg(feature = "legacy_client_ai")]
+        let frac = {
+            #[cfg(feature = "legacy_client_ai")]
+            {
+                if let Some(id) = r.dk_id
+                    && let Some(n) = r.server.npcs.iter().find(|n| n.id.0 == id)
                 {
-                    if let Some(id) = r.dk_id
-                        && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
-                    {
-                        (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
-                    } else {
-                        1.0
-                    }
+                    (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
+                } else {
+                    1.0
+                }
                 }
                 #[cfg(not(feature = "legacy_client_ai"))]
                 {
