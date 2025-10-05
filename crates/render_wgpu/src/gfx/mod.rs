@@ -1947,6 +1947,12 @@ impl Renderer {
         renderer::render::render_impl(self)
     }
 
+    /// Recreate swapchain and sized resources using the current window size.
+    pub fn recreate_surface_current_size(&mut self, window: &winit::window::Window) {
+        let size = window.inner_size();
+        self.resize(size);
+    }
+
     /// Back-compat stub for old render body.
     pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {
         renderer::render::render_impl(self)

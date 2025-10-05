@@ -134,9 +134,8 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = state.render() {
                     match err {
-                        SurfaceError::Lost | SurfaceError::Outdated => {
-                            state.resize(window.inner_size())
-                        }
+                        SurfaceError::Lost | SurfaceError::Outdated => state
+                            .recreate_surface_current_size(window),
                         SurfaceError::OutOfMemory => event_loop.exit(),
                         e => eprintln!("render error: {e:?}"),
                     }
