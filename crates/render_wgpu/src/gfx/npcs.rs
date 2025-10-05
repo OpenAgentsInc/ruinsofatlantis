@@ -20,15 +20,15 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
     let mut server = server_core::ServerState::new();
     // Keep the close/mid zombie rings; drop the extreme far ring that caused
     // distant floating health bars.
-    let near_count = 8usize; // was 10
-    let near_radius = 15.0f32;
-    let mid1_count = 12usize; // was 16
-    let mid1_radius = 30.0f32;
-    let mid2_count = 15usize; // was 20
-    let mid2_radius = 45.0f32;
-    let mid3_count = 18usize; // was 24
-    let mid3_radius = 60.0f32;
-    let far_count = 0usize; // remove far ring entirely
+    let _near_count = 8usize; // was 10
+    let _near_radius = 15.0f32;
+    let _mid1_count = 12usize; // was 16
+    let _mid1_radius = 30.0f32;
+    let _mid2_count = 15usize; // was 20
+    let _mid2_radius = 45.0f32;
+    let _mid3_count = 18usize; // was 24
+    let _mid3_radius = 60.0f32;
+    let _far_count = 0usize; // remove far ring entirely
     let _far_radius = terrain_extent * 0.7;
     // Spawn rings (hp scales mildly with distance)
     #[cfg(feature = "legacy_client_ai")]
@@ -39,8 +39,8 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         server.ring_spawn(mid3_count, mid3_radius, 35);
     }
 
-    let mut instances_cpu: Vec<super::types::Instance> = Vec::new();
-    let mut models: Vec<glam::Mat4> = Vec::new();
+    let instances_cpu: Vec<super::types::Instance> = Vec::new();
+    let models: Vec<glam::Mat4> = Vec::new();
     #[cfg(feature = "legacy_client_ai")]
     for npc in &server.npcs {
         let m = glam::Mat4::from_scale_rotation_translation(

@@ -367,6 +367,10 @@ pub struct Renderer {
     // --- Destructible (voxel) state ---
     #[cfg(feature = "legacy_client_carve")]
     destruct_cfg: DestructibleConfig,
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     voxel_grid: Option<VoxelGrid>,
     #[cfg(feature = "legacy_client_carve")]
     chunk_queue: ChunkQueue,
@@ -383,6 +387,10 @@ pub struct Renderer {
     // One-path demo status (optional): (ray, carve, mesh)
     vox_onepath_ui: Option<(bool, bool, bool)>,
     // Deterministic debris seeding counter
+    #[cfg_attr(
+        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
+        allow(dead_code)
+    )]
     impact_id: u64,
 
     // Voxel chunk GPU meshes (keyed by destructible id + chunk coord)
@@ -420,6 +428,7 @@ pub struct Renderer {
     // --- Replication (local loop) ---
     repl_rx: Option<net_core::channel::Rx>,
     repl_buf: client_core::replication::ReplicationBuffer,
+    #[cfg_attr(not(feature = "legacy_client_ai"), allow(dead_code))]
     boss_status_next_emit: f32,
 
     // Demo helpers
@@ -739,11 +748,8 @@ impl Renderer {
             self.zombie_joints,
         );
         #[cfg(not(feature = "legacy_client_ai"))]
-        let (zinst, zcpu, zmodels, zids, zcount) = zombies::build_instances(
-            &self.device,
-            &self.terrain_cpu,
-            self.zombie_joints,
-        );
+        let (zinst, zcpu, zmodels, zids, zcount) =
+            zombies::build_instances(&self.device, &self.terrain_cpu, self.zombie_joints);
         self.zombie_instances = zinst;
         self.zombie_instances_cpu = zcpu;
         self.zombie_models = zmodels.clone();
@@ -2828,6 +2834,7 @@ impl Renderer {
 
 impl Renderer {
     // moved: yaw_from_model -> renderer/update.rs
+    #[allow(dead_code)]
     fn yaw_from_model(m: &glam::Mat4) -> f32 {
         let f = *m * glam::Vec4::new(0.0, 0.0, 1.0, 0.0);
         f32::atan2(f.x, f.z)
@@ -3014,12 +3021,16 @@ impl Renderer {
         }
         // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
-        // Build quick lookup for attack state and radius using server NPCs
+        // Build quick lookup for attack state and radius from replication; fallback to server when legacy is enabled
         use std::collections::HashMap;
         let mut attack_map: HashMap<u32, bool> = HashMap::new();
         let mut radius_map: HashMap<u32, f32> = HashMap::new();
+        for n in &self.repl_buf.npcs {
+            attack_map.insert(n.id, n.attack_anim > 0.0);
+            radius_map.insert(n.id, n.radius);
+        }
         #[cfg(feature = "legacy_client_ai")]
-        {
+        if attack_map.is_empty() {
             for n in &self.server.npcs {
                 attack_map.insert(n.id.0, n.attack_anim > 0.0);
                 radius_map.insert(n.id.0, n.radius);

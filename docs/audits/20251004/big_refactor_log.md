@@ -137,3 +137,9 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 
 - Tracking
   - #99 marked ready to close after CI confirms. #100 partially complete (CI updated); feature combo checks remain gated as planned.
+- Issue #101: Replicated HUD completeness (DK + NPCs)
+  - Renderer HUD now uses replication exclusively by default:
+    - Zombie nameplates and bars filter alive NPCs via `ReplicationBuffer.npcs` (fallback to server only under `legacy_client_ai`).
+    - Death Knight banner and HP bar prefer `BossStatusMsg`; if replication is absent, DK HP bar is omitted in default builds (server fallback gated under legacy feature).
+    - Zombie animation attack state and radius selection for palette updates now derive from replication; server fallback only under legacy.
+  - Verified `--no-default-features` build shows no server reads in HUD paths; clippy/tests green.

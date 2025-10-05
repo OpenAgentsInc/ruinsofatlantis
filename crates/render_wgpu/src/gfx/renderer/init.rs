@@ -11,11 +11,15 @@ use data_runtime::{loader as data_loader, zone::ZoneManifest};
 use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use glam::{DVec3, UVec3};
 #[cfg(feature = "legacy_client_carve")]
 use server_core::destructible::config::DestructibleConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")))]
+use voxel_proxy::VoxelGrid;
+#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
 use voxel_proxy::{VoxelGrid, VoxelProxyMeta, voxelize_surface_fill};
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;

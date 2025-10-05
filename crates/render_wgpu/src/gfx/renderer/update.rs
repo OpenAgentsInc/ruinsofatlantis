@@ -1650,14 +1650,12 @@ impl Renderer {
                         } else {
                             #[cfg(feature = "legacy_client_ai")]
                             {
-                                let wpos =
-                                    (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                                let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
                                 for n in &self.server.npcs {
                                     if !n.alive {
                                         continue;
                                     }
-                                    let d =
-                                        glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
+                                    let d = glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
                                     if d < target_dist {
                                         target_dist = d;
                                     }
@@ -1732,7 +1730,10 @@ impl Renderer {
                             continue;
                         }
                     }
+                    #[cfg(feature = "legacy_client_ai")]
                     let mut exploded = false;
+                    #[cfg(not(feature = "legacy_client_ai"))]
+                    let exploded = false;
                     // collide against any alive NPC cylinder in XZ
                     #[cfg(feature = "legacy_client_ai")]
                     if !self.server.npcs.is_empty() {
@@ -2377,9 +2378,13 @@ impl Renderer {
         let mut instances: Vec<Instance> = Vec::with_capacity(self.debris.len());
         let vsize = {
             #[cfg(feature = "legacy_client_carve")]
-            { self.destruct_cfg.voxel_size_m.0 as f32 }
+            {
+                self.destruct_cfg.voxel_size_m.0 as f32
+            }
             #[cfg(not(feature = "legacy_client_carve"))]
-            { 0.25f32 }
+            {
+                0.25f32
+            }
         };
         let half = vsize * 0.5;
         let mut i = 0usize;

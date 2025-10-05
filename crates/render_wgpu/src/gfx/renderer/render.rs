@@ -6,6 +6,7 @@ use wgpu::SurfaceError;
 #[cfg(target_arch = "wasm32")]
 use crate::gfx::types::Globals;
 use crate::gfx::{camera_sys, terrain, types::Model};
+#[cfg(feature = "legacy_client_ai")]
 use net_core::snapshot::SnapshotEncode;
 
 /// Full render implementation (moved from gfx/mod.rs).
@@ -766,30 +767,31 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         if r.dk_count > 0
             && {
                 #[cfg(feature = "legacy_client_carve")]
-                { !r.destruct_cfg.vox_sandbox }
+                {
+                    !r.destruct_cfg.vox_sandbox
+                }
                 #[cfg(not(feature = "legacy_client_carve"))]
-                { true }
+                {
+                    true
+                }
             }
             && let Some(m) = r.dk_models.first().copied()
         {
-            let frac = {
+            // Prefer replication; if not present, only fallback under legacy feature.
+            if let Some(bs) = r.repl_buf.boss_status.as_ref() {
+                let frac = (bs.hp.max(0) as f32) / (bs.max.max(1) as f32);
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                bar_entries.push((head.truncate(), frac));
+            } else {
                 #[cfg(feature = "legacy_client_ai")]
+                if let Some(id) = r.dk_id
+                    && let Some(n) = r.server.npcs.iter().find(|n| n.id.0 == id)
                 {
-                    if let Some(id) = r.dk_id
-                        && let Some(n) = r.server.npcs.iter().find(|n| n.id.0 == id)
-                    {
-                        (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
-                    } else {
-                        1.0
-                    }
+                    let frac = (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32);
+                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                    bar_entries.push((head.truncate(), frac));
                 }
-                #[cfg(not(feature = "legacy_client_ai"))]
-                {
-                    1.0
-                }
-            };
-            let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-            bar_entries.push((head.truncate(), frac));
+            }
         }
         // Queue bars vertices and draw to the active target
         r.bars.queue_entries(
@@ -854,15 +856,27 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             );
             r.nameplates.draw(&mut encoder, target_view);
         }
-        // NPC nameplates: skip dead
+        // NPC nameplates: prefer replication to filter out dead
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
-        for (idx, m) in r.zombie_models.iter().enumerate() {
-            #[cfg(feature = "legacy_client_ai")]
-            if let Some(npc) = r.server.npcs.get(idx) && !npc.alive {
+        use std::collections::HashSet;
+        let mut alive: HashSet<u32> = HashSet::new();
+        for n in &r.repl_buf.npcs {
+            if n.alive { alive.insert(n.id); }
+        }
+        #[cfg(feature = "legacy_client_ai")]
+        if alive.is_empty() {
+            for n in &r.server.npcs {
+                if n.alive { alive.insert(n.id.0); }
+            }
+        }
+        for (idx, id) in r.zombie_ids.iter().enumerate() {
+            if !alive.is_empty() && !alive.contains(id) {
                 continue;
             }
-            let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-            npc_positions.push(head.truncate());
+            if let Some(m) = r.zombie_models.get(idx).copied() {
+                let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                npc_positions.push(head.truncate());
+            }
         }
         if !npc_positions.is_empty() {
             let target_view = if r.direct_present {
@@ -1154,36 +1168,21 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 cast_label,
             );
             // Boss banner (top-center) via replicated cache or server fallback
-            let boss_line = if let Some(bs) = r.repl_buf.boss_status.as_ref() {
-                Some(format!(
+            let mut boss_line: Option<String> = None;
+            if let Some(bs) = r.repl_buf.boss_status.as_ref() {
+                boss_line = Some(format!(
                     "{} — HP {}/{}  AC {}",
                     bs.name, bs.hp, bs.max, bs.ac
-                ))
-            } else if {
-                #[cfg(feature = "legacy_client_ai")]
-                {
-                    if let Some(st) = r.server.nivita_status() {
-                        r.hud.append_center_text(
-                            r.size.width,
-                            r.size.height,
-                            &format!("{} — HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac),
-                            20.0,
-                            [0.95, 0.98, 1.0, 0.95],
-                        );
-                        true
-                    } else {
-                        false
-                    }
-                }
-                #[cfg(not(feature = "legacy_client_ai"))]
-                {
-                    false
-                }
-            } {
-                None
+                ));
             } else {
-                None
-            };
+                #[cfg(feature = "legacy_client_ai")]
+                if let Some(st) = r.server.nivita_status() {
+                    boss_line = Some(format!(
+                        "{} — HP {}/{}  AC {}",
+                        st.name, st.hp, st.max, st.ac
+                    ));
+                }
+            }
             if let Some(txt) = boss_line {
                 r.hud.append_center_text(
                     r.size.width,
