@@ -1730,6 +1730,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         destruct_instances: scene_build.destruct_instances,
         repl_rx: None,
         repl_buf: Default::default(),
+        boss_status_next_emit: 0.0,
         voxel_model_bg,
         debris_vb,
         debris_ib,

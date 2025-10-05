@@ -173,7 +173,7 @@ mod tests {
             pos: Vec3::new(-2.0, 0.0, 0.0),
             vel: Vec3::new(4.0, 0.0, 0.0),
         }];
-        let segs = integrate(&mut projectiles, 0.25);
+        let segs = integrate(&mut projectiles, 0.5);
         let mut targets = vec![(
             EntityId(2),
             CollisionShape::Sphere {

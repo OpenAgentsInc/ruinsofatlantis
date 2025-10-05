@@ -6,6 +6,7 @@ use wgpu::SurfaceError;
 #[cfg(target_arch = "wasm32")]
 use crate::gfx::types::Globals;
 use crate::gfx::{camera_sys, terrain, types::Model};
+use net_core::snapshot::SnapshotEncode;
 
 /// Full render implementation (moved from gfx/mod.rs).
 pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
@@ -1008,6 +1009,20 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     log::debug!("submit: normal path");
+    // Periodically publish BossStatus into the local replication buffer (simulated channel)
+    if r.last_time >= r.boss_status_next_emit && let Some(st) = r.server.nivita_status() {
+            let msg = net_core::snapshot::BossStatusMsg {
+                name: st.name,
+                ac: st.ac,
+                hp: st.hp,
+                max: st.max,
+                pos: [st.pos.x, st.pos.y, st.pos.z],
+            };
+            let mut buf = Vec::new();
+            msg.encode(&mut buf);
+            let _ = r.repl_buf.apply_message(&buf);
+            r.boss_status_next_emit = r.last_time + 1.0;
+    }
     // HUD
     let pc_hp = r
         .wizard_hp
@@ -1072,6 +1087,23 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 cd3,
                 cast_label,
             );
+            // Boss banner (top-center) via replicated cache or server fallback
+            let boss_line = if let Some(bs) = r.repl_buf.boss_status.as_ref() {
+                Some(format!("{} — HP {}/{}  AC {}", bs.name, bs.hp, bs.max, bs.ac))
+            } else if let Some(st) = r.server.nivita_status() {
+                Some(format!("{} — HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac))
+            } else {
+                None
+            };
+            if let Some(txt) = boss_line {
+                r.hud.append_center_text(
+                    r.size.width,
+                    r.size.height,
+                    &txt,
+                    20.0,
+                    [0.95, 0.98, 1.0, 0.95],
+                );
+            }
         } else {
             r.hud.reset();
         }

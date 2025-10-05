@@ -117,13 +117,21 @@ mod tests {
     #[test]
     fn carve_then_mesh_processes_within_budget() {
         let mut grid = mk_grid(UVec3::new(32, 32, 32), UVec3::new(8, 8, 8), 0.25);
+        // Seed a small solid region so carving creates real changes
+        for x in 1..6 {
+            for y in 1..6 {
+                for z in 1..6 {
+                    grid.set(x, y, z, true);
+                }
+            }
+        }
         let mut dirty = ChunkDirty::default();
         let mut meshes = ChunkMesh::default();
         let cfg = DestructibleConfig::default();
         let req = CarveRequest {
             did: 1,
             center_m: glam::DVec3::new(2.5, 2.5, 2.5),
-            radius_m: 0.6,
+            radius_m: 1.2,
             seed: 42,
             impact_id: 1,
         };

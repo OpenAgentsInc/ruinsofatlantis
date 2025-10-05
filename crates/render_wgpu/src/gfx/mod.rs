@@ -417,6 +417,7 @@ pub struct Renderer {
     // --- Replication (local loop) ---
     repl_rx: Option<net_core::channel::Rx>,
     repl_buf: client_core::replication::ReplicationBuffer,
+    boss_status_next_emit: f32,
 
     // Demo helpers
     #[cfg_attr(
