@@ -3,9 +3,9 @@
 //! Provides a minimal `run()` that creates a window and drives the
 //! `render_wgpu::gfx::Renderer` via winit's ApplicationHandler API.
 
+use net_core::snapshot::SnapshotEncode;
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
-use net_core::snapshot::SnapshotEncode;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -161,7 +161,7 @@ impl ApplicationHandler for App {
         }
         // Emit a compact replicated NPC list each frame (demo only)
         #[cfg(feature = "demo_server")]
-        if let (Some(tx), Some(s)) = (&self.repl_tx, &self.state) {
+        if let (Some(tx), Some(_s)) = (&self.repl_tx, &self.state) {
             // If renderer requests overlay-only mode, we still send a small list
             let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
             if let Some(srv) = &self.demo_server {
