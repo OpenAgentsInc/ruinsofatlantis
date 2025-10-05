@@ -65,7 +65,6 @@ pub fn build(device: &wgpu::Device, terrain_extent: f32) -> NpcGpu {
         far_count
     );
 
-
     // Note: Server authority (unique boss spawn) is handled outside the renderer.
     // The renderer should remain presentation-only and consume server state.
 

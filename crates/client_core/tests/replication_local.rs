@@ -1,6 +1,9 @@
 use client_core::replication::ReplicationBuffer;
 use client_core::upload::{ChunkMeshEntry, MeshUpload};
-use net_core::{channel, snapshot::{ChunkMeshDelta, BossStatusMsg, SnapshotEncode}};
+use net_core::{
+    channel,
+    snapshot::{BossStatusMsg, ChunkMeshDelta, SnapshotEncode},
+};
 
 struct DummyUploader {
     uploads: usize,
@@ -51,7 +54,13 @@ fn local_loop_sends_and_applies_chunk_mesh() {
     assert_eq!(last.2.indices, vec![0, 1, 2]);
 
     // BossStatus message round-trip
-    let bs = BossStatusMsg { name: "Nivita".into(), ac: 18, hp: 220, max: 250, pos: [0.0, 0.6, 35.0] };
+    let bs = BossStatusMsg {
+        name: "Nivita".into(),
+        ac: 18,
+        hp: 220,
+        max: 250,
+        pos: [0.0, 0.6, 35.0],
+    };
     let mut b2 = Vec::new();
     bs.encode(&mut b2);
     let _ = repl.apply_message(&b2);

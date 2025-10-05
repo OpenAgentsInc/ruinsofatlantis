@@ -3287,7 +3287,11 @@ impl Renderer {
                 glam::Vec3::Z
             };
             let to = glam::vec3(pc_pos.x - pos.x, 0.0, pc_pos.z - pos.z);
-            let dir = if to.length_squared() > 1e-8 { to.normalize() } else { glam::Vec3::Z };
+            let dir = if to.length_squared() > 1e-8 {
+                to.normalize()
+            } else {
+                glam::Vec3::Z
+            };
             let yaw = dir.x.atan2(dir.z);
             let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),

@@ -203,7 +203,9 @@ impl SnapshotDecode for BossStatusMsg {
             Ok(buf)
         }
         let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
-        if inp.len() < n { bail!("short name"); }
+        if inp.len() < n {
+            bail!("short name");
+        }
         let (name_bytes, rest) = inp.split_at(n);
         *inp = rest;
         let name = String::from_utf8(name_bytes.to_vec()).unwrap_or_default();
@@ -214,7 +216,13 @@ impl SnapshotDecode for BossStatusMsg {
         for v in &mut pos {
             *v = f32::from_le_bytes(take::<4>(inp)?);
         }
-        Ok(Self { name, ac, hp, max, pos })
+        Ok(Self {
+            name,
+            ac,
+            hp,
+            max,
+            pos,
+        })
     }
 }
 

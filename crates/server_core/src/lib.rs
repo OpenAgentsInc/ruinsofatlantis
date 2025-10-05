@@ -4,8 +4,8 @@
 //! - Grid raycast via Amanatides & Woo DDA
 //! - Carve impact sphere + spawn debris with seeded RNG
 
-use glam::Vec3;
 use ecs_core::components as ec;
+use glam::Vec3;
 pub mod destructible;
 pub mod jobs;
 pub mod scene_build;

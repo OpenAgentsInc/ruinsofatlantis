@@ -64,4 +64,3 @@ mod tests {
         assert!(parse_condition("none").is_none());
     }
 }
-

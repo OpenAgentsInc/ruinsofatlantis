@@ -13,9 +13,9 @@ pub struct NivitaCfg {
     pub id: String,
     pub name: String,
     #[serde(default)]
-    pub kind: String,          // e.g., "boss"
+    pub kind: String, // e.g., "boss"
     #[serde(default)]
-    pub team: Option<String>,  // e.g., "enemy_raid"
+    pub team: Option<String>, // e.g., "enemy_raid"
     pub level: u8,
     pub hp_range: (i32, i32),
     #[serde(default)]
@@ -106,15 +106,13 @@ fn data_root() -> PathBuf {
 /// Load the default Nivita config from `data/config/nivita.toml`.
 pub fn load_nivita() -> Result<NivitaCfg> {
     let path = data_root().join("config/nivita.toml");
-    let txt = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let txt = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     let mut cfg: NivitaCfg = toml::from_str(&txt).context("parse nivita.toml")?;
     if cfg.kind.is_empty() {
         cfg.kind = "boss".into();
     }
     Ok(cfg)
 }
-
 
 #[cfg(test)]
 mod tests {

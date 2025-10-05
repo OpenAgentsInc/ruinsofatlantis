@@ -1010,18 +1010,20 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
 
     log::debug!("submit: normal path");
     // Periodically publish BossStatus into the local replication buffer (simulated channel)
-    if r.last_time >= r.boss_status_next_emit && let Some(st) = r.server.nivita_status() {
-            let msg = net_core::snapshot::BossStatusMsg {
-                name: st.name,
-                ac: st.ac,
-                hp: st.hp,
-                max: st.max,
-                pos: [st.pos.x, st.pos.y, st.pos.z],
-            };
-            let mut buf = Vec::new();
-            msg.encode(&mut buf);
-            let _ = r.repl_buf.apply_message(&buf);
-            r.boss_status_next_emit = r.last_time + 1.0;
+    if r.last_time >= r.boss_status_next_emit
+        && let Some(st) = r.server.nivita_status()
+    {
+        let msg = net_core::snapshot::BossStatusMsg {
+            name: st.name,
+            ac: st.ac,
+            hp: st.hp,
+            max: st.max,
+            pos: [st.pos.x, st.pos.y, st.pos.z],
+        };
+        let mut buf = Vec::new();
+        msg.encode(&mut buf);
+        let _ = r.repl_buf.apply_message(&buf);
+        r.boss_status_next_emit = r.last_time + 1.0;
     }
     // HUD
     let pc_hp = r
@@ -1089,9 +1091,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             );
             // Boss banner (top-center) via replicated cache or server fallback
             let boss_line = if let Some(bs) = r.repl_buf.boss_status.as_ref() {
-                Some(format!("{} — HP {}/{}  AC {}", bs.name, bs.hp, bs.max, bs.ac))
+                Some(format!(
+                    "{} — HP {}/{}  AC {}",
+                    bs.name, bs.hp, bs.max, bs.ac
+                ))
             } else if let Some(st) = r.server.nivita_status() {
-                Some(format!("{} — HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac))
+                Some(format!(
+                    "{} — HP {}/{}  AC {}",
+                    st.name, st.hp, st.max, st.ac
+                ))
             } else {
                 None
             };
@@ -1153,10 +1161,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, &line, 4);
             } else if let Some(st) = r.server.nivita_status() {
-                let line = format!(
-                    "Boss: {}  HP {}/{}  AC {}",
-                    st.name, st.hp, st.max, st.ac
-                );
+                let line = format!("Boss: {}  HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac);
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, &line, 4);
             }

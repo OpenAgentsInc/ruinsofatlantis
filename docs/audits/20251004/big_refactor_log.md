@@ -39,8 +39,14 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - `cargo check` — OK after both changes above.
 - `cargo test -p net_core` — OK; new tests pass.
 
+## Incremental hardening — server unwrap removal (F-SIM-009)
+
+- File: `crates/server_core/src/destructible.rs`
+- Change: Replace `unwrap()` on `core_materials::mass_for_voxel` with a safe default (`Mass::kilograms(0.0)`) when material lookup fails.
+- Rationale: Avoid panics in production server paths; unexpected material ids should not crash the server tick.
+- Follow-up: Broader sweep to add `#![deny(clippy::unwrap_used, clippy::expect_used)]` with targeted allowances and metrics in a separate PR.
+
 ## Notes
 
 - All dependency changes used Cargo tooling per repository policy (no manual Cargo.toml edits).
 - No interactive apps were run; only build/test/lint and code changes.
-

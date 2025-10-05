@@ -1095,7 +1095,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             // Try to merge the universal animation library so Sorceress can use the same Walk/Idle clips as the PC.
             {
                 use ra_assets::skinning::merge_gltf_animations;
-                let lib_path = super::super::asset_path("assets/anims/universal/AnimationLibrary.glb");
+                let lib_path =
+                    super::super::asset_path("assets/anims/universal/AnimationLibrary.glb");
                 if lib_path.exists() {
                     match merge_gltf_animations(&mut cpu, &lib_path) {
                         Ok(n) => {

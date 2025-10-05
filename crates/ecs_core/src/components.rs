@@ -240,14 +240,20 @@ pub struct LegendaryResistances {
 
 impl LegendaryResistances {
     pub fn new(per_day: u8) -> Self {
-        Self { per_day, remaining: per_day }
+        Self {
+            per_day,
+            remaining: per_day,
+        }
     }
 }
 
 /// How legendary resources reset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
-pub enum ResetRule { LongRest, PerEncounter }
+pub enum ResetRule {
+    LongRest,
+    PerEncounter,
+}
 
 /// Legendary Resistances with reset rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,7 +266,11 @@ pub struct LegendaryResist {
 
 impl LegendaryResist {
     pub fn new(per_day: u8, reset: ResetRule) -> Self {
-        Self { per_day, left: per_day, reset }
+        Self {
+            per_day,
+            left: per_day,
+            reset,
+        }
     }
 }
 

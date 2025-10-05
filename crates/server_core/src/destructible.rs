@@ -179,7 +179,8 @@ pub fn carve_and_spawn_debris(
         );
         let v = (base + 0.35 * jitter).normalize_or_zero() * 6.0; // ~6 m/s burst
         velocities.push(v.as_dvec3());
-        let m = core_materials::mass_for_voxel(mat, voxel_m).unwrap();
+        // Avoid panicking on an unexpected material id; default to 0 kg and continue.
+        let m = core_materials::mass_for_voxel(mat, voxel_m).unwrap_or(Mass::kilograms(0.0));
         masses.push(m);
     }
     DebrisSpawn {
