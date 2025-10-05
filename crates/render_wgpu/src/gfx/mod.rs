@@ -3273,6 +3273,8 @@ impl Renderer {
         let mut m = self.sorc_models[0];
         let c = m.to_cols_array();
         let mut pos = glam::vec3(c[12], c[13], c[14]);
+        // Record previous position before applying motion so palette step sees movement
+        self.sorc_prev_pos = pos;
         let pc_pos = if self.pc_index < self.wizard_models.len() {
             let cp = self.wizard_models[self.pc_index].to_cols_array();
             glam::vec3(cp[12], cp[13], cp[14])
@@ -3298,7 +3300,7 @@ impl Renderer {
                     .write_buffer(&self.sorc_instances, 0, bytemuck::bytes_of(inst));
             }
         }
-        self.sorc_prev_pos = pos;
+        // Keep prev_pos as the position before this move (used by palette step)
     }
 
     fn update_deathknight_from_server(&mut self) {
