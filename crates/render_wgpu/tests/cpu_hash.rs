@@ -5,7 +5,7 @@ fn terrain_cpu_hash_is_stable() {
     // CPU-only generation; no GPU device needed.
     let cpu = render_wgpu::gfx::terrain::generate_cpu(129, 150.0, 12345);
     let mut hasher = Sha256::new();
-    hasher.update(&(cpu.size as u32).to_le_bytes());
+    hasher.update((cpu.size as u32).to_le_bytes());
     hasher.update(cpu.extent.to_bits().to_le_bytes());
     for h in &cpu.heights {
         hasher.update(h.to_bits().to_le_bytes());

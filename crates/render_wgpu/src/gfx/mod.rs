@@ -3456,7 +3456,7 @@ impl Renderer {
             wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
         }
         let mut any = false;
-        for (i, id) in self.zombie_ids.clone().iter().enumerate() {
+        for (i, id) in self.zombie_ids.iter().copied().enumerate() {
             if let Some(p) = pos_map.get(id) {
                 let m_old = self.zombie_models[i];
                 let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(*p);

@@ -896,16 +896,11 @@ impl Renderer {
                 rv.colliders.retain(|sc| sc.coord != *c);
                 _removed += 1;
             } else {
-                let mesh_cpu = ecs_core::components::MeshCpu {
-                    positions: mb.positions.clone(),
-                    normals: mb.normals.clone(),
-                    indices: mb.indices.clone(),
-                };
-                let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh(
+                let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh_raw(
                     &self.device,
                     crate::gfx::DestructibleId(ruin_idx),
                     (c.x, c.y, c.z),
-                    &mesh_cpu,
+                    &mb,
                     &mut self.voxel_meshes,
                     &mut self.voxel_hashes,
                 );
@@ -2330,16 +2325,11 @@ impl Renderer {
                     self.voxel_hashes.remove(&key);
                 } else {
                     // Interleave positions + normals to match types::Vertex layout
-                    let mesh_cpu = ecs_core::components::MeshCpu {
-                        positions: mb.positions.clone(),
-                        normals: mb.normals.clone(),
-                        indices: mb.indices.clone(),
-                    };
-                    let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh(
+                    let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh_raw(
                         &self.device,
                         crate::gfx::DestructibleId(0),
                         (c.x, c.y, c.z),
-                        &mesh_cpu,
+                        &mb,
                         &mut self.voxel_meshes,
                         &mut self.voxel_hashes,
                     );
