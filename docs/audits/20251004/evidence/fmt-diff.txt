@@ -1,0 +1,298 @@
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/client_core/tests/replication_local.rs:1:
+ use client_core::replication::ReplicationBuffer;
+ use client_core::upload::{ChunkMeshEntry, MeshUpload};
+[31m-use net_core::{channel, snapshot::{ChunkMeshDelta, BossStatusMsg, SnapshotEncode}};
+(B[m[32m+use net_core::{
+(B[m[32m+    channel,
+(B[m[32m+    snapshot::{BossStatusMsg, ChunkMeshDelta, SnapshotEncode},
+(B[m[32m+};
+(B[m 
+ struct DummyUploader {
+     uploads: usize,
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/client_core/tests/replication_local.rs:51:
+     assert_eq!(last.2.indices, vec![0, 1, 2]);
+ 
+     // BossStatus message round-trip
+[31m-    let bs = BossStatusMsg { name: "Nivita".into(), ac: 18, hp: 220, max: 250, pos: [0.0, 0.6, 35.0] };
+(B[m[32m+    let bs = BossStatusMsg {
+(B[m[32m+        name: "Nivita".into(),
+(B[m[32m+        ac: 18,
+(B[m[32m+        hp: 220,
+(B[m[32m+        max: 250,
+(B[m[32m+        pos: [0.0, 0.6, 35.0],
+(B[m[32m+    };
+(B[m     let mut b2 = Vec::new();
+     bs.encode(&mut b2);
+     let _ = repl.apply_message(&b2);
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/data_runtime/src/configs/npc_unique.rs:13:
+     pub id: String,
+     pub name: String,
+     #[serde(default)]
+[31m-    pub kind: String,          // e.g., "boss"
+(B[m[32m+    pub kind: String, // e.g., "boss"
+(B[m     #[serde(default)]
+[31m-    pub team: Option<String>,  // e.g., "enemy_raid"
+(B[m[32m+    pub team: Option<String>, // e.g., "enemy_raid"
+(B[m     pub level: u8,
+     pub hp_range: (i32, i32),
+     #[serde(default)]
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/data_runtime/src/configs/npc_unique.rs:106:
+ /// Load the default Nivita config from `data/config/nivita.toml`.
+ pub fn load_nivita() -> Result<NivitaCfg> {
+     let path = data_root().join("config/nivita.toml");
+[31m-    let txt = std::fs::read_to_string(&path)
+(B[m[31m-        .with_context(|| format!("read {}", path.display()))?;
+(B[m[32m+    let txt = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+(B[m     let mut cfg: NivitaCfg = toml::from_str(&txt).context("parse nivita.toml")?;
+     if cfg.kind.is_empty() {
+         cfg.kind = "boss".into();
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/data_runtime/src/configs/npc_unique.rs:114:
+     }
+     Ok(cfg)
+ }
+[31m-
+(B[m 
+ #[cfg(test)]
+ mod tests {
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/ecs_core/src/components.rs:240:
+ 
+ impl LegendaryResistances {
+     pub fn new(per_day: u8) -> Self {
+[31m-        Self { per_day, remaining: per_day }
+(B[m[32m+        Self {
+(B[m[32m+            per_day,
+(B[m[32m+            remaining: per_day,
+(B[m[32m+        }
+(B[m     }
+ }
+ 
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/ecs_core/src/components.rs:247:
+ /// How legendary resources reset.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+ #[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
+[31m-pub enum ResetRule { LongRest, PerEncounter }
+(B[m[32m+pub enum ResetRule {
+(B[m[32m+    LongRest,
+(B[m[32m+    PerEncounter,
+(B[m[32m+}
+(B[m 
+ /// Legendary Resistances with reset rule.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/ecs_core/src/components.rs:260:
+ 
+ impl LegendaryResist {
+     pub fn new(per_day: u8, reset: ResetRule) -> Self {
+[31m-        Self { per_day, left: per_day, reset }
+(B[m[32m+        Self {
+(B[m[32m+            per_day,
+(B[m[32m+            left: per_day,
+(B[m[32m+            reset,
+(B[m[32m+        }
+(B[m     }
+ }
+ 
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/ecs_core/src/parse.rs:64:
+         assert!(parse_condition("none").is_none());
+     }
+ }
+[31m-
+(B[m 
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/net_core/src/snapshot.rs:203:
+             Ok(buf)
+         }
+         let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
+[31m-        if inp.len() < n { bail!("short name"); }
+(B[m[32m+        if inp.len() < n {
+(B[m[32m+            bail!("short name");
+(B[m[32m+        }
+(B[m         let (name_bytes, rest) = inp.split_at(n);
+         *inp = rest;
+         let name = String::from_utf8(name_bytes.to_vec()).unwrap_or_default();
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/net_core/src/snapshot.rs:214:
+         for v in &mut pos {
+             *v = f32::from_le_bytes(take::<4>(inp)?);
+         }
+[31m-        Ok(Self { name, ac, hp, max, pos })
+(B[m[32m+        Ok(Self {
+(B[m[32m+            name,
+(B[m[32m+            ac,
+(B[m[32m+            hp,
+(B[m[32m+            max,
+(B[m[32m+            pos,
+(B[m[32m+        })
+(B[m     }
+ }
+ 
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/mod.rs:3287:
+                 glam::Vec3::Z
+             };
+             let to = glam::vec3(pc_pos.x - pos.x, 0.0, pc_pos.z - pos.z);
+[31m-            let dir = if to.length_squared() > 1e-8 { to.normalize() } else { glam::Vec3::Z };
+(B[m[32m+            let dir = if to.length_squared() > 1e-8 {
+(B[m[32m+                to.normalize()
+(B[m[32m+            } else {
+(B[m[32m+                glam::Vec3::Z
+(B[m[32m+            };
+(B[m             let yaw = dir.x.atan2(dir.z);
+             let m = glam::Mat4::from_scale_rotation_translation(
+                 glam::Vec3::splat(1.0),
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/npcs.rs:4:
+ 
+ use wgpu::util::DeviceExt;
+ 
+[31m-fn find_clear_spawn(server: &server_core::ServerState, mut pos: glam::Vec3, my_radius: f32) -> glam::Vec3 {
+(B[m[32m+fn find_clear_spawn(
+(B[m[32m+    server: &server_core::ServerState,
+(B[m[32m+    mut pos: glam::Vec3,
+(B[m[32m+    my_radius: f32,
+(B[m[32m+) -> glam::Vec3 {
+(B[m     let pad = 0.5f32;
+     let step = 3.0f32;
+     for _ in 0..32 {
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/npcs.rs:19:
+                 break;
+             }
+         }
+[31m-        if ok { return pos; }
+(B[m[32m+        if ok {
+(B[m[32m+            return pos;
+(B[m[32m+        }
+(B[m         pos.z += step;
+     }
+     pos
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/npcs.rs:32:
+         return;
+     };
+     for n in &mut server.npcs {
+[31m-        if n.id == boss { continue; }
+(B[m[32m+        if n.id == boss {
+(B[m[32m+            continue;
+(B[m[32m+        }
+(B[m         let mut dx = n.pos.x - bx;
+         let mut dz = n.pos.z - bz;
+         let d2 = dx * dx + dz * dz;
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/npcs.rs:39:
+         let min_d = br + n.radius + pad;
+         if d2 < min_d * min_d {
+             let mut d = d2.sqrt();
+[31m-            if d < 1e-4 { dx = 1.0; dz = 0.0; d = 1e-4; }
+(B[m[31m-            dx /= d; dz /= d;
+(B[m[32m+            if d < 1e-4 {
+(B[m[32m+                dx = 1.0;
+(B[m[32m+                dz = 0.0;
+(B[m[32m+                d = 1e-4;
+(B[m[32m+            }
+(B[m[32m+            dx /= d;
+(B[m[32m+            dz /= d;
+(B[m             let push = min_d - d;
+             n.pos.x += dx * push;
+             n.pos.z += dz * push;
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/renderer/render.rs:1010:
+ 
+     log::debug!("submit: normal path");
+     // Periodically publish BossStatus into the local replication buffer (simulated channel)
+[31m-    if r.last_time >= r.boss_status_next_emit && let Some(st) = r.server.nivita_status() {
+(B[m[31m-            let msg = net_core::snapshot::BossStatusMsg {
+(B[m[31m-                name: st.name,
+(B[m[31m-                ac: st.ac,
+(B[m[31m-                hp: st.hp,
+(B[m[31m-                max: st.max,
+(B[m[31m-                pos: [st.pos.x, st.pos.y, st.pos.z],
+(B[m[31m-            };
+(B[m[31m-            let mut buf = Vec::new();
+(B[m[31m-            msg.encode(&mut buf);
+(B[m[31m-            let _ = r.repl_buf.apply_message(&buf);
+(B[m[31m-            r.boss_status_next_emit = r.last_time + 1.0;
+(B[m[32m+    if r.last_time >= r.boss_status_next_emit
+(B[m[32m+        && let Some(st) = r.server.nivita_status()
+(B[m[32m+    {
+(B[m[32m+        let msg = net_core::snapshot::BossStatusMsg {
+(B[m[32m+            name: st.name,
+(B[m[32m+            ac: st.ac,
+(B[m[32m+            hp: st.hp,
+(B[m[32m+            max: st.max,
+(B[m[32m+            pos: [st.pos.x, st.pos.y, st.pos.z],
+(B[m[32m+        };
+(B[m[32m+        let mut buf = Vec::new();
+(B[m[32m+        msg.encode(&mut buf);
+(B[m[32m+        let _ = r.repl_buf.apply_message(&buf);
+(B[m[32m+        r.boss_status_next_emit = r.last_time + 1.0;
+(B[m     }
+     // HUD
+     let pc_hp = r
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/renderer/render.rs:1089:
+             );
+             // Boss banner (top-center) via replicated cache or server fallback
+             let boss_line = if let Some(bs) = r.repl_buf.boss_status.as_ref() {
+[31m-                Some(format!("{} — HP {}/{}  AC {}", bs.name, bs.hp, bs.max, bs.ac))
+(B[m[32m+                Some(format!(
+(B[m[32m+                    "{} — HP {}/{}  AC {}",
+(B[m[32m+                    bs.name, bs.hp, bs.max, bs.ac
+(B[m[32m+                ))
+(B[m             } else if let Some(st) = r.server.nivita_status() {
+[31m-                Some(format!("{} — HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac))
+(B[m[32m+                Some(format!(
+(B[m[32m+                    "{} — HP {}/{}  AC {}",
+(B[m[32m+                    st.name, st.hp, st.max, st.ac
+(B[m[32m+                ))
+(B[m             } else {
+                 None
+             };
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/render_wgpu/src/gfx/renderer/render.rs:1153:
+                 r.hud
+                     .append_perf_text_line(r.size.width, r.size.height, &line, 4);
+             } else if let Some(st) = r.server.nivita_status() {
+[31m-                let line = format!(
+(B[m[31m-                    "Boss: {}  HP {}/{}  AC {}",
+(B[m[31m-                    st.name, st.hp, st.max, st.ac
+(B[m[31m-                );
+(B[m[32m+                let line = format!("Boss: {}  HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac);
+(B[m                 r.hud
+                     .append_perf_text_line(r.size.width, r.size.height, &line, 4);
+             }
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/server_core/src/lib.rs:4:
+ //! - Grid raycast via Amanatides & Woo DDA
+ //! - Carve impact sphere + spawn debris with seeded RNG
+ 
+[31m-use glam::Vec3;
+(B[m use ecs_core::components as ec;
+[32m+use glam::Vec3;
+(B[m pub mod destructible;
+ pub mod jobs;
+ pub mod scene_build;
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/server_core/tests/nivita_spawn_unique.rs:3:
+ #[test]
+ fn spawn_is_unique_and_status_exists() {
+     let mut s = ServerState::new();
+[31m-    let id1 = s.spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0)).expect("spawn");
+(B[m[31m-    let id2 = s.spawn_nivita_unique(glam::vec3(5.0, 0.6, 15.0)).expect("spawn again");
+(B[m[32m+    let id1 = s
+(B[m[32m+        .spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0))
+(B[m[32m+        .expect("spawn");
+(B[m[32m+    let id2 = s
+(B[m[32m+        .spawn_nivita_unique(glam::vec3(5.0, 0.6, 15.0))
+(B[m[32m+        .expect("spawn again");
+(B[m     assert_eq!(id1.0, id2.0, "must return same id for unique boss");
+     let st = s.nivita_status().expect("status");
+     assert!(st.name.to_lowercase().contains("nivita"));
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/server_core/tests/nivita_spawn_unique.rs:11:
+ }
+[31m-
+(B[m 
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/server_core/tests/nivita_status_values.rs:3:
+ #[test]
+ fn status_values_match_config() {
+     let mut s = ServerState::new();
+[31m-    let _ = s.spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0)).expect("spawn");
+(B[m[32m+    let _ = s
+(B[m[32m+        .spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0))
+(B[m[32m+        .expect("spawn");
+(B[m     let st = s.nivita_status().expect("status");
+     let cfg = data_runtime::configs::npc_unique::load_nivita().expect("cfg");
+     let exp_ac = i32::from(cfg.defenses.ac);
+Diff in /Users/christopherdavid/code/ruinsofatlantis/crates/server_core/tests/nivita_status_values.rs:13:
+     assert_eq!(st.hp, mid);
+     assert!(st.name.contains(&cfg.name));
+ }
+[31m-
+(B[m 

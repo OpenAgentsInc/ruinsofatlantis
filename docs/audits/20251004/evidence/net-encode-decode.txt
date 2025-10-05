@@ -1,0 +1,14 @@
+crates/net_core/src/snapshot.rs:8:    fn encode(&self, out: &mut Vec<u8>);
+crates/net_core/src/snapshot.rs:13:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self>;
+crates/net_core/src/snapshot.rs:34:    fn encode(&self, out: &mut Vec<u8>) {
+crates/net_core/src/snapshot.rs:63:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:128:    fn encode(&self, out: &mut Vec<u8>) {
+crates/net_core/src/snapshot.rs:140:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:179:    fn encode(&self, out: &mut Vec<u8>) {
+crates/net_core/src/snapshot.rs:193:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:234:        d.encode(&mut buf);
+crates/net_core/src/snapshot.rs:236:        let d2 = ChunkMeshDelta::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:250:        d.encode(&mut buf);
+crates/net_core/src/snapshot.rs:252:        let d2 = DestructibleInstance::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:265:        s.encode(&mut buf);
+crates/net_core/src/snapshot.rs:267:        let s2 = BossStatusMsg::decode(&mut slice).expect("decode");

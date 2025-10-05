@@ -1,0 +1,33 @@
+crates/net_core/src/snapshot.rs:1://! Snapshot encode/decode traits and stub message types for replication.
+crates/net_core/src/snapshot.rs:7:pub trait SnapshotEncode {
+crates/net_core/src/snapshot.rs:12:pub trait SnapshotDecode: Sized {
+crates/net_core/src/snapshot.rs:25:pub struct ChunkMeshDelta {
+crates/net_core/src/snapshot.rs:33:impl SnapshotEncode for ChunkMeshDelta {
+crates/net_core/src/snapshot.rs:62:impl SnapshotDecode for ChunkMeshDelta {
+crates/net_core/src/snapshot.rs:127:impl SnapshotEncode for DestructibleInstance {
+crates/net_core/src/snapshot.rs:139:impl SnapshotDecode for DestructibleInstance {
+crates/net_core/src/snapshot.rs:170:pub struct BossStatusMsg {
+crates/net_core/src/snapshot.rs:178:impl SnapshotEncode for BossStatusMsg {
+crates/net_core/src/snapshot.rs:192:impl SnapshotDecode for BossStatusMsg {
+crates/net_core/src/snapshot.rs:226:        let d = ChunkMeshDelta {
+crates/net_core/src/snapshot.rs:236:        let d2 = ChunkMeshDelta::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:257:        let s = BossStatusMsg {
+crates/net_core/src/snapshot.rs:267:        let s2 = BossStatusMsg::decode(&mut slice).expect("decode");
+crates/client_core/src/systems/action_bindings.rs:8:pub struct ButtonSnapshot {
+crates/client_core/src/systems/action_bindings.rs:46:    input: &ButtonSnapshot,
+crates/client_core/src/systems/action_bindings.rs:98:        let input = ButtonSnapshot {
+crates/client_core/src/systems/action_bindings.rs:117:        let input = ButtonSnapshot {
+crates/client_core/src/replication.rs:11:use net_core::snapshot::SnapshotDecode;
+crates/client_core/src/replication.rs:17:    pub boss_status: Option<BossStatus>,
+crates/client_core/src/replication.rs:21:pub struct BossStatus {
+crates/client_core/src/replication.rs:33:        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice) {
+crates/client_core/src/replication.rs:44:            if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut slice2) {
+crates/client_core/src/replication.rs:45:                self.boss_status = Some(BossStatus {
+crates/server_core/src/lib.rs:51:pub struct BossStatus {
+crates/server_core/src/lib.rs:92:    /// Snapshot of Nivita's boss stats/components for replication/logging.
+crates/server_core/src/lib.rs:217:    pub fn nivita_status(&self) -> Option<BossStatus> {
+crates/server_core/src/lib.rs:221:        Some(BossStatus {
+crates/client_core/tests/replication_local.rs:3:use net_core::{channel, snapshot::{ChunkMeshDelta, BossStatusMsg, SnapshotEncode}};
+crates/client_core/tests/replication_local.rs:21:    let delta = ChunkMeshDelta {
+crates/client_core/tests/replication_local.rs:53:    // BossStatus message round-trip
+crates/client_core/tests/replication_local.rs:54:    let bs = BossStatusMsg { name: "Nivita".into(), ac: 18, hp: 220, max: 250, pos: [0.0, 0.6, 35.0] };

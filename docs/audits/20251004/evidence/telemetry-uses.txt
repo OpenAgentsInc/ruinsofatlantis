@@ -1,0 +1,4 @@
+crates/server_core/src/lib.rs:213:        metrics::counter!("boss.nivita.spawns_total").increment(1);
+crates/server_core/src/telemetry.rs:27:    tracing::info!(
+crates/client_core/src/systems/action_bindings.rs:5:use tracing::{debug, info};
+crates/client_core/src/systems/cursor.rs:5:use tracing::info;

@@ -1,0 +1,86 @@
+crates/render_wgpu/src/gfx/ui.rs:395:    pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+crates/render_wgpu/src/gfx/ui.rs:399:        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:401:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/ui.rs:833:    pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+crates/render_wgpu/src/gfx/ui.rs:837:        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:839:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/ui.rs:1008:    pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+crates/render_wgpu/src/gfx/ui.rs:1012:        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1014:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/ui.rs:1807:    pub fn draw(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+crates/render_wgpu/src/gfx/ui.rs:1810:            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1812:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/ui.rs:1831:            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1833:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/vox_onepath.rs:859:        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+crates/render_wgpu/src/gfx/hiz.rs:73:        encoder: &mut wgpu::CommandEncoder,
+crates/render_wgpu/src/gfx/renderer/passes.rs:16:    pub(crate) fn pass_build_hiz(&self, encoder: &mut wgpu::CommandEncoder) {
+crates/render_wgpu/src/gfx/renderer/passes.rs:31:    pub(crate) fn pass_blit_scene_read(&self, encoder: &mut wgpu::CommandEncoder) {
+crates/render_wgpu/src/gfx/renderer/passes.rs:35:        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/passes.rs:37:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/passes.rs:60:    pub(crate) fn pass_ssr(&self, encoder: &mut wgpu::CommandEncoder) {
+crates/render_wgpu/src/gfx/renderer/passes.rs:64:        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/passes.rs:66:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/passes.rs:85:    pub(crate) fn pass_ssgi(&self, encoder: &mut wgpu::CommandEncoder) {
+crates/render_wgpu/src/gfx/renderer/passes.rs:89:        let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/passes.rs:91:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/passes.rs:111:    pub(crate) fn pass_ao(&self, encoder: &mut wgpu::CommandEncoder) {
+crates/render_wgpu/src/gfx/renderer/passes.rs:115:        let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/passes.rs:117:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/passes.rs:138:        encoder: &mut wgpu::CommandEncoder,
+crates/render_wgpu/src/gfx/renderer/passes.rs:141:        let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/passes.rs:143:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:27:            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:60:        let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:62:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:87:            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:89:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:98:                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:118:        let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:120:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:394:        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:408:        let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:410:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:437:        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:439:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:448:            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:648:            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:650:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:864:        let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:866:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:885:        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:887:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:908:        let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:910:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:932:        let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:934:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:955:        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:957:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/renderer/render.rs:977:        let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/renderer/render.rs:979:            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2160:            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2176:            let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2178:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2205:            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2207:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2216:                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2536:            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2538:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2580:            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2582:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2602:            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2604:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2627:            let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2629:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2654:                let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2656:                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2679:            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2681:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/mod.rs:2702:            let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2704:                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+crates/render_wgpu/src/gfx/draw.rs:8:    pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
+crates/render_wgpu/src/gfx/draw.rs:41:    pub(crate) fn draw_wizards(&self, rpass: &mut wgpu::RenderPass<'_>) {
+crates/render_wgpu/src/gfx/draw.rs:78:    pub(crate) fn draw_particles(&self, rpass: &mut wgpu::RenderPass<'_>) {
+crates/render_wgpu/src/gfx/draw.rs:89:    pub(crate) fn draw_zombies(&self, rpass: &mut wgpu::RenderPass<'_>) {
+crates/render_wgpu/src/gfx/draw.rs:104:    pub(crate) fn draw_deathknight(&self, rpass: &mut wgpu::RenderPass<'_>) {
+crates/render_wgpu/src/gfx/draw.rs:119:    pub(crate) fn draw_sorceress(&self, rpass: &mut wgpu::RenderPass<'_>) {

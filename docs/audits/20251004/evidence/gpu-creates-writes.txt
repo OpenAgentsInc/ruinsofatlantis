@@ -1,0 +1,134 @@
+crates/render_wgpu/src/gfx/vox_onepath.rs:851:    let readback = r.device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/vox_onepath.rs:990:                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/vox_onepath.rs:997:                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/sorceress.rs:31:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/sorceress.rs:36:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/sorceress.rs:68:    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/foliage.rs:39:        let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/foliage.rs:87:    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/foliage.rs:99:            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/foliage.rs:104:            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/hiz.rs:24:        let tex = device.create_texture(&TextureDescriptor {
+crates/render_wgpu/src/gfx/hiz.rs:197:        let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/fx.rs:51:    let instances = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/fx.rs:72:    let model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/fx.rs:103:    let quad_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/deathknight.rs:40:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/deathknight.rs:45:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/deathknight.rs:81:    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/npcs.rs:96:    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/zombies.rs:47:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/zombies.rs:52:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/zombies.rs:100:    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:612:                    .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+crates/render_wgpu/src/gfx/mod.rs:652:            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:738:        self.zombie_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:762:        self.dk_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:830:        self.queue.write_buffer(&self.wizard_instances, 0, bytes);
+crates/render_wgpu/src/gfx/mod.rs:974:        let scene_color = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:991:        let scene_read = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1091:        let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1115:        let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1171:        let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1333:        let plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1353:        let shard_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1527:        let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1532:        let wizard_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1575:        let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1608:        let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:1690:        let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/mod.rs:2053:            .write_buffer(&self.globals_buf, 0, bytemuck::bytes_of(&globals));
+crates/render_wgpu/src/gfx/mod.rs:2056:            .write_buffer(&self.sky_buf, 0, bytemuck::bytes_of(&self.sky.sky_uniform));
+crates/render_wgpu/src/gfx/mod.rs:2067:            .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
+crates/render_wgpu/src/gfx/mod.rs:2152:                .write_buffer(&self.lights_buf, 0, bytemuck::bytes_of(&raw));
+crates/render_wgpu/src/gfx/mod.rs:2904:                    .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+crates/render_wgpu/src/gfx/mod.rs:3141:                self.queue.write_buffer(
+crates/render_wgpu/src/gfx/mod.rs:3213:            .write_buffer(&self.dk_palettes_buf, 0, bytemuck::cast_slice(&raw));
+crates/render_wgpu/src/gfx/mod.rs:3267:            .write_buffer(&self.sorc_palettes_buf, 0, bytemuck::cast_slice(&raw));
+crates/render_wgpu/src/gfx/mod.rs:3301:                    .write_buffer(&self.sorc_instances, 0, bytemuck::bytes_of(inst));
+crates/render_wgpu/src/gfx/mod.rs:3330:                    .write_buffer(&self.sorc_instances, 0, bytemuck::bytes_of(inst));
+crates/render_wgpu/src/gfx/mod.rs:3384:            self.queue.write_buffer(&self.dk_instances, 0, bytes);
+crates/render_wgpu/src/gfx/mod.rs:3495:            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+crates/render_wgpu/src/gfx/ruins.rs:82:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/ruins.rs:87:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/material.rs:42:    let wizard_mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/material.rs:60:        let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/material.rs:70:        queue.write_texture(
+crates/render_wgpu/src/gfx/material.rs:121:        let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/material.rs:131:        queue.write_texture(
+crates/render_wgpu/src/gfx/rocks.rs:34:    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/rocks.rs:49:            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/rocks.rs:54:            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/util.rs:34:    let tex = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/gbuffer.rs:52:            let tex = device.create_texture(&TextureDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:155:        let atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:200:        let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:228:        queue.write_texture(
+crates/render_wgpu/src/gfx/ui.rs:384:            self.vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:392:        queue.write_buffer(&self.vbuf, 0, bytes);
+crates/render_wgpu/src/gfx/ui.rs:582:        let atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:630:        let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:822:            self.vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:830:        queue.write_buffer(&self.vbuf, 0, bytes);
+crates/render_wgpu/src/gfx/ui.rs:877:        let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:997:            self.vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1005:        queue.write_buffer(&self.vbuf, 0, bytes);
+crates/render_wgpu/src/gfx/ui.rs:1157:        let atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1207:        let bars_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1214:        let text_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1247:        queue.write_texture(
+crates/render_wgpu/src/gfx/ui.rs:1615:            self.bars_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1624:            queue.write_buffer(&self.bars_vbuf, 0, bbytes);
+crates/render_wgpu/src/gfx/ui.rs:1630:            self.text_vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:1639:            queue.write_buffer(&self.text_vbuf, 0, tbytes);
+crates/render_wgpu/src/gfx/ui.rs:1872:        queue.write_texture(
+crates/render_wgpu/src/gfx/ui.rs:2002:            self.vbuf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/ui.rs:2010:        queue.write_buffer(&self.vbuf, 0, bytes);
+crates/render_wgpu/src/gfx/mesh.rs:55:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mesh.rs:60:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mesh.rs:91:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/mesh.rs:96:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/attachments.rs:33:        let scene_color = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/renderer/attachments.rs:50:        let scene_read = device.create_texture(&wgpu::TextureDescriptor {
+crates/render_wgpu/src/gfx/terrain.rs:65:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/terrain.rs:70:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:343:    let _plane_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:363:    let shard_model_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:397:    let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:419:    let lights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:497:    let sky_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:731:    let wizard_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:736:    let wizard_ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:771:    let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:801:    let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:901:                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:906:                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:933:                let inst_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:939:                let pc_pal_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1030:    let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1065:    let dk_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1112:            let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1134:        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1164:        let b = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1173:    let sorc_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1249:        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1267:    let debris_instances = device.create_buffer(&wgpu::BufferDescriptor {
+crates/render_wgpu/src/gfx/renderer/init.rs:1281:        let buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/voxel_upload.rs:37:    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/voxel_upload.rs:42:    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/renderer/update.rs:1238:            .write_buffer(&self.ruins_instances, offset, bytes);
+crates/render_wgpu/src/gfx/renderer/update.rs:1339:            .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
+crates/render_wgpu/src/gfx/renderer/update.rs:1343:                .write_buffer(pc_inst, 0, bytemuck::bytes_of(&inst));
+crates/render_wgpu/src/gfx/renderer/update.rs:1373:            .write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
+crates/render_wgpu/src/gfx/renderer/update.rs:1483:            .write_buffer(pc_pal_buf, 0, bytemuck::cast_slice(&raw));
+crates/render_wgpu/src/gfx/renderer/update.rs:1836:                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+crates/render_wgpu/src/gfx/renderer/update.rs:1985:                .write_buffer(&self.fx_instances, 0, bytemuck::cast_slice(&inst));
+crates/render_wgpu/src/gfx/renderer/update.rs:2405:            self.queue.write_buffer(&self.debris_instances, 0, bytes);
+crates/render_wgpu/src/gfx/renderer/update.rs:2655:                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+crates/render_wgpu/src/gfx/renderer/render.rs:57:            .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&g));
+crates/render_wgpu/src/gfx/renderer/render.rs:270:        .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&globals));
+crates/render_wgpu/src/gfx/renderer/render.rs:272:        .write_buffer(&r.sky_buf, 0, bytemuck::bytes_of(&r.sky.sky_uniform));
+crates/render_wgpu/src/gfx/renderer/render.rs:283:        .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
+crates/render_wgpu/src/gfx/renderer/render.rs:375:            .write_buffer(&r.lights_buf, 0, bytemuck::bytes_of(&raw));
+crates/render_wgpu/src/gfx/scene.rs:211:    let wizard_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+crates/render_wgpu/src/gfx/scene.rs:216:    let ruins_instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

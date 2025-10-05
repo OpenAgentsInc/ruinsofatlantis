@@ -1,0 +1,5 @@
+crates/data_runtime/tests/telemetry_cfg.rs:5:    unsafe {
+crates/data_runtime/tests/input_camera_cfg.rs:5:    unsafe {
+crates/render_wgpu/src/gfx/mod.rs:883:                let surf = unsafe {
+crates/render_wgpu/src/gfx/renderer/init.rs:84:                unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(s) }
+crates/render_wgpu/src/gfx/renderer/init.rs:91:                unsafe {

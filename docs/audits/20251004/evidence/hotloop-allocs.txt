@@ -1,0 +1,84 @@
+crates/server_core/src/systems/destructible.rs:58:            positions: mb.positions.clone(),
+crates/server_core/src/systems/destructible.rs:59:            normals: mb.normals.clone(),
+crates/server_core/src/systems/destructible.rs:60:            indices: mb.indices.clone(),
+crates/render_wgpu/src/gfx/vox_onepath.rs:251:        renderer.voxel_grid = Some(grid.clone());
+crates/render_wgpu/src/gfx/vox_onepath.rs:949:    renderer.voxel_grid = Some(grid.clone());
+crates/server_core/src/lib.rs:179:        let spell_ids = |v: &[String]| v.iter().map(|s| ec::SpellId(s.clone())).collect();
+crates/server_core/src/lib.rs:192:            name: cfg.name.clone(),
+crates/server_core/src/lib.rs:201:            team: cfg.team.clone(),
+crates/server_core/src/lib.rs:222:            name: stats.name.clone(),
+crates/server_core/src/telemetry.rs:9:    let level = cfg.log_level.clone().unwrap_or_else(|| "info".to_string());
+crates/render_wgpu/src/gfx/mod.rs:636:        let mut wizard_models = scene_build.wizard_models.clone();
+crates/render_wgpu/src/gfx/mod.rs:646:        let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+crates/render_wgpu/src/gfx/mod.rs:721:        self.zombie_models = zmodels.clone();
+crates/render_wgpu/src/gfx/mod.rs:757:        self.dk_models = dk_models.clone();
+crates/render_wgpu/src/gfx/mod.rs:1503:                .collect::<Vec<[f32; 2]>>();
+crates/render_wgpu/src/gfx/mod.rs:1560:        let mut wizard_models = scene_build.wizard_models.clone();
+crates/render_wgpu/src/gfx/mod.rs:1570:        let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+crates/render_wgpu/src/gfx/mod.rs:1745:            present_bgl: present_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1746:            post_ao_bgl: post_ao_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1747:            ssgi_globals_bgl: ssgi_globals_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1748:            ssgi_depth_bgl: ssgi_depth_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1749:            ssgi_scene_bgl: ssgi_scene_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1750:            ssr_depth_bgl: ssr_depth_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1751:            ssr_scene_bgl: ssr_scene_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1752:            palettes_bgl: palettes_bgl.clone(),
+crates/render_wgpu/src/gfx/mod.rs:1806:            zombie_models: zombie_models.clone(),
+crates/render_wgpu/src/gfx/mod.rs:2961:                    times: times.clone(),
+crates/render_wgpu/src/gfx/mod.rs:2973:                    times: times.clone(),
+crates/render_wgpu/src/gfx/mod.rs:3018:                    return Some(name.clone());
+crates/render_wgpu/src/gfx/mod.rs:3164:                    return Some(name.clone());
+crates/render_wgpu/src/gfx/mod.rs:3238:                    return Some(name.clone());
+crates/render_wgpu/src/gfx/mod.rs:3402:        for (i, id) in self.zombie_ids.clone().iter().enumerate() {
+crates/render_wgpu/src/gfx/renderer/upload_adapter.rs:16:            positions: mesh.positions.clone(),
+crates/render_wgpu/src/gfx/renderer/upload_adapter.rs:17:            normals: mesh.normals.clone(),
+crates/render_wgpu/src/gfx/renderer/upload_adapter.rs:18:            indices: mesh.indices.clone(),
+crates/render_wgpu/src/gfx/renderer/replication.rs:38:            self.last = Some((did, chunk, mesh.clone()));
+crates/render_wgpu/src/gfx/anim.rs:10:    let mut local_t: Vec<glam::Vec3> = mesh.base_t.clone();
+crates/render_wgpu/src/gfx/anim.rs:11:    let mut local_r: Vec<glam::Quat> = mesh.base_r.clone();
+crates/render_wgpu/src/gfx/anim.rs:12:    let mut local_s: Vec<glam::Vec3> = mesh.base_s.clone();
+crates/render_wgpu/src/gfx/anim.rs:63:    let mut lt = mesh.base_t.clone();
+crates/render_wgpu/src/gfx/anim.rs:64:    let mut lr = mesh.base_r.clone();
+crates/render_wgpu/src/gfx/anim.rs:65:    let mut ls = mesh.base_s.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:156:        let formats = caps.formats.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:243:    let _depth = attachments.depth_view.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:244:    let _scene_color = attachments.scene_color.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:245:    let _scene_view = attachments.scene_view.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:246:    let _scene_read = attachments.scene_read.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:247:    let _scene_read_view = attachments.scene_read_view.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:670:    let ZoneManifest { slug, .. } = zone.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:709:            .collect::<Vec<[f32; 2]>>();
+crates/render_wgpu/src/gfx/renderer/init.rs:760:    let mut wizard_models = scene_build.wizard_models.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:767:    let mut wizard_instances_cpu = scene_build.wizard_instances_cpu.clone();
+crates/render_wgpu/src/gfx/renderer/init.rs:1122:                dummy.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1144:            dummy.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1475:                    let grid = voxelize_surface_fill(meta.clone(), &surf, dcfg.close_surfaces);
+crates/render_wgpu/src/gfx/renderer/init.rs:1478:                        let grid2 = voxelize_surface_fill(meta.clone(), &surf, true);
+crates/render_wgpu/src/gfx/renderer/init.rs:1572:        present_bgl: present_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1573:        post_ao_bgl: post_ao_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1574:        ssgi_globals_bgl: ssgi_globals_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1575:        ssgi_depth_bgl: ssgi_depth_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1576:        ssgi_scene_bgl: ssgi_scene_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1577:        ssr_depth_bgl: ssr_depth_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1578:        ssr_scene_bgl: ssr_scene_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1579:        palettes_bgl: palettes_bgl.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1716:        voxel_grid: voxel_grid.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1793:        dk_models: dk_models.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1804:        sorc_models: sorc_models.clone(),
+crates/render_wgpu/src/gfx/renderer/init.rs:1811:        zombie_models: zombie_models.clone(),
+crates/render_wgpu/src/gfx/scene.rs:232:        ruins_instances_cpu: ruin_instances.clone(),
+crates/render_wgpu/src/gfx/scene.rs:280:                if !ruin_instances.clone().is_empty() {
+crates/render_wgpu/src/gfx/renderer/update.rs:898:                    positions: mb.positions.clone(),
+crates/render_wgpu/src/gfx/renderer/update.rs:899:                    normals: mb.normals.clone(),
+crates/render_wgpu/src/gfx/renderer/update.rs:900:                    indices: mb.indices.clone(),
+crates/render_wgpu/src/gfx/renderer/update.rs:1064:                                        .clone()
+crates/render_wgpu/src/gfx/renderer/update.rs:1067:                                        .collect::<Vec<_>>()
+crates/render_wgpu/src/gfx/renderer/update.rs:1416:                    return Some(k.clone());
+crates/render_wgpu/src/gfx/renderer/update.rs:1427:                    return Some(name.clone());
+crates/render_wgpu/src/gfx/renderer/update.rs:2324:                        positions: mb.positions.clone(),
+crates/render_wgpu/src/gfx/renderer/update.rs:2325:                        normals: mb.normals.clone(),
+crates/render_wgpu/src/gfx/renderer/update.rs:2326:                        indices: mb.indices.clone(),
+crates/render_wgpu/src/gfx/renderer/update.rs:2788:        let initial = self.voxel_grid_initial.clone();
+crates/render_wgpu/src/gfx/renderer/update.rs:2817:            let rec = self.recent_impacts.clone();
+crates/render_wgpu/src/gfx/terrain.rs:195:        heights: cpu.heights.clone(),
+crates/render_wgpu/src/gfx/terrain.rs:207:        models: models.to_vec(),

@@ -1,0 +1,1 @@
+crates/render_wgpu/src/gfx/renderer/update.rs:1782:            let damage = 10; // TODO: integrate with spell spec dice

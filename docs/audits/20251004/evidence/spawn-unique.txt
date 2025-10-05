@@ -1,0 +1,7 @@
+crates/server_core/src/systems/boss.rs:37:        let id = s.spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0)).expect("spawn");
+crates/render_wgpu/src/gfx/npcs.rs:116:    if let Some(id) = server.spawn_nivita_unique(clear) {
+crates/server_core/src/lib.rs:113:    pub fn spawn_nivita_unique(&mut self, pos: Vec3) -> Option<NpcId> {
+crates/server_core/tests/nivita_status_values.rs:6:    let _ = s.spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0)).expect("spawn");
+crates/server_core/tests/nivita_spawn_unique.rs:4:fn spawn_is_unique_and_status_exists() {
+crates/server_core/tests/nivita_spawn_unique.rs:6:    let id1 = s.spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0)).expect("spawn");
+crates/server_core/tests/nivita_spawn_unique.rs:7:    let id2 = s.spawn_nivita_unique(glam::vec3(5.0, 0.6, 15.0)).expect("spawn again");

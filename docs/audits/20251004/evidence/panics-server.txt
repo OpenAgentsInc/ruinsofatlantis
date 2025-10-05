@@ -1,0 +1,24 @@
+crates/server_core/src/systems/projectiles.rs:220:        let db = data_runtime::specs::projectiles::ProjectileSpecDb::load_default().unwrap();
+crates/server_core/src/systems/projectiles.rs:231:        .expect("spawn");
+crates/server_core/src/systems/destructible.rs:112:            material: core_materials::find_material_id("stone").unwrap(),
+crates/server_core/tests/nivita_status_values.rs:6:    let _ = s.spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0)).expect("spawn");
+crates/server_core/tests/nivita_status_values.rs:7:    let st = s.nivita_status().expect("status");
+crates/server_core/tests/nivita_status_values.rs:8:    let cfg = data_runtime::configs::npc_unique::load_nivita().expect("cfg");
+crates/server_core/tests/nivita_spawn_unique.rs:6:    let id1 = s.spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0)).expect("spawn");
+crates/server_core/tests/nivita_spawn_unique.rs:7:    let id2 = s.spawn_nivita_unique(glam::vec3(5.0, 0.6, 15.0)).expect("spawn again");
+crates/server_core/tests/nivita_spawn_unique.rs:9:    let st = s.nivita_status().expect("status");
+crates/server_core/src/tick.rs:68:            material: core_materials::find_material_id("stone").unwrap(),
+crates/server_core/src/destructible.rs:182:        let m = core_materials::mass_for_voxel(mat, voxel_m).unwrap();
+crates/server_core/src/destructible.rs:592:            material: find_material_id("stone").unwrap(),
+crates/server_core/src/destructible.rs:603:        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+crates/server_core/src/destructible.rs:613:        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+crates/server_core/src/destructible.rs:625:        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+crates/server_core/src/destructible.rs:652:        let wood = find_material_id("wood").unwrap();
+crates/server_core/src/destructible.rs:653:        let stone = find_material_id("stone").unwrap();
+crates/server_core/src/destructible.rs:654:        let mw = core_materials::mass_for_voxel(wood, g.voxel_m()).unwrap();
+crates/server_core/src/destructible.rs:655:        let ms = core_materials::mass_for_voxel(stone, g.voxel_m()).unwrap();
+crates/server_core/src/telemetry.rs:22:        let addr = addr.parse().unwrap_or_else(|_| "127.0.0.1:9100".parse().unwrap());
+crates/server_core/src/systems/boss.rs:37:        let id = s.spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0)).expect("spawn");
+crates/server_core/src/systems/boss.rs:38:        let start = s.npcs.iter().find(|n| n.id == id).unwrap().pos;
+crates/server_core/src/systems/boss.rs:41:        let now = s.npcs.iter().find(|n| n.id == id).unwrap().pos;
+crates/server_core/src/systems/boss.rs:43:        let max_step = s.npcs.iter().find(|n| n.id == id).unwrap().speed * 0.5 + 1e-4;

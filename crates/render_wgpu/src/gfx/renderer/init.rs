@@ -1091,10 +1091,32 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _sorc_sampler,
     ) = if let Some(model_rel) = sorc_cfg.model.as_deref() {
         if let Ok(sa) = super::super::sorceress::load_assets(&device, model_rel) {
-            let joints = sa.cpu.joints_nodes.len() as u32;
-            let mat = material::create_wizard_material(&device, &queue, &material_bgl, &sa.cpu);
+            let mut cpu = sa.cpu;
+            // Try to merge the universal animation library so Sorceress can use the same Walk/Idle clips as the PC.
+            {
+                use ra_assets::skinning::merge_gltf_animations;
+                let lib_path = super::super::asset_path("assets/anims/universal/AnimationLibrary.glb");
+                if lib_path.exists() {
+                    match merge_gltf_animations(&mut cpu, &lib_path) {
+                        Ok(n) => {
+                            log::info!(
+                                target: "model_viewer",
+                                "sorceress: merged GLTF animations from {:?} ({} clips)",
+                                lib_path,
+                                n
+                            );
+                        }
+                        Err(e) => log::warn!(
+                            "sorceress: failed to merge animation library at {:?}: {e:?}",
+                            lib_path
+                        ),
+                    }
+                }
+            }
+            let joints = cpu.joints_nodes.len() as u32;
+            let mat = material::create_wizard_material(&device, &queue, &material_bgl, &cpu);
             (
-                sa.cpu,
+                cpu,
                 sa.vb,
                 sa.ib,
                 sa.index_count,
