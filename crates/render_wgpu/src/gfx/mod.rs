@@ -2996,9 +2996,12 @@ impl Renderer {
         use std::collections::HashMap;
         let mut attack_map: HashMap<u32, bool> = HashMap::new();
         let mut radius_map: HashMap<u32, f32> = HashMap::new();
-        for n in &self.server.npcs {
-            attack_map.insert(n.id.0, n.attack_anim > 0.0);
-            radius_map.insert(n.id.0, n.radius);
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            for n in &self.server.npcs {
+                attack_map.insert(n.id.0, n.attack_anim > 0.0);
+                radius_map.insert(n.id.0, n.radius);
+            }
         }
         // Wizard positions
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
@@ -3174,12 +3177,21 @@ impl Renderer {
             glam::Vec3::ZERO
         };
         let moving = (current_pos - self.dk_prev_pos).length_squared() > 1e-4;
-        let attack_now = if let Some(id) = self.dk_id
-            && let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id)
-        {
-            n.attack_anim > 0.0
-        } else {
-            false
+        let attack_now = {
+            #[cfg(feature = "legacy_client_ai")]
+            {
+                if let Some(id) = self.dk_id
+                    && let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id)
+                {
+                    n.attack_anim > 0.0
+                } else {
+                    false
+                }
+            }
+            #[cfg(not(feature = "legacy_client_ai"))]
+            {
+                false
+            }
         };
         for i in 0..(self.dk_count as usize) {
             let lookup = if attack_now {
@@ -3276,6 +3288,7 @@ impl Renderer {
         self.sorc_prev_pos = prev_pos;
 
         // If server has a Nivita status, follow it (server-authoritative).
+        #[cfg(feature = "legacy_client_ai")]
         if let Some(status) = self.server.nivita_status() {
             let pos = status.pos;
             // Face nearest wizard for better presentation
@@ -3336,6 +3349,10 @@ impl Renderer {
     }
 
     fn update_deathknight_from_server(&mut self) {
+        #[cfg(not(feature = "legacy_client_ai"))]
+        {
+            return;
+        }
         if self.dk_count == 0 {
             return;
         }
@@ -3344,6 +3361,7 @@ impl Renderer {
         } else {
             return;
         };
+        #[cfg(feature = "legacy_client_ai")]
         let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id) {
             n
         } else {
@@ -3392,6 +3410,7 @@ impl Renderer {
         // Build map from id -> pos
         use std::collections::HashMap;
         let mut pos_map: HashMap<u32, glam::Vec3> = HashMap::new();
+        #[cfg(feature = "legacy_client_ai")]
         for n in &self.server.npcs {
             pos_map.insert(n.id.0, n.pos);
         }

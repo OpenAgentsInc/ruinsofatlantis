@@ -730,16 +730,16 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             && !r.destruct_cfg.vox_sandbox
             && let Some(m) = r.dk_models.first().copied()
         {
-        let frac = {
-            #[cfg(feature = "legacy_client_ai")]
-            {
-                if let Some(id) = r.dk_id
-                    && let Some(n) = r.server.npcs.iter().find(|n| n.id.0 == id)
+            let frac = {
+                #[cfg(feature = "legacy_client_ai")]
                 {
-                    (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
-                } else {
-                    1.0
-                }
+                    if let Some(id) = r.dk_id
+                        && let Some(n) = r.server.npcs.iter().find(|n| n.id.0 == id)
+                    {
+                        (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
+                    } else {
+                        1.0
+                    }
                 }
                 #[cfg(not(feature = "legacy_client_ai"))]
                 {
