@@ -302,8 +302,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
             }
         }
-        let hits = r.server.step_npc_ai(dt, &wiz_pos);
-        for (widx, dmg) in hits {
+        #[cfg(feature = "legacy_client_ai")]
+        for (widx, dmg) in r.server.step_npc_ai(dt, &wiz_pos) {
             if let Some(hp) = r.wizard_hp.get_mut(widx) {
                 let before = *hp;
                 *hp = (*hp - dmg).max(0);
@@ -715,27 +715,27 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 bar_entries.push((head.truncate(), frac));
             }
         }
-    // Death Knight health bar (use server HP; lower vertical offset)
-    if r.dk_count > 0
-        && !r.destruct_cfg.vox_sandbox
-        && let Some(m) = r.dk_models.first().copied()
-    {
-        let frac = {
-            #[cfg(feature = "legacy_client_ai")]
-            {
-                if let Some(id) = r.dk_id
-                    && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
+        // Death Knight health bar (use server HP; lower vertical offset)
+        if r.dk_count > 0
+            && !r.destruct_cfg.vox_sandbox
+            && let Some(m) = r.dk_models.first().copied()
+        {
+            let frac = {
+                #[cfg(feature = "legacy_client_ai")]
                 {
-                    (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
-                } else {
+                    if let Some(id) = r.dk_id
+                        && let Some(n) = r.server.npcs.iter().find(|n| n.id == id)
+                    {
+                        (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32)
+                    } else {
+                        1.0
+                    }
+                }
+                #[cfg(not(feature = "legacy_client_ai"))]
+                {
                     1.0
                 }
-            }
-            #[cfg(not(feature = "legacy_client_ai"))]
-            {
-                1.0
-            }
-        };
+            };
             let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             bar_entries.push((head.truncate(), frac));
         }

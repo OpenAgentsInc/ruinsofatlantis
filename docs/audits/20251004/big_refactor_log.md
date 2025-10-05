@@ -66,6 +66,13 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - Rationale: Ensure default builds perform no gameplay mutations from the renderer; legacy/demo behavior is opt-in.
 - Tests: clippy and tests pass with default features; existing feature tests remain valid.
 
+## Renderer: stop server AI calls by default (F-ARCH-002)
+
+- Files:
+  - `crates/render_wgpu/src/gfx/renderer/render.rs`: gated `server.step_npc_ai` behind `legacy_client_ai`.
+- Rationale: Default builds do not mutate server state from the renderer.
+- Tests: workspace tests remain green.
+
 ## Network protocol — add version headers + caps (F-NET-014)
 
 - Files:
