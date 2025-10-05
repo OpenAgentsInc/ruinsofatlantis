@@ -285,6 +285,7 @@ pub struct Renderer {
     sorc_models: Vec<glam::Mat4>,
     sorc_cpu: SkinnedMeshCPU,
     sorc_time_offset: Vec<f32>,
+    sorc_prev_pos: glam::Vec3,
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
@@ -3218,21 +3219,32 @@ impl Renderer {
             return;
         }
         let joints = self.sorc_joints as usize;
-        // Choose Idle if present; fallback to idle-like; else any
-        let pick_idle = || -> Option<String> {
-            if self.sorc_cpu.animations.contains_key("Idle") {
-                return Some("Idle".to_string());
+        // Movement detection from last frame
+        let current_pos = if let Some(m) = self.sorc_models.first().copied() {
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        } else {
+            glam::Vec3::ZERO
+        };
+        let moving = (current_pos - self.sorc_prev_pos).length_squared() > 1e-6;
+        let pick_named = |want: &str| -> Option<String> {
+            if self.sorc_cpu.animations.contains_key(want) {
+                return Some(want.to_string());
             }
-            let wanted = ["idle", "stand", "wait"];
+            let low = want.to_lowercase();
             for name in self.sorc_cpu.animations.keys() {
-                let low = name.to_lowercase();
-                if wanted.iter().any(|s| low.contains(s)) {
+                if name.to_lowercase().contains(&low) {
                     return Some(name.clone());
                 }
             }
             None
         };
-        let lookup = pick_idle().or_else(|| self.sorc_cpu.animations.keys().next().cloned());
+        let lookup = if moving {
+            pick_named("Walk").or_else(|| pick_named("Walk_Loop"))
+        } else {
+            pick_named("Idle").or_else(|| pick_named("Idle_Loop"))
+        }
+        .or_else(|| self.sorc_cpu.animations.keys().next().cloned());
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.sorc_count as usize * joints);
         for i in 0..(self.sorc_count as usize) {
             let t = time_global + self.sorc_time_offset.get(i).copied().unwrap_or(0.0);
@@ -3252,6 +3264,41 @@ impl Renderer {
         }
         self.queue
             .write_buffer(&self.sorc_palettes_buf, 0, bytemuck::cast_slice(&raw));
+    }
+
+    fn update_sorceress_motion(&mut self, dt: f32) {
+        if self.sorc_count == 0 || self.sorc_models.is_empty() {
+            return;
+        }
+        let mut m = self.sorc_models[0];
+        let c = m.to_cols_array();
+        let mut pos = glam::vec3(c[12], c[13], c[14]);
+        let pc_pos = if self.pc_index < self.wizard_models.len() {
+            let cp = self.wizard_models[self.pc_index].to_cols_array();
+            glam::vec3(cp[12], cp[13], cp[14])
+        } else {
+            glam::Vec3::ZERO
+        };
+        let to = glam::vec3(pc_pos.x - pos.x, 0.0, pc_pos.z - pos.z);
+        let dist = to.length();
+        if dist > 0.05 {
+            let dir = to / dist.max(1e-6);
+            let step = (1.2 * dt).min(dist);
+            pos += dir * step;
+            let yaw = dir.x.atan2(dir.z);
+            m = glam::Mat4::from_scale_rotation_translation(
+                glam::Vec3::splat(1.0),
+                glam::Quat::from_rotation_y(yaw),
+                pos,
+            );
+            self.sorc_models[0] = m;
+            if let Some(inst) = self.sorc_instances_cpu.get_mut(0) {
+                inst.model = m.to_cols_array_2d();
+                self.queue
+                    .write_buffer(&self.sorc_instances, 0, bytemuck::bytes_of(inst));
+            }
+        }
+        self.sorc_prev_pos = pos;
     }
 
     fn update_deathknight_from_server(&mut self) {

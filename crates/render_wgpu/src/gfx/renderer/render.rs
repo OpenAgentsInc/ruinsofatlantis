@@ -328,10 +328,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         r.update_zombies_from_server();
         r.update_zombie_palettes(t);
         r.update_deathknight_from_server();
+        // Move sorceress client-side toward the wizards (slow walk)
+        r.update_sorceress_motion(dt);
     }
     // Death Knight palettes (single instance)
     r.update_deathknight_palettes(t);
-    // Sorceress idle palettes
+    // Sorceress palettes (walk/idle based on motion)
     r.update_sorceress_palettes(t);
     // FX update (projectiles/particles)
     r.update_fx(t, dt);

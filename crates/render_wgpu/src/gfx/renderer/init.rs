@@ -1115,41 +1115,18 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 usage: wgpu::BufferUsages::VERTEX,
                 mapped_at_creation: false,
             });
-            let mat = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("sorc-mat-empty"),
-                layout: &material_bgl,
-                entries: &[],
-            });
+            let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+            let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
             (
                 crate::gfx::Renderer::empty_skinned_cpu(),
                 dummy.clone(),
                 dummy,
                 0u32,
                 0u32,
-                mat,
-                device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("_"),
-                    size: 4,
-                    usage: wgpu::BufferUsages::UNIFORM,
-                    mapped_at_creation: false,
-                }),
-                device
-                    .create_texture(&wgpu::TextureDescriptor {
-                        label: Some("_"),
-                        size: wgpu::Extent3d {
-                            width: 1,
-                            height: 1,
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                        view_formats: &[],
-                    })
-                    .create_view(&wgpu::TextureViewDescriptor::default()),
-                device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                mat.bind_group,
+                mat.uniform_buf,
+                mat.texture_view,
+                mat.sampler,
             )
         }
     } else {
@@ -1160,41 +1137,18 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             usage: wgpu::BufferUsages::VERTEX,
             mapped_at_creation: false,
         });
-        let mat = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("sorc-mat-empty"),
-            layout: &material_bgl,
-            entries: &[],
-        });
+        let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
         (
             crate::gfx::Renderer::empty_skinned_cpu(),
             dummy.clone(),
             dummy,
             0u32,
             0u32,
-            mat,
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("_"),
-                size: 4,
-                usage: wgpu::BufferUsages::UNIFORM,
-                mapped_at_creation: false,
-            }),
-            device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some("_"),
-                    size: wgpu::Extent3d {
-                        width: 1,
-                        height: 1,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                    view_formats: &[],
-                })
-                .create_view(&wgpu::TextureViewDescriptor::default()),
-            device.create_sampler(&wgpu::SamplerDescriptor::default()),
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
         )
     };
     // Position: behind DK along +Z
@@ -1218,7 +1172,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let total_sorc_mats = sorc_count as usize * sorc_joints as usize;
     let sorc_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("sorceress-palettes"),
-        size: (total_sorc_mats * 64) as u64,
+        size: ((total_sorc_mats.max(1)) * 64) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1849,6 +1803,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         sorc_models: sorc_models.clone(),
         sorc_cpu,
         sorc_time_offset: (0..sorc_count as usize).map(|_| 0.0f32).collect(),
+        sorc_prev_pos: sorc_pos,
         zombie_palettes_buf,
         zombie_palettes_bg,
         zombie_joints,
