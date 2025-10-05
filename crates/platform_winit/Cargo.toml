@@ -12,6 +12,7 @@ render_wgpu = { path = "../render_wgpu" }
 net_core = { path = "../net_core" }
 wgpu = "26"
 winit = "0.30"
+metrics = "0.24.2"
 
 [features]
 default = ["demo_server"]

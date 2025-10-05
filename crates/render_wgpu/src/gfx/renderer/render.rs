@@ -148,11 +148,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.last_time = t;
     // Replication: drain any incoming deltas and upload chunk meshes (local loop)
     if let Some(rx) = &r.repl_rx {
+        metrics::gauge!("replication.queue_depth").set(rx.depth() as f64);
         let msgs = rx.drain();
         if !msgs.is_empty() {
+            let mut total = 0usize;
             for b in &msgs {
+                total += b.len();
                 let _ = r.repl_buf.apply_message(b);
             }
+            metrics::counter!("net.bytes_recv_total", "dir" => "rx").increment(total as u64);
             let updates = r.repl_buf.drain_mesh_updates();
             use client_core::upload::MeshUpload;
             for (did, chunk, entry) in updates {
@@ -861,12 +865,16 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         use std::collections::HashSet;
         let mut alive: HashSet<u32> = HashSet::new();
         for n in &r.repl_buf.npcs {
-            if n.alive { alive.insert(n.id); }
+            if n.alive {
+                alive.insert(n.id);
+            }
         }
         #[cfg(feature = "legacy_client_ai")]
         if alive.is_empty() {
             for n in &r.server.npcs {
-                if n.alive { alive.insert(n.id.0); }
+                if n.alive {
+                    alive.insert(n.id.0);
+                }
             }
         }
         for (idx, id) in r.zombie_ids.iter().enumerate() {

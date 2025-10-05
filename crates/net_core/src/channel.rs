@@ -30,9 +30,12 @@ impl Tx {
     #[must_use]
     pub fn try_send(&self, bytes: Vec<u8>) -> bool {
         match self.0.try_send(bytes) {
-            Ok(()) => true,
+            Ok(()) => {
+                metrics::counter!("replication.enqueued_total").increment(1);
+                true
+            }
             Err(xchan::TrySendError::Full(_bytes)) => {
-                // Drop newest on full; a metric could be incremented here.
+                metrics::counter!("replication.dropped_total", "reason" => "full").increment(1);
                 false
             }
             Err(xchan::TrySendError::Disconnected(_bytes)) => false,

@@ -54,6 +54,7 @@ png = "0.17"
 half = "2"
 env_logger = "0.11.5"
 net_core = { version = "0.1.0", path = "../net_core" }
+metrics = "0.24.2"
 
 [dev-dependencies]
 sha2 = "0.10.9"

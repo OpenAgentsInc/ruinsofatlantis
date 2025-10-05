@@ -4153,6 +4153,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
+ "metrics",
 ]
 
 [[package]]
@@ -4748,6 +4749,7 @@ dependencies = [
  "anyhow",
  "futures-util",
  "log",
+ "metrics",
  "net_core",
  "pollster",
  "render_wgpu",
@@ -5225,6 +5227,7 @@ dependencies = [
  "half",
  "hw-skymodel",
  "log",
+ "metrics",
  "net_core",
  "png 0.17.16",
  "pollster",

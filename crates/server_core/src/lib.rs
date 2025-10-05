@@ -235,7 +235,10 @@ impl ServerState {
     }
     /// Move toward nearest wizard and attack when in range. Returns (wizard_idx, damage) per hit.
     pub fn step_npc_ai(&mut self, dt: f32, wizards: &[Vec3]) -> Vec<(usize, i32)> {
+        let _t0 = std::time::Instant::now();
         if wizards.is_empty() {
+            let ms = _t0.elapsed().as_secs_f64() * 1000.0;
+            metrics::histogram!("tick.ms").record(ms);
             return Vec::new();
         }
         let wizard_r = 0.7f32;
@@ -273,7 +276,10 @@ impl ServerState {
                 }
             }
         }
+        let _c0 = std::time::Instant::now();
         self.resolve_collisions(wizards);
+        let coll_ms = _c0.elapsed().as_secs_f64() * 1000.0;
+        metrics::histogram!("collider.ms").record(coll_ms);
         for (idx, n) in self.npcs.iter_mut().enumerate() {
             if !n.alive {
                 continue;
@@ -290,6 +296,8 @@ impl ServerState {
                 }
             }
         }
+        let ms = _t0.elapsed().as_secs_f64() * 1000.0;
+        metrics::histogram!("tick.ms").record(ms);
         hits
     }
     fn resolve_collisions(&mut self, wizards: &[Vec3]) {
