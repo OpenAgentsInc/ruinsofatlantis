@@ -1,26 +1,42 @@
 //! Simple in-proc channel for replication messages (bytes).
 //!
-//! This is intentionally minimal for the local loop in 95I. It uses
-//! `std::sync::mpsc` under the hood and exposes non-blocking drain helpers.
+//! Bounded channel backed by `crossbeam-channel` to provide basic backpressure
+//! and avoid unbounded memory growth under load. Exposes non-blocking helpers.
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use crossbeam_channel as xchan;
 
 #[derive(Clone)]
-pub struct Tx(pub Sender<Vec<u8>>);
-pub struct Rx(pub Receiver<Vec<u8>>);
+pub struct Tx(pub xchan::Sender<Vec<u8>>);
+pub struct Rx(pub xchan::Receiver<Vec<u8>>);
 
-/// Create a sender/receiver pair. The underlying channel is unbounded.
+/// Default capacity for replication channels when not specified.
+const DEFAULT_CAPACITY: usize = 4096;
+
+/// Create a sender/receiver pair with default capacity.
 #[must_use]
 pub fn channel() -> (Tx, Rx) {
-    let (s, r) = mpsc::channel::<Vec<u8>>();
+    channel_bounded(DEFAULT_CAPACITY)
+}
+
+/// Create a sender/receiver pair with the given bounded capacity.
+#[must_use]
+pub fn channel_bounded(capacity: usize) -> (Tx, Rx) {
+    let (s, r) = xchan::bounded::<Vec<u8>>(capacity.max(1));
     (Tx(s), Rx(r))
 }
 
 impl Tx {
-    /// Try to send; returns false if the receiver is dropped.
+    /// Try to send; returns false if the receiver is dropped or the channel is full.
     #[must_use]
     pub fn try_send(&self, bytes: Vec<u8>) -> bool {
-        self.0.send(bytes).is_ok()
+        match self.0.try_send(bytes) {
+            Ok(()) => true,
+            Err(xchan::TrySendError::Full(_bytes)) => {
+                // Drop newest on full; a metric could be incremented here.
+                false
+            }
+            Err(xchan::TrySendError::Disconnected(_bytes)) => false,
+        }
     }
 }
 
@@ -39,6 +55,11 @@ impl Rx {
         }
         out
     }
+    /// Current approximate queue depth.
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        self.0.len()
+    }
 }
 
 #[cfg(test)]
@@ -46,11 +67,23 @@ mod tests {
     use super::*;
     #[test]
     fn send_and_drain() {
-        let (tx, rx) = channel();
+        let (tx, rx) = channel_bounded(4);
         assert!(tx.try_send(vec![1, 2, 3]));
         assert!(tx.try_send(vec![4, 5]));
         let drained = rx.drain();
         assert_eq!(drained.len(), 2);
         assert_eq!(drained[0], vec![1, 2, 3]);
+    }
+    #[test]
+    fn drops_when_full() {
+        let (tx, rx) = channel_bounded(2);
+        assert!(tx.try_send(b"a".to_vec()));
+        assert!(tx.try_send(b"b".to_vec()));
+        // Now channel is full; next try_send should return false (dropped).
+        assert!(!tx.try_send(b"c".to_vec()));
+        let drained = rx.drain();
+        assert_eq!(drained.len(), 2);
+        assert_eq!(drained[0], b"a".to_vec());
+        assert_eq!(drained[1], b"b".to_vec());
     }
 }

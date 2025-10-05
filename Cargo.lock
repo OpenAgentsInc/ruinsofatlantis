@@ -4152,6 +4152,7 @@ name = "net_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "crossbeam-channel",
 ]
 
 [[package]]
