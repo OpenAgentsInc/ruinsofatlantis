@@ -56,6 +56,13 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - Rationale: Keep renderer presentation-only; server/app bootstrap should own entity creation.
 - Tests: render_wgpu tests pass; health bar logic handles `dk_id = None` gracefully.
 
+## Network protocol — add version headers + caps (F-NET-014)
+
+- Files:
+  - `crates/net_core/src/snapshot.rs`: added `VERSION = 1` prefix byte to all messages; decode rejects mismatches; added conservative max caps for mesh elements (`MAX_MESH_ELEMS`).
+- Rationale: Establish forward/backward compatibility hooks and bound allocations to prevent OOM on malformed inputs.
+- Tests: `net_core`, `client_core`, and `render_wgpu` tests pass with the new versioned messages.
+
 ## Incremental hardening — server unwrap removal (F-SIM-009)
 
 - File: `crates/server_core/src/destructible.rs`
