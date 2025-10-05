@@ -365,7 +365,7 @@ Security note: do not embed secrets; use relative HTTP assets; static hosting is
 
 Appendix B: One‑shot Deploy to the Laravel Site
 
-For the local sibling site repo at `/Users/christopherdavid/code/ruinsofatlantis.com`, use the helper script to build, copy artifacts into `public/`, update the Blade view (`resources/views/play.blade.php`), commit, push, and open a PR:
+For a local sibling site repo (defaulting to `$SITE_REPO` or `$HOME/code/ruinsofatlantis.com`), use the helper script to build, copy artifacts into `public/`, update the Blade view (`resources/views/play.blade.php`), commit, push, and open a PR:
 
 ```
 # From the app repo root

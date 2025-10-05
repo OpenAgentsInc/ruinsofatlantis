@@ -9,7 +9,7 @@ Intent
 - Import and render the “Universal Base Characters” pack (male/female) as skinned characters with proper materials and textures, ready for runtime animation and controller use.
 
 Source (local)
-- Folder: `/Users/christopherdavid/Downloads/Universal Base Characters[Standard]/Base Characters`
+- Folder: `$HOME/Downloads/Universal Base Characters[Standard]/Base Characters`
   - Godot variant: `Godot/Superhero_Male.gltf + .bin + textures`, `Godot/Superhero_Female.gltf + .bin + textures`
   - Unreal variant: `Unreal Engine/Superhero_Male.gltf + .bin + textures`, `Unreal Engine/Superhero_Female.gltf + .bin + textures`
   - Unity variant: `.fbx` (skip; prefer glTF/GLB for our loader)
@@ -29,9 +29,9 @@ Model Viewer integration (verified path and pipeline)
 - Animations: viewer can merge additional clips via the library UI (scans `assets/anims` and optional `FBX_LIB_DIR`).
 - Usage examples (local, from repo root):
   - Male (Godot variant):
-    `cargo run -p model-viewer -- "/Users/christopherdavid/Downloads/Universal Base Characters[Standard]/Base Characters/Godot/Superhero_Male.gltf"`
+    `cargo run -p model-viewer -- "$HOME/Downloads/Universal Base Characters[Standard]/Base Characters/Godot/Superhero_Male.gltf"`
   - Female (Unreal Engine variant):
-    `cargo run -p model-viewer -- "/Users/christopherdavid/Downloads/Universal Base Characters[Standard]/Base Characters/Unreal Engine/Superhero_Female.gltf"`
+    `cargo run -p model-viewer -- "$HOME/Downloads/Universal Base Characters[Standard]/Base Characters/Unreal Engine/Superhero_Female.gltf"`
   - Note: keep textures next to the .gltf as shipped so imports resolve.
   - Tip: shrink UI text to see more animations: add `--ui-scale 0.6`.
   - Non‑interactive snapshot: add `--snapshot /tmp/ubc.png` to save a PNG and exit.

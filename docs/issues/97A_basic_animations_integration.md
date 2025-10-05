@@ -9,7 +9,7 @@ Intent
 - Import the “Animation Library[Standard]” pack and play its clips on the Universal Base Characters. Prefer the `.glb` (Godot) or `.gltf`-equivalent to avoid FBX parsing at runtime.
 
 Source (local)
-- Folder: `/Users/christopherdavid/Downloads/Animation Library[Standard]/`
+- Folder: `$HOME/Downloads/Animation Library[Standard]/`
   - Godot variant: `Godot/AnimationLibrary_Godot_Standard.glb` (preferred)
   - UE variant: `Unreal Engine/AL_Standard.fbx` (fallback; convert to glTF/GLB offline)
   - Unity variant: `Unity/AnimationLibrary_Unity_Standard.fbx` (same note as above)
