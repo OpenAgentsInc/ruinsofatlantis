@@ -565,7 +565,19 @@ impl Renderer {
     }
     // moved: wrap_angle -> renderer/update.rs
     fn any_zombies_alive(&self) -> bool {
-        self.server.npcs.iter().any(|n| n.alive)
+        // Prefer replication buffer (default build path)
+        if !self.repl_buf.npcs.is_empty() {
+            return self.repl_buf.npcs.iter().any(|n| n.alive);
+        }
+        // Fallback to local server only when legacy client AI is enabled
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            return self.server.npcs.iter().any(|n| n.alive);
+        }
+        #[cfg(not(feature = "legacy_client_ai"))]
+        {
+            false
+        }
     }
     /// Pop a pending pointer-lock request emitted by controller systems.
     pub fn take_pointer_lock_request(&mut self) -> Option<bool> {
@@ -715,11 +727,21 @@ impl Renderer {
         self.npc_index_count = npcs.index_count;
         self.npc_instances = npcs.instances;
         self.npc_models = npcs.models;
-        self.server = npcs.server;
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            self.server = npcs.server;
+        }
+        #[cfg(feature = "legacy_client_ai")]
         let (zinst, zcpu, zmodels, zids, zcount) = zombies::build_instances(
             &self.device,
             &self.terrain_cpu,
             &self.server,
+            self.zombie_joints,
+        );
+        #[cfg(not(feature = "legacy_client_ai"))]
+        let (zinst, zcpu, zmodels, zids, zcount) = zombies::build_instances(
+            &self.device,
+            &self.terrain_cpu,
             self.zombie_joints,
         );
         self.zombie_instances = zinst;
@@ -3348,6 +3370,7 @@ impl Renderer {
         }
     }
 
+    #[cfg(feature = "legacy_client_ai")]
     fn update_deathknight_from_server(&mut self) {
         #[cfg(not(feature = "legacy_client_ai"))]
         {
@@ -3406,6 +3429,7 @@ impl Renderer {
         }
     }
 
+    #[cfg(feature = "legacy_client_ai")]
     fn update_zombies_from_server(&mut self) {
         // Build map from id -> pos
         use std::collections::HashMap;

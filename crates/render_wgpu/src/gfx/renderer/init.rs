@@ -12,10 +12,11 @@ use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
 use glam::{DVec3, UVec3};
+#[cfg(feature = "legacy_client_carve")]
 use server_core::destructible::config::DestructibleConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
+use voxel_proxy::{VoxelGrid, VoxelProxyMeta, voxelize_surface_fill};
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
@@ -989,6 +990,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let npc_index_count = npcs.index_count;
     let npc_instances = npcs.instances;
     let npc_models = npcs.models;
+    #[cfg(feature = "legacy_client_ai")]
     let server = npcs.server;
 
     // Vegetation
@@ -1229,10 +1231,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // Parse CLI flags for destructibles
+    #[cfg(feature = "legacy_client_carve")]
     #[allow(unused_mut)]
     let mut dcfg = DestructibleConfig::from_args(std::env::args());
     // On web, allow enabling demo via query param ?vox=1 (unless a model is specified)
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(feature = "legacy_client_carve", target_arch = "wasm32"))]
     {
         if dcfg.voxel_model.is_none() && !dcfg.demo_grid {
             if let Some(win) = web_sys::window() {
@@ -1246,6 +1249,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     }
 
     // In the main scene, avoid seeding a demo voxel grid unless explicitly requested
+    #[cfg(feature = "legacy_client_carve")]
     if std::env::var("RA_VOX_DEMO")
         .map(|v| v != "1")
         .unwrap_or(true)
@@ -1257,10 +1261,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let voxel_model_bg = {
         // Enable triplanar path for voxel meshes by setting _pad[0]=1, and
         // set tile frequency via _pad[1] derived from voxel size (meters).
+        #[cfg(feature = "legacy_client_carve")]
         let mut tiles_per_meter = (1.0f32 / (dcfg.voxel_size_m.0 as f32).max(1e-3)) * 0.25;
+        #[cfg(feature = "legacy_client_carve")]
         if let Some(t) = dcfg.vox_tiles_per_meter {
             tiles_per_meter = t.max(0.01);
         }
+        #[cfg(not(feature = "legacy_client_carve"))]
+        let tiles_per_meter = 0.25f32;
         let mdl = crate::gfx::types::Model {
             model: glam::Mat4::IDENTITY.to_cols_array_2d(),
             color: [0.6, 0.6, 0.6],
@@ -1284,7 +1292,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
 
     // Debris instancing: unit cube VB/IB and instance buffer
     let (debris_vb, debris_ib, debris_index_count) = crate::gfx::mesh::create_cube(&device);
+    #[cfg(feature = "legacy_client_carve")]
     let debris_capacity = dcfg.max_debris as u32;
+    #[cfg(not(feature = "legacy_client_carve"))]
+    let debris_capacity = 0u32;
     let debris_instances = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("debris-instances"),
         size: (debris_capacity as usize * std::mem::size_of::<crate::gfx::types::Instance>())
@@ -1315,6 +1326,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // Optionally create a voxel grid from a model (--voxel-model) or demo shell (--voxel-demo)
+    #[cfg(feature = "legacy_client_carve")]
     let voxel_grid = if let Some(ref model_path) = dcfg.voxel_model {
         // Load triangles and voxelize a surface shell, then flood-fill
         match ra_assets::gltf::load_gltf_mesh(std::path::Path::new(model_path)) {
@@ -1551,6 +1563,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     } else {
         None
     };
+    #[cfg(not(feature = "legacy_client_carve"))]
+    let voxel_grid: Option<VoxelGrid> = None;
 
     // Build the renderer struct first so we can optionally seed the voxel chunk queue
     // Load controller input/camera config (optional file)
@@ -1733,8 +1747,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         controller_ml_cfg: ml_cfg,
         controller_alt_hold: alt_hold,
         // Destructible defaults; leave grid None until provided by a loader/demo
+        #[cfg(feature = "legacy_client_carve")]
         destruct_cfg: dcfg,
         voxel_grid: voxel_grid.clone(),
+        #[cfg(feature = "legacy_client_carve")]
         chunk_queue: server_core::destructible::queue::ChunkQueue::new(),
         chunk_colliders: Vec::new(),
         vox_last_chunks: 0,
@@ -1792,6 +1808,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         rmb_down: false,
         last_cursor_pos: None,
         screenshot_start: None,
+        #[cfg(feature = "legacy_client_ai")]
         server,
         wizard_hp: vec![100; scene_build.wizard_count as usize],
         wizard_hp_max: 100,
@@ -1863,6 +1880,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     renderer.controller_state.profile = prof;
 
     // If a demo voxel grid was created, enqueue all chunks once so it renders immediately
+    #[cfg(feature = "legacy_client_carve")]
     if let Some(ref grid) = renderer.voxel_grid {
         let dims = grid.dims();
         let csz = grid.meta().chunk;
@@ -1883,7 +1901,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     }
 
     // Optionally apply a replay file of impacts to the current grid (native only)
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "legacy_client_carve", not(target_arch = "wasm32")))]
     if let (Some(grid), Some(ref path)) = (
         &mut renderer.voxel_grid,
         renderer.destruct_cfg.replay.as_ref(),
@@ -1923,8 +1941,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     }
 
     // Vox sandbox: remove mobs/boss for a clean destructible demo
+    #[cfg(feature = "legacy_client_carve")]
     if renderer.destruct_cfg.vox_sandbox {
-        renderer.server.npcs.clear();
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            renderer.server.npcs.clear();
+        }
         renderer.zombie_count = 0;
         renderer.dk_count = 0;
         renderer.dk_id = None;

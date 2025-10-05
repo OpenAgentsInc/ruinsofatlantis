@@ -53,28 +53,18 @@ fn ci() -> Result<()> {
     build_packs()?;
     cargo(&["test"])?;
     schema_check()?;
-    // 95A: Validate renderer with feature combos for legacy/demo gates
-    // Default/no-features sanity for render_wgpu (explicit no-default-features to be clear)
-    if std::env::var("RA_CHECK_RENDER_NO_DEFAULTS")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-    {
-        cargo(&["check", "-p", "render_wgpu", "--no-default-features"])?;
-        cargo(&[
-            "clippy",
-            "-p",
-            "render_wgpu",
-            "--no-default-features",
-            "--",
-            "-D",
-            "warnings",
-        ])?;
-        cargo(&["test", "-p", "render_wgpu", "--no-default-features"])?;
-    } else {
-        eprintln!(
-            "xtask: skipping render_wgpu no-default-features checks (set RA_CHECK_RENDER_NO_DEFAULTS=1 to enable)"
-        );
-    }
+    // 95A/99/100: Always validate render_wgpu without default features
+    cargo(&["check", "-p", "render_wgpu", "--no-default-features"])?;
+    cargo(&[
+        "clippy",
+        "-p",
+        "render_wgpu",
+        "--no-default-features",
+        "--",
+        "-D",
+        "warnings",
+    ])?;
+    cargo(&["test", "-p", "render_wgpu", "--no-default-features"])?;
     // Feature combo: vox_onepath_demo + legacy_client_carve + destruct_debug
     let feat = "vox_onepath_demo,legacy_client_carve,destruct_debug";
     if std::env::var("RA_CHECK_RENDER_FEATURE_COMBO")
@@ -132,9 +122,7 @@ fn layering_guard() -> Result<()> {
     }
     let s = String::from_utf8_lossy(&out.stdout);
     if s.contains("server_core ") || s.contains(" server_core") {
-        eprintln!(
-            "xtask: WARN layering: render_wgpu depends on server_core (expected until extraction)"
-        );
+        bail!("layering violation: render_wgpu must not depend on server_core (default)");
     }
     Ok(())
 }

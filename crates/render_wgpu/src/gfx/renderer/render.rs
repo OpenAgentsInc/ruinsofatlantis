@@ -329,9 +329,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 }
             }
         }
-        r.update_zombies_from_server();
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            r.update_zombies_from_server();
+        }
         r.update_zombie_palettes(t);
-        r.update_deathknight_from_server();
+        #[cfg(feature = "legacy_client_ai")]
+        {
+            r.update_deathknight_from_server();
+        }
         // Move sorceress client-side toward the wizards (slow walk)
         r.update_sorceress_motion(dt);
     }
@@ -598,23 +604,45 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Skinned: wizards (PC always visible even if hide_wizards)
         if r.is_vox_onepath() {
             // skip wizard visuals entirely in one‑path demo
-        } else if r.destruct_cfg.hide_wizards {
-            r.draw_pc_only(&mut rp);
-            r.draw_calls += 1;
-        } else if std::env::var("RA_DRAW_WIZARDS")
-            .map(|v| v != "0")
-            .unwrap_or(true)
-        {
-            log::debug!("draw: wizards x{}", r.wizard_count);
-            r.draw_wizards(&mut rp);
-            r.draw_calls += 1;
-            // If PC uses a separate rig, draw it explicitly in addition to NPC wizards
-            if r.pc_vb.is_some() {
+        } else {
+            #[cfg(feature = "legacy_client_carve")]
+            if r.destruct_cfg.hide_wizards {
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
+            } else {
+                if std::env::var("RA_DRAW_WIZARDS")
+                    .map(|v| v != "0")
+                    .unwrap_or(true)
+                {
+                    log::debug!("draw: wizards x{}", r.wizard_count);
+                    r.draw_wizards(&mut rp);
+                    r.draw_calls += 1;
+                    // If PC uses a separate rig, draw it explicitly in addition to NPC wizards
+                    if r.pc_vb.is_some() {
+                        r.draw_pc_only(&mut rp);
+                        r.draw_calls += 1;
+                    }
+                } else {
+                    log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
+                }
             }
-        } else {
-            log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
+            #[cfg(not(feature = "legacy_client_carve"))]
+            {
+                if std::env::var("RA_DRAW_WIZARDS")
+                    .map(|v| v != "0")
+                    .unwrap_or(true)
+                {
+                    log::debug!("draw: wizards x{}", r.wizard_count);
+                    r.draw_wizards(&mut rp);
+                    r.draw_calls += 1;
+                    if r.pc_vb.is_some() {
+                        r.draw_pc_only(&mut rp);
+                        r.draw_calls += 1;
+                    }
+                } else {
+                    log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
+                }
+            }
         }
         // Skinned: Death Knight (boss)
         if r.dk_count > 0 && !r.is_vox_onepath() {
@@ -684,6 +712,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Bars for wizards
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         for (i, m) in r.wizard_models.iter().enumerate() {
+            #[cfg(feature = "legacy_client_carve")]
             if r.destruct_cfg.hide_wizards && i != r.pc_index {
                 continue;
             }
@@ -707,6 +736,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 }
             }
             for (i, id) in r.zombie_ids.iter().enumerate() {
+                #[cfg(feature = "legacy_client_carve")]
                 if r.destruct_cfg.vox_sandbox {
                     continue;
                 }
@@ -726,6 +756,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         #[cfg(not(feature = "legacy_client_ai"))]
         for _ in &r.zombie_ids {
+            #[cfg(feature = "legacy_client_carve")]
             if r.destruct_cfg.vox_sandbox {
                 continue;
             }
@@ -733,7 +764,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         // Death Knight health bar (use server HP; lower vertical offset)
         if r.dk_count > 0
-            && !r.destruct_cfg.vox_sandbox
+            && {
+                #[cfg(feature = "legacy_client_carve")]
+                { !r.destruct_cfg.vox_sandbox }
+                #[cfg(not(feature = "legacy_client_carve"))]
+                { true }
+            }
             && let Some(m) = r.dk_models.first().copied()
         {
             let frac = {
@@ -821,9 +857,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // NPC nameplates: skip dead
         let mut npc_positions: Vec<glam::Vec3> = Vec::new();
         for (idx, m) in r.zombie_models.iter().enumerate() {
-            if let Some(npc) = r.server.npcs.get(idx)
-                && !npc.alive
-            {
+            #[cfg(feature = "legacy_client_ai")]
+            if let Some(npc) = r.server.npcs.get(idx) && !npc.alive {
                 continue;
             }
             let head = *m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
@@ -1038,6 +1073,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
 
     log::debug!("submit: normal path");
     // Periodically publish BossStatus into the local replication buffer (simulated channel)
+    #[cfg(feature = "legacy_client_ai")]
     if r.last_time >= r.boss_status_next_emit
         && let Some(st) = r.server.nivita_status()
     {
@@ -1123,11 +1159,28 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     "{} — HP {}/{}  AC {}",
                     bs.name, bs.hp, bs.max, bs.ac
                 ))
-            } else if let Some(st) = r.server.nivita_status() {
-                Some(format!(
-                    "{} — HP {}/{}  AC {}",
-                    st.name, st.hp, st.max, st.ac
-                ))
+            } else if {
+                #[cfg(feature = "legacy_client_ai")]
+                {
+                    if let Some(st) = r.server.nivita_status() {
+                        r.hud.append_center_text(
+                            r.size.width,
+                            r.size.height,
+                            &format!("{} — HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac),
+                            20.0,
+                            [0.95, 0.98, 1.0, 0.95],
+                        );
+                        true
+                    } else {
+                        false
+                    }
+                }
+                #[cfg(not(feature = "legacy_client_ai"))]
+                {
+                    false
+                }
+            } {
+                None
             } else {
                 None
             };
@@ -1188,10 +1241,13 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 let line = format!("Boss: {}  HP {}/{}  AC {}", bs.name, bs.hp, bs.max, bs.ac);
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, &line, 4);
-            } else if let Some(st) = r.server.nivita_status() {
-                let line = format!("Boss: {}  HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac);
-                r.hud
-                    .append_perf_text_line(r.size.width, r.size.height, &line, 4);
+            } else {
+                #[cfg(feature = "legacy_client_ai")]
+                if let Some(st) = r.server.nivita_status() {
+                    let line = format!("Boss: {}  HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac);
+                    r.hud
+                        .append_perf_text_line(r.size.width, r.size.height, &line, 4);
+                }
             }
         }
         // Short demo hint for first few seconds

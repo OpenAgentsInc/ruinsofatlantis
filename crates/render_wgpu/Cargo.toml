@@ -9,7 +9,7 @@ path = "src/bin/vox_onepath.rs"
 required-features = ["vox_onepath_demo"]
 
 [features]
-default = ["legacy_client_ai", "legacy_client_combat", "legacy_client_carve"]
+default = []
 # Enables client-side voxel carve/collider/meshing/debris (legacy path)
 legacy_client_carve = ["dep:server_core"]
 # Enables client-side AI updates (legacy/demo only)

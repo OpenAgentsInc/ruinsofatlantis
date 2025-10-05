@@ -135,8 +135,15 @@ Gameplay wiring (prototype)
   - Compiles and exposes the one‑path voxel demo helpers and bin; gates demo grid creation and related helpers in the renderer.
 - `legacy_client_carve` (default: off)
   - Enables legacy client‑side voxel carve/collider/mesh/debris paths for A/B testing. Default builds do not mutate voxels on the client.
+- `legacy_client_ai` (default: off)
+  - Enables legacy client‑side AI updates and local server state reads. Default builds do not read or mutate `server_core` from the renderer.
+- `legacy_client_combat` (default: off)
+  - Enables legacy client‑side projectile/NPC collision and damage plumbing against local server state.
 - `destruct_debug` (default: off)
   - Opt‑in verbose logging for destructible selection/carve/meshing.
+
+Notes
+- Default build of `render_wgpu` compiles with no legacy features and without linking `server_core`. CI enforces this via `cargo xtask ci`.
 
 ## Frame Graph (Renderer)
 - The renderer encodes pass I/O in a minimal static frame-graph (`renderer::graph`).

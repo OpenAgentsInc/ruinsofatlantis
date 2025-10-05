@@ -113,3 +113,27 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 
 - All dependency changes used Cargo tooling per repository policy (no manual Cargo.toml edits).
 - No interactive apps were run; only build/test/lint and code changes.
+
+## 2025-10-04 PM — Issue #99 and #100 landed (decouple defaults + enforce layering)
+
+- Issue #99: Cut hard link (default build) render_wgpu ↔ server_core
+  - Changes (render_wgpu):
+    - gfx/renderer/init.rs: gated `server_core` destructible imports and all destructible/server initializers under feature flags; added safe fallbacks for default build (no voxel grid; neutral debris capacity; tiles_per_meter default).
+    - gfx/mod.rs: `any_zombies_alive()` now prefers replication; falls back to server only when `legacy_client_ai` enabled. `respawn()` works in both modes (dual call-sites for `zombies::build_instances`). Server-only helpers are `#[cfg(feature = "legacy_client_ai")]`.
+    - gfx/renderer/render.rs: removed default references to `server`/`destruct_cfg`; wrapped server lookups (DK/NPC nameplates, boss status fallback) and destructible toggles with feature gates; guarded BossStatus emit to replication behind `legacy_client_ai`.
+    - gfx/renderer/update.rs: guarded server‑based selection/collision paths with `legacy_client_ai`/`legacy_client_combat`; provided neutral defaults when features are off.
+  - Result: `cargo check -p render_wgpu --no-default-features` passes locally (CI will enforce via xtask).
+
+- Issue #100: Flip defaults OFF and enforce layering in CI
+  - crates/render_wgpu/Cargo.toml: `[features] default = []`.
+  - xtask/src/main.rs:
+    - Always run `check/clippy/test` for `render_wgpu --no-default-features` (removed env gates).
+    - Layering guard escalated to error: fails if `cargo tree -p render_wgpu` shows `server_core`.
+  - src/README.md: documented `legacy_client_ai` and `legacy_client_combat` (default off) and noted CI enforcement.
+
+- Verification
+  - No‑default build: OK.
+  - Workspace `cargo xtask ci`: will now fail if renderer links `server_core` by default.
+
+- Tracking
+  - #99 marked ready to close after CI confirms. #100 partially complete (CI updated); feature combo checks remain gated as planned.

@@ -1648,14 +1648,19 @@ impl Renderer {
                                 target_dist = (pc - wpos).length();
                             }
                         } else {
-                            let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
-                            for n in &self.server.npcs {
-                                if !n.alive {
-                                    continue;
-                                }
-                                let d = glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
-                                if d < target_dist {
-                                    target_dist = d;
+                            #[cfg(feature = "legacy_client_ai")]
+                            {
+                                let wpos =
+                                    (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                                for n in &self.server.npcs {
+                                    if !n.alive {
+                                        continue;
+                                    }
+                                    let d =
+                                        glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
+                                    if d < target_dist {
+                                        target_dist = d;
+                                    }
                                 }
                             }
                         }
@@ -1729,6 +1734,7 @@ impl Renderer {
                     }
                     let mut exploded = false;
                     // collide against any alive NPC cylinder in XZ
+                    #[cfg(feature = "legacy_client_ai")]
                     if !self.server.npcs.is_empty() {
                         for n in &self.server.npcs {
                             if !n.alive {
@@ -2369,7 +2375,12 @@ impl Renderer {
         }
         let g = glam::Vec3::new(0.0, -9.8, 0.0);
         let mut instances: Vec<Instance> = Vec::with_capacity(self.debris.len());
-        let vsize = self.destruct_cfg.voxel_size_m.0 as f32;
+        let vsize = {
+            #[cfg(feature = "legacy_client_carve")]
+            { self.destruct_cfg.voxel_size_m.0 as f32 }
+            #[cfg(not(feature = "legacy_client_carve"))]
+            { 0.25f32 }
+        };
         let half = vsize * 0.5;
         let mut i = 0usize;
         while i < self.debris.len() {
@@ -2519,6 +2530,7 @@ impl Renderer {
         // Damage NPCs in radius
         let r2 = radius * radius;
         // Handle DK first for despawn behavior
+        #[cfg(feature = "legacy_client_ai")]
         if let Some(dk_id) = self.dk_id
             && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id.0 == dk_id)
             && n.alive
@@ -2619,7 +2631,9 @@ impl Renderer {
             }
         }
         // Generic NPCs + zombies
+        #[cfg(feature = "legacy_client_ai")]
         let mut k = 0usize;
+        #[cfg(feature = "legacy_client_ai")]
         while k < self.server.npcs.len() {
             let id = self.server.npcs[k].id.0;
             if !self.server.npcs[k].alive {
