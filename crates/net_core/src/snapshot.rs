@@ -76,15 +76,22 @@ impl SnapshotDecode for ChunkMeshDelta {
             buf.copy_from_slice(a);
             Ok(buf)
         }
-        let ver = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let ver = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if ver != VERSION { bail!("unsupported version: {}", ver); }
+        if ver != VERSION {
+            bail!("unsupported version: {ver}");
+        }
         let did = u64::from_le_bytes(take::<8>(inp)?);
         let cx = u32::from_le_bytes(take::<4>(inp)?);
         let cy = u32::from_le_bytes(take::<4>(inp)?);
         let cz = u32::from_le_bytes(take::<4>(inp)?);
         let npos = u32::from_le_bytes(take::<4>(inp)?) as usize;
-        if npos > MAX_MESH_ELEMS { bail!("npos too large: {}", npos); }
+        if npos > MAX_MESH_ELEMS {
+            bail!("npos too large: {npos}");
+        }
         let mut positions = Vec::with_capacity(npos);
         for _ in 0..npos {
             positions.push([
@@ -94,7 +101,9 @@ impl SnapshotDecode for ChunkMeshDelta {
             ]);
         }
         let nnrm = u32::from_le_bytes(take::<4>(inp)?) as usize;
-        if nnrm > MAX_MESH_ELEMS { bail!("nnrm too large: {}", nnrm); }
+        if nnrm > MAX_MESH_ELEMS {
+            bail!("nnrm too large: {nnrm}");
+        }
         let mut normals = Vec::with_capacity(nnrm);
         for _ in 0..nnrm {
             normals.push([
@@ -104,7 +113,9 @@ impl SnapshotDecode for ChunkMeshDelta {
             ]);
         }
         let nidx = u32::from_le_bytes(take::<4>(inp)?) as usize;
-        if nidx > MAX_MESH_ELEMS * 6 { bail!("nidx too large: {}", nidx); }
+        if nidx > MAX_MESH_ELEMS * 6 {
+            bail!("nidx too large: {nidx}");
+        }
         let mut indices = Vec::with_capacity(nidx);
         for _ in 0..nidx {
             indices.push(u32::from_le_bytes(take::<4>(inp)?));
@@ -159,9 +170,14 @@ impl SnapshotDecode for DestructibleInstance {
             buf.copy_from_slice(a);
             Ok(buf)
         }
-        let ver = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let ver = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if ver != VERSION { anyhow::bail!("unsupported version: {}", ver); }
+        if ver != VERSION {
+            anyhow::bail!("unsupported version: {ver}");
+        }
         let did = u64::from_le_bytes(take::<8>(inp)?);
         let mut world_min = [0.0f32; 3];
         for v in &mut world_min {
@@ -217,9 +233,14 @@ impl SnapshotDecode for BossStatusMsg {
             buf.copy_from_slice(a);
             Ok(buf)
         }
-        let ver = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let ver = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if ver != VERSION { bail!("unsupported version: {}", ver); }
+        if ver != VERSION {
+            bail!("unsupported version: {ver}");
+        }
         let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
         if inp.len() < n {
             bail!("short name");
