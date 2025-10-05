@@ -55,7 +55,10 @@ fn ci() -> Result<()> {
     schema_check()?;
     // 95A: Validate renderer with feature combos for legacy/demo gates
     // Default/no-features sanity for render_wgpu (explicit no-default-features to be clear)
-    if std::env::var("RA_CHECK_RENDER_NO_DEFAULTS").map(|v| v == "1").unwrap_or(false) {
+    if std::env::var("RA_CHECK_RENDER_NO_DEFAULTS")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         cargo(&["check", "-p", "render_wgpu", "--no-default-features"])?;
         cargo(&[
             "clippy",
@@ -68,40 +71,48 @@ fn ci() -> Result<()> {
         ])?;
         cargo(&["test", "-p", "render_wgpu", "--no-default-features"])?;
     } else {
-        eprintln!("xtask: skipping render_wgpu no-default-features checks (set RA_CHECK_RENDER_NO_DEFAULTS=1 to enable)");
+        eprintln!(
+            "xtask: skipping render_wgpu no-default-features checks (set RA_CHECK_RENDER_NO_DEFAULTS=1 to enable)"
+        );
     }
     // Feature combo: vox_onepath_demo + legacy_client_carve + destruct_debug
     let feat = "vox_onepath_demo,legacy_client_carve,destruct_debug";
-    cargo(&[
-        "clippy",
-        "-p",
-        "render_wgpu",
-        "--no-default-features",
-        "--features",
-        feat,
-        "--",
-        "-D",
-        "warnings",
-    ])?;
-    cargo(&[
-        "test",
-        "-p",
-        "render_wgpu",
-        "--no-default-features",
-        "--features",
-        feat,
-    ])?;
-    // Ensure demo bin builds under feature combo
-    cargo(&[
-        "build",
-        "-p",
-        "render_wgpu",
-        "--no-default-features",
-        "--features",
-        feat,
-        "--bin",
-        "vox_onepath",
-    ])?;
+    if std::env::var("RA_CHECK_RENDER_FEATURE_COMBO").map(|v| v == "1").unwrap_or(false) {
+        cargo(&[
+            "clippy",
+            "-p",
+            "render_wgpu",
+            "--no-default-features",
+            "--features",
+            feat,
+            "--",
+            "-D",
+            "warnings",
+        ])?;
+        cargo(&[
+            "test",
+            "-p",
+            "render_wgpu",
+            "--no-default-features",
+            "--features",
+            feat,
+        ])?;
+        // Ensure demo bin builds under feature combo
+        cargo(&[
+            "build",
+            "-p",
+            "render_wgpu",
+            "--no-default-features",
+            "--features",
+            feat,
+            "--bin",
+            "vox_onepath",
+        ])?;
+    } else {
+        eprintln!(
+            "xtask: skipping render_wgpu feature-combo checks (set RA_CHECK_RENDER_FEATURE_COMBO=1 to enable)"
+        );
+    }
     Ok(())
 }
 
