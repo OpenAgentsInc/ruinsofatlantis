@@ -277,10 +277,20 @@ impl ApplicationHandler for App {
                     .unwrap_or(false)
                 {
                     let actors = srv.actors.actors.len();
-                    log::info!("demo_server: stepping dt={:.3}s; actors={} wizards={}", dt, actors, wiz_pos.len());
+                    log::info!(
+                        "demo_server: stepping dt={:.3}s; actors={} wizards={}",
+                        dt,
+                        actors,
+                        wiz_pos.len()
+                    );
                 } else {
                     let actors = srv.actors.actors.len();
-                    log::debug!("demo_server: stepping dt={:.3}s; actors={} wizards={} ", dt, actors, wiz_pos.len());
+                    log::debug!(
+                        "demo_server: stepping dt={:.3}s; actors={} wizards={} ",
+                        dt,
+                        actors,
+                        wiz_pos.len()
+                    );
                 }
                 // Send actor-centric snapshot v2 (authoritative snapshot)
                 let asnap = srv.tick_snapshot_actors(self.tick as u64);

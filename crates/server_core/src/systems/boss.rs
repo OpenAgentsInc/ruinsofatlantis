@@ -45,7 +45,9 @@ mod tests {
     #[test]
     fn nivita_moves_toward_target() {
         let mut s = ServerState::new();
-        let id = s.spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0)).expect("spawn");
+        let id = s
+            .spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0))
+            .expect("spawn");
         let start = s.actors.get(id).unwrap().tr.pos;
         let wizards = [Vec3::new(5.0, 0.6, 0.0)];
         boss_seek_and_integrate(&mut s, 0.5, &wizards);

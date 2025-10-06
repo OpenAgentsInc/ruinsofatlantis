@@ -355,7 +355,61 @@ impl ServerState {
     pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
         // Ensure we mirror wizard positions
         self.sync_wizards(wizard_positions);
-        // 1) (actor-based AI handled elsewhere; NPC caster logic omitted in actor refactor)
+        // 1) Minimal actor-based NPC AI (Undead seek nearest hostile Wizard/PC, melee on contact)
+        {
+            // Snapshot candidates to avoid borrow conflicts
+            let wizard_targets: Vec<(ActorId, Vec3, f32)> = self
+                .actors
+                .actors
+                .iter()
+                .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
+                .map(|a| (a.id, a.tr.pos, a.tr.radius))
+                .collect();
+            let undead_ids: Vec<ActorId> = self
+                .actors
+                .actors
+                .iter()
+                .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Zombie))
+                .map(|a| a.id)
+                .collect();
+            for uid in undead_ids {
+                // Defaults until components carry these
+                let speed = 2.0f32;
+                let damage = 5i32;
+                let (pos_u, rad_u) = if let Some(a) = self.actors.get(uid) {
+                    (a.tr.pos, a.tr.radius)
+                } else {
+                    continue;
+                };
+                // Find nearest wizard target
+                let mut best: Option<(f32, ActorId, Vec3, f32)> = None;
+                for (tid, p, r) in &wizard_targets {
+                    // Undead are hostile to both Pc and Wizards teams by default via FactionState
+                    let dx = p.x - pos_u.x;
+                    let dz = p.z - pos_u.z;
+                    let d2 = dx * dx + dz * dz;
+                    if best.as_ref().map(|(b, _, _, _)| d2 < *b).unwrap_or(true) {
+                        best = Some((d2, *tid, *p, *r));
+                    }
+                }
+                if let Some((_d2, tid, tp, tr)) = best {
+                    let to = Vec3::new(tp.x - pos_u.x, 0.0, tp.z - pos_u.z);
+                    let dist = to.length();
+                    let contact = rad_u + tr + 0.35f32;
+                    if dist > contact + 0.02 {
+                        let step = (speed * dt).min(dist - contact);
+                        if step > 1e-4 && let Some(a) = self.actors.get_mut(uid) {
+                            a.tr.pos += to.normalize_or_zero() * step;
+                        }
+                    } else {
+                        // Apply melee damage when in range
+                        if let Some(t) = self.actors.get_mut(tid) {
+                            t.hp.hp = (t.hp.hp - damage).max(0);
+                        }
+                    }
+                }
+            }
+        }
         // 3) Step projectiles and collide vs NPCs and wizards (friendly fire on)
         let mut i = 0usize;
         while i < self.projectiles.len() {
@@ -508,7 +562,11 @@ impl ServerState {
         self.actors.spawn(
             ActorKind::Zombie,
             Team::Undead,
-            Transform { pos, yaw: 0.0, radius },
+            Transform {
+                pos,
+                yaw: 0.0,
+                radius,
+            },
             Health { hp, max: hp },
         )
     }
@@ -530,8 +588,15 @@ impl ServerState {
         let id = self.actors.spawn(
             ActorKind::Boss,
             Team::Undead,
-            Transform { pos, yaw: 0.0, radius },
-            Health { hp: hp_mid, max: hp_mid },
+            Transform {
+                pos,
+                yaw: 0.0,
+                radius,
+            },
+            Health {
+                hp: hp_mid,
+                max: hp_mid,
+            },
         );
         // Build and store boss stats snapshot for replication/logging
         let ab = ec::Abilities {
@@ -691,133 +756,133 @@ impl ServerState {
     // clone_for_snapshot removed
     // Move toward nearest wizard and attack when in range. Returns (wizard_idx, damage) per hit.
     /*
-    pub fn step_npc_ai(&mut self, _dt: f32, _wizards: &[Vec3]) -> Vec<(usize, i32)> { return Vec::new(); }
-/*
-        let _t0 = std::time::Instant::now();
-        if wizards.is_empty() {
-            let ms = _t0.elapsed().as_secs_f64() * 1000.0;
-            metrics::histogram!("tick.ms").record(ms);
-            return Vec::new();
-        }
-        let wizard_r = 0.7f32;
-        let melee_pad = 0.35f32;
-        let attack_cd = 1.5f32;
-        let attack_anim_time = 0.8f32;
-        let mut hits = Vec::new();
-        let mut chosen: Vec<Option<usize>> = vec![None; self.npcs.len()];
-        for (idx, n) in self.npcs.iter_mut().enumerate() {
-            if !n.alive {
-                continue;
+        pub fn step_npc_ai(&mut self, _dt: f32, _wizards: &[Vec3]) -> Vec<(usize, i32)> { return Vec::new(); }
+    /*
+            let _t0 = std::time::Instant::now();
+            if wizards.is_empty() {
+                let ms = _t0.elapsed().as_secs_f64() * 1000.0;
+                metrics::histogram!("tick.ms").record(ms);
+                return Vec::new();
             }
-            n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
-            n.attack_anim = (n.attack_anim - dt).max(0.0);
-            let mut best_i = 0usize;
-            let mut best_d2 = f32::INFINITY;
-            for (i, w) in wizards.iter().enumerate() {
-                let dx = w.x - n.pos.x;
-                let dz = w.z - n.pos.z;
-                let d2 = dx * dx + dz * dz;
-                if d2 < best_d2 {
-                    best_d2 = d2;
-                    best_i = i;
+            let wizard_r = 0.7f32;
+            let melee_pad = 0.35f32;
+            let attack_cd = 1.5f32;
+            let attack_anim_time = 0.8f32;
+            let mut hits = Vec::new();
+            let mut chosen: Vec<Option<usize>> = vec![None; self.npcs.len()];
+            for (idx, n) in self.npcs.iter_mut().enumerate() {
+                if !n.alive {
+                    continue;
                 }
-            }
-            chosen[idx] = Some(best_i);
-            let target = wizards[best_i];
-            let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
-            let dist = to.length();
-            let contact = n.radius + wizard_r + melee_pad;
-            if dist > contact + 0.02 {
-                let step = (n.speed * dt).min(dist - contact);
-                if step > 1e-4 {
-                    n.pos += to.normalize() * step;
+                n.attack_cooldown = (n.attack_cooldown - dt).max(0.0);
+                n.attack_anim = (n.attack_anim - dt).max(0.0);
+                let mut best_i = 0usize;
+                let mut best_d2 = f32::INFINITY;
+                for (i, w) in wizards.iter().enumerate() {
+                    let dx = w.x - n.pos.x;
+                    let dz = w.z - n.pos.z;
+                    let d2 = dx * dx + dz * dz;
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        best_i = i;
+                    }
                 }
-            }
-        }
-        let _c0 = std::time::Instant::now();
-        self.resolve_collisions(wizards);
-        let coll_ms = _c0.elapsed().as_secs_f64() * 1000.0;
-        metrics::histogram!("collider.ms").record(coll_ms);
-        for (idx, n) in self.npcs.iter_mut().enumerate() {
-            if !n.alive {
-                continue;
-            }
-            if let Some(best_i) = chosen[idx] {
+                chosen[idx] = Some(best_i);
                 let target = wizards[best_i];
                 let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
                 let dist = to.length();
                 let contact = n.radius + wizard_r + melee_pad;
-                if dist <= contact + 0.05 && n.attack_cooldown <= 0.0 {
-                    hits.push((best_i, n.damage));
-                    n.attack_cooldown = attack_cd;
-                    n.attack_anim = attack_anim_time;
+                if dist > contact + 0.02 {
+                    let step = (n.speed * dt).min(dist - contact);
+                    if step > 1e-4 {
+                        n.pos += to.normalize() * step;
+                    }
                 }
             }
-        }
-        let ms = _t0.elapsed().as_secs_f64() * 1000.0;
-        metrics::histogram!("tick.ms").record(ms);
-        hits
-    }
-    fn resolve_collisions(&mut self, _wizards: &[Vec3]) { }
-*/
-        let nlen = self.npcs.len();
-        for i in 0..nlen {
-            if !self.npcs[i].alive {
-                continue;
-            }
-            for j in (i + 1)..nlen {
-                if !self.npcs[j].alive {
+            let _c0 = std::time::Instant::now();
+            self.resolve_collisions(wizards);
+            let coll_ms = _c0.elapsed().as_secs_f64() * 1000.0;
+            metrics::histogram!("collider.ms").record(coll_ms);
+            for (idx, n) in self.npcs.iter_mut().enumerate() {
+                if !n.alive {
                     continue;
                 }
-                let mut dx = self.npcs[j].pos.x - self.npcs[i].pos.x;
-                let mut dz = self.npcs[j].pos.z - self.npcs[i].pos.z;
-                let d2 = dx * dx + dz * dz;
-                let min_d = self.npcs[i].radius + self.npcs[j].radius;
-                if d2 < min_d * min_d {
-                    let mut d = d2.sqrt();
-                    if d < 1e-4 {
-                        dx = 1.0;
-                        dz = 0.0;
-                        d = 1e-4;
+                if let Some(best_i) = chosen[idx] {
+                    let target = wizards[best_i];
+                    let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
+                    let dist = to.length();
+                    let contact = n.radius + wizard_r + melee_pad;
+                    if dist <= contact + 0.05 && n.attack_cooldown <= 0.0 {
+                        hits.push((best_i, n.damage));
+                        n.attack_cooldown = attack_cd;
+                        n.attack_anim = attack_anim_time;
                     }
-                    dx /= d;
-                    dz /= d;
-                    let overlap = min_d - d;
-                    let push = overlap * 0.5;
-                    self.npcs[i].pos.x -= dx * push;
-                    self.npcs[i].pos.z -= dz * push;
-                    self.npcs[j].pos.x += dx * push;
-                    self.npcs[j].pos.z += dz * push;
                 }
             }
+            let ms = _t0.elapsed().as_secs_f64() * 1000.0;
+            metrics::histogram!("tick.ms").record(ms);
+            hits
         }
-        let wiz_r = 0.7f32;
-        for n in &mut self.npcs {
-            if !n.alive {
-                continue;
-            }
-            for w in wizards {
-                let mut dx = n.pos.x - w.x;
-                let mut dz = n.pos.z - w.z;
-                let d2 = dx * dx + dz * dz;
-                let min_d = n.radius + wiz_r;
-                if d2 < min_d * min_d {
-                    let mut d = d2.sqrt();
-                    if d < 1e-4 {
-                        dx = 1.0;
-                        dz = 0.0;
-                        d = 1e-4;
-                    }
-                    dx /= d;
-                    dz /= d;
-                    let overlap = min_d - d;
-                    n.pos.x += dx * overlap;
-                    n.pos.z += dz * overlap;
-                }
-            }
-        }
-    }
+        fn resolve_collisions(&mut self, _wizards: &[Vec3]) { }
     */
+            let nlen = self.npcs.len();
+            for i in 0..nlen {
+                if !self.npcs[i].alive {
+                    continue;
+                }
+                for j in (i + 1)..nlen {
+                    if !self.npcs[j].alive {
+                        continue;
+                    }
+                    let mut dx = self.npcs[j].pos.x - self.npcs[i].pos.x;
+                    let mut dz = self.npcs[j].pos.z - self.npcs[i].pos.z;
+                    let d2 = dx * dx + dz * dz;
+                    let min_d = self.npcs[i].radius + self.npcs[j].radius;
+                    if d2 < min_d * min_d {
+                        let mut d = d2.sqrt();
+                        if d < 1e-4 {
+                            dx = 1.0;
+                            dz = 0.0;
+                            d = 1e-4;
+                        }
+                        dx /= d;
+                        dz /= d;
+                        let overlap = min_d - d;
+                        let push = overlap * 0.5;
+                        self.npcs[i].pos.x -= dx * push;
+                        self.npcs[i].pos.z -= dz * push;
+                        self.npcs[j].pos.x += dx * push;
+                        self.npcs[j].pos.z += dz * push;
+                    }
+                }
+            }
+            let wiz_r = 0.7f32;
+            for n in &mut self.npcs {
+                if !n.alive {
+                    continue;
+                }
+                for w in wizards {
+                    let mut dx = n.pos.x - w.x;
+                    let mut dz = n.pos.z - w.z;
+                    let d2 = dx * dx + dz * dz;
+                    let min_d = n.radius + wiz_r;
+                    if d2 < min_d * min_d {
+                        let mut d = d2.sqrt();
+                        if d < 1e-4 {
+                            dx = 1.0;
+                            dz = 0.0;
+                            d = 1e-4;
+                        }
+                        dx /= d;
+                        dz /= d;
+                        let overlap = min_d - d;
+                        n.pos.x += dx * overlap;
+                        n.pos.z += dz * overlap;
+                    }
+                }
+            }
+        }
+        */
 }
 
 // ============================================================================

@@ -290,3 +290,14 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 Next:
 - Delete remaining legacy NPC/Wizard fields and helpers; move boss spawn/status to `nivita_actor_id` and actor lookup.
 - Update tests to actor-centric snapshots and remove legacy TickSnapshot tests.
+
+## 2025-10-06 — Actors-only authority complete
+
+- server_core:
+  - Removed legacy `wizards`/`npcs` storage and all dependent helpers/tests.
+  - Boss system now uses `nivita_actor_id` and actor lookup for movement; default speed used until components carry it.
+  - `tick_snapshot_actors` uses live `ActorStore`; removed `clone_for_snapshot` and all legacy rebuild bridges.
+- platform_winit:
+  - Removed `step_npc_ai` call; demo stepping remains via authoritative step + boss seek helper.
+- tests:
+  - Pruned legacy wizard/NPC tests; added minimal actor-centric test for projectile speed. Workspace tests/clippy green.
