@@ -514,15 +514,11 @@ impl ServerState {
                         }
                         if owner_id == Some(1) {
                             // Flip hostility if any non-PC wizard within AoE
-                            let hit_non_pc = self
-                                .wizards
-                                .iter()
-                                .skip(1)
-                                .any(|w| {
-                                    let dx = w.pos.x - cx;
-                                    let dz = w.pos.z - cz;
-                                    dx * dx + dz * dz <= r2
-                                });
+                            let hit_non_pc = self.wizards.iter().skip(1).any(|w| {
+                                let dx = w.pos.x - cx;
+                                let dz = w.pos.z - cz;
+                                dx * dx + dz * dz <= r2
+                            });
                             if hit_non_pc {
                                 self.wizards_hostile_to_pc = true;
                             }
@@ -586,15 +582,11 @@ impl ServerState {
                             }
                             if owner_id == Some(1) {
                                 // Flip hostility if any non-PC wizard within AoE
-                                let hit_non_pc = self
-                                    .wizards
-                                    .iter()
-                                    .skip(1)
-                                    .any(|w| {
-                                        let dx = w.pos.x - cx;
-                                        let dz = w.pos.z - cz;
-                                        dx * dx + dz * dz <= r2
-                                    });
+                                let hit_non_pc = self.wizards.iter().skip(1).any(|w| {
+                                    let dx = w.pos.x - cx;
+                                    let dz = w.pos.z - cz;
+                                    dx * dx + dz * dz <= r2
+                                });
                                 if hit_non_pc {
                                     self.wizards_hostile_to_pc = true;
                                 }
@@ -700,15 +692,11 @@ impl ServerState {
                     }
                     if owner_id == Some(1) {
                         // Flip hostility only if any non-PC wizard is within AoE
-                        let hit_non_pc = self
-                            .wizards
-                            .iter()
-                            .skip(1)
-                            .any(|w| {
-                                let dx = w.pos.x - cx;
-                                let dz = w.pos.z - cz;
-                                dx * dx + dz * dz <= r2
-                            });
+                        let hit_non_pc = self.wizards.iter().skip(1).any(|w| {
+                            let dx = w.pos.x - cx;
+                            let dz = w.pos.z - cz;
+                            dx * dx + dz * dz <= r2
+                        });
                         if hit_non_pc {
                             self.wizards_hostile_to_pc = true;
                         }
