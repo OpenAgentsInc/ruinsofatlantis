@@ -134,8 +134,9 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Err(err) = state.render() {
                     match err {
-                        SurfaceError::Lost | SurfaceError::Outdated => state
-                            .recreate_surface_current_size(window),
+                        SurfaceError::Lost | SurfaceError::Outdated => {
+                            state.recreate_surface_current_size(window)
+                        }
                         SurfaceError::OutOfMemory => event_loop.exit(),
                         e => eprintln!("render error: {e:?}"),
                     }
@@ -177,10 +178,12 @@ impl ApplicationHandler for App {
                 }
             }
             let msg = net_core::snapshot::NpcListMsg { items };
-            let mut buf = Vec::new();
-            msg.encode(&mut buf);
-            metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(buf.len() as u64);
-            let _ = tx.try_send(buf);
+            let mut payload = Vec::new();
+            msg.encode(&mut payload);
+            let mut framed = Vec::with_capacity(payload.len() + 5);
+            net_core::frame::write_msg(&mut framed, &payload);
+            metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+            let _ = tx.try_send(framed);
         }
         if let Some(win) = &self.window {
             win.request_redraw();

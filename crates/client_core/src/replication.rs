@@ -30,7 +30,12 @@ pub struct BossStatus {
 impl ReplicationBuffer {
     /// Apply a raw message. Returns whether any state changed.
     pub fn apply_message(&mut self, bytes: &[u8]) -> bool {
-        let mut slice: &[u8] = bytes;
+        // If the message is framed, unwrap the payload; else fall back to raw
+        let payload: &[u8] = match net_core::frame::read_msg(bytes) {
+            Ok(p) => p,
+            Err(_) => bytes,
+        };
+        let mut slice: &[u8] = payload;
         if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice) {
             let entry = crate::upload::ChunkMeshEntry {
                 positions: delta.positions,
@@ -41,7 +46,7 @@ impl ReplicationBuffer {
             self.updated_chunks += 1;
             true
         } else {
-            let mut slice2: &[u8] = bytes; // reset since first decode may have advanced
+            let mut slice2: &[u8] = payload; // reset since first decode may have advanced
             if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut slice2) {
                 self.boss_status = Some(BossStatus {
                     name: bs.name,
@@ -52,7 +57,7 @@ impl ReplicationBuffer {
                 });
                 return true;
             }
-            let mut slice3: &[u8] = bytes;
+            let mut slice3: &[u8] = payload;
             if let Ok(list) = net_core::snapshot::NpcListMsg::decode(&mut slice3) {
                 self.npcs.clear();
                 for it in list.items {

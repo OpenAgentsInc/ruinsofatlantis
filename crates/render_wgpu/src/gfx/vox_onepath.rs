@@ -301,8 +301,9 @@ impl ApplicationHandler for App {
                 // Render the frame
                 if let Err(err) = state.render() {
                     match err {
-                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated =>
-                            state.recreate_surface_current_size(window),
+                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated => {
+                            state.recreate_surface_current_size(window)
+                        }
                         wgpu::SurfaceError::OutOfMemory => el.exit(),
                         e => eprintln!("render error: {e:?}"),
                     }
