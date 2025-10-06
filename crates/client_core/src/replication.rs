@@ -90,8 +90,8 @@ impl ReplicationBuffer {
                 }
                 true
             } else {
-                let mut slice_bs: &[u8] = payload; // reset for boss status
-                if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut slice_bs) {
+                let mut bs_slice: &[u8] = payload; // reset for boss status
+                if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut bs_slice) {
                     self.boss_status = Some(BossStatus {
                         name: bs.name,
                         ac: bs.ac,
