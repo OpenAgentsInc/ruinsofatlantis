@@ -381,36 +381,67 @@ impl ServerState {
             }
             // Fireball proximity explode: if we passed within AoE radius of any NPC this step
             if !removed && let ProjKind::Fireball { radius, damage } = kind {
-                    let r2 = radius * radius;
-                    let a = glam::Vec2::new(p0.x, p0.z);
-                    let b = glam::Vec2::new(p1.x, p1.z);
-                    let ab = b - a;
-                    let len2 = ab.length_squared();
-                    let mut best_d2 = f32::INFINITY;
-                    let mut best_center = b;
-                    for m in &self.npcs {
-                        if !m.alive { continue; }
-                        let c = glam::Vec2::new(m.pos.x, m.pos.z);
-                        let t = if len2 <= 1e-12 { 0.0 } else { ((c - a).dot(ab) / len2).clamp(0.0, 1.0) };
-                        let closest = a + ab * t;
-                        let d2 = (closest - c).length_squared();
-                        if d2 < best_d2 { best_d2 = d2; best_center = closest; }
+                let r2 = radius * radius;
+                let a = glam::Vec2::new(p0.x, p0.z);
+                let b = glam::Vec2::new(p1.x, p1.z);
+                let ab = b - a;
+                let len2 = ab.length_squared();
+                let mut best_d2 = f32::INFINITY;
+                let mut best_center = b;
+                for m in &self.npcs {
+                    if !m.alive {
+                        continue;
                     }
-                    if best_d2 <= r2 {
-                        let cx = best_center.x; let cz = best_center.y;
-                        log::info!("server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} ({} npcs)", cx, p1.y, cz, radius, damage, self.npcs.len());
-                        for m in &mut self.npcs {
-                            if !m.alive { continue; }
-                            let dx = m.pos.x - cx; let dz = m.pos.z - cz;
-                            if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); if m.hp == 0 { m.alive = false; } }
-                        }
-                        for m in &mut self.wizards {
-                            if m.hp <= 0 { continue; }
-                            let dx = m.pos.x - cx; let dz = m.pos.z - cz;
-                            if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); }
-                        }
-                        removed = true;
+                    let c = glam::Vec2::new(m.pos.x, m.pos.z);
+                    let t = if len2 <= 1e-12 {
+                        0.0
+                    } else {
+                        ((c - a).dot(ab) / len2).clamp(0.0, 1.0)
+                    };
+                    let closest = a + ab * t;
+                    let d2 = (closest - c).length_squared();
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        best_center = closest;
                     }
+                }
+                if best_d2 <= r2 {
+                    let cx = best_center.x;
+                    let cz = best_center.y;
+                    log::info!(
+                        "server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} ({} npcs)",
+                        cx,
+                        p1.y,
+                        cz,
+                        radius,
+                        damage,
+                        self.npcs.len()
+                    );
+                    for m in &mut self.npcs {
+                        if !m.alive {
+                            continue;
+                        }
+                        let dx = m.pos.x - cx;
+                        let dz = m.pos.z - cz;
+                        if dx * dx + dz * dz <= r2 {
+                            m.hp = (m.hp - damage).max(0);
+                            if m.hp == 0 {
+                                m.alive = false;
+                            }
+                        }
+                    }
+                    for m in &mut self.wizards {
+                        if m.hp <= 0 {
+                            continue;
+                        }
+                        let dx = m.pos.x - cx;
+                        let dz = m.pos.z - cz;
+                        if dx * dx + dz * dz <= r2 {
+                            m.hp = (m.hp - damage).max(0);
+                        }
+                    }
+                    removed = true;
+                }
             }
             if removed {
                 self.projectiles.swap_remove(i);

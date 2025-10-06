@@ -256,12 +256,21 @@ impl ApplicationHandler for App {
                 let _hits = srv.step_npc_ai(dt, &wiz_pos);
                 server_core::systems::boss::boss_seek_and_integrate(srv, dt, &wiz_pos);
                 // Build replication messages
-                log::info!(
-                    "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
-                    dt,
-                    srv.npcs.len(),
-                    wiz_pos.len()
-                );
+                if std::env::var("RA_LOG_DEMO").map(|v| v == "1").unwrap_or(false) {
+                    log::info!(
+                        "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
+                        dt,
+                        srv.npcs.len(),
+                        wiz_pos.len()
+                    );
+                } else {
+                    log::debug!(
+                        "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
+                        dt,
+                        srv.npcs.len(),
+                        wiz_pos.len()
+                    );
+                }
                 let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
                 for n in &srv.npcs {
                     items.push(net_core::snapshot::NpcItem {

@@ -159,11 +159,19 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 let _ = r.repl_buf.apply_message(b);
             }
             metrics::counter!("net.bytes_recv_total", "dir" => "rx").increment(total as u64);
-            log::info!(
-                "replication: drained {} msg(s), npcs now {}",
-                msgs.len(),
-                r.repl_buf.npcs.len()
-            );
+            if std::env::var("RA_LOG_REPL").map(|v| v == "1").unwrap_or(false) {
+                log::info!(
+                    "replication: drained {} msg(s), npcs now {}",
+                    msgs.len(),
+                    r.repl_buf.npcs.len()
+                );
+            } else {
+                log::debug!(
+                    "replication: drained {} msg(s), npcs now {}",
+                    msgs.len(),
+                    r.repl_buf.npcs.len()
+                );
+            }
             let updates = r.repl_buf.drain_mesh_updates();
             use client_core::upload::MeshUpload;
             for (did, chunk, entry) in updates {
