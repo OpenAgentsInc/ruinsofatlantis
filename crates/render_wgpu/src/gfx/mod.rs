@@ -3100,7 +3100,9 @@ impl Renderer {
                     let dx = w.x - n.pos.x;
                     let dz = w.z - n.pos.z;
                     let d2 = dx * dx + dz * dz;
-                    if d2 < best_d2 { best_d2 = d2; }
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                    }
                 }
                 let contact = (n.radius + wizard_r + melee_pad).max(0.01);
                 attacking = best_d2 <= contact * contact;

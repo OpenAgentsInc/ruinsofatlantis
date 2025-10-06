@@ -92,6 +92,8 @@ pub struct Projectile {
     pub kind: ProjKind,
     pub age: f32,
     pub life: f32,
+    /// Optional owner wizard id (1=PC, >=2=NPC wizard)
+    pub owner: Option<u32>,
 }
 
 /// Server-side resolved projectile parameters used for spawning and collision.
@@ -158,6 +160,8 @@ pub struct ServerState {
     /// Live projectiles spawned by wizards.
     pub projectiles: Vec<Projectile>,
     next_proj_id: u32,
+    /// When true, NPC wizards target the PC instead of zombies
+    pub wizards_hostile_to_pc: bool,
 }
 
 impl ServerState {
@@ -201,6 +205,7 @@ impl ServerState {
             wizards: Vec::new(),
             projectiles: Vec::new(),
             next_proj_id: 1,
+            wizards_hostile_to_pc: false,
         }
     }
     /// Mirror wizard positions from the client into authoritative state; create entries as needed.
@@ -243,6 +248,7 @@ impl ServerState {
             kind,
             age,
             life,
+            owner: None,
         });
     }
     /// Spawn a projectile by unit direction; velocity is scaled using server specs.
@@ -262,7 +268,43 @@ impl ServerState {
                 spec.damage
             );
         }
-        self.spawn_projectile(pos, d * spec.speed_mps, kind);
+        // Default owner is None; platform/NPC-cast may override via helper below
+        let id = self.next_proj_id;
+        self.next_proj_id = self.next_proj_id.wrapping_add(1);
+        let (age, life) = (0.0, spec.life_s);
+        self.projectiles.push(Projectile {
+            id,
+            pos,
+            vel: d * spec.speed_mps,
+            kind,
+            age,
+            life,
+            owner: None,
+        });
+    }
+
+    /// Owned variant: attaches the owner wizard id (1=PC, >=2=NPC)
+    pub fn spawn_projectile_from_dir_owned(
+        &mut self,
+        pos: Vec3,
+        dir: Vec3,
+        kind: ProjKind,
+        owner: Option<u32>,
+    ) {
+        let d = dir.normalize_or_zero();
+        let spec = self.projectile_spec(kind);
+        let id = self.next_proj_id;
+        self.next_proj_id = self.next_proj_id.wrapping_add(1);
+        let (age, life) = (0.0, spec.life_s);
+        self.projectiles.push(Projectile {
+            id,
+            pos,
+            vel: d * spec.speed_mps,
+            kind,
+            age,
+            life,
+            owner,
+        });
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
@@ -319,7 +361,7 @@ impl ServerState {
                 w.hp = (w.hp - dmg).max(0);
             }
         }
-        // 2) Wizard simple casting: non-PC wizards shoot Fire Bolts toward nearest zombie
+        // 2) Wizard simple casting: non-PC wizards shoot Fire Bolts
         let wiz_len = self.wizards.len();
         for i in 0..wiz_len {
             if i == 0 {
@@ -335,20 +377,23 @@ impl ServerState {
             if hp <= 0 {
                 continue;
             }
-            // face nearest NPC
-            let mut best = None::<(f32, Vec3)>;
-            for n in &self.npcs {
-                if !n.alive {
-                    continue;
+            // Choose target: PC if hostile_to_pc, else nearest NPC
+            let target = if self.wizards_hostile_to_pc && !self.wizards.is_empty() {
+                self.wizards[0].pos
+            } else {
+                let mut best = None::<(f32, Vec3)>;
+                for n in &self.npcs {
+                    if !n.alive { continue; }
+                    let dx = n.pos.x - pos.x;
+                    let dz = n.pos.z - pos.z;
+                    let d2 = dx * dx + dz * dz;
+                    if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
+                        best = Some((d2, n.pos));
+                    }
                 }
-                let dx = n.pos.x - pos.x;
-                let dz = n.pos.z - pos.z;
-                let d2 = dx * dx + dz * dz;
-                if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
-                    best = Some((d2, n.pos));
-                }
-            }
-            if let Some((_d2, target)) = best {
+                best.map(|(_,p)| p).unwrap_or(pos)
+            };
+            if target != pos {
                 let dir = Vec3::new(target.x - pos.x, 0.0, target.z - pos.z);
                 if dir.length_squared() > 1e-6 {
                     yaw_local = dir.x.atan2(dir.z);
@@ -371,11 +416,19 @@ impl ServerState {
                         .map(|s| s.speed_mps)
                         .unwrap_or(40.0);
                     let vel = dir.normalize_or_zero() * speed;
-                    self.spawn_projectile(
-                        pos + vel.normalize_or_zero() * 0.3,
+                    let owner = Some(self.wizards[i].id);
+                    // Push projectile with owner id so future hostility toggles can reason about source
+                    let id = self.next_proj_id;
+                    self.next_proj_id = self.next_proj_id.wrapping_add(1);
+                    self.projectiles.push(Projectile {
+                        id,
+                        pos: pos + vel.normalize_or_zero() * 0.3,
                         vel,
-                        ProjKind::Firebolt,
-                    );
+                        kind: ProjKind::Firebolt,
+                        age: 0.0,
+                        life: 1.5,
+                        owner,
+                    });
                 }
             }
         }
@@ -391,6 +444,7 @@ impl ServerState {
             let mut removed = false;
             // Resolve projectile spec once for this step to avoid borrow conflicts
             let spec_kind = self.projectile_spec(kind);
+            let owner_id = self.projectiles[i].owner;
             // Collide vs NPCs (direct hit)
             for n in &mut self.npcs {
                 if !n.alive {
@@ -416,6 +470,12 @@ impl ServerState {
                                 hit_npc,
                                 hit_wiz
                             );
+                        }
+                        if owner_id == Some(1) && hit_wiz > 0 {
+                            self.wizards_hostile_to_pc = true;
+                            if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                                log::info!("server: hostility -> PC (impact AoE) hits_wiz={}", hit_wiz);
+                            }
                         }
                     } else {
                         let dmg = spec.damage;
@@ -456,9 +516,21 @@ impl ServerState {
                                     hit_wiz
                                 );
                             }
+                            if owner_id == Some(1) && hit_wiz > 0 {
+                                self.wizards_hostile_to_pc = true;
+                                if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                                    log::info!("server: hostility -> PC (impact wiz) hits_wiz={}", hit_wiz);
+                                }
+                            }
                         } else {
                             let dmg = spec.damage;
                             w.hp = (w.hp - dmg).max(0);
+                            if owner_id == Some(1) {
+                                self.wizards_hostile_to_pc = true;
+                                if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                                    log::info!("server: hostility -> PC (direct hit wiz)");
+                                }
+                            }
                         }
                         removed = true;
                         break;
@@ -511,6 +583,12 @@ impl ServerState {
                             hit_wiz
                         );
                     }
+                    if owner_id == Some(1) && hit_wiz > 0 {
+                        self.wizards_hostile_to_pc = true;
+                        if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                            log::info!("server: hostility -> PC (proximity) hits_wiz={}", hit_wiz);
+                        }
+                    }
                     removed = true;
                 }
             }
@@ -538,6 +616,12 @@ impl ServerState {
                             hit_npc,
                             hit_wiz
                         );
+                    }
+                    if owner_id == Some(1) && hit_wiz > 0 {
+                        self.wizards_hostile_to_pc = true;
+                        if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                            log::info!("server: hostility -> PC (ttl) hits_wiz={}", hit_wiz);
+                        }
                     }
                     removed = true;
                 }

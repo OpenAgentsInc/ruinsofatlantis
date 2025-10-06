@@ -203,10 +203,12 @@ impl ApplicationHandler for App {
                                     d.y,
                                     d.z
                                 );
-                                srv.spawn_projectile_from_dir(
+                                // Owner wizard id 1 = PC in server_core
+                                srv.spawn_projectile_from_dir_owned(
                                     p,
                                     d,
                                     server_core::ProjKind::Firebolt,
+                                    Some(1),
                                 );
                             }
                             net_core::command::ClientCmd::Fireball { pos, dir } => {
@@ -221,10 +223,12 @@ impl ApplicationHandler for App {
                                     d.y,
                                     d.z
                                 );
-                                srv.spawn_projectile_from_dir(
+                                // Owner wizard id 1 = PC in server_core
+                                srv.spawn_projectile_from_dir_owned(
                                     p,
                                     d,
                                     server_core::ProjKind::Fireball,
+                                    Some(1),
                                 );
                             }
                         }
