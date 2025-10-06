@@ -199,6 +199,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.zombie_models = models;
                 r.zombie_ids = ids;
                 r.zombie_count = r.zombie_ids.len() as u32;
+                log::info!(
+                    "replication: built zombie visuals from {} NPCs (joints={})",
+                    r.zombie_count,
+                    r.zombie_joints
+                );
                 // Initialize tracking arrays to correct lengths
                 r.zombie_prev_pos = r
                     .zombie_models
@@ -211,7 +216,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.zombie_time_offset = (0..r.zombie_count as usize)
                     .map(|i| i as f32 * 0.35)
                     .collect();
-                r.zombie_forward_offsets = vec![crate::gfx::zombies::forward_offset(&r.zombie_cpu); r.zombie_count as usize];
+                r.zombie_forward_offsets = vec![
+                    crate::gfx::zombies::forward_offset(&r.zombie_cpu);
+                    r.zombie_count as usize
+                ];
                 // Resize palette buffer (min 64 bytes)
                 let total = (r.zombie_count as usize * r.zombie_joints as usize).max(1) * 64;
                 r.zombie_palettes_buf = r.device.create_buffer(&wgpu::BufferDescriptor {

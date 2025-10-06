@@ -200,6 +200,12 @@ impl ApplicationHandler for App {
                 let _hits = srv.step_npc_ai(dt, &wiz_pos);
                 server_core::systems::boss::boss_seek_and_integrate(srv, dt, &wiz_pos);
                 // Build replication messages
+                log::info!(
+                    "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
+                    dt,
+                    srv.npcs.len(),
+                    wiz_pos.len()
+                );
                 let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
                 for n in &srv.npcs {
                     items.push(net_core::snapshot::NpcItem {
@@ -221,6 +227,7 @@ impl ApplicationHandler for App {
                 metrics::counter!("net.bytes_sent_total", "dir" => "tx")
                     .increment(framed.len() as u64);
                 let _ = tx.try_send(framed);
+                log::info!("demo_server: sent NpcListMsg items={}", list.items.len());
                 // Send BossStatus if available
                 if let Some(st) = srv.nivita_status() {
                     let bs = net_core::snapshot::BossStatusMsg {
@@ -237,6 +244,14 @@ impl ApplicationHandler for App {
                     metrics::counter!("net.bytes_sent_total", "dir" => "tx")
                         .increment(f2.len() as u64);
                     let _ = tx.try_send(f2);
+                    log::info!(
+                        "demo_server: sent BossStatus pos=({:.1},{:.1},{:.1}) hp={}/{}",
+                        st.pos.x,
+                        st.pos.y,
+                        st.pos.z,
+                        st.hp,
+                        st.max
+                    );
                 }
             }
         }
