@@ -233,6 +233,68 @@ impl ServerState {
             self.spawn_npc(pos, 0.95, hp);
         }
     }
+    /// Build a consolidated `TickSnapshot` for clients. Until wizard/projectile state
+    /// lives here, we include wizard positions from the caller and compute NPC yaw toward
+    /// the nearest wizard.
+    pub fn tick_snapshot(
+        &self,
+        tick: u32,
+        wizard_positions: &[Vec3],
+    ) -> net_core::snapshot::TickSnapshot {
+        let mut npcs: Vec<net_core::snapshot::NpcRep> = Vec::with_capacity(self.npcs.len());
+        for n in &self.npcs {
+            // Compute yaw toward nearest wizard if available
+            let mut yaw = 0.0f32;
+            let mut best_d2 = f32::INFINITY;
+            for w in wizard_positions {
+                let dx = w.x - n.pos.x;
+                let dz = w.z - n.pos.z;
+                let d2 = dx * dx + dz * dz;
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                    yaw = dx.atan2(dz);
+                }
+            }
+            npcs.push(net_core::snapshot::NpcRep {
+                id: n.id.0,
+                archetype: 0,
+                pos: [n.pos.x, n.pos.y, n.pos.z],
+                yaw,
+                radius: n.radius,
+                hp: n.hp,
+                max: n.max_hp,
+                alive: n.alive,
+            });
+        }
+        let wizards: Vec<net_core::snapshot::WizardRep> = wizard_positions
+            .iter()
+            .enumerate()
+            .map(|(i, p)| net_core::snapshot::WizardRep {
+                id: i as u32,
+                kind: 0,
+                pos: [p.x, p.y, p.z],
+                yaw: 0.0,
+                hp: 100,
+                max: 100,
+            })
+            .collect();
+        let boss = self.nivita_status().map(|st| net_core::snapshot::BossRep {
+            id: self.nivita_id.map(|i| i.0).unwrap_or(0),
+            name: st.name,
+            pos: [st.pos.x, st.pos.y, st.pos.z],
+            hp: st.hp,
+            max: st.max,
+            ac: st.ac,
+        });
+        net_core::snapshot::TickSnapshot {
+            v: 1,
+            tick,
+            wizards,
+            npcs,
+            projectiles: Vec::new(),
+            boss,
+        }
+    }
     /// Move toward nearest wizard and attack when in range. Returns (wizard_idx, damage) per hit.
     pub fn step_npc_ai(&mut self, dt: f32, wizards: &[Vec3]) -> Vec<(usize, i32)> {
         let _t0 = std::time::Instant::now();
