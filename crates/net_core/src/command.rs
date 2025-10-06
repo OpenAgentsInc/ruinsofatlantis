@@ -10,6 +10,9 @@
 //! - Add new enum variants (e.g., melee swings, toggles). Keep payloads small
 //!   and fixed-size where possible. Versioning is handled at the message level
 //!   with `TAG_CLIENT_CMD`. If the wire evolves, introduce a new tag.
+//! - Never include gameplay tuning in commands (e.g., damage, radius). The
+//!   server is authoritative over projectile parameters and resolves them from
+//!   data specs. Clients send only intent (kind + origin + direction).
 
 use crate::snapshot::SnapshotDecode;
 

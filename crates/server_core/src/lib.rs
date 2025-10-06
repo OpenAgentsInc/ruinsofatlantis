@@ -72,11 +72,15 @@ pub struct Wizard {
     pub cast_timer: f32,
 }
 
-/// Projectile kind enum. Fireball carries radius/damage; Firebolt uses defaults.
+/// Projectile kind enum.
+///
+/// IMPORTANT: The server is authoritative over all projectile tuning
+/// (speed, lifetime, AoE radius, damage). Clients must never supply
+/// gameplay parameters — they only request a kind.
 #[derive(Debug, Clone, Copy)]
 pub enum ProjKind {
     Firebolt,
-    Fireball { radius: f32, damage: i32 },
+    Fireball,
 }
 
 /// Server-side projectile state used for authoritative collision.
@@ -88,6 +92,15 @@ pub struct Projectile {
     pub kind: ProjKind,
     pub age: f32,
     pub life: f32,
+}
+
+/// Server-side resolved projectile parameters used for spawning and collision.
+#[derive(Debug, Clone, Copy)]
+struct ProjectileSpec {
+    speed_mps: f32,
+    life_s: f32,
+    aoe_radius_m: f32,
+    damage: i32,
 }
 
 #[inline]
@@ -190,48 +203,71 @@ impl ServerState {
     pub fn spawn_projectile(&mut self, pos: Vec3, vel: Vec3, kind: ProjKind) {
         let id = self.next_proj_id;
         self.next_proj_id = self.next_proj_id.wrapping_add(1);
-        let (age, life) = match kind {
-            ProjKind::Fireball { .. } => (0.0, 2.0),
-            _ => (0.0, 1.5),
-        };
-        self.projectiles.push(Projectile { id, pos, vel, kind, age, life });
+        let spec = self.projectile_spec(kind);
+        let (age, life) = (0.0, spec.life_s);
+        self.projectiles.push(Projectile {
+            id,
+            pos,
+            vel,
+            kind,
+            age,
+            life,
+        });
     }
-    /// Spawn a projectile by unit direction; speed and damage/radius are chosen by kind.
-    /// Spawn a projectile by unit direction; scales velocity using config defaults.
+    /// Spawn a projectile by unit direction; velocity is scaled using server specs.
     pub fn spawn_projectile_from_dir(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
         let d = dir.normalize_or_zero();
+        let spec = self.projectile_spec(kind);
+        if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false)
+            && matches!(kind, ProjKind::Fireball)
+        {
+            log::info!(
+                "server: Fireball spawn speed={:.1} life={:.2}s r={:.1} dmg={}",
+                spec.speed_mps, spec.life_s, spec.aoe_radius_m, spec.damage
+            );
+        }
+        self.spawn_projectile(pos, d * spec.speed_mps, kind);
+    }
+    /// Resolve server-authoritative projectile spec. Falls back to baked defaults
+    /// when the DB cannot be loaded.
+    fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
+        let db = data_runtime::specs::projectiles::ProjectileSpecDb::load_default().ok();
         match kind {
             ProjKind::Firebolt => {
-                let speed = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
-                    .ok()
-                    .and_then(|db| db.actions.get("AtWillLMB").cloned())
-                    .map(|s| s.speed_mps)
-                    .unwrap_or(40.0);
-                self.spawn_projectile(pos, d * speed, kind);
+                let s = db
+                    .as_ref()
+                    .and_then(|db| db.actions.get("AtWillLMB"))
+                    .cloned()
+                    .unwrap_or(data_runtime::specs::projectiles::ProjectileSpec {
+                        speed_mps: 40.0,
+                        radius_m: 0.2,
+                        damage: 10,
+                        life_s: 1.5,
+                    });
+                ProjectileSpec {
+                    speed_mps: s.speed_mps,
+                    life_s: s.life_s,
+                    aoe_radius_m: 0.0,
+                    damage: s.damage,
+                }
             }
-            ProjKind::Fireball { radius, damage } => {
-                let spec = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
-                    .ok()
-                    .and_then(|db| db.actions.get("EncounterQ").cloned());
-                let speed = spec.as_ref().map(|s| s.speed_mps).unwrap_or(30.0);
-                let rad = if radius > 0.0 {
-                    radius
-                } else {
-                    spec.as_ref().map(|s| s.radius_m).unwrap_or(6.0)
-                };
-                let dmg = if damage > 0 {
-                    damage
-                } else {
-                    spec.as_ref().map(|s| s.damage).unwrap_or(28)
-                };
-                self.spawn_projectile(
-                    pos,
-                    d * speed,
-                    ProjKind::Fireball {
-                        radius: rad,
-                        damage: dmg,
-                    },
-                );
+            ProjKind::Fireball => {
+                let s = db
+                    .as_ref()
+                    .and_then(|db| db.actions.get("EncounterQ"))
+                    .cloned()
+                    .unwrap_or(data_runtime::specs::projectiles::ProjectileSpec {
+                        speed_mps: 30.0,
+                        radius_m: 6.0,
+                        damage: 28,
+                        life_s: 1.5,
+                    });
+                ProjectileSpec {
+                    speed_mps: s.speed_mps,
+                    life_s: s.life_s,
+                    aoe_radius_m: s.radius_m.max(0.0),
+                    damage: s.damage.max(0),
+                }
             }
         }
     }
@@ -317,36 +353,36 @@ impl ServerState {
             let p1 = self.projectiles[i].pos;
             self.projectiles[i].age += dt;
             let mut removed = false;
+            // Resolve projectile spec once for this step to avoid borrow conflicts
+            let spec_kind = self.projectile_spec(kind);
             // Collide vs NPCs (direct hit)
             for n in &mut self.npcs {
                 if !n.alive {
                     continue;
                 }
                 if segment_hits_circle_xz(p0, p1, n.pos, n.radius) {
-                    match kind {
-                        ProjKind::Fireball { radius, damage } => {
-                            // AoE explode on impact
-                            let r2 = radius * radius;
-                            for m in &mut self.npcs {
-                                if !m.alive {
-                                    continue;
-                                }
-                                let dx = m.pos.x - p1.x;
-                                let dz = m.pos.z - p1.z;
-                                if dx * dx + dz * dz <= r2 {
-                                    m.hp = (m.hp - damage).max(0);
-                                    if m.hp == 0 {
-                                        m.alive = false;
-                                    }
+                    let spec = spec_kind;
+                    if matches!(kind, ProjKind::Fireball) {
+                        // AoE explode on impact
+                        let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
+                        for m in &mut self.npcs {
+                            if !m.alive {
+                                continue;
+                            }
+                            let dx = m.pos.x - p1.x;
+                            let dz = m.pos.z - p1.z;
+                            if dx * dx + dz * dz <= r2 {
+                                m.hp = (m.hp - spec.damage).max(0);
+                                if m.hp == 0 {
+                                    m.alive = false;
                                 }
                             }
                         }
-                        _ => {
-                            let dmg = 10;
-                            n.hp = (n.hp - dmg).max(0);
-                            if n.hp == 0 {
-                                n.alive = false;
-                            }
+                    } else {
+                        let dmg = spec.damage;
+                        n.hp = (n.hp - dmg).max(0);
+                        if n.hp == 0 {
+                            n.alive = false;
                         }
                     }
                     removed = true;
@@ -361,25 +397,23 @@ impl ServerState {
                     }
                     let r = 0.7f32;
                     if segment_hits_circle_xz(p0, p1, w.pos, r) {
-                        match kind {
-                            ProjKind::Fireball { radius, damage } => {
-                                // Explode with friendly fire for wizards as well
-                                let r2 = radius * radius;
-                                for m in &mut self.wizards {
-                                    if m.hp <= 0 {
-                                        continue;
-                                    }
-                                    let dx = m.pos.x - p1.x;
-                                    let dz = m.pos.z - p1.z;
-                                    if dx * dx + dz * dz <= r2 {
-                                        m.hp = (m.hp - damage).max(0);
-                                    }
+                        let spec = spec_kind;
+                        if matches!(kind, ProjKind::Fireball) {
+                            // Explode with friendly fire for wizards as well
+                            let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
+                            for m in &mut self.wizards {
+                                if m.hp <= 0 {
+                                    continue;
+                                }
+                                let dx = m.pos.x - p1.x;
+                                let dz = m.pos.z - p1.z;
+                                if dx * dx + dz * dz <= r2 {
+                                    m.hp = (m.hp - spec.damage).max(0);
                                 }
                             }
-                            _ => {
-                                let dmg = 10;
-                                w.hp = (w.hp - dmg).max(0);
-                            }
+                        } else {
+                            let dmg = spec.damage;
+                            w.hp = (w.hp - dmg).max(0);
                         }
                         removed = true;
                         break;
@@ -387,8 +421,9 @@ impl ServerState {
                 }
             }
             // Fireball proximity explode: if we passed within AoE radius of any NPC this step
-            if !removed && let ProjKind::Fireball { radius, damage } = kind {
-                let r2 = radius * radius;
+            if !removed && matches!(kind, ProjKind::Fireball) {
+                let spec = spec_kind;
+                let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                 let a = glam::Vec2::new(p0.x, p0.z);
                 let b = glam::Vec2::new(p1.x, p1.z);
                 let ab = b - a;
@@ -415,15 +450,16 @@ impl ServerState {
                 if best_d2 <= r2 {
                     let cx = best_center.x;
                     let cz = best_center.y;
-                    log::info!(
-                        "server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} ({} npcs)",
-                        cx,
-                        p1.y,
-                        cz,
-                        radius,
-                        damage,
-                        self.npcs.len()
-                    );
+                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                        log::info!(
+                            "server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
+                            cx,
+                            p1.y,
+                            cz,
+                            spec.aoe_radius_m,
+                            spec.damage
+                        );
+                    }
                     for m in &mut self.npcs {
                         if !m.alive {
                             continue;
@@ -431,7 +467,7 @@ impl ServerState {
                         let dx = m.pos.x - cx;
                         let dz = m.pos.z - cz;
                         if dx * dx + dz * dz <= r2 {
-                            m.hp = (m.hp - damage).max(0);
+                            m.hp = (m.hp - spec.damage).max(0);
                             if m.hp == 0 {
                                 m.alive = false;
                             }
@@ -444,7 +480,7 @@ impl ServerState {
                         let dx = m.pos.x - cx;
                         let dz = m.pos.z - cz;
                         if dx * dx + dz * dz <= r2 {
-                            m.hp = (m.hp - damage).max(0);
+                            m.hp = (m.hp - spec.damage).max(0);
                         }
                     }
                     removed = true;
@@ -454,21 +490,46 @@ impl ServerState {
             if !removed {
                 let age = self.projectiles[i].age;
                 let life = self.projectiles[i].life;
-                if age >= life && let ProjKind::Fireball { radius, damage } = kind {
-                    let r2 = radius * radius;
-                    let cx = p1.x; let cz = p1.z;
-                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
-                        log::info!("server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}", cx, p1.y, cz, radius, damage);
+                if age >= life && matches!(kind, ProjKind::Fireball) {
+                    let spec = spec_kind;
+                    let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
+                    let cx = p1.x;
+                    let cz = p1.z;
+                    if std::env::var("RA_LOG_FIREBALL")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
+                        log::info!(
+                            "server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
+                            cx,
+                            p1.y,
+                            cz,
+                            spec.aoe_radius_m,
+                            spec.damage
+                        );
                     }
                     for m in &mut self.npcs {
-                        if !m.alive { continue; }
-                        let dx = m.pos.x - cx; let dz = m.pos.z - cz;
-                        if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); if m.hp == 0 { m.alive = false; } }
+                        if !m.alive {
+                            continue;
+                        }
+                        let dx = m.pos.x - cx;
+                        let dz = m.pos.z - cz;
+                        if dx * dx + dz * dz <= r2 {
+                            m.hp = (m.hp - spec.damage).max(0);
+                            if m.hp == 0 {
+                                m.alive = false;
+                            }
+                        }
                     }
-                    for m in &mut self.wizards { if m.hp > 0 {
-                        let dx = m.pos.x - cx; let dz = m.pos.z - cz;
-                        if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); }
-                    }}
+                    for m in &mut self.wizards {
+                        if m.hp > 0 {
+                            let dx = m.pos.x - cx;
+                            let dz = m.pos.z - cz;
+                            if dx * dx + dz * dz <= r2 {
+                                m.hp = (m.hp - spec.damage).max(0);
+                            }
+                        }
+                    }
                     removed = true;
                 }
             }
@@ -666,7 +727,7 @@ impl ServerState {
                 id: p.id,
                 kind: match p.kind {
                     ProjKind::Firebolt => 0,
-                    ProjKind::Fireball { .. } => 1,
+                    ProjKind::Fireball => 1,
                 },
                 pos: [p.pos.x, p.pos.y, p.pos.z],
                 vel: [p.vel.x, p.vel.y, p.vel.z],
@@ -836,5 +897,36 @@ mod tests {
         srv.spawn_projectile_from_dir(Vec3::ZERO, Vec3::new(0.0, 0.0, 1.0), ProjKind::Firebolt);
         let p = &srv.projectiles[0];
         assert!(p.vel.z > 20.0, "vel was not scaled: {}", p.vel.z);
+    }
+
+    #[test]
+    fn fireball_aoe_damages_ring() {
+        let mut srv = ServerState::new();
+        // Simple ring around origin within ~3m radius
+        for a in [0.0, std::f32::consts::FRAC_PI_2, std::f32::consts::PI, 3.0 * std::f32::consts::FRAC_PI_2] {
+            srv.spawn_npc(Vec3::new(a.cos() * 3.0, 0.6, a.sin() * 3.0), 0.75, 50);
+        }
+        // Cast fireball grazing the ring
+        srv.spawn_projectile_from_dir(Vec3::new(-6.0, 0.6, 0.0), Vec3::new(1.0, 0.0, 0.0), ProjKind::Fireball);
+        // Step forward a bit to ensure proximity explode triggers
+        for _ in 0..20 {
+            srv.step_authoritative(0.05, &[]);
+        }
+        let any_damaged = srv.npcs.iter().any(|n| n.hp < n.max_hp);
+        assert!(any_damaged, "expected at least one NPC to take damage");
+    }
+
+    #[test]
+    fn fireball_ttl_explodes_and_damages() {
+        let mut srv = ServerState::new();
+        // Put a target near the end of the projectile path
+        let target = srv.spawn_npc(Vec3::new(3.0, 0.6, 0.0), 0.9, 40);
+        srv.spawn_projectile_from_dir(Vec3::new(0.0, 0.6, 0.0), Vec3::new(1.0, 0.0, 0.0), ProjKind::Fireball);
+        // Run simulation long enough for TTL explosion
+        for _ in 0..60 {
+            srv.step_authoritative(0.05, &[]);
+        }
+        let n = srv.npcs.iter().find(|n| n.id == target).unwrap();
+        assert!(n.hp < n.max_hp, "target should have taken damage from TTL explode");
     }
 }

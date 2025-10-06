@@ -224,10 +224,7 @@ impl ApplicationHandler for App {
                                 srv.spawn_projectile_from_dir(
                                     p,
                                     d,
-                                    server_core::ProjKind::Fireball {
-                                        radius: 0.0,
-                                        damage: 0,
-                                    },
+                                    server_core::ProjKind::Fireball,
                                 );
                             }
                         }

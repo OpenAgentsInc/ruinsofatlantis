@@ -104,6 +104,7 @@ Gameplay wiring (server‑authoritative)
 - A local server (in‑process) runs NPC AI, wizard casting, projectiles, and damage.
 - The client sends input/cast commands (ClientCmd) and renders snapshots (TickSnapshot) from the server. The renderer never mutates game state.
 - Health bars/HUD derive from replicated HP only.
+- Projectile tuning (speed/life/radius/damage) is server-only. Clients send intent only; the server resolves params from `data_runtime::specs::projectiles`.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).
     - `Globals` now includes: `sun_dir_time` (xyz + day_frac), `sh_coeffs[9]` (RGB irradiance SH‑L2 as vec4 RGB+pad), and `fog_params` (rgb + density).
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.

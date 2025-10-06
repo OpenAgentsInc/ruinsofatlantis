@@ -225,6 +225,9 @@ This running log captures code-level changes made to address the 2025-10-04 audi
   - Using LocalLoopbackTransport; drains ClientCmd → spawns projectiles on server, steps server, sends TickSnapshot; removed legacy message sends.
 - Server:
   - Owns wizard/projectile ECS state; steps NPC melee, wizard casts, projectiles, and authoritative HP; uses projectile spec speeds for NPC and PC casts.
+  - Fireball parameters are now server‑resolved only (speed/life/radius/damage). Removed/ignored any client‑provided AoE tuning. Fixed bug where client passed radius=0, damage=0 causing no AoE damage.
+  - Added RA_LOG_FIREBALL traces on spawn/explode with center/radius/damage; proximity and TTL explosions use spec values consistently.
+  - Added tests: `fireball_aoe_damages_ring` and `fireball_ttl_explodes_and_damages`.
 - CI/Policy:
   - render_wgpu default = []; xtask always checks/clippies/tests no-default build and enforces layering guard error.
 - Docs:
