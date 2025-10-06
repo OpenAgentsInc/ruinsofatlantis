@@ -14,6 +14,7 @@ pub mod frame;
 pub mod interest;
 pub mod snapshot;
 pub mod transport;
+pub mod command;
 
 #[cfg(test)]
 mod tests {

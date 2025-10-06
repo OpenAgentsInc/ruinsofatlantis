@@ -1543,15 +1543,18 @@ impl Renderer {
                         let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
                         match self.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                             super::super::PcCast::FireBolt => {
-                                let fb_col = [2.6, 0.7, 0.18];
-                                self.spawn_firebolt(
-                                    spawn,
-                                    dir_w,
-                                    t,
-                                    Some(self.pc_index),
-                                    false,
-                                    fb_col,
-                                );
+                                // Send authoritative command to server
+                                if let Some(tx) = &self.cmd_tx {
+                                    let cmd = net_core::command::ClientCmd::FireBolt {
+                                        pos: [spawn.x, spawn.y, spawn.z],
+                                        dir: [dir_w.x, dir_w.y, dir_w.z],
+                                    };
+                                    let mut payload = Vec::new();
+                                    cmd.encode(&mut payload);
+                                    let mut framed = Vec::with_capacity(payload.len() + 8);
+                                    net_core::frame::write_msg(&mut framed, &payload);
+                                    let _ = tx.try_send(framed);
+                                }
                                 // Start cooldown via SceneInputs (single source of truth)
                                 let spell_id = "wiz.fire_bolt.srd521";
                                 self.scene_inputs.start_cooldown(
@@ -1561,7 +1564,20 @@ impl Renderer {
                                 );
                             }
                             super::super::PcCast::MagicMissile => {
-                                self.spawn_magic_missile(spawn, dir_w, t);
+                                // For now, treat as three FireBolt spawns server-side
+                                if let Some(tx) = &self.cmd_tx {
+                                    for _ in 0..3 {
+                                        let cmd = net_core::command::ClientCmd::FireBolt {
+                                            pos: [spawn.x, spawn.y, spawn.z],
+                                            dir: [dir_w.x, dir_w.y, dir_w.z],
+                                        };
+                                        let mut payload = Vec::new();
+                                        cmd.encode(&mut payload);
+                                        let mut framed = Vec::with_capacity(payload.len() + 8);
+                                        net_core::frame::write_msg(&mut framed, &payload);
+                                        let _ = tx.try_send(framed.clone());
+                                    }
+                                }
                                 // Start cooldown via SceneInputs
                                 let spell_id = "wiz.magic_missile.srd521";
                                 self.scene_inputs.start_cooldown(
@@ -1571,7 +1587,17 @@ impl Renderer {
                                 );
                             }
                             super::super::PcCast::Fireball => {
-                                self.spawn_fireball(spawn, dir_w, t, Some(self.pc_index));
+                                if let Some(tx) = &self.cmd_tx {
+                                    let cmd = net_core::command::ClientCmd::Fireball {
+                                        pos: [spawn.x, spawn.y, spawn.z],
+                                        dir: [dir_w.x, dir_w.y, dir_w.z],
+                                    };
+                                    let mut payload = Vec::new();
+                                    cmd.encode(&mut payload);
+                                    let mut framed = Vec::with_capacity(payload.len() + 8);
+                                    net_core::frame::write_msg(&mut framed, &payload);
+                                    let _ = tx.try_send(framed);
+                                }
                                 let spell_id = "wiz.fireball.srd521";
                                 self.scene_inputs.start_cooldown(
                                     spell_id,
@@ -2559,6 +2585,7 @@ impl Renderer {
     /// Spawn Magic Missile visuals: three darts on a horizontal plane.
     /// The center dart flies straight forward; the side darts fly with a slight
     /// outward yaw so they gradually spread as they travel.
+    #[allow(dead_code)]
     pub(crate) fn spawn_magic_missile(&mut self, origin: glam::Vec3, dir: glam::Vec3, t: f32) {
         let base_dir = dir.normalize_or_zero();
         // Ultra-tight spread: ±2 degrees about Y (horizontal plane)

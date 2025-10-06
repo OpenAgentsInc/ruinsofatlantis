@@ -360,6 +360,9 @@ pub struct Renderer {
     hud_model: ux_hud::HudModel,
     // Controller facade (client_core-owned logic)
     controller_state: client_core::facade::controller::ControllerState,
+    // Optional command transmitter to server (client->server commands)
+    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
+    cmd_tx: Option<net_core::channel::Tx>,
     // Pending pointer-lock request emitted by controller systems; applied by platform
     pointer_lock_request: Option<bool>,
     // Actual pointer-lock state as applied by the platform (used to choose
@@ -583,6 +586,10 @@ impl Renderer {
     /// and applied each frame before scene updates.
     pub fn set_replication_rx(&mut self, rx: net_core::channel::Rx) {
         self.repl_rx = Some(rx);
+    }
+    /// Attach a server-command transmitter so the client can send actions to the server.
+    pub fn set_command_tx(&mut self, tx: net_core::channel::Tx) {
+        self.cmd_tx = Some(tx);
     }
     #[inline]
     pub fn is_vox_onepath(&self) -> bool {

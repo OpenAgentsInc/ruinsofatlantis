@@ -3,7 +3,7 @@
 //! Provides a minimal `run()` that creates a window and drives the
 //! `render_wgpu::gfx::Renderer` via winit's ApplicationHandler API.
 
-use net_core::snapshot::SnapshotEncode;
+use net_core::snapshot::{SnapshotEncode, SnapshotDecode};
 use net_core::transport::Transport;
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
@@ -68,8 +68,9 @@ impl ApplicationHandler for App {
             };
             // Wire a local replication channel for NPC/Boss status
             let (_srv, _cli) = net_core::transport::LocalLoopbackTransport::new(4096);
-            let (_tx_cli, rx_cli) = _cli.split();
+            let (tx_cli, rx_cli) = _cli.split();
             state.set_replication_rx(rx_cli);
+            state.set_command_tx(tx_cli);
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.window = Some(window);
@@ -178,9 +179,35 @@ impl ApplicationHandler for App {
         // Emit replicated NPC/Boss each frame and step demo server (demo only)
         #[cfg(feature = "demo_server")]
         if let (Some(srv_xport), Some(s)) = (&self.transport_srv, &mut self.state) {
-            // Step demo server AI toward wizard positions
+            // Step server; drain client->server commands before stepping
             #[cfg(feature = "demo_server")]
             if let Some(srv) = &mut self.demo_server {
+                // Drain any client commands (projectiles, etc.)
+                while let Some(bytes) = srv_xport.try_recv() {
+                    let payload = match net_core::frame::read_msg(&bytes) {
+                        Ok(p) => p,
+                        Err(_) => &bytes,
+                    };
+                    let mut slice: &[u8] = payload;
+                    if let Ok(cmd) = net_core::command::ClientCmd::decode(&mut slice) {
+                        match cmd {
+                            net_core::command::ClientCmd::FireBolt { pos, dir } => {
+                                let p = glam::vec3(pos[0], pos[1], pos[2]);
+                                let d = glam::vec3(dir[0], dir[1], dir[2]);
+                                srv.spawn_projectile(p, d, server_core::ProjKind::Firebolt);
+                            }
+                            net_core::command::ClientCmd::Fireball { pos, dir } => {
+                                let p = glam::vec3(pos[0], pos[1], pos[2]);
+                                let d = glam::vec3(dir[0], dir[1], dir[2]);
+                                srv.spawn_projectile(
+                                    p,
+                                    d,
+                                    server_core::ProjKind::Fireball { radius: 6.0, damage: 28 },
+                                );
+                            }
+                        }
+                    }
+                }
                 // dt
                 let dt = if let Some(t0) = self.last_time.take() {
                     let now = {

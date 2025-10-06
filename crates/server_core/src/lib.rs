@@ -178,7 +178,7 @@ impl ServerState {
             self.wizards.truncate(wiz_pos.len());
         }
     }
-    fn spawn_projectile(&mut self, pos: Vec3, vel: Vec3, kind: ProjKind) {
+    pub fn spawn_projectile(&mut self, pos: Vec3, vel: Vec3, kind: ProjKind) {
         let id = self.next_proj_id;
         self.next_proj_id = self.next_proj_id.wrapping_add(1);
         self.projectiles.push(Projectile { id, pos, vel, kind });
@@ -197,7 +197,9 @@ impl ServerState {
         // 2) Wizard simple casting: non-PC wizards shoot Fire Bolts toward nearest zombie
         let wiz_len = self.wizards.len();
         for i in 0..wiz_len {
-            if i == 0 { continue; }
+            if i == 0 {
+                continue;
+            }
             let (pos, hp);
             {
                 let w = &mut self.wizards[i];
@@ -205,14 +207,18 @@ impl ServerState {
                 hp = w.hp;
             }
             let mut yaw_local = 0.0f32;
-            if hp <= 0 { continue; }
+            if hp <= 0 {
+                continue;
+            }
             // face nearest NPC
             let mut best = None::<(f32, Vec3)>;
             for n in &self.npcs {
-                if !n.alive { continue; }
+                if !n.alive {
+                    continue;
+                }
                 let dx = n.pos.x - pos.x;
                 let dz = n.pos.z - pos.z;
-                let d2 = dx*dx + dz*dz;
+                let d2 = dx * dx + dz * dz;
                 if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
                     best = Some((d2, n.pos));
                 }
@@ -227,13 +233,20 @@ impl ServerState {
                     let w = &mut self.wizards[i];
                     w.yaw = yaw_local;
                     w.cast_timer -= dt;
-                    if w.cast_timer <= 0.0 { fire_now = true; w.cast_timer = 1.5; }
+                    if w.cast_timer <= 0.0 {
+                        fire_now = true;
+                        w.cast_timer = 1.5;
+                    }
                 }
                 if fire_now {
                     // Fire a bolt and reset timer
                     let speed = 36.0;
                     let vel = dir.normalize_or_zero() * speed;
-                    self.spawn_projectile(pos + vel.normalize_or_zero() * 0.3, vel, ProjKind::Firebolt);
+                    self.spawn_projectile(
+                        pos + vel.normalize_or_zero() * 0.3,
+                        vel,
+                        ProjKind::Firebolt,
+                    );
                 }
             }
         }
@@ -247,11 +260,18 @@ impl ServerState {
             let mut removed = false;
             // Collide vs NPCs
             for n in &mut self.npcs {
-                if !n.alive { continue; }
+                if !n.alive {
+                    continue;
+                }
                 if segment_hits_circle_xz(p0, p1, n.pos, n.radius) {
-                    let dmg = match self.projectiles[i].kind { ProjKind::Fireball { damage, .. } => damage, _ => 10 };
+                    let dmg = match self.projectiles[i].kind {
+                        ProjKind::Fireball { damage, .. } => damage,
+                        _ => 10,
+                    };
                     n.hp = (n.hp - dmg).max(0);
-                    if n.hp == 0 { n.alive = false; }
+                    if n.hp == 0 {
+                        n.alive = false;
+                    }
                     removed = true;
                     break;
                 }
@@ -259,10 +279,15 @@ impl ServerState {
             if !removed {
                 // Collide vs wizards
                 for w in &mut self.wizards {
-                    if w.hp <= 0 { continue; }
+                    if w.hp <= 0 {
+                        continue;
+                    }
                     let r = 0.7f32;
                     if segment_hits_circle_xz(p0, p1, w.pos, r) {
-                        let dmg = match self.projectiles[i].kind { ProjKind::Fireball { damage, .. } => damage, _ => 10 };
+                        let dmg = match self.projectiles[i].kind {
+                            ProjKind::Fireball { damage, .. } => damage,
+                            _ => 10,
+                        };
                         w.hp = (w.hp - dmg).max(0);
                         removed = true;
                         break;

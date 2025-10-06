@@ -1818,6 +1818,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         server,
         wizard_hp: vec![100; scene_build.wizard_count as usize],
         wizard_hp_max: 100,
+        cmd_tx: None,
         pc_alive: true,
         wizards_hostile_to_pc: false,
         wizard_fire_cycle_count: vec![0; scene_build.wizard_count as usize],
