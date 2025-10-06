@@ -46,19 +46,10 @@ impl ReplicationBuffer {
             self.updated_chunks += 1;
             true
         } else {
-            let mut slice2: &[u8] = payload; // reset since first decode may have advanced
-            if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut slice2) {
-                self.boss_status = Some(BossStatus {
-                    name: bs.name,
-                    ac: bs.ac,
-                    hp: bs.hp,
-                    max: bs.max,
-                    pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]),
-                });
-                return true;
-            }
-            let mut slice3: &[u8] = payload;
-            if let Ok(list) = net_core::snapshot::NpcListMsg::decode(&mut slice3) {
+            // Prefer NpcListMsg before BossStatusMsg to avoid false-positive
+            // decodes on the list payload (both are versioned).
+            let mut slice_list: &[u8] = payload;
+            if let Ok(list) = net_core::snapshot::NpcListMsg::decode(&mut slice_list) {
                 self.npcs.clear();
                 for it in list.items {
                     self.npcs.push(NpcView {
@@ -73,7 +64,19 @@ impl ReplicationBuffer {
                 }
                 true
             } else {
-                false
+                let mut slice_bs: &[u8] = payload; // reset for boss status
+                if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut slice_bs) {
+                    self.boss_status = Some(BossStatus {
+                        name: bs.name,
+                        ac: bs.ac,
+                        hp: bs.hp,
+                        max: bs.max,
+                        pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]),
+                    });
+                    true
+                } else {
+                    false
+                }
             }
         }
     }

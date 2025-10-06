@@ -269,13 +269,13 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 });
             }
             if !inst_cpu.is_empty() {
-                r.zombie_instances = r
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("zombie-instances(repl-fallback)"),
-                        contents: bytemuck::cast_slice(&inst_cpu),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
+                r.zombie_instances =
+                    r.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("zombie-instances(repl-fallback)"),
+                            contents: bytemuck::cast_slice(&inst_cpu),
+                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        });
                 r.zombie_instances_cpu = inst_cpu;
                 r.zombie_models = models;
                 r.zombie_ids = ids;
