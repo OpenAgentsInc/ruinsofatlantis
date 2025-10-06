@@ -218,12 +218,17 @@ impl ServerState {
     pub fn spawn_projectile_from_dir(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
         let d = dir.normalize_or_zero();
         let spec = self.projectile_spec(kind);
-        if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false)
+        if std::env::var("RA_LOG_FIREBALL")
+            .map(|v| v == "1")
+            .unwrap_or(false)
             && matches!(kind, ProjKind::Fireball)
         {
             log::info!(
                 "server: Fireball spawn speed={:.1} life={:.2}s r={:.1} dmg={}",
-                spec.speed_mps, spec.life_s, spec.aoe_radius_m, spec.damage
+                spec.speed_mps,
+                spec.life_s,
+                spec.aoe_radius_m,
+                spec.damage
             );
         }
         self.spawn_projectile(pos, d * spec.speed_mps, kind);
@@ -365,6 +370,7 @@ impl ServerState {
                     if matches!(kind, ProjKind::Fireball) {
                         // AoE explode on impact
                         let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
+                        let mut hit_npc = 0u32;
                         for m in &mut self.npcs {
                             if !m.alive {
                                 continue;
@@ -376,7 +382,24 @@ impl ServerState {
                                 if m.hp == 0 {
                                     m.alive = false;
                                 }
+                                hit_npc += 1;
                             }
+                        }
+                        let mut hit_wiz = 0u32;
+                        for m in &mut self.wizards {
+                            if m.hp <= 0 { continue; }
+                            let dx = m.pos.x - p1.x;
+                            let dz = m.pos.z - p1.z;
+                            if dx * dx + dz * dz <= r2 {
+                                m.hp = (m.hp - spec.damage).max(0);
+                                hit_wiz += 1;
+                            }
+                        }
+                        if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                            log::info!(
+                                "server: Fireball impact explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
+                                p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                            );
                         }
                     } else {
                         let dmg = spec.damage;
@@ -401,15 +424,21 @@ impl ServerState {
                         if matches!(kind, ProjKind::Fireball) {
                             // Explode with friendly fire for wizards as well
                             let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
+                            let mut hit_wiz = 0u32;
                             for m in &mut self.wizards {
-                                if m.hp <= 0 {
-                                    continue;
-                                }
+                                if m.hp <= 0 { continue; }
                                 let dx = m.pos.x - p1.x;
                                 let dz = m.pos.z - p1.z;
                                 if dx * dx + dz * dz <= r2 {
                                     m.hp = (m.hp - spec.damage).max(0);
+                                    hit_wiz += 1;
                                 }
+                            }
+                            if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                                log::info!(
+                                    "server: Fireball impact explode (wiz) at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(Wiz={})",
+                                    p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage, hit_wiz
+                                );
                             }
                         } else {
                             let dmg = spec.damage;
@@ -450,16 +479,7 @@ impl ServerState {
                 if best_d2 <= r2 {
                     let cx = best_center.x;
                     let cz = best_center.y;
-                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
-                        log::info!(
-                            "server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                            cx,
-                            p1.y,
-                            cz,
-                            spec.aoe_radius_m,
-                            spec.damage
-                        );
-                    }
+                    let mut hit_npc = 0u32;
                     for m in &mut self.npcs {
                         if !m.alive {
                             continue;
@@ -471,8 +491,10 @@ impl ServerState {
                             if m.hp == 0 {
                                 m.alive = false;
                             }
+                            hit_npc += 1;
                         }
                     }
+                    let mut hit_wiz = 0u32;
                     for m in &mut self.wizards {
                         if m.hp <= 0 {
                             continue;
@@ -481,7 +503,14 @@ impl ServerState {
                         let dz = m.pos.z - cz;
                         if dx * dx + dz * dz <= r2 {
                             m.hp = (m.hp - spec.damage).max(0);
+                            hit_wiz += 1;
                         }
+                    }
+                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                        log::info!(
+                            "server: Fireball proximity explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
+                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                        );
                     }
                     removed = true;
                 }
@@ -495,19 +524,7 @@ impl ServerState {
                     let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                     let cx = p1.x;
                     let cz = p1.z;
-                    if std::env::var("RA_LOG_FIREBALL")
-                        .map(|v| v == "1")
-                        .unwrap_or(false)
-                    {
-                        log::info!(
-                            "server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                            cx,
-                            p1.y,
-                            cz,
-                            spec.aoe_radius_m,
-                            spec.damage
-                        );
-                    }
+                    let mut hit_npc = 0u32;
                     for m in &mut self.npcs {
                         if !m.alive {
                             continue;
@@ -519,16 +536,28 @@ impl ServerState {
                             if m.hp == 0 {
                                 m.alive = false;
                             }
+                            hit_npc += 1;
                         }
                     }
+                    let mut hit_wiz = 0u32;
                     for m in &mut self.wizards {
                         if m.hp > 0 {
                             let dx = m.pos.x - cx;
                             let dz = m.pos.z - cz;
                             if dx * dx + dz * dz <= r2 {
                                 m.hp = (m.hp - spec.damage).max(0);
+                                hit_wiz += 1;
                             }
                         }
+                    }
+                    if std::env::var("RA_LOG_FIREBALL")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
+                        log::info!(
+                            "server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
+                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                        );
                     }
                     removed = true;
                 }
@@ -903,11 +932,20 @@ mod tests {
     fn fireball_aoe_damages_ring() {
         let mut srv = ServerState::new();
         // Simple ring around origin within ~3m radius
-        for a in [0.0, std::f32::consts::FRAC_PI_2, std::f32::consts::PI, 3.0 * std::f32::consts::FRAC_PI_2] {
+        for a in [
+            0.0,
+            std::f32::consts::FRAC_PI_2,
+            std::f32::consts::PI,
+            3.0 * std::f32::consts::FRAC_PI_2,
+        ] {
             srv.spawn_npc(Vec3::new(a.cos() * 3.0, 0.6, a.sin() * 3.0), 0.75, 50);
         }
         // Cast fireball grazing the ring
-        srv.spawn_projectile_from_dir(Vec3::new(-6.0, 0.6, 0.0), Vec3::new(1.0, 0.0, 0.0), ProjKind::Fireball);
+        srv.spawn_projectile_from_dir(
+            Vec3::new(-6.0, 0.6, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            ProjKind::Fireball,
+        );
         // Step forward a bit to ensure proximity explode triggers
         for _ in 0..20 {
             srv.step_authoritative(0.05, &[]);
@@ -921,12 +959,19 @@ mod tests {
         let mut srv = ServerState::new();
         // Put a target near the end of the projectile path
         let target = srv.spawn_npc(Vec3::new(3.0, 0.6, 0.0), 0.9, 40);
-        srv.spawn_projectile_from_dir(Vec3::new(0.0, 0.6, 0.0), Vec3::new(1.0, 0.0, 0.0), ProjKind::Fireball);
+        srv.spawn_projectile_from_dir(
+            Vec3::new(0.0, 0.6, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            ProjKind::Fireball,
+        );
         // Run simulation long enough for TTL explosion
         for _ in 0..60 {
             srv.step_authoritative(0.05, &[]);
         }
         let n = srv.npcs.iter().find(|n| n.id == target).unwrap();
-        assert!(n.hp < n.max_hp, "target should have taken damage from TTL explode");
+        assert!(
+            n.hp < n.max_hp,
+            "target should have taken damage from TTL explode"
+        );
     }
 }
