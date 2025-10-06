@@ -291,6 +291,25 @@ impl ApplicationHandler for App {
                 // Authoritative TickSnapshot from server
                 srv.step_authoritative(dt, &wiz_pos);
                 let ts = srv.tick_snapshot(self.tick);
+                if std::env::var("RA_LOG_REPL").map(|v| v == "1").unwrap_or(false) {
+                    let wiz = ts.wizards.len();
+                    let npcs = ts.npcs.len();
+                    let mut min_wiz_hp = i32::MAX;
+                    let mut max_wiz_hp = i32::MIN;
+                    for w in &ts.wizards {
+                        min_wiz_hp = min_wiz_hp.min(w.hp);
+                        max_wiz_hp = max_wiz_hp.max(w.hp);
+                    }
+                    log::info!(
+                        "snapshot: tick={} wizards={} (hp min={}, max={}) npcs={} projectiles={}",
+                        self.tick,
+                        wiz,
+                        if wiz == 0 { 0 } else { min_wiz_hp },
+                        if wiz == 0 { 0 } else { max_wiz_hp },
+                        npcs,
+                        ts.projectiles.len()
+                    );
+                }
                 let mut p3 = Vec::new();
                 ts.encode(&mut p3);
                 let mut f3 = Vec::with_capacity(p3.len() + 8);

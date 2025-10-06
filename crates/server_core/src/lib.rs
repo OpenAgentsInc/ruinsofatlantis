@@ -166,36 +166,50 @@ pub struct ServerState {
 
 impl ServerState {
     #[inline]
-    fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32) {
-        let mut hit_npc = 0u32;
-        for m in &mut self.npcs {
-            if !m.alive {
-                continue;
+fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32) {
+    let mut hit_npc = 0u32;
+    for m in &mut self.npcs {
+        if !m.alive {
+            continue;
+        }
+        let dx = m.pos.x - cx;
+        let dz = m.pos.z - cz;
+        if dx * dx + dz * dz <= r2 {
+            let before = m.hp;
+            m.hp = (m.hp - damage).max(0);
+            if m.hp == 0 {
+                m.alive = false;
             }
-            let dx = m.pos.x - cx;
-            let dz = m.pos.z - cz;
-            if dx * dx + dz * dz <= r2 {
-                m.hp = (m.hp - damage).max(0);
-                if m.hp == 0 {
-                    m.alive = false;
-                }
-                hit_npc += 1;
+            hit_npc += 1;
+            if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                log::info!(
+                    "combat: npc {:?} hp {} -> {} by {} at ({:.2},{:.2})",
+                    m.id, before, m.hp, damage, cx, cz
+                );
             }
         }
-        let mut hit_wiz = 0u32;
-        for m in &mut self.wizards {
-            if m.hp <= 0 {
-                continue;
-            }
-            let dx = m.pos.x - cx;
-            let dz = m.pos.z - cz;
-            if dx * dx + dz * dz <= r2 {
-                m.hp = (m.hp - damage).max(0);
-                hit_wiz += 1;
-            }
-        }
-        (hit_npc, hit_wiz)
     }
+    let mut hit_wiz = 0u32;
+    for m in &mut self.wizards {
+        if m.hp <= 0 {
+            continue;
+        }
+        let dx = m.pos.x - cx;
+        let dz = m.pos.z - cz;
+        if dx * dx + dz * dz <= r2 {
+            let before = m.hp;
+            m.hp = (m.hp - damage).max(0);
+            hit_wiz += 1;
+            if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                log::info!(
+                    "combat: wizard id={} hp {} -> {} by {} at ({:.2},{:.2})",
+                    m.id, before, m.hp, damage, cx, cz
+                );
+            }
+        }
+    }
+    (hit_npc, hit_wiz)
+}
     pub fn new() -> Self {
         Self {
             next_id: 1,
@@ -383,7 +397,9 @@ impl ServerState {
             } else {
                 let mut best = None::<(f32, Vec3)>;
                 for n in &self.npcs {
-                    if !n.alive { continue; }
+                    if !n.alive {
+                        continue;
+                    }
                     let dx = n.pos.x - pos.x;
                     let dz = n.pos.z - pos.z;
                     let d2 = dx * dx + dz * dz;
@@ -391,7 +407,7 @@ impl ServerState {
                         best = Some((d2, n.pos));
                     }
                 }
-                best.map(|(_,p)| p).unwrap_or(pos)
+                best.map(|(_, p)| p).unwrap_or(pos)
             };
             if target != pos {
                 let dir = Vec3::new(target.x - pos.x, 0.0, target.z - pos.z);
@@ -473,8 +489,14 @@ impl ServerState {
                         }
                         if owner_id == Some(1) && hit_wiz > 0 {
                             self.wizards_hostile_to_pc = true;
-                            if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
-                                log::info!("server: hostility -> PC (impact AoE) hits_wiz={}", hit_wiz);
+                            if std::env::var("RA_LOG_COMBAT")
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                            {
+                                log::info!(
+                                    "server: hostility -> PC (impact AoE) hits_wiz={}",
+                                    hit_wiz
+                                );
                             }
                         }
                     } else {
@@ -518,8 +540,14 @@ impl ServerState {
                             }
                             if owner_id == Some(1) && hit_wiz > 0 {
                                 self.wizards_hostile_to_pc = true;
-                                if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
-                                    log::info!("server: hostility -> PC (impact wiz) hits_wiz={}", hit_wiz);
+                                if std::env::var("RA_LOG_COMBAT")
+                                    .map(|v| v == "1")
+                                    .unwrap_or(false)
+                                {
+                                    log::info!(
+                                        "server: hostility -> PC (impact wiz) hits_wiz={}",
+                                        hit_wiz
+                                    );
                                 }
                             }
                         } else {
@@ -527,7 +555,10 @@ impl ServerState {
                             w.hp = (w.hp - dmg).max(0);
                             if owner_id == Some(1) {
                                 self.wizards_hostile_to_pc = true;
-                                if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                                if std::env::var("RA_LOG_COMBAT")
+                                    .map(|v| v == "1")
+                                    .unwrap_or(false)
+                                {
                                     log::info!("server: hostility -> PC (direct hit wiz)");
                                 }
                             }
@@ -585,7 +616,10 @@ impl ServerState {
                     }
                     if owner_id == Some(1) && hit_wiz > 0 {
                         self.wizards_hostile_to_pc = true;
-                        if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                        if std::env::var("RA_LOG_COMBAT")
+                            .map(|v| v == "1")
+                            .unwrap_or(false)
+                        {
                             log::info!("server: hostility -> PC (proximity) hits_wiz={}", hit_wiz);
                         }
                     }
@@ -619,7 +653,10 @@ impl ServerState {
                     }
                     if owner_id == Some(1) && hit_wiz > 0 {
                         self.wizards_hostile_to_pc = true;
-                        if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
+                        if std::env::var("RA_LOG_COMBAT")
+                            .map(|v| v == "1")
+                            .unwrap_or(false)
+                        {
                             log::info!("server: hostility -> PC (ttl) hits_wiz={}", hit_wiz);
                         }
                     }

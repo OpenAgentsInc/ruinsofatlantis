@@ -2460,6 +2460,9 @@ impl Renderer {
             if w.hp < prev {
                 let dmg = (prev - w.hp).max(0);
                 self.damage.spawn(head, dmg);
+                if std::env::var("RA_LOG_UI").map(|v| v == "1").unwrap_or(false) {
+                    log::info!("ui: floater wizard id={} dmg={} pos=({:.2},{:.2},{:.2})", w.id, dmg, head.x, head.y, head.z);
+                }
             }
             self.wiz_hp_overlay.insert(w.id, w.hp);
         }
@@ -2488,6 +2491,9 @@ impl Renderer {
                 if hp < prev {
                     let dmg = (prev - hp).max(0);
                     self.damage.spawn(head.truncate(), dmg);
+                    if std::env::var("RA_LOG_UI").map(|v| v == "1").unwrap_or(false) {
+                        log::info!("ui: floater npc id={} dmg={} pos=({:.2},{:.2},{:.2})", id, dmg, head.x, head.y, head.z);
+                    }
                 }
                 // Update the overlay cache with the latest authoritative HP.
                 self.npc_hp_overlay.insert(*id, hp);
