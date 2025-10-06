@@ -56,6 +56,11 @@ pub struct BossStatus {
     pub pos: Vec3,
 }
 
+/// Authoritative wizard model backed by the server.
+///
+/// Index 0 is reserved for the local PC in the demo; additional entries model
+/// NPC-controlled wizards. This is a lightweight stand-in for a fuller ECS
+/// until the sim integrates component storage for actors.
 #[derive(Debug, Clone)]
 pub struct Wizard {
     pub id: u32,
@@ -67,12 +72,14 @@ pub struct Wizard {
     pub cast_timer: f32,
 }
 
+/// Projectile kind enum. Fireball carries radius/damage; Firebolt uses defaults.
 #[derive(Debug, Clone, Copy)]
 pub enum ProjKind {
     Firebolt,
     Fireball { radius: f32, damage: i32 },
 }
 
+/// Server-side projectile state used for authoritative collision.
 #[derive(Debug, Clone)]
 pub struct Projectile {
     pub id: u32,
@@ -184,6 +191,7 @@ impl ServerState {
         self.projectiles.push(Projectile { id, pos, vel, kind });
     }
     /// Spawn a projectile by unit direction; speed and damage/radius are chosen by kind.
+    /// Spawn a projectile by unit direction; scales velocity using config defaults.
     pub fn spawn_projectile_from_dir(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
         let d = dir.normalize_or_zero();
         match kind {
@@ -221,7 +229,8 @@ impl ServerState {
             }
         }
     }
-    /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile integration/collision.
+    /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
+    /// integration/collision. Collisions reduce HP for both NPCs and wizards.
     pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
         // Ensure we mirror wizard positions
         self.sync_wizards(wizard_positions);
@@ -669,5 +678,36 @@ impl ServerState {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn firebolt_hits_npc_and_reduces_hp() {
+        let mut srv = ServerState::new();
+        // Spawn one zombie at z=1 in front of origin (large radius so easy hit)
+        let id = srv.spawn_npc(Vec3::new(0.0, 0.6, 1.0), 0.95, 20);
+        assert_eq!(id.0, 1);
+        // Mirror two wizards (PC far away; NPC wizard at origin)
+        let wiz_pos = vec![Vec3::new(10.0, 0.6, 10.0), Vec3::new(0.0, 0.6, 0.0)];
+        srv.sync_wizards(&wiz_pos);
+        if let Some(w) = srv.wizards.get_mut(1) {
+            w.cast_timer = 0.0;
+        }
+        srv.step_authoritative(0.1, &wiz_pos);
+        // NPC hp should be reduced
+        let n = srv.npcs.iter().find(|n| n.id == id).unwrap();
+        assert!(n.hp < n.max_hp, "expected damage applied");
+    }
+
+    #[test]
+    fn spawn_from_dir_scales_speed() {
+        let mut srv = ServerState::new();
+        srv.spawn_projectile_from_dir(Vec3::ZERO, Vec3::new(0.0, 0.0, 1.0), ProjKind::Firebolt);
+        let p = &srv.projectiles[0];
+        assert!(p.vel.z > 20.0, "vel was not scaled: {}", p.vel.z);
     }
 }

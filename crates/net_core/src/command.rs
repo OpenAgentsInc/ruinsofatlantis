@@ -1,5 +1,15 @@
 //! Client->Server commands (authoritative input/actions).
-//! Minimal binary encoding with a leading tag distinct from snapshots.
+//!
+//! Scope
+//! - Defines a minimal binary protocol for client actions with a leading tag
+//!   (`TAG_CLIENT_CMD`) distinct from `TickSnapshot` framing, so decoders can
+//!   quickly reject the wrong payload type.
+//! - Used by the client renderer to send cast/projectile actions to the server.
+//!
+//! Extending
+//! - Add new enum variants (e.g., melee swings, toggles). Keep payloads small
+//!   and fixed-size where possible. Versioning is handled at the message level
+//!   with `TAG_CLIENT_CMD`. If the wire evolves, introduce a new tag.
 
 use crate::snapshot::SnapshotDecode;
 

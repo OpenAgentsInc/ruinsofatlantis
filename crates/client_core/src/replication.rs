@@ -7,7 +7,8 @@
 //!
 //! Filled in later when net_core types are finalized.
 
-/// Opaque replication buffer (placeholder).
+/// Client-side replication buffer that accumulates incoming deltas (chunks,
+/// entity snapshots) and exposes a coherent view for presentation layers.
 use net_core::snapshot::SnapshotDecode;
 
 #[derive(Default, Debug)]
@@ -155,5 +156,27 @@ mod tests {
     fn buffer_default_is_empty() {
         let b = ReplicationBuffer::default();
         assert_eq!(b.updated_chunks, 0);
+    }
+    #[test]
+    fn tick_snapshot_populates_npcs_and_projectiles() {
+        use net_core::snapshot::{TickSnapshot, WizardRep, NpcRep, ProjectileRep, BossRep, SnapshotEncode, SnapshotDecode, TAG_TICK_SNAPSHOT};
+        let ts = TickSnapshot {
+            v: 1,
+            tick: 7,
+            wizards: vec![WizardRep { id: 1, kind: 0, pos: [0.0, 0.6, 0.0], yaw: 0.0, hp: 100, max: 100 }],
+            npcs: vec![NpcRep { id: 9, archetype: 0, pos: [1.0, 0.6, 2.0], yaw: 0.0, radius: 0.9, hp: 20, max: 20, alive: true }],
+            projectiles: vec![ProjectileRep { id: 3, kind: 0, pos: [0.0, 0.7, 0.2], vel: [0.0, 0.0, 40.0] }],
+            boss: Some(BossRep { id: 99, name: "Nivita".into(), pos: [5.0, 0.6, 5.0], hp: 225, max: 225, ac: 18 })
+        };
+        let mut buf = Vec::new();
+        ts.encode(&mut buf);
+        // Frame it
+        let mut framed = Vec::new();
+        net_core::frame::write_msg(&mut framed, &buf);
+        let mut repl = ReplicationBuffer::default();
+        assert!(repl.apply_message(&framed));
+        assert_eq!(repl.npcs.len(), 1);
+        assert_eq!(repl.projectiles.len(), 1);
+        assert!(repl.boss_status.is_some());
     }
 }
