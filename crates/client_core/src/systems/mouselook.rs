@@ -49,7 +49,10 @@ mod tests {
     use super::*;
     #[test]
     fn pitch_is_clamped() {
-        let mut s = ControllerState { mode: ecs_core::components::ControllerMode::Mouselook, ..Default::default() };
+        let mut s = ControllerState {
+            mode: ecs_core::components::ControllerMode::Mouselook,
+            ..Default::default()
+        };
         let cfg = MouselookConfig {
             sensitivity_deg_per_count: 1.0,
             invert_y: false,

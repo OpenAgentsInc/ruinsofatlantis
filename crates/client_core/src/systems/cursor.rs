@@ -78,7 +78,10 @@ mod tests {
     use super::*;
     #[test]
     fn toggle_switches_and_requests_lock() {
-        let mut s = ControllerState { mode: ControllerMode::Cursor, ..Default::default() };
+        let mut s = ControllerState {
+            mode: ControllerMode::Cursor,
+            ..Default::default()
+        };
         let mut ev = Vec::new();
         handle_cursor_event(&mut s, &UiFocus::default(), CursorEvent::Toggle, &mut ev);
         assert_eq!(s.mode, ControllerMode::Mouselook);

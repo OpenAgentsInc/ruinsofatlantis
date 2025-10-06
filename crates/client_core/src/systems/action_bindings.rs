@@ -92,7 +92,11 @@ mod tests {
     #[test]
     fn pressed_buttons_emit_commands_in_mouselook() {
         let binds = Bindings::default();
-        let state = ControllerState { profile: InputProfile::ActionCombat, mode: ControllerMode::Mouselook, ..Default::default() };
+        let state = ControllerState {
+            profile: InputProfile::ActionCombat,
+            mode: ControllerMode::Mouselook,
+            ..Default::default()
+        };
         let input = ButtonSnapshot {
             lmb_pressed: true,
             q_pressed: true,
@@ -110,7 +114,10 @@ mod tests {
     #[test]
     fn rmb_emits_secondary_command() {
         let binds = Bindings::default();
-        let state = ControllerState { mode: ControllerMode::Mouselook, ..Default::default() };
+        let state = ControllerState {
+            mode: ControllerMode::Mouselook,
+            ..Default::default()
+        };
         let input = ButtonSnapshot {
             rmb_pressed: true,
             ..Default::default()

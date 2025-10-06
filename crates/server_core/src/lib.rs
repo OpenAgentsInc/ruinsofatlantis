@@ -487,7 +487,16 @@ impl ServerState {
                     if matches!(kind, ProjKind::Fireball) {
                         // AoE explode on impact
                         let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
-                        let (hit_npc, hit_wiz) = self.apply_aoe_at(p1.x, p1.z, r2, spec.damage);
+                        let cx = p1.x;
+                        let cz = p1.z;
+                        let pc_hp_before = self.wizards.first().map(|w| w.hp);
+                        let (hit_npc, hit_wiz) = self.apply_aoe_at(cx, cz, r2, spec.damage);
+                        if owner_id == Some(1)
+                            && let Some(hp0) = pc_hp_before
+                            && let Some(w0) = self.wizards.get_mut(0)
+                        {
+                            w0.hp = hp0;
+                        }
                         if std::env::var("RA_LOG_FIREBALL")
                             .map(|v| v == "1")
                             .unwrap_or(false)
@@ -503,8 +512,20 @@ impl ServerState {
                                 hit_wiz
                             );
                         }
-                        if owner_id == Some(1) && hit_wiz > 0 {
-                            self.wizards_hostile_to_pc = true;
+                        if owner_id == Some(1) {
+                            // Flip hostility if any non-PC wizard within AoE
+                            let hit_non_pc = self
+                                .wizards
+                                .iter()
+                                .skip(1)
+                                .any(|w| {
+                                    let dx = w.pos.x - cx;
+                                    let dz = w.pos.z - cz;
+                                    dx * dx + dz * dz <= r2
+                                });
+                            if hit_non_pc {
+                                self.wizards_hostile_to_pc = true;
+                            }
                             if std::env::var("RA_LOG_COMBAT")
                                 .map(|v| v == "1")
                                 .unwrap_or(false)
@@ -538,7 +559,16 @@ impl ServerState {
                         if matches!(kind, ProjKind::Fireball) {
                             // AoE explode on impact
                             let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
-                            let (hit_npc, hit_wiz) = self.apply_aoe_at(p1.x, p1.z, r2, spec.damage);
+                            let cx = p1.x;
+                            let cz = p1.z;
+                            let pc_hp_before = self.wizards.first().map(|w| w.hp);
+                            let (hit_npc, hit_wiz) = self.apply_aoe_at(cx, cz, r2, spec.damage);
+                            if owner_id == Some(1)
+                                && let Some(hp0) = pc_hp_before
+                                && let Some(w0) = self.wizards.get_mut(0)
+                            {
+                                w0.hp = hp0;
+                            }
                             if std::env::var("RA_LOG_FIREBALL")
                                 .map(|v| v == "1")
                                 .unwrap_or(false)
@@ -554,8 +584,20 @@ impl ServerState {
                                     hit_wiz
                                 );
                             }
-                            if owner_id == Some(1) && hit_wiz > 0 {
-                                self.wizards_hostile_to_pc = true;
+                            if owner_id == Some(1) {
+                                // Flip hostility if any non-PC wizard within AoE
+                                let hit_non_pc = self
+                                    .wizards
+                                    .iter()
+                                    .skip(1)
+                                    .any(|w| {
+                                        let dx = w.pos.x - cx;
+                                        let dz = w.pos.z - cz;
+                                        dx * dx + dz * dz <= r2
+                                    });
+                                if hit_non_pc {
+                                    self.wizards_hostile_to_pc = true;
+                                }
                                 if std::env::var("RA_LOG_COMBAT")
                                     .map(|v| v == "1")
                                     .unwrap_or(false)
@@ -584,7 +626,7 @@ impl ServerState {
                     }
                 }
             }
-            // Fireball proximity explode: if we passed within AoE radius of any NPC this step
+            // Fireball proximity explode: if we passed within AoE radius of any NPC or wizard this step
             if !removed && matches!(kind, ProjKind::Fireball) {
                 let spec = spec_kind;
                 let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
@@ -611,10 +653,36 @@ impl ServerState {
                         best_center = closest;
                     }
                 }
+                // Also consider proximity to wizards (alive)
+                for w in &self.wizards {
+                    if w.hp <= 0 {
+                        continue;
+                    }
+                    let c = glam::Vec2::new(w.pos.x, w.pos.z);
+                    let t = if len2 <= 1e-12 {
+                        0.0
+                    } else {
+                        ((c - a).dot(ab) / len2).clamp(0.0, 1.0)
+                    };
+                    let closest = a + ab * t;
+                    let d2 = (closest - c).length_squared();
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        best_center = closest;
+                    }
+                }
                 if best_d2 <= r2 {
                     let cx = best_center.x;
                     let cz = best_center.y;
+                    // Apply AoE, but do not damage the PC with their own Fireball
+                    let pc_hp_before = self.wizards.first().map(|w| w.hp);
                     let (hit_npc, hit_wiz) = self.apply_aoe_at(cx, cz, r2, spec.damage);
+                    if owner_id == Some(1)
+                        && let Some(hp0) = pc_hp_before
+                        && let Some(w0) = self.wizards.get_mut(0)
+                    {
+                        w0.hp = hp0;
+                    }
                     if std::env::var("RA_LOG_FIREBALL")
                         .map(|v| v == "1")
                         .unwrap_or(false)
@@ -630,8 +698,20 @@ impl ServerState {
                             hit_wiz
                         );
                     }
-                    if owner_id == Some(1) && hit_wiz > 0 {
-                        self.wizards_hostile_to_pc = true;
+                    if owner_id == Some(1) {
+                        // Flip hostility only if any non-PC wizard is within AoE
+                        let hit_non_pc = self
+                            .wizards
+                            .iter()
+                            .skip(1)
+                            .any(|w| {
+                                let dx = w.pos.x - cx;
+                                let dz = w.pos.z - cz;
+                                dx * dx + dz * dz <= r2
+                            });
+                        if hit_non_pc {
+                            self.wizards_hostile_to_pc = true;
+                        }
                         if std::env::var("RA_LOG_COMBAT")
                             .map(|v| v == "1")
                             .unwrap_or(false)
