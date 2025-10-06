@@ -2,7 +2,7 @@
 
 use glam::Vec3;
 
-use crate::{NpcId, ServerState};
+use crate::ServerState;
 
 /// Set Nivita's velocity implicitly by moving her pos toward the nearest wizard.
 /// This v0 helper operates directly on position; later we can add explicit Velocity.
@@ -44,4 +44,3 @@ mod tests {
         assert!((now.x - start.x) <= max_step);
     }
 }
-

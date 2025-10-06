@@ -4748,6 +4748,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
+ "glam 0.30.8",
  "log",
  "metrics",
  "net_core",
@@ -4756,6 +4757,7 @@ dependencies = [
  "server_core",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
  "wgpu 26.0.1",
  "winit",
 ]

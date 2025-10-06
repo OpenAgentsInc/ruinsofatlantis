@@ -21,6 +21,10 @@ struct App {
     repl_tx: Option<net_core::channel::Tx>,
     #[cfg(feature = "demo_server")]
     demo_server: Option<server_core::ServerState>,
+    #[cfg(not(target_arch = "wasm32"))]
+    last_time: Option<std::time::Instant>,
+    #[cfg(target_arch = "wasm32")]
+    last_time: Option<web_time::Instant>,
 }
 
 impl ApplicationHandler for App {
@@ -70,8 +74,16 @@ impl ApplicationHandler for App {
                 self.state = Some(state);
                 #[cfg(feature = "demo_server")]
                 {
-                    self.demo_server = Some(server_core::ServerState::new());
+                    let mut srv = server_core::ServerState::new();
+                    // Spawn a few rings so NPC wizards have targets on spawn
+                    srv.ring_spawn(8, 15.0, 20);
+                    srv.ring_spawn(12, 30.0, 25);
+                    srv.ring_spawn(15, 45.0, 30);
+                    // Spawn the unique boss near center
+                    let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                    self.demo_server = Some(srv);
                 }
+                self.last_time = Some(std::time::Instant::now());
             }
 
             #[cfg(target_arch = "wasm32")]
@@ -159,12 +171,32 @@ impl ApplicationHandler for App {
                 });
             }
         }
-        // Emit a compact replicated NPC list each frame (demo only)
+        // Emit replicated NPC/Boss each frame and step demo server (demo only)
         #[cfg(feature = "demo_server")]
-        if let (Some(tx), Some(_s)) = (&self.repl_tx, &self.state) {
-            // If renderer requests overlay-only mode, we still send a small list
-            let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
-            if let Some(srv) = &self.demo_server {
+        if let (Some(tx), Some(s)) = (&self.repl_tx, &mut self.state) {
+            // Step demo server AI toward wizard positions
+            #[cfg(feature = "demo_server")]
+            if let Some(srv) = &mut self.demo_server {
+                // dt
+                let dt = if let Some(t0) = self.last_time.take() {
+                    let now = {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        { std::time::Instant::now() }
+                        #[cfg(target_arch = "wasm32")]
+                        { web_time::Instant::now() }
+                    };
+                    let d = (now - t0).as_secs_f32();
+                    self.last_time = Some(now);
+                    d.clamp(0.0, 0.1)
+                } else {
+                    1.0 / 60.0
+                };
+                // wizard positions from renderer
+                let wiz_pos: Vec<glam::Vec3> = s.wizard_positions();
+                let _hits = srv.step_npc_ai(dt, &wiz_pos);
+                server_core::systems::boss::boss_seek_and_integrate(srv, dt, &wiz_pos);
+                // Build replication messages
+                let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
                 for n in &srv.npcs {
                     items.push(net_core::snapshot::NpcItem {
                         id: n.id.0,
@@ -176,14 +208,31 @@ impl ApplicationHandler for App {
                         attack_anim: n.attack_anim,
                     });
                 }
+                // Send NPC list
+                let list = net_core::snapshot::NpcListMsg { items };
+                let mut payload = Vec::new();
+                list.encode(&mut payload);
+                let mut framed = Vec::with_capacity(payload.len() + 8);
+                net_core::frame::write_msg(&mut framed, &payload);
+                metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+                let _ = tx.try_send(framed);
+                // Send BossStatus if available
+                if let Some(st) = srv.nivita_status() {
+                    let bs = net_core::snapshot::BossStatusMsg {
+                        name: st.name,
+                        ac: st.ac,
+                        hp: st.hp,
+                        max: st.max,
+                        pos: [st.pos.x, st.pos.y, st.pos.z],
+                    };
+                    let mut p2 = Vec::new();
+                    bs.encode(&mut p2);
+                    let mut f2 = Vec::with_capacity(p2.len() + 8);
+                    net_core::frame::write_msg(&mut f2, &p2);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f2.len() as u64);
+                    let _ = tx.try_send(f2);
+                }
             }
-            let msg = net_core::snapshot::NpcListMsg { items };
-            let mut payload = Vec::new();
-            msg.encode(&mut payload);
-            let mut framed = Vec::with_capacity(payload.len() + 5);
-            net_core::frame::write_msg(&mut framed, &payload);
-            metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
-            let _ = tx.try_send(framed);
         }
         if let Some(win) = &self.window {
             win.request_redraw();

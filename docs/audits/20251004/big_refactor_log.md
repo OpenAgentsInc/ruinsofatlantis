@@ -143,3 +143,40 @@ This running log captures code-level changes made to address the 2025-10-04 audi
     - Death Knight banner and HP bar prefer `BossStatusMsg`; if replication is absent, DK HP bar is omitted in default builds (server fallback gated under legacy feature).
     - Zombie animation attack state and radius selection for palette updates now derive from replication; server fallback only under legacy.
   - Verified `--no-default-features` build shows no server reads in HUD paths; clippy/tests green.
+
+## 2025-10-06 — Demo regressions (#107) fixes and wiring
+
+- wgpu palette validation follow-up
+  - Enforced a minimum 64-byte allocation for palette storage buffers across zombie/DK/PC/Sorceress to avoid zero-sized bindings (validation error) even when counts are zero. Confirmed no more validation errors in local runs.
+  - Files: `crates/render_wgpu/src/gfx/renderer/init.rs`, `crates/render_wgpu/src/gfx/mod.rs` (previous commit), and ensured the replication-built zombie path in `renderer/render.rs` also allocates a non-zero palette buffer.
+
+- Platform demo server: spawn/step and replication emission
+  - `crates/platform_winit/src/lib.rs`:
+    - On resume (native), create `ServerState`, spawn three NPC rings and the unique boss near the origin, and store `last_time` for frame `dt`.
+    - Each `about_to_wait`, step NPC AI and boss seek toward current wizard positions, then emit framed `NpcListMsg` and `BossStatusMsg` via the local `net_core` channel.
+    - Added counters for sent bytes consistent with project metrics usage.
+    - Dependencies added via Cargo tooling: `glam = 0.30`, `web-time = 1.1.0`.
+
+- Renderer public helper for demo AI
+  - `crates/render_wgpu/src/gfx/mod.rs`: added `pub fn wizard_positions(&self) -> Vec<glam::Vec3>` to expose world positions for the demo server without exposing internal fields.
+  - Updated platform to use this API (no direct field access).
+
+- Boss seek system export
+  - `crates/server_core/src/systems/mod.rs`: exported `pub mod boss;` (file existed) so platform can call `systems::boss::boss_seek_and_integrate`.
+
+- Replication-driven visuals and terrain snap
+  - `crates/render_wgpu/src/gfx/renderer/render.rs`:
+    - Import `wgpu::util::DeviceExt` for `create_buffer_init` in the replication path.
+    - If there are replicated NPCs and no zombie visuals yet, build minimal zombie instances from replication, snap to `terrain::height_at`, and allocate palette/storage with a min size.
+    - Snap Death Knight model Y to terrain when `BossStatus` is present.
+    - Added minimal default-build wizard-facing toward PC/nearest replicated NPCs (gated off when `legacy_client_ai` is enabled).
+    - Metrics macro usage aligned with existing handle style (`counter!(..).increment(..)`, `gauge!(..).set(..)`).
+
+- Lints/Clippy
+  - Fixed `clippy::suspicious-assignment-formatting` in the wizard-facing loop and collapsed a nested `if` for DK terrain snap.
+  - Removed an unused import in `server_core::systems::boss`.
+
+- Validation
+  - `cargo check` — OK
+  - `cargo clippy --all-targets -D warnings` — OK
+  - `cargo test` — all workspace tests green

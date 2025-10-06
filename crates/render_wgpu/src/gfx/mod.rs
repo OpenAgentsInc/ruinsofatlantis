@@ -545,6 +545,16 @@ struct Debris {
 }
 
 impl Renderer {
+    /// Collect world-space positions for all wizard instances (including PC).
+    /// Used by the platform demo server to drive simple NPC AI.
+    pub fn wizard_positions(&self) -> Vec<glam::Vec3> {
+        let mut out = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            out.push(glam::vec3(c[12], c[13], c[14]));
+        }
+        out
+    }
     pub(crate) fn empty_skinned_cpu() -> SkinnedMeshCPU {
         SkinnedMeshCPU {
             vertices: Vec::new(),
