@@ -2451,10 +2451,11 @@ impl Renderer {
             bar_entries.push((head.truncate(), frac));
         }
         // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
+        // Drive HP from server-authoritative replication only.
         use std::collections::HashMap;
         let mut npc_map: HashMap<u32, (i32, i32, bool, f32)> = HashMap::new();
-        for n in &self.server.npcs {
-            npc_map.insert(n.id.0, (n.hp, n.max_hp, n.alive, n.radius));
+        for n in &self.repl_buf.npcs {
+            npc_map.insert(n.id, (n.hp, n.max, n.alive, n.radius));
         }
         for (i, id) in self.zombie_ids.iter().enumerate() {
             if let Some((hp, max_hp, alive, _radius)) = npc_map.get(id).copied() {
@@ -2469,6 +2470,14 @@ impl Renderer {
                 let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
                 let frac = (hp.max(0) as f32) / (max_hp.max(1) as f32);
                 bar_entries.push((head.truncate(), frac));
+                // Spawn a damage floater when HP decreased since last frame.
+                let prev = self.npc_hp_overlay.get(id).copied().unwrap_or(max_hp);
+                if hp < prev {
+                    let dmg = (prev - hp).max(0);
+                    self.damage.spawn(head.truncate(), dmg);
+                }
+                // Update the overlay cache with the latest authoritative HP.
+                self.npc_hp_overlay.insert(*id, hp);
             }
         }
         // Health bars (default on; set RA_OVERLAYS=0 to hide)

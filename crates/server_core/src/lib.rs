@@ -321,19 +321,25 @@ impl ServerState {
                             // AoE explode on impact
                             let r2 = radius * radius;
                             for m in &mut self.npcs {
-                                if !m.alive { continue; }
+                                if !m.alive {
+                                    continue;
+                                }
                                 let dx = m.pos.x - p1.x;
                                 let dz = m.pos.z - p1.z;
-                                if dx*dx + dz*dz <= r2 {
+                                if dx * dx + dz * dz <= r2 {
                                     m.hp = (m.hp - damage).max(0);
-                                    if m.hp == 0 { m.alive = false; }
+                                    if m.hp == 0 {
+                                        m.alive = false;
+                                    }
                                 }
                             }
                         }
                         _ => {
                             let dmg = 10;
                             n.hp = (n.hp - dmg).max(0);
-                            if n.hp == 0 { n.alive = false; }
+                            if n.hp == 0 {
+                                n.alive = false;
+                            }
                         }
                     }
                     removed = true;
@@ -353,10 +359,12 @@ impl ServerState {
                                 // Explode with friendly fire for wizards as well
                                 let r2 = radius * radius;
                                 for m in &mut self.wizards {
-                                    if m.hp <= 0 { continue; }
+                                    if m.hp <= 0 {
+                                        continue;
+                                    }
                                     let dx = m.pos.x - p1.x;
                                     let dz = m.pos.z - p1.z;
-                                    if dx*dx + dz*dz <= r2 {
+                                    if dx * dx + dz * dz <= r2 {
                                         m.hp = (m.hp - damage).max(0);
                                     }
                                 }
