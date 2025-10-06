@@ -159,6 +159,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 let _ = r.repl_buf.apply_message(b);
             }
             metrics::counter!("net.bytes_recv_total", "dir" => "rx").increment(total as u64);
+            log::info!(
+                "replication: drained {} msg(s), npcs now {}",
+                msgs.len(),
+                r.repl_buf.npcs.len()
+            );
             let updates = r.repl_buf.drain_mesh_updates();
             use client_core::upload::MeshUpload;
             for (did, chunk, entry) in updates {
@@ -236,6 +241,81 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                         resource: r.zombie_palettes_buf.as_entire_binding(),
                     }],
                 });
+            }
+        }
+        // Fallback: if we already have a non-empty replicated NPC cache but haven't
+        // built visuals yet (e.g., drain happened earlier), build now.
+        if r.zombie_count == 0 && !r.repl_buf.npcs.is_empty() {
+            let joints = r.zombie_joints;
+            let mut inst_cpu: Vec<crate::gfx::types::InstanceSkin> = Vec::new();
+            let mut models: Vec<glam::Mat4> = Vec::new();
+            let mut ids: Vec<u32> = Vec::new();
+            for (i, n) in r.repl_buf.npcs.iter().enumerate() {
+                ids.push(n.id);
+                let (h, _n) = terrain::height_at(&r.terrain_cpu, n.pos.x, n.pos.z);
+                let pos = glam::vec3(n.pos.x, h, n.pos.z);
+                let m = glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::IDENTITY,
+                    pos,
+                );
+                models.push(m);
+                inst_cpu.push(crate::gfx::types::InstanceSkin {
+                    model: m.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    selected: 0.0,
+                    palette_base: (i as u32) * joints,
+                    _pad_inst: [0; 3],
+                });
+            }
+            if !inst_cpu.is_empty() {
+                r.zombie_instances = r
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("zombie-instances(repl-fallback)"),
+                        contents: bytemuck::cast_slice(&inst_cpu),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
+                r.zombie_instances_cpu = inst_cpu;
+                r.zombie_models = models;
+                r.zombie_ids = ids;
+                r.zombie_count = r.zombie_ids.len() as u32;
+                // Initialize tracking arrays to correct lengths
+                r.zombie_prev_pos = r
+                    .zombie_models
+                    .iter()
+                    .map(|m| {
+                        let c = m.to_cols_array();
+                        glam::vec3(c[12], c[13], c[14])
+                    })
+                    .collect();
+                r.zombie_time_offset = (0..r.zombie_count as usize)
+                    .map(|i| i as f32 * 0.35)
+                    .collect();
+                r.zombie_forward_offsets = vec![
+                    crate::gfx::zombies::forward_offset(&r.zombie_cpu);
+                    r.zombie_count as usize
+                ];
+                // Resize palette buffer (min 64 bytes)
+                let total = (r.zombie_count as usize * r.zombie_joints as usize).max(1) * 64;
+                r.zombie_palettes_buf = r.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("zombie-palettes"),
+                    size: total as u64,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                r.zombie_palettes_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("zombie-palettes-bg"),
+                    layout: &r.palettes_bgl,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: r.zombie_palettes_buf.as_entire_binding(),
+                    }],
+                });
+                log::info!(
+                    "replication: built zombie visuals (fallback) from {} NPCs",
+                    r.zombie_count
+                );
             }
         }
     }
