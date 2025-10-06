@@ -566,6 +566,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         #[cfg(not(feature = "legacy_client_ai"))]
         {
             r.update_zombies_from_replication();
+            r.apply_zombie_melee_demo(dt);
         }
         r.update_zombie_palettes(t);
         #[cfg(feature = "legacy_client_ai")]

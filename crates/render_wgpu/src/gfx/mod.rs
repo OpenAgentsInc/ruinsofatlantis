@@ -339,6 +339,8 @@ pub struct Renderer {
     particles: Vec<Particle>,
     // Client-side damage overlay for replicated NPCs (id -> hp), used only in demo/default builds
     npc_hp_overlay: std::collections::HashMap<u32, i32>,
+    // Client-side melee cooldowns per replicated zombie (seconds until next allowed hit)
+    zombie_melee_cd: std::collections::HashMap<u32, f32>,
 
     // Data-driven spec
     fire_bolt: Option<SpellSpec>,
@@ -3199,6 +3201,69 @@ impl Renderer {
             }
         }
         // No single bulk upload; we wrote per-instance segments above.
+    }
+
+    /// Default build melee: apply zombie contact damage to nearest wizard with a simple cooldown.
+    fn apply_zombie_melee_demo(&mut self, dt: f32) {
+        if self.zombie_count == 0 || self.wizard_count == 0 || self.repl_buf.npcs.is_empty() {
+            return;
+        }
+        // Precompute wizard positions and head points
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
+        // Tick cooldowns down
+        for v in self.zombie_melee_cd.values_mut() {
+            *v = (*v - dt).max(0.0);
+        }
+        let attack_cd = 1.5f32; // seconds between hits per zombie
+        let damage = 10; // consistent with projectile demo damage
+        let wizard_r = 0.7f32;
+        let pad = 0.2f32;
+        // Snapshot replicated NPCs to avoid borrow issues when mutating self
+        let npcs: Vec<(u32, glam::Vec3, f32, bool)> = self
+            .repl_buf
+            .npcs
+            .iter()
+            .map(|n| (n.id, n.pos, n.radius, n.alive))
+            .collect();
+        for (nid, npos, nradius, nalive) in npcs {
+            if !nalive { continue; }
+            // Nearest wizard index
+            let mut best = None::<usize>;
+            let mut best_d2 = f32::INFINITY;
+            for (j, w) in wiz_pos.iter().enumerate() {
+                let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
+                if hp <= 0 { continue; }
+                let dx = w.x - npos.x;
+                let dz = w.z - npos.z;
+                let d2 = dx*dx + dz*dz;
+                if d2 < best_d2 { best_d2 = d2; best = Some(j); }
+            }
+            let Some(j) = best else { continue; };
+            let contact = nradius + wizard_r + pad;
+            if best_d2 <= contact * contact {
+                // Check cooldown
+                let cd = self.zombie_melee_cd.get(&nid).copied().unwrap_or(0.0);
+                if cd <= 0.0 {
+                    // Apply damage
+                    let before = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
+                    let after = (before - damage).max(0);
+                    if let Some(slot) = self.wizard_hp.get_mut(j) { *slot = after; }
+                    // Floater at wizard head
+                    let head = wiz_pos[j] + glam::vec3(0.0, 1.7, 0.0);
+                    self.damage.spawn(head, damage);
+                    // Fatal handling
+                    if after == 0 {
+                        if j == self.pc_index { self.kill_pc(); } else { self.remove_wizard_at(j); }
+                    }
+                    // Reset cooldown
+                    self.zombie_melee_cd.insert(nid, attack_cd);
+                }
+            }
+        }
     }
 
     fn update_deathknight_palettes(&mut self, time_global: f32) {

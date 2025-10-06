@@ -1624,9 +1624,33 @@ impl Renderer {
                             .unwrap_or(glam::Mat4::IDENTITY);
                         let origin_w = inst
                             * glam::Vec4::new(origin_local.x, origin_local.y, origin_local.z, 1.0);
-                        let dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
+                        // Aim: if hostile to PC, prefer PC target; else nearest replicated NPC; fallback to forward
+                        let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                        let mut dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
                             .truncate()
                             .normalize_or_zero();
+                        if self.wizards_hostile_to_pc && self.pc_alive {
+                            if let Some(pm) = self.wizard_models.get(self.pc_index) {
+                                let c = pm.to_cols_array();
+                                let pc = glam::vec3(c[12], c[13], c[14]);
+                                let d = glam::vec3(pc.x - wpos.x, 0.0, pc.z - wpos.z);
+                                if d.length_squared() > 1e-8 { dir_w = d.normalize(); }
+                            }
+                        } else if !self.repl_buf.npcs.is_empty() {
+                            let mut best_d2 = f32::INFINITY;
+                            let mut tgt: Option<glam::Vec3> = None;
+                            for n in &self.repl_buf.npcs {
+                                if !n.alive { continue; }
+                                let dx = n.pos.x - wpos.x;
+                                let dz = n.pos.z - wpos.z;
+                                let d2 = dx * dx + dz * dz;
+                                if d2 < best_d2 { best_d2 = d2; tgt = Some(n.pos); }
+                            }
+                            if let Some(tp) = tgt {
+                                let d = glam::vec3(tp.x - wpos.x, 0.0, tp.z - wpos.z);
+                                if d.length_squared() > 1e-8 { dir_w = d.normalize(); }
+                            }
+                        }
                         let right_w = (inst * glam::Vec4::new(1.0, 0.0, 0.0, 0.0))
                             .truncate()
                             .normalize_or_zero();
@@ -1677,9 +1701,11 @@ impl Renderer {
                         }
                         if use_fireball {
                             self.spawn_fireball(spawn, dir_w, t, Some(i));
+                            log::info!("npc wizard {} cast Fireball (dist~{:.1})", i, target_dist);
                         } else {
                             let fb_col = [2.6, 0.7, 0.18];
                             self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
+                            log::info!("npc wizard {} cast Fire Bolt", i);
                         }
                     }
                 }
@@ -1725,11 +1751,11 @@ impl Renderer {
                     let cur = self.npc_hp_overlay.get(&nid).copied().unwrap_or(max_hp);
                     let after = (cur - 10).max(0);
                     self.npc_hp_overlay.insert(nid, after);
+                    log::info!("hit npc id={} for 10 ({} -> {})", nid, cur, after);
                     // Damage floater above head (terrain aware)
                     let (hgt, _nrm) =
                         crate::gfx::terrain::height_at(&self.terrain_cpu, cpos.x, cpos.z);
-                    self.damage
-                        .spawn(glam::vec3(cpos.x, hgt + 0.9, cpos.z), 10);
+                    self.damage.spawn(glam::vec3(cpos.x, hgt + 0.9, cpos.z), 10);
                     // If fatal, remove the zombie visual
                     if after == 0
                         && let Some(idx) = self.zombie_ids.iter().position(|z| *z == nid)
