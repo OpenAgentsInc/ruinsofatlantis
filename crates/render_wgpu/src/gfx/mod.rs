@@ -3571,6 +3571,116 @@ impl Renderer {
             self.queue.write_buffer(&self.zombie_instances, 0, bytes);
         }
     }
+
+    /// Update zombie transforms from replicated NPC positions (default build).
+    fn update_zombies_from_replication(&mut self) {
+        use std::collections::HashMap;
+        if self.zombie_count == 0 || self.zombie_ids.is_empty() {
+            return;
+        }
+        // Map replicated id -> pos and radius
+        let mut pos_map: HashMap<u32, glam::Vec3> = HashMap::new();
+        let mut radius_map: HashMap<u32, f32> = HashMap::new();
+        for n in &self.repl_buf.npcs {
+            pos_map.insert(n.id, n.pos);
+            radius_map.insert(n.id, n.radius);
+        }
+        if pos_map.is_empty() {
+            return;
+        }
+        // Wizard positions for facing
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
+        for m in &self.wizard_models {
+            let c = m.to_cols_array();
+            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+        }
+        let mut any = false;
+        for (i, id) in self.zombie_ids.iter().copied().enumerate() {
+            if let Some(p) = pos_map.get(&id).copied() {
+                let m_old = self.zombie_models[i];
+                let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(p);
+                let delta = p - prev;
+                // Face movement direction when moving; otherwise face nearest wizard
+                let mut yaw = if delta.length_squared() > 1e-5 {
+                    let desired = delta.x.atan2(delta.z);
+                    let current = Self::yaw_from_model(&m_old);
+                    let error = Self::wrap_angle(desired - current);
+                    if let Some(off) = self.zombie_forward_offsets.get_mut(i) {
+                        let k = 0.3f32;
+                        *off = Self::wrap_angle(*off * (1.0 - k) + error * k);
+                        desired - *off
+                    } else {
+                        desired
+                    }
+                } else {
+                    // Stationary: orient toward nearest wizard
+                    let mut best_d2 = f32::INFINITY;
+                    let mut face_to: Option<glam::Vec3> = None;
+                    for w in &wiz_pos {
+                        let dx = w.x - p.x;
+                        let dz = w.z - p.z;
+                        let d2 = dx * dx + dz * dz;
+                        if d2 < best_d2 {
+                            best_d2 = d2;
+                            face_to = Some(*w);
+                        }
+                    }
+                    if let Some(tgt) = face_to {
+                        let desired = (tgt.x - p.x).atan2(tgt.z - p.z);
+                        if let Some(off) = self.zombie_forward_offsets.get(i) {
+                            desired - *off
+                        } else {
+                            desired
+                        }
+                    } else {
+                        Self::yaw_from_model(&m_old)
+                    }
+                };
+                // In-contact override: if in melee contact, hard-face nearest wizard
+                let mut best_d2 = f32::INFINITY;
+                let mut face_to: Option<glam::Vec3> = None;
+                for w in &wiz_pos {
+                    let dx = w.x - p.x;
+                    let dz = w.z - p.z;
+                    let d2 = dx * dx + dz * dz;
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        face_to = Some(*w);
+                    }
+                }
+                if let Some(tgt) = face_to {
+                    let z_radius = radius_map.get(&id).copied().unwrap_or(0.95);
+                    let wizard_r = 0.7f32;
+                    let pad = 0.20f32;
+                    let contact = z_radius + wizard_r + pad;
+                    if best_d2 <= contact * contact {
+                        if let Some(off) = self.zombie_forward_offsets.get(i) {
+                            yaw = (tgt.x - p.x).atan2(tgt.z - p.z) - *off;
+                        } else {
+                            yaw = (tgt.x - p.x).atan2(tgt.z - p.z);
+                        }
+                    }
+                }
+                // Snap to terrain
+                let (h, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                let pos = glam::vec3(p.x, h, p.z);
+                let new_m = glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::from_rotation_y(yaw),
+                    pos,
+                );
+                self.zombie_models[i] = new_m;
+                let mut inst = self.zombie_instances_cpu[i];
+                inst.model = new_m.to_cols_array_2d();
+                self.zombie_instances_cpu[i] = inst;
+                any = true;
+            }
+        }
+        if any {
+            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+        }
+    }
     // moved to renderer/input.rs
 
     // moved: update_player_and_camera/apply_pc_transform/update_wizard_palettes/select_clip/process_pc_cast
