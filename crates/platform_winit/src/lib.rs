@@ -301,6 +301,7 @@ impl ApplicationHandler for App {
                         wiz_pos.len()
                     );
                 }
+                // Legacy: build small NPC list (kept for compatibility consumers)
                 let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
                 for n in &srv.npcs {
                     items.push(net_core::snapshot::NpcItem {
@@ -313,9 +314,7 @@ impl ApplicationHandler for App {
                         attack_anim: n.attack_anim,
                     });
                 }
-                // Send NPC list
-                // Authoritative TickSnapshot from server
-                srv.step_authoritative(dt, &wiz_pos);
+                // Send authoritative TickSnapshot for current state BEFORE stepping
                 let ts = srv.tick_snapshot(self.tick);
                 if std::env::var("RA_LOG_REPL")
                     .map(|v| v == "1")
@@ -345,7 +344,18 @@ impl ApplicationHandler for App {
                 net_core::frame::write_msg(&mut f3, &p3);
                 metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f3.len() as u64);
                 let _ = srv_xport.try_send(f3);
+
+                // Also send actor-centric snapshot v2
+                let asnap = srv.tick_snapshot_actors(self.tick as u64);
+                let mut p4 = Vec::new();
+                asnap.encode(&mut p4);
+                let mut f4 = Vec::with_capacity(p4.len() + 8);
+                net_core::frame::write_msg(&mut f4, &p4);
+                metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f4.len() as u64);
+                let _ = srv_xport.try_send(f4);
                 self.tick = self.tick.wrapping_add(1);
+                // Now step authoritative systems (projectiles integrate, AI, etc.)
+                srv.step_authoritative(dt, &wiz_pos);
             }
         }
         if let Some(win) = &self.window {

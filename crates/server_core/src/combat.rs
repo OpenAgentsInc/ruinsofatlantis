@@ -5,7 +5,10 @@ use crate::actor::Team;
 #[inline]
 pub fn are_hostile(a: Team, b: Team) -> bool {
     use Team::*;
-    matches!((a, b), (Pc, Undead) | (Undead, Pc) | (Wizards, Undead) | (Undead, Wizards))
+    matches!(
+        (a, b),
+        (Pc, Undead) | (Undead, Pc) | (Wizards, Undead) | (Undead, Wizards)
+    )
 }
 
 #[derive(Default, Debug, Clone, Copy)]

@@ -27,9 +27,15 @@ pub struct Health {
 }
 impl Health {
     #[inline]
-    pub fn alive(&self) -> bool { self.hp > 0 }
+    pub fn alive(&self) -> bool {
+        self.hp > 0
+    }
     #[inline]
-    pub fn clamp(&mut self) { if self.hp > self.max { self.hp = self.max; } }
+    pub fn clamp(&mut self) {
+        if self.hp > self.max {
+            self.hp = self.max;
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -58,20 +64,38 @@ impl ActorStore {
     pub fn spawn(&mut self, kind: ActorKind, team: Team, tr: Transform, hp: Health) -> ActorId {
         let id = ActorId(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
-        self.actors.push(Actor { id, kind, team, tr, hp });
+        self.actors.push(Actor {
+            id,
+            kind,
+            team,
+            tr,
+            hp,
+        });
         id
     }
 
     #[inline]
-    pub fn get(&self, id: ActorId) -> Option<&Actor> { self.actors.iter().find(|a| a.id == id) }
+    pub fn get(&self, id: ActorId) -> Option<&Actor> {
+        self.actors.iter().find(|a| a.id == id)
+    }
     #[inline]
-    pub fn get_mut(&mut self, id: ActorId) -> Option<&mut Actor> { self.actors.iter_mut().find(|a| a.id == id) }
+    pub fn get_mut(&mut self, id: ActorId) -> Option<&mut Actor> {
+        self.actors.iter_mut().find(|a| a.id == id)
+    }
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item=&Actor> { self.actors.iter() }
+    pub fn iter(&self) -> impl Iterator<Item = &Actor> {
+        self.actors.iter()
+    }
     #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut Actor> { self.actors.iter_mut() }
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Actor> {
+        self.actors.iter_mut()
+    }
 
     pub fn remove_dead(&mut self) {
         self.actors.retain(|a| a.hp.alive());
     }
+}
+
+impl ActorStore {
+    pub fn clone_default(&self) -> Self { Default::default() }
 }

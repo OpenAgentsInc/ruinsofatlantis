@@ -257,18 +257,34 @@ impl ServerState {
             let _ = self.actors.spawn(
                 ActorKind::Wizard,
                 Team::Pc,
-                Transform { pos: pc.pos, yaw: pc.yaw, radius: 0.7 },
-                Health { hp: pc.hp, max: pc.max_hp },
+                Transform {
+                    pos: pc.pos,
+                    yaw: pc.yaw,
+                    radius: 0.7,
+                },
+                Health {
+                    hp: pc.hp,
+                    max: pc.max_hp,
+                },
             );
         }
         // Other wizards
         for (i, w) in self.wizards.iter().enumerate() {
-            if i == 0 { continue; }
+            if i == 0 {
+                continue;
+            }
             let _ = self.actors.spawn(
                 ActorKind::Wizard,
                 Team::Wizards,
-                Transform { pos: w.pos, yaw: w.yaw, radius: 0.7 },
-                Health { hp: w.hp, max: w.max_hp },
+                Transform {
+                    pos: w.pos,
+                    yaw: w.yaw,
+                    radius: 0.7,
+                },
+                Health {
+                    hp: w.hp,
+                    max: w.max_hp,
+                },
             );
         }
         // NPCs (undead)
@@ -276,47 +292,86 @@ impl ServerState {
             let _ = self.actors.spawn(
                 ActorKind::Zombie,
                 Team::Undead,
-                Transform { pos: n.pos, yaw: 0.0, radius: n.radius },
-                Health { hp: n.hp, max: n.max_hp },
+                Transform {
+                    pos: n.pos,
+                    yaw: 0.0,
+                    radius: n.radius,
+                },
+                Health {
+                    hp: n.hp,
+                    max: n.max_hp,
+                },
             );
         }
         // Boss (if any) is included within npcs already; kind Boss would require tagging; we can upgrade later.
     }
 
     /// Apply AoE to actors, skipping self-damage for PC-owned sources and flipping factions when PC hits Wizards.
-    fn apply_aoe_at_actors(&mut self, x: f32, z: f32, r2: f32, damage: i32, source: Option<ActorId>) -> usize {
+    fn apply_aoe_at_actors(
+        &mut self,
+        x: f32,
+        z: f32,
+        r2: f32,
+        damage: i32,
+        source: Option<ActorId>,
+    ) -> usize {
         self.rebuild_actors_from_legacy();
         let src_team = source.and_then(|id| self.actors.get(id).map(|a| a.team));
         let mut hits = 0usize;
         for a in self.actors.iter_mut() {
             // Skip self-damage for PC-owned AoE
             if let (Some(Team::Pc), Some(src)) = (src_team, source)
-                && a.id == src { continue; }
+                && a.id == src
+            {
+                continue;
+            }
             let dx = a.tr.pos.x - x;
             let dz = a.tr.pos.z - z;
-            if dx*dx + dz*dz <= r2 && a.hp.alive() {
+            if dx * dx + dz * dz <= r2 && a.hp.alive() {
                 a.hp.hp = (a.hp.hp - damage).max(0);
                 hits += 1;
                 if let Some(Team::Pc) = src_team
-                    && a.team == Team::Wizards { self.factions.pc_vs_wizards_hostile = true; }
+                    && a.team == Team::Wizards
+                {
+                    self.factions.pc_vs_wizards_hostile = true;
+                }
             }
         }
         // Bridge: propagate actor HP back to legacy lists for now
         // PC wizard
-        if let Some(first_actor) = self.actors.actors.iter().find(|a| a.team == Team::Pc && a.kind == ActorKind::Wizard)
-            && let Some(pc) = self.wizards.get_mut(0) { pc.hp = first_actor.hp.hp; pc.max_hp = first_actor.hp.max; }
+        if let Some(first_actor) = self
+            .actors
+            .actors
+            .iter()
+            .find(|a| a.team == Team::Pc && a.kind == ActorKind::Wizard)
+            && let Some(pc) = self.wizards.get_mut(0)
+        {
+            pc.hp = first_actor.hp.hp;
+            pc.max_hp = first_actor.hp.max;
+        }
         // Other wizards (order as pushed)
-        let mut wiz_iter = self.actors.actors.iter().filter(|a| a.team == Team::Wizards && a.kind == ActorKind::Wizard);
+        let mut wiz_iter = self
+            .actors
+            .actors
+            .iter()
+            .filter(|a| a.team == Team::Wizards && a.kind == ActorKind::Wizard);
         for w in self.wizards.iter_mut().skip(1) {
             if let Some(a) = wiz_iter.next() {
-                w.hp = a.hp.hp; w.max_hp = a.hp.max;
+                w.hp = a.hp.hp;
+                w.max_hp = a.hp.max;
             }
         }
         // Zombies/NPCs (order as pushed)
-        let mut z_iter = self.actors.actors.iter().filter(|a| a.kind == ActorKind::Zombie);
+        let mut z_iter = self
+            .actors
+            .actors
+            .iter()
+            .filter(|a| a.kind == ActorKind::Zombie);
         for n in self.npcs.iter_mut() {
             if let Some(a) = z_iter.next() {
-                n.hp = a.hp.hp; n.max_hp = a.hp.max; n.alive = a.hp.alive();
+                n.hp = a.hp.hp;
+                n.max_hp = a.hp.max;
+                n.alive = a.hp.alive();
             }
         }
         hits
@@ -483,6 +538,8 @@ impl ServerState {
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
     /// integration/collision. Collisions reduce HP for both NPCs and wizards.
     pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
+        // Rebuild actor store so targeting can use unified view
+        self.rebuild_actors_from_legacy();
         // Ensure we mirror wizard positions
         self.sync_wizards(wizard_positions);
         // 1) NPC AI (melee hits against wizards)
@@ -508,20 +565,18 @@ impl ServerState {
             if hp <= 0 {
                 continue;
             }
-            // Choose target: PC if hostile_to_pc, else nearest NPC
-            let target = if self.wizards_hostile_to_pc && !self.wizards.is_empty() {
-                self.wizards[0].pos
-            } else {
+            // Choose nearest hostile actor target based on factions
+            let target = {
                 let mut best = None::<(f32, Vec3)>;
-                for n in &self.npcs {
-                    if !n.alive {
-                        continue;
-                    }
-                    let dx = n.pos.x - pos.x;
-                    let dz = n.pos.z - pos.z;
+                let my_team = Team::Wizards;
+                for a in self.actors.iter() {
+                    if !a.hp.alive() { continue; }
+                    if !self.factions.effective_hostile(my_team, a.team) { continue; }
+                    let dx = a.tr.pos.x - pos.x;
+                    let dz = a.tr.pos.z - pos.z;
                     let d2 = dx * dx + dz * dz;
                     if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
-                        best = Some((d2, n.pos));
+                        best = Some((d2, a.tr.pos));
                     }
                 }
                 best.map(|(_, p)| p).unwrap_or(pos)
@@ -590,12 +645,23 @@ impl ServerState {
                         let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                         let cx = p1.x;
                         let cz = p1.z;
-                        let src = if owner_id == Some(1) { Some(ActorId(0)) } else { None };
+                        let src = if owner_id == Some(1) {
+                            Some(ActorId(0))
+                        } else {
+                            None
+                        };
                         let _hits = self.apply_aoe_at_actors(cx, cz, r2, spec.damage, src);
-                        if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                        if std::env::var("RA_LOG_FIREBALL")
+                            .map(|v| v == "1")
+                            .unwrap_or(false)
+                        {
                             log::info!(
                                 "server: Fireball impact explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                                p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage
+                                p1.x,
+                                p1.y,
+                                p1.z,
+                                spec.aoe_radius_m,
+                                spec.damage
                             );
                         }
                         if owner_id == Some(1) {
@@ -604,7 +670,10 @@ impl ServerState {
                                 .map(|v| v == "1")
                                 .unwrap_or(false)
                             {
-                                log::info!("server: hostility -> PC (impact AoE) now={}", self.wizards_hostile_to_pc);
+                                log::info!(
+                                    "server: hostility -> PC (impact AoE) now={}",
+                                    self.wizards_hostile_to_pc
+                                );
                             }
                         }
                     } else if matches!(kind, ProjKind::MagicMissile) {
@@ -639,12 +708,23 @@ impl ServerState {
                             let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                             let cx = p1.x;
                             let cz = p1.z;
-                            let src = if owner_id == Some(1) { Some(ActorId(0)) } else { None };
+                            let src = if owner_id == Some(1) {
+                                Some(ActorId(0))
+                            } else {
+                                None
+                            };
                             let _hits = self.apply_aoe_at_actors(cx, cz, r2, spec.damage, src);
-                            if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                            if std::env::var("RA_LOG_FIREBALL")
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                            {
                                 log::info!(
                                     "server: Fireball impact explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                                    p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage
+                                    p1.x,
+                                    p1.y,
+                                    p1.z,
+                                    spec.aoe_radius_m,
+                                    spec.damage
                                 );
                             }
                             if owner_id == Some(1) {
@@ -653,7 +733,10 @@ impl ServerState {
                                     .map(|v| v == "1")
                                     .unwrap_or(false)
                                 {
-                                    log::info!("server: hostility -> PC (impact wiz) now={}", self.wizards_hostile_to_pc);
+                                    log::info!(
+                                        "server: hostility -> PC (impact wiz) now={}",
+                                        self.wizards_hostile_to_pc
+                                    );
                                 }
                             }
                         } else if matches!(kind, ProjKind::MagicMissile) {
@@ -736,12 +819,23 @@ impl ServerState {
                     let cx = best_center.x;
                     let cz = best_center.y;
                     // Apply AoE via actors
-                    let src = if owner_id == Some(1) { Some(ActorId(0)) } else { None };
+                    let src = if owner_id == Some(1) {
+                        Some(ActorId(0))
+                    } else {
+                        None
+                    };
                     let _hits = self.apply_aoe_at_actors(cx, cz, r2, spec.damage, src);
-                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                    if std::env::var("RA_LOG_FIREBALL")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
                         log::info!(
                             "server: Fireball proximity explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage
+                            cx,
+                            p1.y,
+                            cz,
+                            spec.aoe_radius_m,
+                            spec.damage
                         );
                     }
                     if owner_id == Some(1) {
@@ -750,7 +844,10 @@ impl ServerState {
                             .map(|v| v == "1")
                             .unwrap_or(false)
                         {
-                            log::info!("server: hostility -> PC (proximity) now={}", self.wizards_hostile_to_pc);
+                            log::info!(
+                                "server: hostility -> PC (proximity) now={}",
+                                self.wizards_hostile_to_pc
+                            );
                         }
                     }
                     removed = true;
@@ -765,12 +862,23 @@ impl ServerState {
                     let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                     let cx = p1.x;
                     let cz = p1.z;
-                    let src = if owner_id == Some(1) { Some(ActorId(0)) } else { None };
+                    let src = if owner_id == Some(1) {
+                        Some(ActorId(0))
+                    } else {
+                        None
+                    };
                     let _hits = self.apply_aoe_at_actors(cx, cz, r2, spec.damage, src);
-                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                    if std::env::var("RA_LOG_FIREBALL")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
                         log::info!(
                             "server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage
+                            cx,
+                            p1.y,
+                            cz,
+                            spec.aoe_radius_m,
+                            spec.damage
                         );
                     }
                     if owner_id == Some(1) {
@@ -779,7 +887,10 @@ impl ServerState {
                             .map(|v| v == "1")
                             .unwrap_or(false)
                         {
-                            log::info!("server: hostility -> PC (ttl) now={}", self.wizards_hostile_to_pc);
+                            log::info!(
+                                "server: hostility -> PC (ttl) now={}",
+                                self.wizards_hostile_to_pc
+                            );
                         }
                     }
                     removed = true;
@@ -993,6 +1104,53 @@ impl ServerState {
             npcs,
             projectiles,
             boss,
+        }
+    }
+    pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
+        // Ensure actors are available
+        let mut tmp = self.clone_for_snapshot();
+        tmp.rebuild_actors_from_legacy();
+        let actors = tmp
+            .actors
+            .iter()
+            .map(|a| net_core::snapshot::ActorRep {
+                id: a.id.0,
+                kind: match a.kind { ActorKind::Wizard => 0, ActorKind::Zombie => 1, ActorKind::Boss => 2 },
+                team: match a.team { Team::Pc => 0, Team::Wizards => 1, Team::Undead => 2, Team::Neutral => 3 },
+                pos: [a.tr.pos.x, a.tr.pos.y, a.tr.pos.z],
+                yaw: a.tr.yaw,
+                radius: a.tr.radius,
+                hp: a.hp.hp,
+                max: a.hp.max,
+                alive: a.hp.alive(),
+            })
+            .collect();
+        let projectiles = self
+            .projectiles
+            .iter()
+            .map(|p| net_core::snapshot::ProjectileRep {
+                id: p.id,
+                kind: match p.kind { ProjKind::Firebolt => 0, ProjKind::Fireball => 1, ProjKind::MagicMissile => 2 },
+                pos: [p.pos.x, p.pos.y, p.pos.z],
+                vel: [p.vel.x, p.vel.y, p.vel.z],
+            })
+            .collect();
+        net_core::snapshot::ActorSnapshot { v: 2, tick, actors, projectiles }
+    }
+
+    fn clone_for_snapshot(&self) -> Self {
+        // Minimal clone to avoid mutating self during snapshot build
+        Self {
+            next_id: self.next_id,
+            npcs: self.npcs.clone(),
+            nivita_id: self.nivita_id,
+            nivita_stats: self.nivita_stats.clone(),
+            wizards: self.wizards.clone(),
+            projectiles: self.projectiles.clone(),
+            next_proj_id: self.next_proj_id,
+            wizards_hostile_to_pc: self.wizards_hostile_to_pc,
+            actors: self.actors.clone_default(),
+            factions: self.factions,
         }
     }
     /// Move toward nearest wizard and attack when in range. Returns (wizard_idx, damage) per hit.

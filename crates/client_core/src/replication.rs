@@ -16,6 +16,7 @@ pub struct ReplicationBuffer {
     pub updated_chunks: usize,
     pending_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
     pub boss_status: Option<BossStatus>,
+    pub actors: Vec<ActorView>,
     pub wizards: Vec<WizardView>,
     pub npcs: Vec<NpcView>,
     pub projectiles: Vec<ProjectileView>,
@@ -32,15 +33,55 @@ pub struct BossStatus {
 
 impl ReplicationBuffer {
     /// Apply a raw message. Returns whether any state changed.
+    #[allow(clippy::too_many_lines)]
     pub fn apply_message(&mut self, bytes: &[u8]) -> bool {
         // If the message is framed, unwrap the payload; else fall back to raw
         let payload: &[u8] = match net_core::frame::read_msg(bytes) {
             Ok(p) => p,
             Err(_) => bytes,
         };
+        // Prefer actor-centric snapshot (v2) if present
+        let mut slice_actor: &[u8] = payload;
+        if let Ok(asnap) = net_core::snapshot::ActorSnapshot::decode(&mut slice_actor) {
+            self.actors.clear();
+            for a in asnap.actors {
+                self.actors.push(ActorView {
+                    id: a.id,
+                    kind: a.kind,
+                    team: a.team,
+                    pos: glam::vec3(a.pos[0], a.pos[1], a.pos[2]),
+                    yaw: a.yaw,
+                    radius: a.radius,
+                    hp: a.hp,
+                    max: a.max,
+                    alive: a.alive,
+                });
+            }
+            self.projectiles.clear();
+            for p in asnap.projectiles {
+                self.projectiles.push(ProjectileView {
+                    id: p.id,
+                    kind: p.kind,
+                    pos: glam::vec3(p.pos[0], p.pos[1], p.pos[2]),
+                    vel: glam::vec3(p.vel[0], p.vel[1], p.vel[2]),
+                });
+            }
+            // Derive wizard/npc views for UI compatibility
+            self.wizards.clear();
+            self.npcs.clear();
+            for a in &self.actors {
+                match a.kind {
+                    0 => self.wizards.push(WizardView { id: a.id, kind: 0, pos: a.pos, yaw: a.yaw, hp: a.hp, max: a.max }),
+                    1 | 2 => self.npcs.push(NpcView { id: a.id, hp: a.hp, max: a.max, pos: a.pos, radius: a.radius, alive: a.alive, attack_anim: 0.0, yaw: a.yaw }),
+                    _ => {}
+                }
+            }
+            return true;
+        }
         // 0) Prefer new consolidated TickSnapshot, which includes boss + npcs.
-        let mut slice_ts: &[u8] = payload;
-        if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice_ts) {
+        // Legacy v1
+        let mut slice_legacy: &[u8] = payload;
+        if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice_legacy) {
             self.wizards.clear();
             for w in ts.wizards {
                 self.wizards.push(WizardView {
@@ -154,6 +195,18 @@ pub struct NpcView {
     pub yaw: f32,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActorView {
+    pub id: u32,
+    pub kind: u8,
+    pub team: u8,
+    pub pos: glam::Vec3,
+    pub yaw: f32,
+    pub radius: f32,
+    pub hp: i32,
+    pub max: i32,
+    pub alive: bool,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardView {
     pub id: u32,
