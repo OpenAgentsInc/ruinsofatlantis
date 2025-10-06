@@ -3660,12 +3660,14 @@ impl Renderer {
         if self.zombie_count == 0 || self.zombie_ids.is_empty() {
             return;
         }
-        // Map replicated id -> pos and radius
+        // Map replicated id -> pos, radius, yaw (if provided)
         let mut pos_map: HashMap<u32, glam::Vec3> = HashMap::new();
         let mut radius_map: HashMap<u32, f32> = HashMap::new();
+        let mut yaw_map: HashMap<u32, f32> = HashMap::new();
         for n in &self.repl_buf.npcs {
             pos_map.insert(n.id, n.pos);
             radius_map.insert(n.id, n.radius);
+            yaw_map.insert(n.id, n.yaw);
         }
         if pos_map.is_empty() {
             return;
@@ -3682,8 +3684,10 @@ impl Renderer {
                 let m_old = self.zombie_models[i];
                 let prev = self.zombie_prev_pos.get(i).copied().unwrap_or(p);
                 let delta = p - prev;
-                // Face movement direction when moving; otherwise face nearest wizard
-                let mut yaw = if delta.length_squared() > 1e-5 {
+                // Prefer server-auth yaw when available
+                let mut yaw = if let Some(y) = yaw_map.get(&id).copied() {
+                    y
+                } else if delta.length_squared() > 1e-5 {
                     let desired = delta.x.atan2(delta.z);
                     let current = Self::yaw_from_model(&m_old);
                     let error = Self::wrap_angle(desired - current);

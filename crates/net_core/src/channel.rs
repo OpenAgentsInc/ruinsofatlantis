@@ -7,6 +7,7 @@ use crossbeam_channel as xchan;
 
 #[derive(Clone)]
 pub struct Tx(pub xchan::Sender<Vec<u8>>);
+#[derive(Clone)]
 pub struct Rx(pub xchan::Receiver<Vec<u8>>);
 
 /// Default capacity for replication channels when not specified.

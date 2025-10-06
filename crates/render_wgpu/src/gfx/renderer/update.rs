@@ -2631,7 +2631,9 @@ impl Renderer {
                 .map(|n| (n.id, n.pos, n.radius, n.alive, n.max))
                 .collect();
             for (nid, pos, radius_z, alive, max_hp) in npcs {
-                if !alive { continue; }
+                if !alive {
+                    continue;
+                }
                 let dx = pos.x - center.x;
                 let dz = pos.z - center.z;
                 if dx * dx + dz * dz <= r2 {

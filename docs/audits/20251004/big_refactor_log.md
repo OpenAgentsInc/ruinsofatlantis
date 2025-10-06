@@ -182,3 +182,36 @@ This running log captures code-level changes made to address the 2025-10-04 audi
   - `cargo check` — OK
   - `cargo clippy --all-targets -D warnings` — OK
   - `cargo test` — all workspace tests green
+
+## 2025-10-06 — Start server-authoritative path (#108)
+
+- net_core: Introduced consolidated TickSnapshot and loopback transport
+  - `crates/net_core/src/snapshot.rs`:
+    - Added `TickSnapshot { v, tick, wizards[], npcs[], projectiles[], boss? }` with a leading tag byte (`TAG_TICK_SNAPSHOT = 0xA1`) for unambiguous decodes alongside legacy, per‑message encodings.
+    - Added `WizardRep`, `NpcRep`, `ProjectileRep`, `BossRep` records and `tick_snapshot_roundtrip` unit test.
+  - `crates/net_core/src/transport.rs`:
+    - New `Transport` trait and `LocalLoopbackTransport` built on the existing bounded channel.
+  - `crates/net_core/src/channel.rs`: made `Rx` cloneable to support loopback splitter.
+
+- client_core: Decode TickSnapshot first; extend NPC view with yaw
+  - `crates/client_core/src/replication.rs`:
+    - `ReplicationBuffer::apply_message` now prefers `TickSnapshot` (boss + npcs) and falls back to `ChunkMeshDelta` → `NpcListMsg` → `BossStatusMsg` for migration.
+    - `NpcView` extended with `yaw`; legacy list populates `yaw = 0.0`.
+
+- platform_winit: Emit TickSnapshot in addition to legacy messages
+  - `crates/platform_winit/src/lib.rs`:
+    - Track a local `tick` counter; after stepping the demo server each frame, build and send a framed `TickSnapshot` with NPC yaw computed toward the nearest wizard (temporary until the server sends yaw).
+    - Kept `NpcListMsg` + `BossStatusMsg` emission during migration.
+
+- render_wgpu: Consume server yaw when available
+  - `crates/render_wgpu/src/gfx/mod.rs`:
+    - `update_zombies_from_replication` now prefers replicated yaw for zombies; falls back to previous client‑side facing heuristics when yaw is absent.
+
+- Validation
+  - `cargo check` — OK
+  - `cargo test -p net_core` — new tests pass
+  - `cargo clippy --all-targets -D warnings` — OK
+
+- Next (#108 follow‑ups)
+  - Move demo HP/melee/projectile damage out of renderer once the server includes authoritative HP/projectiles in TickSnapshot.
+  - Swap platform’s in‑place channel wiring for `LocalLoopbackTransport` end‑to‑end and introduce a `WebSocketTransport` for remote.

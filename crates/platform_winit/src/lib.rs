@@ -25,6 +25,7 @@ struct App {
     last_time: Option<std::time::Instant>,
     #[cfg(target_arch = "wasm32")]
     last_time: Option<web_time::Instant>,
+    tick: u32,
 }
 
 impl ApplicationHandler for App {
@@ -84,6 +85,7 @@ impl ApplicationHandler for App {
                     self.demo_server = Some(srv);
                 }
                 self.last_time = Some(std::time::Instant::now());
+                self.tick = 0;
             }
 
             #[cfg(target_arch = "wasm32")]
@@ -253,6 +255,67 @@ impl ApplicationHandler for App {
                         st.max
                     );
                 }
+                // Also send consolidated TickSnapshot (migration target)
+                let mut npc_rep: Vec<net_core::snapshot::NpcRep> = Vec::with_capacity(srv.npcs.len());
+                for n in &srv.npcs {
+                    // Face nearest wizard for demo yaw until server provides it
+                    let mut yaw = 0.0f32;
+                    let mut best_d2 = f32::INFINITY;
+                    for w in &wiz_pos {
+                        let dx = w.x - n.pos.x;
+                        let dz = w.z - n.pos.z;
+                        let d2 = dx * dx + dz * dz;
+                        if d2 < best_d2 {
+                            best_d2 = d2;
+                            yaw = dx.atan2(dz);
+                        }
+                    }
+                    npc_rep.push(net_core::snapshot::NpcRep {
+                        id: n.id.0,
+                        archetype: 0,
+                        pos: [n.pos.x, n.pos.y, n.pos.z],
+                        yaw,
+                        radius: n.radius,
+                        hp: n.hp,
+                        max: n.max_hp,
+                        alive: n.alive,
+                    });
+                }
+                let wiz_rep: Vec<net_core::snapshot::WizardRep> = wiz_pos
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| net_core::snapshot::WizardRep {
+                        id: i as u32,
+                        kind: 0,
+                        pos: [p.x, p.y, p.z],
+                        yaw: 0.0,
+                        hp: 100,
+                        max: 100,
+                    })
+                    .collect();
+                let boss_rep = srv.nivita_status().map(|st| net_core::snapshot::BossRep {
+                    id: srv.nivita_id.map(|i| i.0).unwrap_or(0),
+                    name: st.name,
+                    pos: [st.pos.x, st.pos.y, st.pos.z],
+                    hp: st.hp,
+                    max: st.max,
+                    ac: st.ac,
+                });
+                let ts = net_core::snapshot::TickSnapshot {
+                    v: 1,
+                    tick: self.tick,
+                    wizards: wiz_rep,
+                    npcs: npc_rep,
+                    projectiles: Vec::new(),
+                    boss: boss_rep,
+                };
+                let mut p3 = Vec::new();
+                ts.encode(&mut p3);
+                let mut f3 = Vec::with_capacity(p3.len() + 8);
+                net_core::frame::write_msg(&mut f3, &p3);
+                metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f3.len() as u64);
+                let _ = tx.try_send(f3);
+                self.tick = self.tick.wrapping_add(1);
             }
         }
         if let Some(win) = &self.window {

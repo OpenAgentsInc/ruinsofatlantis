@@ -13,6 +13,7 @@ pub mod channel;
 pub mod frame;
 pub mod interest;
 pub mod snapshot;
+pub mod transport;
 
 #[cfg(test)]
 mod tests {

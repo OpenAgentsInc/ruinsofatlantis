@@ -36,6 +36,30 @@ impl ReplicationBuffer {
             Err(_) => bytes,
         };
         let mut slice: &[u8] = payload;
+        // 0) Prefer new consolidated TickSnapshot, which includes boss + npcs.
+        if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice) {
+            self.npcs.clear();
+            for n in ts.npcs {
+                self.npcs.push(NpcView {
+                    id: n.id,
+                    hp: n.hp,
+                    max: n.max,
+                    pos: glam::vec3(n.pos[0], n.pos[1], n.pos[2]),
+                    radius: n.radius,
+                    alive: n.alive,
+                    attack_anim: 0.0,
+                    yaw: n.yaw,
+                });
+            }
+            self.boss_status = ts.boss.map(|b| BossStatus {
+                name: b.name,
+                ac: b.ac,
+                hp: b.hp,
+                max: b.max,
+                pos: glam::vec3(b.pos[0], b.pos[1], b.pos[2]),
+            });
+            return true;
+        }
         if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice) {
             let entry = crate::upload::ChunkMeshEntry {
                 positions: delta.positions,
@@ -60,6 +84,7 @@ impl ReplicationBuffer {
                         radius: it.radius,
                         alive: it.alive != 0,
                         attack_anim: it.attack_anim,
+                        yaw: 0.0,
                     });
                 }
                 true
@@ -101,6 +126,7 @@ pub struct NpcView {
     pub radius: f32,
     pub alive: bool,
     pub attack_anim: f32,
+    pub yaw: f32,
 }
 
 #[cfg(test)]
