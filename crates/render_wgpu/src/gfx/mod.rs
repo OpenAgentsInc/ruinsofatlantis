@@ -3230,19 +3230,28 @@ impl Renderer {
             .map(|n| (n.id, n.pos, n.radius, n.alive))
             .collect();
         for (nid, npos, nradius, nalive) in npcs {
-            if !nalive { continue; }
+            if !nalive {
+                continue;
+            }
             // Nearest wizard index
             let mut best = None::<usize>;
             let mut best_d2 = f32::INFINITY;
             for (j, w) in wiz_pos.iter().enumerate() {
                 let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
-                if hp <= 0 { continue; }
+                if hp <= 0 {
+                    continue;
+                }
                 let dx = w.x - npos.x;
                 let dz = w.z - npos.z;
-                let d2 = dx*dx + dz*dz;
-                if d2 < best_d2 { best_d2 = d2; best = Some(j); }
+                let d2 = dx * dx + dz * dz;
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                    best = Some(j);
+                }
             }
-            let Some(j) = best else { continue; };
+            let Some(j) = best else {
+                continue;
+            };
             let contact = nradius + wizard_r + pad;
             if best_d2 <= contact * contact {
                 // Check cooldown
@@ -3251,13 +3260,19 @@ impl Renderer {
                     // Apply damage
                     let before = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
                     let after = (before - damage).max(0);
-                    if let Some(slot) = self.wizard_hp.get_mut(j) { *slot = after; }
+                    if let Some(slot) = self.wizard_hp.get_mut(j) {
+                        *slot = after;
+                    }
                     // Floater at wizard head
                     let head = wiz_pos[j] + glam::vec3(0.0, 1.7, 0.0);
                     self.damage.spawn(head, damage);
                     // Fatal handling
                     if after == 0 {
-                        if j == self.pc_index { self.kill_pc(); } else { self.remove_wizard_at(j); }
+                        if j == self.pc_index {
+                            self.kill_pc();
+                        } else {
+                            self.remove_wizard_at(j);
+                        }
                     }
                     // Reset cooldown
                     self.zombie_melee_cd.insert(nid, attack_cd);

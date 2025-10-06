@@ -1634,21 +1634,30 @@ impl Renderer {
                                 let c = pm.to_cols_array();
                                 let pc = glam::vec3(c[12], c[13], c[14]);
                                 let d = glam::vec3(pc.x - wpos.x, 0.0, pc.z - wpos.z);
-                                if d.length_squared() > 1e-8 { dir_w = d.normalize(); }
+                                if d.length_squared() > 1e-8 {
+                                    dir_w = d.normalize();
+                                }
                             }
                         } else if !self.repl_buf.npcs.is_empty() {
                             let mut best_d2 = f32::INFINITY;
                             let mut tgt: Option<glam::Vec3> = None;
                             for n in &self.repl_buf.npcs {
-                                if !n.alive { continue; }
+                                if !n.alive {
+                                    continue;
+                                }
                                 let dx = n.pos.x - wpos.x;
                                 let dz = n.pos.z - wpos.z;
                                 let d2 = dx * dx + dz * dz;
-                                if d2 < best_d2 { best_d2 = d2; tgt = Some(n.pos); }
+                                if d2 < best_d2 {
+                                    best_d2 = d2;
+                                    tgt = Some(n.pos);
+                                }
                             }
                             if let Some(tp) = tgt {
                                 let d = glam::vec3(tp.x - wpos.x, 0.0, tp.z - wpos.z);
-                                if d.length_squared() > 1e-8 { dir_w = d.normalize(); }
+                                if d.length_squared() > 1e-8 {
+                                    dir_w = d.normalize();
+                                }
                             }
                         }
                         let right_w = (inst * glam::Vec4::new(1.0, 0.0, 0.0, 0.0))
@@ -2611,6 +2620,55 @@ impl Renderer {
         }
         // Damage NPCs in radius
         let r2 = radius * radius;
+        // Default build: replicated NPCs (zombies) take AoE damage
+        #[cfg(not(feature = "legacy_client_ai"))]
+        {
+            // Snapshot current replicated NPCs to avoid borrow conflicts
+            let npcs: Vec<(u32, glam::Vec3, f32, bool, i32)> = self
+                .repl_buf
+                .npcs
+                .iter()
+                .map(|n| (n.id, n.pos, n.radius, n.alive, n.max))
+                .collect();
+            for (nid, pos, radius_z, alive, max_hp) in npcs {
+                if !alive { continue; }
+                let dx = pos.x - center.x;
+                let dz = pos.z - center.z;
+                if dx * dx + dz * dz <= r2 {
+                    let cur = self.npc_hp_overlay.get(&nid).copied().unwrap_or(max_hp);
+                    let after = (cur - damage).max(0);
+                    self.npc_hp_overlay.insert(nid, after);
+                    // UI floater at zombie head
+                    if let Some(idx) = self.zombie_ids.iter().position(|z| *z == nid) {
+                        let m = self
+                            .zombie_models
+                            .get(idx)
+                            .copied()
+                            .unwrap_or(glam::Mat4::IDENTITY);
+                        let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
+                        self.damage.spawn(head.truncate(), damage);
+                        if after == 0 {
+                            self.zombie_ids.swap_remove(idx);
+                            self.zombie_models.swap_remove(idx);
+                            if (idx as u32) < self.zombie_count {
+                                self.zombie_instances_cpu.swap_remove(idx);
+                                self.zombie_count -= 1;
+                                for (i, inst) in self.zombie_instances_cpu.iter_mut().enumerate() {
+                                    inst.palette_base = (i as u32) * self.zombie_joints;
+                                }
+                                let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+                                self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+                            }
+                        }
+                    } else {
+                        let (hgt, _n) =
+                            crate::gfx::terrain::height_at(&self.terrain_cpu, pos.x, pos.z);
+                        self.damage
+                            .spawn(glam::vec3(pos.x, hgt + radius_z + 0.9, pos.z), damage);
+                    }
+                }
+            }
+        }
         // Handle DK first for despawn behavior
         #[cfg(feature = "legacy_client_ai")]
         if let Some(dk_id) = self.dk_id
