@@ -337,6 +337,8 @@ pub struct Renderer {
     // Projectile + particle pools
     projectiles: Vec<Projectile>,
     particles: Vec<Particle>,
+    // Client-side damage overlay for replicated NPCs (id -> hp), used only in demo/default builds
+    npc_hp_overlay: std::collections::HashMap<u32, i32>,
 
     // Data-driven spec
     fire_bolt: Option<SpellSpec>,

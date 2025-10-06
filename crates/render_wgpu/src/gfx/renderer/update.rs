@@ -1693,6 +1693,67 @@ impl Renderer {
             p.pos += p.vel * dt;
             p.pos = gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
+        // 2.25) Collide NPC wizard projectiles with replicated NPCs (default build)
+        #[cfg(not(feature = "legacy_client_combat"))]
+        if !self.projectiles.is_empty() && !self.repl_buf.npcs.is_empty() {
+            let mut i = 0usize;
+            while i < self.projectiles.len() {
+                let pr = self.projectiles[i];
+                // Only NPC wizard casts should hit monsters; PC casts also allowed
+                let p0 = pr.pos - pr.vel * dt;
+                let p1 = pr.pos;
+                let mut hit = None::<(u32, glam::Vec3)>; // (npc_id, pos)
+                for n in &self.repl_buf.npcs {
+                    if !n.alive {
+                        continue;
+                    }
+                    let center = glam::vec3(n.pos.x, n.pos.y, n.pos.z);
+                    if segment_hits_circle_xz(p0, p1, center, n.radius) {
+                        hit = Some((n.id, center));
+                        break;
+                    }
+                }
+                if let Some((nid, cpos)) = hit {
+                    // Damage model: 10 per hit; initialize overlay from replicated max on first contact
+                    let max_hp = self
+                        .repl_buf
+                        .npcs
+                        .iter()
+                        .find(|x| x.id == nid)
+                        .map(|x| x.max)
+                        .unwrap_or(30);
+                    let cur = self.npc_hp_overlay.get(&nid).copied().unwrap_or(max_hp);
+                    let after = (cur - 10).max(0);
+                    self.npc_hp_overlay.insert(nid, after);
+                    // Damage floater above head (terrain aware)
+                    let (hgt, _nrm) =
+                        crate::gfx::terrain::height_at(&self.terrain_cpu, cpos.x, cpos.z);
+                    self.damage
+                        .spawn(glam::vec3(cpos.x, hgt + 0.9, cpos.z), 10);
+                    // If fatal, remove the zombie visual
+                    if after == 0
+                        && let Some(idx) = self.zombie_ids.iter().position(|z| *z == nid)
+                    {
+                        self.zombie_ids.swap_remove(idx);
+                        self.zombie_models.swap_remove(idx);
+                        if (idx as u32) < self.zombie_count {
+                            self.zombie_instances_cpu.swap_remove(idx);
+                            self.zombie_count -= 1;
+                            // Recompute palette_base for contiguity
+                            for (i2, inst2) in self.zombie_instances_cpu.iter_mut().enumerate() {
+                                inst2.palette_base = (i2 as u32) * self.zombie_joints;
+                            }
+                            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
+                        }
+                    }
+                    // Remove projectile on hit
+                    self.projectiles.swap_remove(i);
+                    continue;
+                }
+                i += 1;
+            }
+        }
         // 2.5) Fireball collisions (custom AoE explode on hit)
         if !self.projectiles.is_empty() {
             let mut i = 0usize;

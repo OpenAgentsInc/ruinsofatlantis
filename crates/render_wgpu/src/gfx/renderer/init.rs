@@ -1736,6 +1736,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         root_node,
         projectiles: Vec::new(),
         particles: Vec::new(),
+        npc_hp_overlay: std::collections::HashMap::new(),
         fire_bolt,
         nameplates,
         nameplates_npc,
