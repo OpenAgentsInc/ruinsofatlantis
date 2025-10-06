@@ -3,7 +3,7 @@
 //! Provides a minimal `run()` that creates a window and drives the
 //! `render_wgpu::gfx::Renderer` via winit's ApplicationHandler API.
 
-use net_core::snapshot::{SnapshotEncode, SnapshotDecode};
+use net_core::snapshot::{SnapshotDecode, SnapshotEncode};
 use net_core::transport::Transport;
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
@@ -193,16 +193,16 @@ impl ApplicationHandler for App {
                         match cmd {
                             net_core::command::ClientCmd::FireBolt { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
-                                let d = glam::vec3(dir[0], dir[1], dir[2]);
-                                srv.spawn_projectile(p, d, server_core::ProjKind::Firebolt);
+                                let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
+                                srv.spawn_projectile_from_dir(p, d, server_core::ProjKind::Firebolt);
                             }
                             net_core::command::ClientCmd::Fireball { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
-                                let d = glam::vec3(dir[0], dir[1], dir[2]);
-                                srv.spawn_projectile(
+                                let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
+                                srv.spawn_projectile_from_dir(
                                     p,
                                     d,
-                                    server_core::ProjKind::Fireball { radius: 6.0, damage: 28 },
+                                    server_core::ProjKind::Fireball { radius: 0.0, damage: 0 },
                                 );
                             }
                         }

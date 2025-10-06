@@ -183,6 +183,29 @@ impl ServerState {
         self.next_proj_id = self.next_proj_id.wrapping_add(1);
         self.projectiles.push(Projectile { id, pos, vel, kind });
     }
+    /// Spawn a projectile by unit direction; speed and damage/radius are chosen by kind.
+    pub fn spawn_projectile_from_dir(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
+        let d = dir.normalize_or_zero();
+        match kind {
+            ProjKind::Firebolt => {
+                let speed = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
+                    .ok()
+                    .and_then(|db| db.actions.get("AtWillLMB").cloned())
+                    .map(|s| s.speed_mps)
+                    .unwrap_or(40.0);
+                self.spawn_projectile(pos, d * speed, kind);
+            }
+            ProjKind::Fireball { radius, damage } => {
+                let spec = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
+                    .ok()
+                    .and_then(|db| db.actions.get("EncounterQ").cloned());
+                let speed = spec.as_ref().map(|s| s.speed_mps).unwrap_or(30.0);
+                let rad = if radius > 0.0 { radius } else { spec.as_ref().map(|s| s.radius_m).unwrap_or(6.0) };
+                let dmg = if damage > 0 { damage } else { spec.as_ref().map(|s| s.damage).unwrap_or(28) };
+                self.spawn_projectile(pos, d * speed, ProjKind::Fireball { radius: rad, damage: dmg });
+            }
+        }
+    }
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile integration/collision.
     pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
         // Ensure we mirror wizard positions
@@ -239,14 +262,14 @@ impl ServerState {
                     }
                 }
                 if fire_now {
-                    // Fire a bolt and reset timer
-                    let speed = 36.0;
+                    // Fire a bolt using projectile DB speed
+                    let speed = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
+                        .ok()
+                        .and_then(|db| db.actions.get("AtWillLMB").cloned())
+                        .map(|s| s.speed_mps)
+                        .unwrap_or(40.0);
                     let vel = dir.normalize_or_zero() * speed;
-                    self.spawn_projectile(
-                        pos + vel.normalize_or_zero() * 0.3,
-                        vel,
-                        ProjKind::Firebolt,
-                    );
+                    self.spawn_projectile(pos + vel.normalize_or_zero() * 0.3, vel, ProjKind::Firebolt);
                 }
             }
         }
