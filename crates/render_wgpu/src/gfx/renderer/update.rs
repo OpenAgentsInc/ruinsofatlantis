@@ -1540,7 +1540,9 @@ impl Renderer {
                             .truncate()
                             .normalize_or_zero();
                         let lateral = 0.20;
-                        let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
+                        let mut spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
+                        // Clamp spawn to just above terrain to avoid underground origins
+                        spawn = gfx::util::clamp_above_terrain(&self.terrain_cpu, spawn, 0.15);
                         match self.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                             super::super::PcCast::FireBolt => {
                                 // Send authoritative command to server

@@ -381,59 +381,36 @@ impl ServerState {
             }
             // Fireball proximity explode: if we passed within AoE radius of any NPC this step
             if !removed && let ProjKind::Fireball { radius, damage } = kind {
-                let r2 = radius * radius;
-                let mut near_any = false;
-                for m in &self.npcs {
-                    if !m.alive {
-                        continue;
-                    }
-                    // Distance from segment [p0,p1] to NPC center in XZ
+                    let r2 = radius * radius;
                     let a = glam::Vec2::new(p0.x, p0.z);
                     let b = glam::Vec2::new(p1.x, p1.z);
-                    let c = glam::Vec2::new(m.pos.x, m.pos.z);
                     let ab = b - a;
                     let len2 = ab.length_squared();
-                    let t = if len2 <= 1e-12 {
-                        0.0
-                    } else {
-                        ((c - a).dot(ab) / len2).clamp(0.0, 1.0)
-                    };
-                    let closest = a + ab * t;
-                    let d2 = (closest - c).length_squared();
-                    if d2 <= r2 {
-                        near_any = true;
-                        break;
+                    let mut best_d2 = f32::INFINITY;
+                    let mut best_center = b;
+                    for m in &self.npcs {
+                        if !m.alive { continue; }
+                        let c = glam::Vec2::new(m.pos.x, m.pos.z);
+                        let t = if len2 <= 1e-12 { 0.0 } else { ((c - a).dot(ab) / len2).clamp(0.0, 1.0) };
+                        let closest = a + ab * t;
+                        let d2 = (closest - c).length_squared();
+                        if d2 < best_d2 { best_d2 = d2; best_center = closest; }
                     }
-                }
-                    if near_any {
-                        // Apply AoE centered at p1
-                        log::info!("server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} ({} npcs)", p1.x, p1.y, p1.z, radius, damage, self.npcs.len());
+                    if best_d2 <= r2 {
+                        let cx = best_center.x; let cz = best_center.y;
+                        log::info!("server: Fireball explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} ({} npcs)", cx, p1.y, cz, radius, damage, self.npcs.len());
                         for m in &mut self.npcs {
-                        if !m.alive {
-                            continue;
+                            if !m.alive { continue; }
+                            let dx = m.pos.x - cx; let dz = m.pos.z - cz;
+                            if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); if m.hp == 0 { m.alive = false; } }
                         }
-                        let dx = m.pos.x - p1.x;
-                        let dz = m.pos.z - p1.z;
-                        if dx * dx + dz * dz <= r2 {
-                            m.hp = (m.hp - damage).max(0);
-                            if m.hp == 0 {
-                                m.alive = false;
-                            }
+                        for m in &mut self.wizards {
+                            if m.hp <= 0 { continue; }
+                            let dx = m.pos.x - cx; let dz = m.pos.z - cz;
+                            if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); }
                         }
+                        removed = true;
                     }
-                    // Friendly fire on wizards in AoE
-                    for m in &mut self.wizards {
-                        if m.hp <= 0 {
-                            continue;
-                        }
-                        let dx = m.pos.x - p1.x;
-                        let dz = m.pos.z - p1.z;
-                        if dx * dx + dz * dz <= r2 {
-                            m.hp = (m.hp - damage).max(0);
-                        }
-                    }
-                    removed = true;
-                }
             }
             if removed {
                 self.projectiles.swap_remove(i);
