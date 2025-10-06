@@ -94,52 +94,7 @@ impl ReplicationBuffer {
             }
             return true;
         }
-        // 0) Prefer new consolidated TickSnapshot, which includes boss + npcs.
-        // Legacy v1
-        let mut slice_legacy: &[u8] = payload;
-        if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice_legacy) {
-            self.wizards.clear();
-            for w in ts.wizards {
-                self.wizards.push(WizardView {
-                    id: w.id,
-                    kind: w.kind,
-                    pos: glam::vec3(w.pos[0], w.pos[1], w.pos[2]),
-                    yaw: w.yaw,
-                    hp: w.hp,
-                    max: w.max,
-                });
-            }
-            self.npcs.clear();
-            for n in ts.npcs {
-                self.npcs.push(NpcView {
-                    id: n.id,
-                    hp: n.hp,
-                    max: n.max,
-                    pos: glam::vec3(n.pos[0], n.pos[1], n.pos[2]),
-                    radius: n.radius,
-                    alive: n.alive,
-                    attack_anim: 0.0,
-                    yaw: n.yaw,
-                });
-            }
-            self.projectiles.clear();
-            for p in ts.projectiles {
-                self.projectiles.push(ProjectileView {
-                    id: p.id,
-                    kind: p.kind,
-                    pos: glam::vec3(p.pos[0], p.pos[1], p.pos[2]),
-                    vel: glam::vec3(p.vel[0], p.vel[1], p.vel[2]),
-                });
-            }
-            self.boss_status = ts.boss.map(|b| BossStatus {
-                name: b.name,
-                ac: b.ac,
-                hp: b.hp,
-                max: b.max,
-                pos: glam::vec3(b.pos[0], b.pos[1], b.pos[2]),
-            });
-            return true;
-        }
+        // No legacy TickSnapshot decode; only actors (v2) is accepted now.
         let mut slice_delta: &[u8] = payload;
         if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
             let entry = crate::upload::ChunkMeshEntry {
@@ -251,110 +206,14 @@ mod tests {
     }
     #[test]
     fn tick_snapshot_populates_npcs_and_projectiles() {
-        use net_core::snapshot::{
-            BossRep, NpcRep, ProjectileRep, SnapshotEncode, TickSnapshot, WizardRep,
-        };
-        let ts = TickSnapshot {
-            v: 1,
-            tick: 7,
-            wizards: vec![WizardRep {
-                id: 1,
-                kind: 0,
-                pos: [0.0, 0.6, 0.0],
-                yaw: 0.0,
-                hp: 100,
-                max: 100,
-            }],
-            npcs: vec![NpcRep {
-                id: 9,
-                archetype: 0,
-                pos: [1.0, 0.6, 2.0],
-                yaw: 0.0,
-                radius: 0.9,
-                hp: 20,
-                max: 20,
-                alive: true,
-            }],
-            projectiles: vec![ProjectileRep {
-                id: 3,
-                kind: 0,
-                pos: [0.0, 0.7, 0.2],
-                vel: [0.0, 0.0, 40.0],
-            }],
-            boss: Some(BossRep {
-                id: 99,
-                name: "Nivita".into(),
-                pos: [5.0, 0.6, 5.0],
-                hp: 225,
-                max: 225,
-                ac: 18,
-            }),
-        };
-        let mut buf = Vec::new();
-        ts.encode(&mut buf);
-        // Frame it
-        let mut framed = Vec::new();
-        net_core::frame::write_msg(&mut framed, &buf);
+        // Legacy TickSnapshot no longer decoded; expect no-op on garbage bytes
         let mut repl = ReplicationBuffer::default();
-        assert!(repl.apply_message(&framed));
-        assert_eq!(repl.npcs.len(), 1);
-        assert_eq!(repl.projectiles.len(), 1);
-        assert!(repl.boss_status.is_some());
+        assert!(!repl.apply_message(&[0u8]));
     }
 
     #[test]
     fn apply_tick_snapshot_populates_all_views() {
-        use net_core::snapshot::{
-            BossRep, NpcRep, ProjectileRep, SnapshotEncode, TickSnapshot, WizardRep,
-        };
-        let snap = TickSnapshot {
-            v: 1,
-            tick: 7,
-            wizards: vec![WizardRep {
-                id: 1,
-                kind: 0,
-                pos: [1.0, 0.6, 2.0],
-                yaw: 0.1,
-                hp: 72,
-                max: 100,
-            }],
-            npcs: vec![NpcRep {
-                id: 10,
-                archetype: 1,
-                pos: [0.0, 0.6, 0.0],
-                yaw: 0.0,
-                radius: 0.9,
-                hp: 2,
-                max: 30,
-                alive: true,
-            }],
-            projectiles: vec![ProjectileRep {
-                id: 77,
-                kind: 1,
-                pos: [0.0, 0.6, 3.0],
-                vel: [30.0, 0.0, 0.0],
-            }],
-            boss: Some(BossRep {
-                id: 999,
-                name: "Nivita".into(),
-                pos: [5.0, 1.2, 2.0],
-                hp: 225,
-                max: 225,
-                ac: 18,
-            }),
-        };
-        let mut bytes = Vec::new();
-        snap.encode(&mut bytes);
-        let mut framed = Vec::new();
-        net_core::frame::write_msg(&mut framed, &bytes);
-
         let mut buf = ReplicationBuffer::default();
-        assert!(buf.apply_message(&framed));
-        assert_eq!(buf.wizards.len(), 1);
-        assert_eq!(buf.npcs.len(), 1);
-        assert_eq!(buf.projectiles.len(), 1);
-        assert_eq!(buf.wizards[0].hp, 72);
-        assert_eq!(buf.npcs[0].hp, 2);
-        assert!(buf.boss_status.is_some());
+        assert!(!buf.apply_message(&[0u8]));
     }
 }

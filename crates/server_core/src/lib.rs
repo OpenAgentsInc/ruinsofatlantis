@@ -398,7 +398,9 @@ impl ServerState {
                     let contact = rad_u + tr + 0.35f32;
                     if dist > contact + 0.02 {
                         let step = (speed * dt).min(dist - contact);
-                        if step > 1e-4 && let Some(a) = self.actors.get_mut(uid) {
+                        if step > 1e-4
+                            && let Some(a) = self.actors.get_mut(uid)
+                        {
                             a.tr.pos += to.normalize_or_zero() * step;
                         }
                     } else {
