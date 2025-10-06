@@ -387,7 +387,9 @@ impl ServerState {
                         }
                         let mut hit_wiz = 0u32;
                         for m in &mut self.wizards {
-                            if m.hp <= 0 { continue; }
+                            if m.hp <= 0 {
+                                continue;
+                            }
                             let dx = m.pos.x - p1.x;
                             let dz = m.pos.z - p1.z;
                             if dx * dx + dz * dz <= r2 {
@@ -395,10 +397,19 @@ impl ServerState {
                                 hit_wiz += 1;
                             }
                         }
-                        if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                        if std::env::var("RA_LOG_FIREBALL")
+                            .map(|v| v == "1")
+                            .unwrap_or(false)
+                        {
                             log::info!(
                                 "server: Fireball impact explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
-                                p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                                p1.x,
+                                p1.y,
+                                p1.z,
+                                spec.aoe_radius_m,
+                                spec.damage,
+                                hit_npc,
+                                hit_wiz
                             );
                         }
                     } else {
@@ -426,7 +437,9 @@ impl ServerState {
                             let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                             let mut hit_wiz = 0u32;
                             for m in &mut self.wizards {
-                                if m.hp <= 0 { continue; }
+                                if m.hp <= 0 {
+                                    continue;
+                                }
                                 let dx = m.pos.x - p1.x;
                                 let dz = m.pos.z - p1.z;
                                 if dx * dx + dz * dz <= r2 {
@@ -434,10 +447,18 @@ impl ServerState {
                                     hit_wiz += 1;
                                 }
                             }
-                            if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                            if std::env::var("RA_LOG_FIREBALL")
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                            {
                                 log::info!(
                                     "server: Fireball impact explode (wiz) at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(Wiz={})",
-                                    p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage, hit_wiz
+                                    p1.x,
+                                    p1.y,
+                                    p1.z,
+                                    spec.aoe_radius_m,
+                                    spec.damage,
+                                    hit_wiz
                                 );
                             }
                         } else {
@@ -506,13 +527,33 @@ impl ServerState {
                             hit_wiz += 1;
                         }
                     }
-                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                    // Require at least 2 targets to detonate on proximity; otherwise skip
+                    if (hit_npc + hit_wiz) >= 2 {
+                        if std::env::var("RA_LOG_FIREBALL")
+                            .map(|v| v == "1")
+                            .unwrap_or(false)
+                        {
+                            log::info!(
+                                "server: Fireball proximity explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
+                                cx,
+                                p1.y,
+                                cz,
+                                spec.aoe_radius_m,
+                                spec.damage,
+                                hit_npc,
+                                hit_wiz
+                            );
+                        }
+                        removed = true;
+                    } else if std::env::var("RA_LOG_FIREBALL")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
                         log::info!(
-                            "server: Fireball proximity explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
-                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                            "server: Fireball proximity skipped (low-count: NPCs={},Wiz={})",
+                            hit_npc, hit_wiz
                         );
                     }
-                    removed = true;
                 }
             }
             // Fireball timeout explode at current position (server-authoritative)
@@ -556,7 +597,13 @@ impl ServerState {
                     {
                         log::info!(
                             "server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
-                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                            cx,
+                            p1.y,
+                            cz,
+                            spec.aoe_radius_m,
+                            spec.damage,
+                            hit_npc,
+                            hit_wiz
                         );
                     }
                     removed = true;
