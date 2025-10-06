@@ -310,7 +310,7 @@ impl ServerState {
             self.projectiles[i].pos = p0 + vel * dt;
             let p1 = self.projectiles[i].pos;
             let mut removed = false;
-            // Collide vs NPCs
+            // Collide vs NPCs (direct hit)
             for n in &mut self.npcs {
                 if !n.alive {
                     continue;
@@ -347,7 +347,7 @@ impl ServerState {
                 }
             }
             if !removed {
-                // Collide vs wizards
+                // Collide vs wizards (direct hit)
                 for w in &mut self.wizards {
                     if w.hp <= 0 {
                         continue;
@@ -378,6 +378,49 @@ impl ServerState {
                         break;
                     }
                 }
+            }
+            // Fireball proximity explode: if we passed within AoE radius of any NPC this step
+            if !removed && let ProjKind::Fireball { radius, damage } = kind {
+                    let r2 = radius * radius;
+                    let mut near_any = false;
+                    for m in &self.npcs {
+                        if !m.alive { continue; }
+                        // Distance from segment [p0,p1] to NPC center in XZ
+                        let a = glam::Vec2::new(p0.x, p0.z);
+                        let b = glam::Vec2::new(p1.x, p1.z);
+                        let c = glam::Vec2::new(m.pos.x, m.pos.z);
+                        let ab = b - a;
+                        let len2 = ab.length_squared();
+                        let t = if len2 <= 1e-12 { 0.0 } else { ((c - a).dot(ab) / len2).clamp(0.0, 1.0) };
+                        let closest = a + ab * t;
+                        let d2 = (closest - c).length_squared();
+                        if d2 <= r2 {
+                            near_any = true;
+                            break;
+                        }
+                    }
+                    if near_any {
+                        // Apply AoE centered at p1
+                        for m in &mut self.npcs {
+                            if !m.alive { continue; }
+                            let dx = m.pos.x - p1.x;
+                            let dz = m.pos.z - p1.z;
+                            if dx*dx + dz*dz <= r2 {
+                                m.hp = (m.hp - damage).max(0);
+                                if m.hp == 0 { m.alive = false; }
+                            }
+                        }
+                        // Friendly fire on wizards in AoE
+                        for m in &mut self.wizards {
+                            if m.hp <= 0 { continue; }
+                            let dx = m.pos.x - p1.x;
+                            let dz = m.pos.z - p1.z;
+                            if dx*dx + dz*dz <= r2 {
+                                m.hp = (m.hp - damage).max(0);
+                            }
+                        }
+                        removed = true;
+                    }
             }
             if removed {
                 self.projectiles.swap_remove(i);

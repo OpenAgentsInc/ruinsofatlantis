@@ -176,7 +176,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 let mut models: Vec<glam::Mat4> = Vec::new();
                 let mut ids: Vec<u32> = Vec::new();
                 for (i, n) in r.repl_buf.npcs.iter().enumerate() {
-                    if !n.alive { continue; }
+                    if !n.alive {
+                        continue;
+                    }
                     ids.push(n.id);
                     let (h, _n) = terrain::height_at(&r.terrain_cpu, n.pos.x, n.pos.z);
                     let pos = glam::vec3(n.pos.x, h, n.pos.z);
@@ -275,7 +277,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             let mut models: Vec<glam::Mat4> = Vec::new();
             let mut ids: Vec<u32> = Vec::new();
             for (i, n) in r.repl_buf.npcs.iter().enumerate() {
-                if !n.alive { continue; }
+                if !n.alive {
+                    continue;
+                }
                 ids.push(n.id);
                 let (h, _n) = terrain::height_at(&r.terrain_cpu, n.pos.x, n.pos.z);
                 let pos = glam::vec3(n.pos.x, h, n.pos.z);
