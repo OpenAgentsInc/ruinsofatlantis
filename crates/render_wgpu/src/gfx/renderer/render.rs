@@ -265,9 +265,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 vel: p.vel,
                 t_die: t + 0.25, // keep visible between snapshots
                 owner_wizard: None,
-                color: match p.kind { 1 => [2.2, 0.9, 0.3], _ => [2.6, 0.7, 0.18] },
+                color: match p.kind {
+                    1 => [2.2, 0.9, 0.3],
+                    _ => [2.6, 0.7, 0.18],
+                },
                 kind: match p.kind {
-                    1 => crate::gfx::fx::ProjectileKind::Fireball { radius: 6.0, damage: 28 },
+                    1 => crate::gfx::fx::ProjectileKind::Fireball {
+                        radius: 6.0,
+                        damage: 28,
+                    },
                     _ => crate::gfx::fx::ProjectileKind::Normal,
                 },
             });

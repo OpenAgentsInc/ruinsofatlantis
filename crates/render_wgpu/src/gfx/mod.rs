@@ -341,6 +341,7 @@ pub struct Renderer {
     #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     npc_hp_overlay: std::collections::HashMap<u32, i32>,
     // Client-side damage overlay cache for replicated wizards (id -> hp)
+    #[allow(dead_code)]
     wiz_hp_overlay: std::collections::HashMap<u32, i32>,
     // Client-side melee cooldowns per replicated zombie (seconds until next allowed hit)
     #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
@@ -2448,7 +2449,9 @@ impl Renderer {
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         // Wizards (including PC): use replicated positions + HP
         for w in &self.repl_buf.wizards {
-            if w.hp <= 0 { continue; }
+            if w.hp <= 0 {
+                continue;
+            }
             let head = glam::vec3(w.pos[0], w.pos[1] + 1.7, w.pos[2]);
             let frac = (w.hp.max(0) as f32) / (w.max.max(1) as f32);
             bar_entries.push((head, frac));
