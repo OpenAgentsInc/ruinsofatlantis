@@ -215,3 +215,17 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - Next (#108 follow‑ups)
   - Move demo HP/melee/projectile damage out of renderer once the server includes authoritative HP/projectiles in TickSnapshot.
   - Swap platform’s in‑place channel wiring for `LocalLoopbackTransport` end‑to‑end and introduce a `WebSocketTransport` for remote.
+
+## 2025-10-06 — Finish #108: server‑authoritative only; remove demo hacks
+
+- Renderer (default build):
+  - Removed client-side combat/collision and local HP deltas; presentation-only now. PC casts send ClientCmd; projectiles/HP come from TickSnapshot.
+  - No default runtime reads of server_core; feature flags left only for archaeology (deprecated, off by default).
+- Platform:
+  - Using LocalLoopbackTransport; drains ClientCmd → spawns projectiles on server, steps server, sends TickSnapshot; removed legacy message sends.
+- Server:
+  - Owns wizard/projectile ECS state; steps NPC melee, wizard casts, projectiles, and authoritative HP; uses projectile spec speeds for NPC and PC casts.
+- CI/Policy:
+  - render_wgpu default = []; xtask always checks/clippies/tests no-default build and enforces layering guard error.
+- Docs:
+  - Updated src/README.md to reflect server-authoritative demo and deprecated flags.

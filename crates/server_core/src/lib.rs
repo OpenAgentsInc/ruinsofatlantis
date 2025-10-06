@@ -200,9 +200,24 @@ impl ServerState {
                     .ok()
                     .and_then(|db| db.actions.get("EncounterQ").cloned());
                 let speed = spec.as_ref().map(|s| s.speed_mps).unwrap_or(30.0);
-                let rad = if radius > 0.0 { radius } else { spec.as_ref().map(|s| s.radius_m).unwrap_or(6.0) };
-                let dmg = if damage > 0 { damage } else { spec.as_ref().map(|s| s.damage).unwrap_or(28) };
-                self.spawn_projectile(pos, d * speed, ProjKind::Fireball { radius: rad, damage: dmg });
+                let rad = if radius > 0.0 {
+                    radius
+                } else {
+                    spec.as_ref().map(|s| s.radius_m).unwrap_or(6.0)
+                };
+                let dmg = if damage > 0 {
+                    damage
+                } else {
+                    spec.as_ref().map(|s| s.damage).unwrap_or(28)
+                };
+                self.spawn_projectile(
+                    pos,
+                    d * speed,
+                    ProjKind::Fireball {
+                        radius: rad,
+                        damage: dmg,
+                    },
+                );
             }
         }
     }
@@ -269,7 +284,11 @@ impl ServerState {
                         .map(|s| s.speed_mps)
                         .unwrap_or(40.0);
                     let vel = dir.normalize_or_zero() * speed;
-                    self.spawn_projectile(pos + vel.normalize_or_zero() * 0.3, vel, ProjKind::Firebolt);
+                    self.spawn_projectile(
+                        pos + vel.normalize_or_zero() * 0.3,
+                        vel,
+                        ProjKind::Firebolt,
+                    );
                 }
             }
         }

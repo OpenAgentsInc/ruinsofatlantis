@@ -100,10 +100,10 @@ Note: the old `core/` facade has been removed; crates use `data_runtime` and `si
 - server/
   - mod.rs — In‑process server scaffold: authoritative NPC state (positions/health) and projectile collision/damage resolution. Designed to move into its own crate/process in a future workspace split.
 
-Gameplay wiring (prototype)
-- NPCs: multiple rings of cube NPCs spawn at various radii. They have health and can be killed; on hit, bars drop and color shifts.
-- Fire Bolt: on hit, applies damage to NPCs (logs hits/deaths). Impact spawns a small particle burst.
-- Health bars: shown for the player, all wizards, and all NPC boxes. Bars render above the head/center in screen space.
+Gameplay wiring (server‑authoritative)
+- A local server (in‑process) runs NPC AI, wizard casting, projectiles, and damage.
+- The client sends input/cast commands (ClientCmd) and renders snapshots (TickSnapshot) from the server. The renderer never mutates game state.
+- Health bars/HUD derive from replicated HP only.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).
     - `Globals` now includes: `sun_dir_time` (xyz + day_frac), `sh_coeffs[9]` (RGB irradiance SH‑L2 as vec4 RGB+pad), and `fog_params` (rgb + density).
   - mesh.rs — CPU mesh builders (plane, cube) → vertex/index buffers.
@@ -131,19 +131,8 @@ Gameplay wiring (prototype)
   - `cargo dev` / `cargo dev-test` via Cargo aliases in `.cargo/config.toml`.
 
 ## Feature Flags (Renderer)
-- `vox_onepath_demo` (default: off)
-  - Compiles and exposes the one‑path voxel demo helpers and bin; gates demo grid creation and related helpers in the renderer.
-- `legacy_client_carve` (default: off)
-  - Enables legacy client‑side voxel carve/collider/mesh/debris paths for A/B testing. Default builds do not mutate voxels on the client.
-- `legacy_client_ai` (default: off)
-  - Enables legacy client‑side AI updates and local server state reads. Default builds do not read or mutate `server_core` from the renderer.
-- `legacy_client_combat` (default: off)
-  - Enables legacy client‑side projectile/NPC collision and damage plumbing against local server state.
-- `destruct_debug` (default: off)
-  - Opt‑in verbose logging for destructible selection/carve/meshing.
-
-Notes
-- Default build of `render_wgpu` compiles with no legacy features and without linking `server_core`. CI enforces this via `cargo xtask ci`.
+- Default build: no legacy features; `render_wgpu` does not link `server_core`.
+- Deprecated legacy/demo flags (kept only for archaeology; do not use): `legacy_client_ai`, `legacy_client_combat`, `legacy_client_carve`, `vox_onepath_demo`. CI builds without them.
 
 ## Frame Graph (Renderer)
 - The renderer encodes pass I/O in a minimal static frame-graph (`renderer::graph`).

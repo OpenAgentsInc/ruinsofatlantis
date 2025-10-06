@@ -194,7 +194,11 @@ impl ApplicationHandler for App {
                             net_core::command::ClientCmd::FireBolt { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
                                 let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
-                                srv.spawn_projectile_from_dir(p, d, server_core::ProjKind::Firebolt);
+                                srv.spawn_projectile_from_dir(
+                                    p,
+                                    d,
+                                    server_core::ProjKind::Firebolt,
+                                );
                             }
                             net_core::command::ClientCmd::Fireball { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
@@ -202,7 +206,10 @@ impl ApplicationHandler for App {
                                 srv.spawn_projectile_from_dir(
                                     p,
                                     d,
-                                    server_core::ProjKind::Fireball { radius: 0.0, damage: 0 },
+                                    server_core::ProjKind::Fireball {
+                                        radius: 0.0,
+                                        damage: 0,
+                                    },
                                 );
                             }
                         }
