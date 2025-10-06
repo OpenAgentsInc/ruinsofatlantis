@@ -31,9 +31,9 @@ pub struct ChunkMeshDelta {
 }
 
 const VERSION: u8 = 1;
-/// Distinct tag byte used to identify TickSnapshot payloads unambiguously.
+/// Distinct tag byte used to identify `TickSnapshot` payloads unambiguously.
 /// Keeping legacy per-message encodings intact, this leading tag ensures other
-/// decoders will quickly reject TickSnapshot payloads instead of mis-decoding.
+/// decoders will quickly reject `TickSnapshot` payloads instead of mis-decoding.
 pub const TAG_TICK_SNAPSHOT: u8 = 0xA1;
 const MAX_MESH_ELEMS: usize = 262_144; // conservative cap to prevent OOM
 
@@ -224,7 +224,7 @@ impl SnapshotEncode for TickSnapshot {
             out.extend_from_slice(&n.radius.to_le_bytes());
             out.extend_from_slice(&n.hp.to_le_bytes());
             out.extend_from_slice(&n.max.to_le_bytes());
-            out.push(if n.alive { 1 } else { 0 });
+            out.push(u8::from(n.alive));
         }
         // Projectiles
         let np = u16::try_from(self.projectiles.len()).unwrap_or(0);
@@ -260,6 +260,7 @@ impl SnapshotEncode for TickSnapshot {
 }
 
 impl SnapshotDecode for TickSnapshot {
+    #[allow(clippy::too_many_lines)] // Flat, explicit decode for predictable bounds checks
     fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
         use anyhow::bail;
         fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
@@ -273,12 +274,18 @@ impl SnapshotDecode for TickSnapshot {
             Ok(buf)
         }
         // Require tag + version first
-        let tag = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let tag = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
         if tag != TAG_TICK_SNAPSHOT {
             bail!("not a TickSnapshot tag");
         }
-        let v = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let v = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
         if v != VERSION {
             bail!("unsupported version: {v}");
@@ -289,7 +296,10 @@ impl SnapshotDecode for TickSnapshot {
         let mut wizards = Vec::with_capacity(nw);
         for _ in 0..nw {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+            let kind = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
             *inp = &inp[1..];
             let mut pos = [0.0f32; 3];
             for v in &mut pos {
@@ -298,14 +308,24 @@ impl SnapshotDecode for TickSnapshot {
             let yaw = f32::from_le_bytes(take::<4>(inp)?);
             let hp = i32::from_le_bytes(take::<4>(inp)?);
             let max = i32::from_le_bytes(take::<4>(inp)?);
-            wizards.push(WizardRep { id, kind, pos, yaw, hp, max });
+            wizards.push(WizardRep {
+                id,
+                kind,
+                pos,
+                yaw,
+                hp,
+                max,
+            });
         }
         // NPCs
         let nn = u16::from_le_bytes(take::<2>(inp)?) as usize;
         let mut npcs = Vec::with_capacity(nn);
         for _ in 0..nn {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let archetype = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+            let archetype = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
             *inp = &inp[1..];
             let mut pos = [0.0f32; 3];
             for v in &mut pos {
@@ -315,16 +335,32 @@ impl SnapshotDecode for TickSnapshot {
             let radius = f32::from_le_bytes(take::<4>(inp)?);
             let hp = i32::from_le_bytes(take::<4>(inp)?);
             let max = i32::from_le_bytes(take::<4>(inp)?);
-            let alive = match inp.first().copied() { Some(0) => false, Some(_) => true, None => anyhow::bail!("short read"), };
+            let alive = match inp.first().copied() {
+                Some(0) => false,
+                Some(_) => true,
+                None => anyhow::bail!("short read"),
+            };
             *inp = &inp[1..];
-            npcs.push(NpcRep { id, archetype, pos, yaw, radius, hp, max, alive });
+            npcs.push(NpcRep {
+                id,
+                archetype,
+                pos,
+                yaw,
+                radius,
+                hp,
+                max,
+                alive,
+            });
         }
         // Projectiles
         let np = u16::from_le_bytes(take::<2>(inp)?) as usize;
         let mut projectiles = Vec::with_capacity(np);
         for _ in 0..np {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+            let kind = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
             *inp = &inp[1..];
             let mut pos = [0.0f32; 3];
             for v in &mut pos {
@@ -337,23 +373,46 @@ impl SnapshotDecode for TickSnapshot {
             projectiles.push(ProjectileRep { id, kind, pos, vel });
         }
         // Boss
-        let has_boss = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let has_boss = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
         let boss = if has_boss != 0 {
             let id = u32::from_le_bytes(take::<4>(inp)?);
             let nlen = u16::from_le_bytes(take::<2>(inp)?) as usize;
-            if inp.len() < nlen { anyhow::bail!("short name"); }
+            if inp.len() < nlen {
+                anyhow::bail!("short name");
+            }
             let (nb, rest) = inp.split_at(nlen);
             *inp = rest;
             let name = String::from_utf8(nb.to_vec()).unwrap_or_default();
             let mut pos = [0.0f32; 3];
-            for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
             let hp = i32::from_le_bytes(take::<4>(inp)?);
             let max = i32::from_le_bytes(take::<4>(inp)?);
             let ac = i32::from_le_bytes(take::<4>(inp)?);
-            Some(BossRep { id, name, pos, hp, max, ac })
-        } else { None };
-        Ok(TickSnapshot { v, tick, wizards, npcs, projectiles, boss })
+            Some(BossRep {
+                id,
+                name,
+                pos,
+                hp,
+                max,
+                ac,
+            })
+        } else {
+            None
+        };
+        Ok(TickSnapshot {
+            v,
+            tick,
+            wizards,
+            npcs,
+            projectiles,
+            boss,
+        })
     }
 }
 
@@ -631,10 +690,38 @@ mod tests {
         let t = TickSnapshot {
             v: VERSION,
             tick: 42,
-            wizards: vec![WizardRep { id: 1, kind: 0, pos: [1.0, 2.0, 3.0], yaw: 0.5, hp: 90, max: 100 }],
-            npcs: vec![NpcRep { id: 10, archetype: 0, pos: [4.0, 0.6, -2.0], yaw: 1.2, radius: 0.9, hp: 30, max: 30, alive: true }],
-            projectiles: vec![ProjectileRep { id: 7, kind: 0, pos: [0.0, 1.0, 0.0], vel: [0.0, 0.0, 1.0] }],
-            boss: Some(BossRep { id: 99, name: "Nivita".into(), pos: [0.0, 0.6, 0.0], hp: 225, max: 225, ac: 18 })
+            wizards: vec![WizardRep {
+                id: 1,
+                kind: 0,
+                pos: [1.0, 2.0, 3.0],
+                yaw: 0.5,
+                hp: 90,
+                max: 100,
+            }],
+            npcs: vec![NpcRep {
+                id: 10,
+                archetype: 0,
+                pos: [4.0, 0.6, -2.0],
+                yaw: 1.2,
+                radius: 0.9,
+                hp: 30,
+                max: 30,
+                alive: true,
+            }],
+            projectiles: vec![ProjectileRep {
+                id: 7,
+                kind: 0,
+                pos: [0.0, 1.0, 0.0],
+                vel: [0.0, 0.0, 1.0],
+            }],
+            boss: Some(BossRep {
+                id: 99,
+                name: "Nivita".into(),
+                pos: [0.0, 0.6, 0.0],
+                hp: 225,
+                max: 225,
+                ac: 18,
+            }),
         };
         let mut buf = Vec::new();
         t.encode(&mut buf);
@@ -643,6 +730,9 @@ mod tests {
         assert_eq!(t.tick, t2.tick);
         assert_eq!(t.wizards.len(), t2.wizards.len());
         assert_eq!(t.npcs[0].yaw, t2.npcs[0].yaw);
-        assert_eq!(t.boss.as_ref().unwrap().name, t2.boss.as_ref().unwrap().name);
+        assert_eq!(
+            t.boss.as_ref().unwrap().name,
+            t2.boss.as_ref().unwrap().name
+        );
     }
 }

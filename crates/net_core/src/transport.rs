@@ -31,8 +31,14 @@ impl LocalLoopbackTransport {
     pub fn new(capacity: usize) -> (Self, Self) {
         let (tx_a, rx_a) = channel::channel_bounded(capacity);
         let (tx_b, rx_b) = channel::channel_bounded(capacity);
-        let a = Self { tx: tx_a, rx: rx_b.clone() };
-        let b = Self { tx: tx_b, rx: rx_a.clone() };
+        let a = Self {
+            tx: tx_a,
+            rx: rx_b.clone(),
+        };
+        let b = Self {
+            tx: tx_b,
+            rx: rx_a.clone(),
+        };
         (a, b)
     }
     #[must_use]
@@ -47,12 +53,18 @@ impl LocalLoopbackTransport {
 
 impl Transport for LocalLoopbackTransport {
     fn try_send(&self, bytes: Vec<u8>) -> Result<(), TrySendError> {
-        if self.tx.try_send(bytes) { Ok(()) } else { Err(TrySendError::Full) }
+        if self.tx.try_send(bytes) {
+            Ok(())
+        } else {
+            Err(TrySendError::Full)
+        }
     }
     fn try_recv(&self) -> Option<Vec<u8>> {
         self.rx.try_recv()
     }
-    fn depth(&self) -> usize { self.rx.depth() }
+    fn depth(&self) -> usize {
+        self.rx.depth()
+    }
 }
 
 #[cfg(test)]
@@ -67,4 +79,3 @@ mod tests {
         assert_eq!(a.try_recv(), Some(b"pong".to_vec()));
     }
 }
-

@@ -256,7 +256,8 @@ impl ApplicationHandler for App {
                     );
                 }
                 // Also send consolidated TickSnapshot (migration target)
-                let mut npc_rep: Vec<net_core::snapshot::NpcRep> = Vec::with_capacity(srv.npcs.len());
+                let mut npc_rep: Vec<net_core::snapshot::NpcRep> =
+                    Vec::with_capacity(srv.npcs.len());
                 for n in &srv.npcs {
                     // Face nearest wizard for demo yaw until server provides it
                     let mut yaw = 0.0f32;
