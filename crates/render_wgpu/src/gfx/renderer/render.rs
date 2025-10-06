@@ -188,15 +188,30 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                         _pad_inst: [0; 3],
                     });
                 }
-                r.zombie_instances = r.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("zombie-instances(repl)"),
-                    contents: bytemuck::cast_slice(&inst_cpu),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                });
+                r.zombie_instances =
+                    r.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("zombie-instances(repl)"),
+                            contents: bytemuck::cast_slice(&inst_cpu),
+                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        });
                 r.zombie_instances_cpu = inst_cpu;
                 r.zombie_models = models;
                 r.zombie_ids = ids;
                 r.zombie_count = r.zombie_ids.len() as u32;
+                // Initialize tracking arrays to correct lengths
+                r.zombie_prev_pos = r
+                    .zombie_models
+                    .iter()
+                    .map(|m| {
+                        let c = m.to_cols_array();
+                        glam::vec3(c[12], c[13], c[14])
+                    })
+                    .collect();
+                r.zombie_time_offset = (0..r.zombie_count as usize)
+                    .map(|i| i as f32 * 0.35)
+                    .collect();
+                r.zombie_forward_offsets = vec![crate::gfx::zombies::forward_offset(&r.zombie_cpu); r.zombie_count as usize];
                 // Resize palette buffer (min 64 bytes)
                 let total = (r.zombie_count as usize * r.zombie_joints as usize).max(1) * 64;
                 r.zombie_palettes_buf = r.device.create_buffer(&wgpu::BufferDescriptor {
@@ -352,31 +367,67 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         let yaw_rate = 2.5 * dt;
         let mut targets: Vec<glam::Vec3> = Vec::new();
         for n in &r.repl_buf.npcs {
-            if n.alive { targets.push(n.pos); }
+            if n.alive {
+                targets.push(n.pos);
+            }
         }
         for i in 0..(r.wizard_count as usize) {
-            if i == r.pc_index { continue; }
+            if i == r.pc_index {
+                continue;
+            }
             let m = r.wizard_models[i];
             let pos = (m * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
             let tgt = if r.wizards_hostile_to_pc && r.pc_alive {
                 if let Some(pm) = r.wizard_models.get(r.pc_index) {
                     let c = pm.to_cols_array();
                     glam::vec3(c[12], c[13], c[14])
-                } else { pos }
+                } else {
+                    pos
+                }
             } else if !targets.is_empty() {
-                let mut best = pos; let mut best_d2 = f32::INFINITY;
-                for tpos in &targets { let dx=tpos.x-pos.x; let dz=tpos.z-pos.z; let d2=dx*dx+dz*dz; if d2<best_d2 { best_d2=d2; best = *tpos; } }
+                let mut best = pos;
+                let mut best_d2 = f32::INFINITY;
+                for tpos in &targets {
+                    let dx = tpos.x - pos.x;
+                    let dz = tpos.z - pos.z;
+                    let d2 = dx * dx + dz * dz;
+                    if d2 < best_d2 {
+                        best_d2 = d2;
+                        best = *tpos;
+                    }
+                }
                 best
-            } else { pos };
+            } else {
+                pos
+            };
             let desired = (tgt.x - pos.x).atan2(tgt.z - pos.z);
             let cur = {
-                let c = m.to_cols_array(); let (_, rquat, _) = glam::Mat4::from_cols_array(&c).to_scale_rotation_translation(); let fwd = rquat * glam::Vec3::Z; fwd.x.atan2(fwd.z)
+                let c = m.to_cols_array();
+                let (_, rquat, _) = glam::Mat4::from_cols_array(&c).to_scale_rotation_translation();
+                let fwd = rquat * glam::Vec3::Z;
+                fwd.x.atan2(fwd.z)
             };
-            let delta = (desired - cur + std::f32::consts::PI).rem_euclid(2.0*std::f32::consts::PI) - std::f32::consts::PI;
-            let new_yaw = if delta.abs() <= yaw_rate { desired } else { cur + yaw_rate * delta.signum() };
+            let delta = (desired - cur + std::f32::consts::PI)
+                .rem_euclid(2.0 * std::f32::consts::PI)
+                - std::f32::consts::PI;
+            let new_yaw = if delta.abs() <= yaw_rate {
+                desired
+            } else {
+                cur + yaw_rate * delta.signum()
+            };
             if (new_yaw - cur).abs() > 1e-4 {
-                let new_m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), glam::Quat::from_rotation_y(new_yaw), pos);
-                r.wizard_models[i] = new_m; let mut inst = r.wizard_instances_cpu[i]; inst.model = new_m.to_cols_array_2d(); r.wizard_instances_cpu[i] = inst; let offset = (i * std::mem::size_of::<crate::gfx::types::InstanceSkin>()) as u64; r.queue.write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
+                let new_m = glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::from_rotation_y(new_yaw),
+                    pos,
+                );
+                r.wizard_models[i] = new_m;
+                let mut inst = r.wizard_instances_cpu[i];
+                inst.model = new_m.to_cols_array_2d();
+                r.wizard_instances_cpu[i] = inst;
+                let offset = (i * std::mem::size_of::<crate::gfx::types::InstanceSkin>()) as u64;
+                r.queue
+                    .write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
             }
         }
     }
@@ -1293,10 +1344,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     let pos = glam::vec3(bs.pos[0], h, bs.pos[2]);
                     if let Some(m) = r.dk_models.get_mut(0) {
                         let (_, rq, _) = m.to_scale_rotation_translation();
-                        *m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(2.5), rq, pos);
+                        *m = glam::Mat4::from_scale_rotation_translation(
+                            glam::Vec3::splat(2.5),
+                            rq,
+                            pos,
+                        );
                         if let Some(inst) = r.dk_instances_cpu.get_mut(0) {
                             inst.model = m.to_cols_array_2d();
-                            r.queue.write_buffer(&r.dk_instances, 0, bytemuck::bytes_of(inst));
+                            r.queue
+                                .write_buffer(&r.dk_instances, 0, bytemuck::bytes_of(inst));
                         }
                     }
                 }

@@ -181,9 +181,13 @@ impl ApplicationHandler for App {
                 let dt = if let Some(t0) = self.last_time.take() {
                     let now = {
                         #[cfg(not(target_arch = "wasm32"))]
-                        { std::time::Instant::now() }
+                        {
+                            std::time::Instant::now()
+                        }
                         #[cfg(target_arch = "wasm32")]
-                        { web_time::Instant::now() }
+                        {
+                            web_time::Instant::now()
+                        }
                     };
                     let d = (now - t0).as_secs_f32();
                     self.last_time = Some(now);
@@ -214,7 +218,8 @@ impl ApplicationHandler for App {
                 list.encode(&mut payload);
                 let mut framed = Vec::with_capacity(payload.len() + 8);
                 net_core::frame::write_msg(&mut framed, &payload);
-                metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+                metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                    .increment(framed.len() as u64);
                 let _ = tx.try_send(framed);
                 // Send BossStatus if available
                 if let Some(st) = srv.nivita_status() {
@@ -229,7 +234,8 @@ impl ApplicationHandler for App {
                     bs.encode(&mut p2);
                     let mut f2 = Vec::with_capacity(p2.len() + 8);
                     net_core::frame::write_msg(&mut f2, &p2);
-                    metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f2.len() as u64);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                        .increment(f2.len() as u64);
                     let _ = tx.try_send(f2);
                 }
             }

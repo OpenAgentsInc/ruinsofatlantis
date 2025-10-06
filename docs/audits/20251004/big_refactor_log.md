@@ -168,6 +168,7 @@ This running log captures code-level changes made to address the 2025-10-04 audi
   - `crates/render_wgpu/src/gfx/renderer/render.rs`:
     - Import `wgpu::util::DeviceExt` for `create_buffer_init` in the replication path.
     - If there are replicated NPCs and no zombie visuals yet, build minimal zombie instances from replication, snap to `terrain::height_at`, and allocate palette/storage with a min size.
+    - Also initialize per-instance arrays (`zombie_prev_pos`, `zombie_time_offset`, `zombie_forward_offsets`) so CPU animation and palette uploads operate safely.
     - Snap Death Knight model Y to terrain when `BossStatus` is present.
     - Added minimal default-build wizard-facing toward PC/nearest replicated NPCs (gated off when `legacy_client_ai` is enabled).
     - Metrics macro usage aligned with existing handle style (`counter!(..).increment(..)`, `gauge!(..).set(..)`).
@@ -175,6 +176,7 @@ This running log captures code-level changes made to address the 2025-10-04 audi
 - Lints/Clippy
   - Fixed `clippy::suspicious-assignment-formatting` in the wizard-facing loop and collapsed a nested `if` for DK terrain snap.
   - Removed an unused import in `server_core::systems::boss`.
+  - Added terrain clamping to sorceress default-walk path so Nivita doesn’t sink under uneven ground.
 
 - Validation
   - `cargo check` — OK

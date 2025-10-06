@@ -3382,6 +3382,9 @@ impl Renderer {
             let dir = to / dist.max(1e-6);
             let step = (1.2 * dt).min(dist);
             pos += dir * step;
+            // Snap to terrain height after move
+            let (h, _n) = terrain::height_at(&self.terrain_cpu, pos.x, pos.z);
+            pos.y = h;
             let yaw = dir.x.atan2(dir.z);
             let m = glam::Mat4::from_scale_rotation_translation(
                 glam::Vec3::splat(1.0),
