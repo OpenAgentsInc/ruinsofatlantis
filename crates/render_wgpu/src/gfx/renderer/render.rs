@@ -257,28 +257,20 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 });
             }
         }
-        // Projectiles: renderer is presentation-only. Replace local projectiles from replicated state.
-        if !r.repl_buf.projectiles.is_empty() {
-            r.projectiles.clear();
-            for p in &r.repl_buf.projectiles {
-                r.projectiles.push(crate::gfx::fx::Projectile {
-                    pos: p.pos,
-                    vel: p.vel,
-                    t_die: t + 0.25, // keep visible between snapshots
-                    owner_wizard: None,
-                    color: match p.kind {
-                        1 => [2.2, 0.9, 0.3],
-                        _ => [2.6, 0.7, 0.18],
-                    },
-                    kind: match p.kind {
-                        1 => crate::gfx::fx::ProjectileKind::Fireball {
-                            radius: 6.0,
-                            damage: 28,
-                        },
-                        _ => crate::gfx::fx::ProjectileKind::Normal,
-                    },
-                });
-            }
+        // Projectiles: renderer is presentation-only. Mirror replicated projectiles exactly.
+        r.projectiles.clear();
+        for p in &r.repl_buf.projectiles {
+            r.projectiles.push(crate::gfx::fx::Projectile {
+                pos: p.pos,
+                vel: p.vel,
+                t_die: t + 0.25, // keep visible between snapshots
+                owner_wizard: None,
+                color: match p.kind { 1 => [2.2, 0.9, 0.3], _ => [2.6, 0.7, 0.18] },
+                kind: match p.kind {
+                    1 => crate::gfx::fx::ProjectileKind::Fireball { radius: 6.0, damage: 28 },
+                    _ => crate::gfx::fx::ProjectileKind::Normal,
+                },
+            });
         }
         // Fallback: if we already have a non-empty replicated NPC cache but haven't
         // built visuals yet (e.g., drain happened earlier), build now.

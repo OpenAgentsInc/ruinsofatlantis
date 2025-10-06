@@ -340,6 +340,8 @@ pub struct Renderer {
     // Client-side damage overlay for replicated NPCs (id -> hp) — legacy/demo only
     #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     npc_hp_overlay: std::collections::HashMap<u32, i32>,
+    // Client-side damage overlay cache for replicated wizards (id -> hp)
+    wiz_hp_overlay: std::collections::HashMap<u32, i32>,
     // Client-side melee cooldowns per replicated zombie (seconds until next allowed hit)
     #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     zombie_melee_cd: std::collections::HashMap<u32, f32>,
@@ -2442,13 +2444,21 @@ impl Renderer {
         }
         // Overlay: health bars, floating damage numbers, then nameplates
         let view_proj = glam::Mat4::from_cols_array_2d(&globals.view_proj);
-        // Build bar entries: wizards (including PC)
+        // Build bar entries from server-authoritative replication
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
-        for (i, m) in self.wizard_models.iter().enumerate() {
-            let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
-            let frac = (self.wizard_hp.get(i).copied().unwrap_or(self.wizard_hp_max) as f32)
-                / (self.wizard_hp_max as f32);
-            bar_entries.push((head.truncate(), frac));
+        // Wizards (including PC): use replicated positions + HP
+        for w in &self.repl_buf.wizards {
+            if w.hp <= 0 { continue; }
+            let head = glam::vec3(w.pos[0], w.pos[1] + 1.7, w.pos[2]);
+            let frac = (w.hp.max(0) as f32) / (w.max.max(1) as f32);
+            bar_entries.push((head, frac));
+            // Spawn floater on HP drop
+            let prev = self.wiz_hp_overlay.get(&w.id).copied().unwrap_or(w.max);
+            if w.hp < prev {
+                let dmg = (prev - w.hp).max(0);
+                self.damage.spawn(head, dmg);
+            }
+            self.wiz_hp_overlay.insert(w.id, w.hp);
         }
         // Zombies: anchor bars to the skinned instance head position (terrain‑aware)
         // Drive HP from server-authoritative replication only.

@@ -551,7 +551,8 @@ impl ServerState {
                     {
                         log::info!(
                             "server: Fireball proximity skipped (low-count: NPCs={},Wiz={})",
-                            hit_npc, hit_wiz
+                            hit_npc,
+                            hit_wiz
                         );
                     }
                 }
