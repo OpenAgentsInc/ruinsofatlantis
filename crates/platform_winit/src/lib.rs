@@ -4,6 +4,7 @@
 //! `render_wgpu::gfx::Renderer` via winit's ApplicationHandler API.
 
 use net_core::snapshot::SnapshotEncode;
+use net_core::transport::Transport;
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
 use winit::{
@@ -17,8 +18,8 @@ use winit::{
 struct App {
     window: Option<Window>,
     state: Option<Renderer>,
-    #[allow(dead_code)]
-    repl_tx: Option<net_core::channel::Tx>,
+    // Loopback transport (server side) used to send snapshots to the client/renderer
+    transport_srv: Option<net_core::transport::LocalLoopbackTransport>,
     #[cfg(feature = "demo_server")]
     demo_server: Option<server_core::ServerState>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -66,12 +67,13 @@ impl ApplicationHandler for App {
                 }
             };
             // Wire a local replication channel for NPC/Boss status
-            let (tx, rx) = net_core::channel::channel();
-            state.set_replication_rx(rx);
+            let (_srv, _cli) = net_core::transport::LocalLoopbackTransport::new(4096);
+            let (_tx_cli, rx_cli) = _cli.split();
+            state.set_replication_rx(rx_cli);
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.window = Some(window);
-                self.repl_tx = Some(tx);
+                self.transport_srv = Some(_srv);
                 self.state = Some(state);
                 #[cfg(feature = "demo_server")]
                 {
@@ -175,7 +177,7 @@ impl ApplicationHandler for App {
         }
         // Emit replicated NPC/Boss each frame and step demo server (demo only)
         #[cfg(feature = "demo_server")]
-        if let (Some(tx), Some(s)) = (&self.repl_tx, &mut self.state) {
+        if let (Some(srv_xport), Some(s)) = (&self.transport_srv, &mut self.state) {
             // Step demo server AI toward wizard positions
             #[cfg(feature = "demo_server")]
             if let Some(srv) = &mut self.demo_server {
@@ -221,48 +223,15 @@ impl ApplicationHandler for App {
                     });
                 }
                 // Send NPC list
-                let list = net_core::snapshot::NpcListMsg { items };
-                let mut payload = Vec::new();
-                list.encode(&mut payload);
-                let mut framed = Vec::with_capacity(payload.len() + 8);
-                net_core::frame::write_msg(&mut framed, &payload);
-                metrics::counter!("net.bytes_sent_total", "dir" => "tx")
-                    .increment(framed.len() as u64);
-                let _ = tx.try_send(framed);
-                log::info!("demo_server: sent NpcListMsg items={}", list.items.len());
-                // Send BossStatus if available
-                if let Some(st) = srv.nivita_status() {
-                    let bs = net_core::snapshot::BossStatusMsg {
-                        name: st.name,
-                        ac: st.ac,
-                        hp: st.hp,
-                        max: st.max,
-                        pos: [st.pos.x, st.pos.y, st.pos.z],
-                    };
-                    let mut p2 = Vec::new();
-                    bs.encode(&mut p2);
-                    let mut f2 = Vec::with_capacity(p2.len() + 8);
-                    net_core::frame::write_msg(&mut f2, &p2);
-                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
-                        .increment(f2.len() as u64);
-                    let _ = tx.try_send(f2);
-                    log::info!(
-                        "demo_server: sent BossStatus pos=({:.1},{:.1},{:.1}) hp={}/{}",
-                        st.pos.x,
-                        st.pos.y,
-                        st.pos.z,
-                        st.hp,
-                        st.max
-                    );
-                }
-                // Also send consolidated TickSnapshot (migration target)
-                let ts = srv.tick_snapshot(self.tick, &wiz_pos);
+                // Authoritative TickSnapshot from server
+                srv.step_authoritative(dt, &wiz_pos);
+                let ts = srv.tick_snapshot(self.tick);
                 let mut p3 = Vec::new();
                 ts.encode(&mut p3);
                 let mut f3 = Vec::with_capacity(p3.len() + 8);
                 net_core::frame::write_msg(&mut f3, &p3);
                 metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f3.len() as u64);
-                let _ = tx.try_send(f3);
+                let _ = srv_xport.try_send(f3);
                 self.tick = self.tick.wrapping_add(1);
             }
         }

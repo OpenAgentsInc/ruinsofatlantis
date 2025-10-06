@@ -56,6 +56,46 @@ pub struct BossStatus {
     pub pos: Vec3,
 }
 
+#[derive(Debug, Clone)]
+pub struct Wizard {
+    pub id: u32,
+    pub pos: Vec3,
+    pub yaw: f32,
+    pub hp: i32,
+    pub max_hp: i32,
+    pub kind: u8, // 0=PC, 1=NPC wizard
+    pub cast_timer: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ProjKind {
+    Firebolt,
+    Fireball { radius: f32, damage: i32 },
+}
+
+#[derive(Debug, Clone)]
+pub struct Projectile {
+    pub id: u32,
+    pub pos: Vec3,
+    pub vel: Vec3,
+    pub kind: ProjKind,
+}
+
+#[inline]
+fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> bool {
+    let a = glam::Vec2::new(p0.x, p0.z);
+    let b = glam::Vec2::new(p1.x, p1.z);
+    let c = glam::Vec2::new(center.x, center.z);
+    let ab = b - a;
+    let len2 = ab.length_squared();
+    if len2 <= 1e-12 {
+        return (a - c).length_squared() <= radius * radius;
+    }
+    let t = ((c - a).dot(ab) / len2).clamp(0.0, 1.0);
+    let closest = a + ab * t;
+    (closest - c).length_squared() <= radius * radius
+}
+
 impl Npc {
     pub fn new(id: NpcId, pos: Vec3, radius: f32, hp: i32) -> Self {
         Self {
@@ -91,6 +131,11 @@ pub struct ServerState {
     pub nivita_id: Option<NpcId>,
     /// Snapshot of Nivita's boss stats/components for replication/logging.
     pub nivita_stats: Option<NivitaStats>,
+    /// Wizards mirrored from client positions (index 0 is PC for demo).
+    pub wizards: Vec<Wizard>,
+    /// Live projectiles spawned by wizards.
+    pub projectiles: Vec<Projectile>,
+    next_proj_id: u32,
 }
 
 impl ServerState {
@@ -100,6 +145,135 @@ impl ServerState {
             npcs: Vec::new(),
             nivita_id: None,
             nivita_stats: None,
+            wizards: Vec::new(),
+            projectiles: Vec::new(),
+            next_proj_id: 1,
+        }
+    }
+    /// Mirror wizard positions from the client into authoritative state; create entries as needed.
+    pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) {
+        // Resize preserving existing HP/yaw/kind where possible
+        if self.wizards.len() < wiz_pos.len() {
+            let start = self.wizards.len();
+            for (i, p) in wiz_pos.iter().copied().enumerate().skip(start) {
+                let kind = if i == 0 { 0u8 } else { 1u8 };
+                self.wizards.push(Wizard {
+                    id: (i as u32) + 1,
+                    pos: p,
+                    yaw: 0.0,
+                    hp: 100,
+                    max_hp: 100,
+                    kind,
+                    cast_timer: 0.0,
+                });
+            }
+        }
+        for (i, p) in wiz_pos.iter().copied().enumerate() {
+            if let Some(w) = self.wizards.get_mut(i) {
+                w.pos = p;
+            }
+        }
+        // Drop extra entries if fewer wizards now
+        if self.wizards.len() > wiz_pos.len() {
+            self.wizards.truncate(wiz_pos.len());
+        }
+    }
+    fn spawn_projectile(&mut self, pos: Vec3, vel: Vec3, kind: ProjKind) {
+        let id = self.next_proj_id;
+        self.next_proj_id = self.next_proj_id.wrapping_add(1);
+        self.projectiles.push(Projectile { id, pos, vel, kind });
+    }
+    /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile integration/collision.
+    pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
+        // Ensure we mirror wizard positions
+        self.sync_wizards(wizard_positions);
+        // 1) NPC AI (melee hits against wizards)
+        let hits = self.step_npc_ai(dt, wizard_positions);
+        for (wiz_idx, dmg) in hits {
+            if let Some(w) = self.wizards.get_mut(wiz_idx) {
+                w.hp = (w.hp - dmg).max(0);
+            }
+        }
+        // 2) Wizard simple casting: non-PC wizards shoot Fire Bolts toward nearest zombie
+        let wiz_len = self.wizards.len();
+        for i in 0..wiz_len {
+            if i == 0 { continue; }
+            let (pos, hp);
+            {
+                let w = &mut self.wizards[i];
+                pos = w.pos;
+                hp = w.hp;
+            }
+            let mut yaw_local = 0.0f32;
+            if hp <= 0 { continue; }
+            // face nearest NPC
+            let mut best = None::<(f32, Vec3)>;
+            for n in &self.npcs {
+                if !n.alive { continue; }
+                let dx = n.pos.x - pos.x;
+                let dz = n.pos.z - pos.z;
+                let d2 = dx*dx + dz*dz;
+                if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
+                    best = Some((d2, n.pos));
+                }
+            }
+            if let Some((_d2, target)) = best {
+                let dir = Vec3::new(target.x - pos.x, 0.0, target.z - pos.z);
+                if dir.length_squared() > 1e-6 {
+                    yaw_local = dir.x.atan2(dir.z);
+                }
+                let mut fire_now = false;
+                {
+                    let w = &mut self.wizards[i];
+                    w.yaw = yaw_local;
+                    w.cast_timer -= dt;
+                    if w.cast_timer <= 0.0 { fire_now = true; w.cast_timer = 1.5; }
+                }
+                if fire_now {
+                    // Fire a bolt and reset timer
+                    let speed = 36.0;
+                    let vel = dir.normalize_or_zero() * speed;
+                    self.spawn_projectile(pos + vel.normalize_or_zero() * 0.3, vel, ProjKind::Firebolt);
+                }
+            }
+        }
+        // 3) Step projectiles and collide vs NPCs and wizards (friendly fire on)
+        let mut i = 0usize;
+        while i < self.projectiles.len() {
+            let p0 = self.projectiles[i].pos;
+            let vel = self.projectiles[i].vel; // snag immutable copy
+            self.projectiles[i].pos = p0 + vel * dt;
+            let p1 = self.projectiles[i].pos;
+            let mut removed = false;
+            // Collide vs NPCs
+            for n in &mut self.npcs {
+                if !n.alive { continue; }
+                if segment_hits_circle_xz(p0, p1, n.pos, n.radius) {
+                    let dmg = match self.projectiles[i].kind { ProjKind::Fireball { damage, .. } => damage, _ => 10 };
+                    n.hp = (n.hp - dmg).max(0);
+                    if n.hp == 0 { n.alive = false; }
+                    removed = true;
+                    break;
+                }
+            }
+            if !removed {
+                // Collide vs wizards
+                for w in &mut self.wizards {
+                    if w.hp <= 0 { continue; }
+                    let r = 0.7f32;
+                    if segment_hits_circle_xz(p0, p1, w.pos, r) {
+                        let dmg = match self.projectiles[i].kind { ProjKind::Fireball { damage, .. } => damage, _ => 10 };
+                        w.hp = (w.hp - dmg).max(0);
+                        removed = true;
+                        break;
+                    }
+                }
+            }
+            if removed {
+                self.projectiles.swap_remove(i);
+                continue;
+            }
+            i += 1;
         }
     }
     pub fn spawn_npc(&mut self, pos: Vec3, radius: f32, hp: i32) -> NpcId {
@@ -236,19 +410,15 @@ impl ServerState {
     /// Build a consolidated `TickSnapshot` for clients. Until wizard/projectile state
     /// lives here, we include wizard positions from the caller and compute NPC yaw toward
     /// the nearest wizard.
-    pub fn tick_snapshot(
-        &self,
-        tick: u32,
-        wizard_positions: &[Vec3],
-    ) -> net_core::snapshot::TickSnapshot {
+    pub fn tick_snapshot(&self, tick: u32) -> net_core::snapshot::TickSnapshot {
         let mut npcs: Vec<net_core::snapshot::NpcRep> = Vec::with_capacity(self.npcs.len());
         for n in &self.npcs {
             // Compute yaw toward nearest wizard if available
             let mut yaw = 0.0f32;
             let mut best_d2 = f32::INFINITY;
-            for w in wizard_positions {
-                let dx = w.x - n.pos.x;
-                let dz = w.z - n.pos.z;
+            for w in &self.wizards {
+                let dx = w.pos.x - n.pos.x;
+                let dz = w.pos.z - n.pos.z;
                 let d2 = dx * dx + dz * dz;
                 if d2 < best_d2 {
                     best_d2 = d2;
@@ -266,16 +436,16 @@ impl ServerState {
                 alive: n.alive,
             });
         }
-        let wizards: Vec<net_core::snapshot::WizardRep> = wizard_positions
+        let wizards: Vec<net_core::snapshot::WizardRep> = self
+            .wizards
             .iter()
-            .enumerate()
-            .map(|(i, p)| net_core::snapshot::WizardRep {
-                id: i as u32,
-                kind: 0,
-                pos: [p.x, p.y, p.z],
-                yaw: 0.0,
-                hp: 100,
-                max: 100,
+            .map(|w| net_core::snapshot::WizardRep {
+                id: w.id,
+                kind: w.kind,
+                pos: [w.pos.x, w.pos.y, w.pos.z],
+                yaw: w.yaw,
+                hp: w.hp,
+                max: w.max_hp,
             })
             .collect();
         let boss = self.nivita_status().map(|st| net_core::snapshot::BossRep {
@@ -286,12 +456,25 @@ impl ServerState {
             max: st.max,
             ac: st.ac,
         });
+        let projectiles: Vec<net_core::snapshot::ProjectileRep> = self
+            .projectiles
+            .iter()
+            .map(|p| net_core::snapshot::ProjectileRep {
+                id: p.id,
+                kind: match p.kind {
+                    ProjKind::Firebolt => 0,
+                    ProjKind::Fireball { .. } => 1,
+                },
+                pos: [p.pos.x, p.pos.y, p.pos.z],
+                vel: [p.vel.x, p.vel.y, p.vel.z],
+            })
+            .collect();
         net_core::snapshot::TickSnapshot {
             v: 1,
             tick,
             wizards,
             npcs,
-            projectiles: Vec::new(),
+            projectiles,
             boss,
         }
     }

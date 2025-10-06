@@ -16,6 +16,7 @@ pub struct ReplicationBuffer {
     pending_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
     pub boss_status: Option<BossStatus>,
     pub npcs: Vec<NpcView>,
+    pub projectiles: Vec<ProjectileView>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +50,15 @@ impl ReplicationBuffer {
                     alive: n.alive,
                     attack_anim: 0.0,
                     yaw: n.yaw,
+                });
+            }
+            self.projectiles.clear();
+            for p in ts.projectiles {
+                self.projectiles.push(ProjectileView {
+                    id: p.id,
+                    kind: p.kind,
+                    pos: glam::vec3(p.pos[0], p.pos[1], p.pos[2]),
+                    vel: glam::vec3(p.vel[0], p.vel[1], p.vel[2]),
                 });
             }
             self.boss_status = ts.boss.map(|b| BossStatus {
@@ -128,6 +138,14 @@ pub struct NpcView {
     pub alive: bool,
     pub attack_anim: f32,
     pub yaw: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectileView {
+    pub id: u32,
+    pub kind: u8,
+    pub pos: glam::Vec3,
+    pub vel: glam::Vec3,
 }
 
 #[cfg(test)]

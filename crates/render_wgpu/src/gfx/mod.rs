@@ -337,9 +337,11 @@ pub struct Renderer {
     // Projectile + particle pools
     projectiles: Vec<Projectile>,
     particles: Vec<Particle>,
-    // Client-side damage overlay for replicated NPCs (id -> hp), used only in demo/default builds
+    // Client-side damage overlay for replicated NPCs (id -> hp) — legacy/demo only
+    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     npc_hp_overlay: std::collections::HashMap<u32, i32>,
     // Client-side melee cooldowns per replicated zombie (seconds until next allowed hit)
+    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     zombie_melee_cd: std::collections::HashMap<u32, f32>,
 
     // Data-driven spec

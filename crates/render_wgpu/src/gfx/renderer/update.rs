@@ -1728,8 +1728,8 @@ impl Renderer {
             p.pos += p.vel * dt;
             p.pos = gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
-        // 2.25) Collide NPC wizard projectiles with replicated NPCs (default build)
-        #[cfg(not(feature = "legacy_client_combat"))]
+        // 2.25) Collide NPC wizard projectiles with replicated NPCs (legacy/demo path)
+        #[cfg(feature = "legacy_client_combat")]
         if !self.projectiles.is_empty() && !self.repl_buf.npcs.is_empty() {
             let mut i = 0usize;
             while i < self.projectiles.len() {
@@ -1995,7 +1995,8 @@ impl Renderer {
             self.particles.append(&mut burst);
         }
 
-        // 2.6) Collide with wizards/PC (friendly fire on)
+        // 2.6) Collide with wizards/PC (friendly fire on) — legacy/demo only
+        #[cfg(feature = "legacy_client_combat")]
         if !self.projectiles.is_empty() {
             self.collide_with_wizards(dt, 10);
         }
@@ -2099,6 +2100,7 @@ impl Renderer {
         }
     }
 
+    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     pub(crate) fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
         let mut i = 0usize;
         while i < self.projectiles.len() {
@@ -2598,6 +2600,7 @@ impl Renderer {
         });
     }
 
+    #[allow(unused_variables)]
     fn explode_fireball_at(
         &mut self,
         owner: Option<usize>,
@@ -2618,11 +2621,10 @@ impl Renderer {
                 color: [2.2, 1.0, 0.3],
             });
         }
-        // Damage NPCs in radius
-        let r2 = radius * radius;
-        // Default build: replicated NPCs (zombies) take AoE damage
-        #[cfg(not(feature = "legacy_client_ai"))]
+        // Damage NPCs in radius — legacy/demo only; default build uses server-authoritative HP
+        #[cfg(feature = "legacy_client_combat")]
         {
+            let r2 = radius * radius;
             // Snapshot current replicated NPCs to avoid borrow conflicts
             let npcs: Vec<(u32, glam::Vec3, f32, bool, i32)> = self
                 .repl_buf
@@ -2640,7 +2642,7 @@ impl Renderer {
                     let cur = self.npc_hp_overlay.get(&nid).copied().unwrap_or(max_hp);
                     let after = (cur - damage).max(0);
                     self.npc_hp_overlay.insert(nid, after);
-                    // UI floater at zombie head
+                    // UI floater at zombie head (terrain aware)
                     if let Some(idx) = self.zombie_ids.iter().position(|z| *z == nid) {
                         let m = self
                             .zombie_models
@@ -2834,8 +2836,13 @@ impl Renderer {
             k += 1;
         }
         // Damage wizards (including PC) in radius; trigger aggro if player-owned explosion hits any wizard
+        #[cfg(feature = "legacy_client_combat")]
         let mut hit_any_wizard = false;
+        #[cfg(feature = "legacy_client_combat")]
         let mut to_remove: Vec<usize> = Vec::new();
+        #[cfg(feature = "legacy_client_combat")]
+        let r2 = radius * radius;
+        #[cfg(feature = "legacy_client_combat")]
         for j in 0..(self.wizard_count as usize) {
             let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
             if hp <= 0 {
@@ -2862,6 +2869,7 @@ impl Renderer {
             }
         }
         // Remove dead wizards after the loop (descending indices to preserve validity)
+        #[cfg(feature = "legacy_client_combat")]
         if !to_remove.is_empty() {
             to_remove.sort_unstable_by(|a, b| b.cmp(a));
             for idx in to_remove {
@@ -2870,6 +2878,7 @@ impl Renderer {
                 }
             }
         }
+        #[cfg(feature = "legacy_client_combat")]
         if hit_any_wizard {
             self.wizards_hostile_to_pc = true;
             // Ensure NPC wizards resume casting loop even if all monsters are dead
@@ -3003,6 +3012,7 @@ pub(super) fn rand_unit() -> f32 {
     r.random::<f32>() * 2.0 - 1.0
 }
 
+#[allow(dead_code)]
 pub(super) fn segment_hits_circle_xz(
     p0: glam::Vec3,
     p1: glam::Vec3,
