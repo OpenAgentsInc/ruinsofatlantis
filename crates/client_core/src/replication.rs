@@ -35,9 +35,9 @@ impl ReplicationBuffer {
             Ok(p) => p,
             Err(_) => bytes,
         };
-        let mut slice: &[u8] = payload;
         // 0) Prefer new consolidated TickSnapshot, which includes boss + npcs.
-        if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice) {
+        let mut slice_ts: &[u8] = payload;
+        if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice_ts) {
             self.npcs.clear();
             for n in ts.npcs {
                 self.npcs.push(NpcView {
@@ -60,7 +60,8 @@ impl ReplicationBuffer {
             });
             return true;
         }
-        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice) {
+        let mut slice_delta: &[u8] = payload;
+        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
             let entry = crate::upload::ChunkMeshEntry {
                 positions: delta.positions,
                 normals: delta.normals,
