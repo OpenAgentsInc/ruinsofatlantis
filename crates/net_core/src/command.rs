@@ -22,6 +22,7 @@ pub const TAG_CLIENT_CMD: u8 = 0xC1;
 pub enum ClientCmd {
     FireBolt { pos: [f32; 3], dir: [f32; 3] },
     Fireball { pos: [f32; 3], dir: [f32; 3] },
+    MagicMissile { pos: [f32; 3], dir: [f32; 3] },
 }
 
 impl ClientCmd {
@@ -39,6 +40,15 @@ impl ClientCmd {
             }
             ClientCmd::Fireball { pos, dir } => {
                 out.push(1);
+                for c in pos {
+                    out.extend_from_slice(&c.to_le_bytes());
+                }
+                for c in dir {
+                    out.extend_from_slice(&c.to_le_bytes());
+                }
+            }
+            ClientCmd::MagicMissile { pos, dir } => {
+                out.push(2);
                 for c in pos {
                     out.extend_from_slice(&c.to_le_bytes());
                 }
@@ -84,9 +94,13 @@ impl SnapshotDecode for ClientCmd {
         for v in &mut dir {
             *v = f32::from_le_bytes(take::<4>(inp)?);
         }
-        Ok(match kind {
-            0 => Self::FireBolt { pos, dir },
-            _ => Self::Fireball { pos, dir },
-        })
+        let out = if kind == 1 {
+            Self::Fireball { pos, dir }
+        } else if kind == 2 {
+            Self::MagicMissile { pos, dir }
+        } else {
+            Self::FireBolt { pos, dir }
+        };
+        Ok(out)
     }
 }

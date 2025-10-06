@@ -81,6 +81,7 @@ pub struct Wizard {
 pub enum ProjKind {
     Firebolt,
     Fireball,
+    MagicMissile,
 }
 
 /// Server-side projectile state used for authoritative collision.
@@ -377,6 +378,24 @@ impl ServerState {
                     damage: s.damage.max(0),
                 }
             }
+            ProjKind::MagicMissile => {
+                // Close-range, medium speed, short TTL; damage light per hit
+                let s = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
+                    .ok()
+                    .and_then(|db| db.actions.get("MagicMissile").cloned())
+                    .unwrap_or(data_runtime::specs::projectiles::ProjectileSpec {
+                        speed_mps: 28.0,
+                        radius_m: 0.5,
+                        damage: 7,
+                        life_s: 1.0,
+                    });
+                ProjectileSpec {
+                    speed_mps: s.speed_mps,
+                    life_s: s.life_s,
+                    aoe_radius_m: s.radius_m.max(0.0),
+                    damage: s.damage.max(0),
+                }
+            }
         }
     }
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
@@ -477,8 +496,8 @@ impl ServerState {
             // Resolve projectile spec once for this step to avoid borrow conflicts
             let spec_kind = self.projectile_spec(kind);
             let owner_id = self.projectiles[i].owner;
-            // Collide vs NPCs (direct hit)
-            for n in &mut self.npcs {
+                // Collide vs NPCs (direct hit)
+                for n in &mut self.npcs {
                 if !n.alive {
                     continue;
                 }
@@ -531,6 +550,13 @@ impl ServerState {
                                     hit_wiz
                                 );
                             }
+                        }
+                    } else if matches!(kind, ProjKind::MagicMissile) {
+                        // Direct hit with small damage; no AoE
+                        let dmg = spec.damage;
+                        n.hp = (n.hp - dmg).max(0);
+                        if n.hp == 0 {
+                            n.alive = false;
                         }
                     } else {
                         let dmg = spec.damage;
@@ -598,6 +624,19 @@ impl ServerState {
                                         "server: hostility -> PC (impact wiz) hits_wiz={}",
                                         hit_wiz
                                     );
+                                }
+                            }
+                        } else if matches!(kind, ProjKind::MagicMissile) {
+                            // Direct hit small damage
+                            let dmg = spec.damage;
+                            w.hp = (w.hp - dmg).max(0);
+                            if owner_id == Some(1) {
+                                self.wizards_hostile_to_pc = true;
+                                if std::env::var("RA_LOG_COMBAT")
+                                    .map(|v| v == "1")
+                                    .unwrap_or(false)
+                                {
+                                    log::info!("server: hostility -> PC (direct hit wiz)");
                                 }
                             }
                         } else {
@@ -942,6 +981,7 @@ impl ServerState {
                 kind: match p.kind {
                     ProjKind::Firebolt => 0,
                     ProjKind::Fireball => 1,
+                    ProjKind::MagicMissile => 2,
                 },
                 pos: [p.pos.x, p.pos.y, p.pos.z],
                 vel: [p.vel.x, p.vel.y, p.vel.z],

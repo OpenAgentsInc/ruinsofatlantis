@@ -263,10 +263,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.projectiles.push(crate::gfx::fx::Projectile {
                 pos: p.pos,
                 vel: p.vel,
-                t_die: t + 0.25, // keep visible between snapshots
+                t_die: t + 1.0, // keep visible between snapshots generously
                 owner_wizard: None,
                 color: match p.kind {
                     1 => [2.2, 0.9, 0.3],
+                    2 => [0.6, 0.7, 2.2],
                     _ => [2.6, 0.7, 0.18],
                 },
                 kind: match p.kind {
@@ -274,6 +275,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                         radius: 6.0,
                         damage: 28,
                     },
+                    2 => crate::gfx::fx::ProjectileKind::MagicMissile,
                     _ => crate::gfx::fx::ProjectileKind::Normal,
                 },
             });

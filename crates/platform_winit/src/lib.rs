@@ -231,6 +231,32 @@ impl ApplicationHandler for App {
                                     Some(1),
                                 );
                             }
+                            net_core::command::ClientCmd::MagicMissile { pos, dir } => {
+                                let p = glam::vec3(pos[0], pos[1], pos[2]);
+                                let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
+                                log::info!(
+                                    "cmd: MagicMissile at ({:.2},{:.2},{:.2}) dir=({:.2},{:.2},{:.2})",
+                                    p.x,
+                                    p.y,
+                                    p.z,
+                                    d.x,
+                                    d.y,
+                                    d.z
+                                );
+                                // Spawn a small volley (3) with slight spread
+                                let spreads = [-0.06f32, 0.0, 0.06];
+                                for sgn in spreads {
+                                    let yaw = sgn;
+                                    let ry = glam::Quat::from_rotation_y(yaw);
+                                    let dir2 = (ry * d).normalize_or_zero();
+                                    srv.spawn_projectile_from_dir_owned(
+                                        p,
+                                        dir2,
+                                        server_core::ProjKind::MagicMissile,
+                                        Some(1),
+                                    );
+                                }
+                            }
                         }
                     }
                 }

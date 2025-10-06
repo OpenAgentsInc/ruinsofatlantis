@@ -1570,25 +1570,21 @@ impl Renderer {
                                 );
                             }
                             super::super::PcCast::MagicMissile => {
-                                // For now, treat as three FireBolt spawns server-side
                                 if let Some(tx) = &self.cmd_tx {
-                                    for _ in 0..3 {
-                                        let cmd = net_core::command::ClientCmd::FireBolt {
-                                            pos: [spawn.x, spawn.y, spawn.z],
-                                            dir: [dir_w.x, dir_w.y, dir_w.z],
-                                        };
-                                        let mut payload = Vec::new();
-                                        cmd.encode(&mut payload);
-                                        let mut framed = Vec::with_capacity(payload.len() + 8);
-                                        net_core::frame::write_msg(&mut framed, &payload);
-                                        let _ = tx.try_send(framed.clone());
-                                    }
+                                    let cmd = net_core::command::ClientCmd::MagicMissile {
+                                        pos: [spawn.x, spawn.y, spawn.z],
+                                        dir: [dir_w.x, dir_w.y, dir_w.z],
+                                    };
+                                    let mut payload = Vec::new();
+                                    cmd.encode(&mut payload);
+                                    let mut framed = Vec::with_capacity(payload.len() + 8);
+                                    net_core::frame::write_msg(&mut framed, &payload);
+                                    let _ = tx.try_send(framed);
                                 } else {
                                     log::warn!(
                                         "pc cast MagicMissile but cmd_tx not set; no command sent"
                                     );
                                 }
-                                // Start cooldown via SceneInputs
                                 let spell_id = "wiz.magic_missile.srd521";
                                 self.scene_inputs.start_cooldown(
                                     spell_id,
