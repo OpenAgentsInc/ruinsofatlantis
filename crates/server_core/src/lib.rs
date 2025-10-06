@@ -165,18 +165,24 @@ impl ServerState {
     fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32) {
         let mut hit_npc = 0u32;
         for m in &mut self.npcs {
-            if !m.alive { continue; }
+            if !m.alive {
+                continue;
+            }
             let dx = m.pos.x - cx;
             let dz = m.pos.z - cz;
             if dx * dx + dz * dz <= r2 {
                 m.hp = (m.hp - damage).max(0);
-                if m.hp == 0 { m.alive = false; }
+                if m.hp == 0 {
+                    m.alive = false;
+                }
                 hit_npc += 1;
             }
         }
         let mut hit_wiz = 0u32;
         for m in &mut self.wizards {
-            if m.hp <= 0 { continue; }
+            if m.hp <= 0 {
+                continue;
+            }
             let dx = m.pos.x - cx;
             let dz = m.pos.z - cz;
             if dx * dx + dz * dz <= r2 {
@@ -435,10 +441,19 @@ impl ServerState {
                             // AoE explode on impact
                             let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
                             let (hit_npc, hit_wiz) = self.apply_aoe_at(p1.x, p1.z, r2, spec.damage);
-                            if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                            if std::env::var("RA_LOG_FIREBALL")
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                            {
                                 log::info!(
                                     "server: Fireball impact explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
-                                    p1.x, p1.y, p1.z, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                                    p1.x,
+                                    p1.y,
+                                    p1.z,
+                                    spec.aoe_radius_m,
+                                    spec.damage,
+                                    hit_npc,
+                                    hit_wiz
                                 );
                             }
                         } else {
@@ -481,10 +496,19 @@ impl ServerState {
                     let cx = best_center.x;
                     let cz = best_center.y;
                     let (hit_npc, hit_wiz) = self.apply_aoe_at(cx, cz, r2, spec.damage);
-                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                    if std::env::var("RA_LOG_FIREBALL")
+                        .map(|v| v == "1")
+                        .unwrap_or(false)
+                    {
                         log::info!(
                             "server: Fireball proximity explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={} hits(NPCs={},Wiz={})",
-                            cx, p1.y, cz, spec.aoe_radius_m, spec.damage, hit_npc, hit_wiz
+                            cx,
+                            p1.y,
+                            cz,
+                            spec.aoe_radius_m,
+                            spec.damage,
+                            hit_npc,
+                            hit_wiz
                         );
                     }
                     removed = true;

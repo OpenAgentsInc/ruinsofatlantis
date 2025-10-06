@@ -3072,12 +3072,40 @@ impl Renderer {
         }
         // Per-instance clip selection based on movement
         let joints = self.zombie_joints as usize;
-        // Build quick lookup for attack state and radius from replication; fallback to server when legacy is enabled
+        // Build quick lookup for attack state and radius from replication; if attack flag
+        // is absent (0.0), derive a heuristic based on proximity to the nearest wizard.
         use std::collections::HashMap;
         let mut attack_map: HashMap<u32, bool> = HashMap::new();
         let mut radius_map: HashMap<u32, f32> = HashMap::new();
+        // Wizard positions from replication (prefer) or from models as fallback
+        let mut wiz_pos: Vec<glam::Vec3> = Vec::new();
+        if !self.repl_buf.wizards.is_empty() {
+            for w in &self.repl_buf.wizards {
+                wiz_pos.push(glam::vec3(w.pos[0], w.pos[1], w.pos[2]));
+            }
+        } else {
+            for m in &self.wizard_models {
+                let c = m.to_cols_array();
+                wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
+            }
+        }
+        let wizard_r = 0.7f32;
+        let melee_pad = 0.35f32;
         for n in &self.repl_buf.npcs {
-            attack_map.insert(n.id, n.attack_anim > 0.0);
+            let mut attacking = n.attack_anim > 0.0;
+            if !attacking && !wiz_pos.is_empty() {
+                // Heuristic: if within contact distance of nearest wizard, treat as attacking
+                let mut best_d2 = f32::INFINITY;
+                for w in &wiz_pos {
+                    let dx = w.x - n.pos.x;
+                    let dz = w.z - n.pos.z;
+                    let d2 = dx * dx + dz * dz;
+                    if d2 < best_d2 { best_d2 = d2; }
+                }
+                let contact = (n.radius + wizard_r + melee_pad).max(0.01);
+                attacking = best_d2 <= contact * contact;
+            }
+            attack_map.insert(n.id, attacking);
             radius_map.insert(n.id, n.radius);
         }
         #[cfg(feature = "legacy_client_ai")]
@@ -3087,12 +3115,7 @@ impl Renderer {
                 radius_map.insert(n.id.0, n.radius);
             }
         }
-        // Wizard positions
-        let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
-        for m in &self.wizard_models {
-            let c = m.to_cols_array();
-            wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
-        }
+        // wiz_pos prepared above from replication/models
         // Helper: fuzzy find clip by case-insensitive substring(s)
         let find_clip = |subs: &[&str],
                          anims: &std::collections::HashMap<String, AnimClip>|
