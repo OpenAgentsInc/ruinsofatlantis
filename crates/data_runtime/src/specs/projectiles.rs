@@ -57,8 +57,8 @@ impl ProjectileSpecDb {
                 "EncounterQ".to_string(),
                 ProjectileSpec {
                     speed_mps: 30.0,
-                    radius_m: 0.6,
-                    damage: 24,
+                    radius_m: 6.0,   // Fireball AoE ~6 meters default
+                    damage: 28,      // avg 8d6
                     life_s: 1.5,
                 },
             );
