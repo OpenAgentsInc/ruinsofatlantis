@@ -159,14 +159,45 @@ mod tests {
     }
     #[test]
     fn tick_snapshot_populates_npcs_and_projectiles() {
-        use net_core::snapshot::{TickSnapshot, WizardRep, NpcRep, ProjectileRep, BossRep, SnapshotEncode, SnapshotDecode, TAG_TICK_SNAPSHOT};
+        use net_core::snapshot::{
+            BossRep, NpcRep, ProjectileRep, SnapshotDecode, SnapshotEncode, TAG_TICK_SNAPSHOT,
+            TickSnapshot, WizardRep,
+        };
         let ts = TickSnapshot {
             v: 1,
             tick: 7,
-            wizards: vec![WizardRep { id: 1, kind: 0, pos: [0.0, 0.6, 0.0], yaw: 0.0, hp: 100, max: 100 }],
-            npcs: vec![NpcRep { id: 9, archetype: 0, pos: [1.0, 0.6, 2.0], yaw: 0.0, radius: 0.9, hp: 20, max: 20, alive: true }],
-            projectiles: vec![ProjectileRep { id: 3, kind: 0, pos: [0.0, 0.7, 0.2], vel: [0.0, 0.0, 40.0] }],
-            boss: Some(BossRep { id: 99, name: "Nivita".into(), pos: [5.0, 0.6, 5.0], hp: 225, max: 225, ac: 18 })
+            wizards: vec![WizardRep {
+                id: 1,
+                kind: 0,
+                pos: [0.0, 0.6, 0.0],
+                yaw: 0.0,
+                hp: 100,
+                max: 100,
+            }],
+            npcs: vec![NpcRep {
+                id: 9,
+                archetype: 0,
+                pos: [1.0, 0.6, 2.0],
+                yaw: 0.0,
+                radius: 0.9,
+                hp: 20,
+                max: 20,
+                alive: true,
+            }],
+            projectiles: vec![ProjectileRep {
+                id: 3,
+                kind: 0,
+                pos: [0.0, 0.7, 0.2],
+                vel: [0.0, 0.0, 40.0],
+            }],
+            boss: Some(BossRep {
+                id: 99,
+                name: "Nivita".into(),
+                pos: [5.0, 0.6, 5.0],
+                hp: 225,
+                max: 225,
+                ac: 18,
+            }),
         };
         let mut buf = Vec::new();
         ts.encode(&mut buf);

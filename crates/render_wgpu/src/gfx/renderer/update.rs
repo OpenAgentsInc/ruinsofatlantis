@@ -1554,6 +1554,8 @@ impl Renderer {
                                     let mut framed = Vec::with_capacity(payload.len() + 8);
                                     net_core::frame::write_msg(&mut framed, &payload);
                                     let _ = tx.try_send(framed);
+                                } else {
+                                    log::warn!("pc cast FireBolt but cmd_tx not set; no command sent");
                                 }
                                 // Start cooldown via SceneInputs (single source of truth)
                                 let spell_id = "wiz.fire_bolt.srd521";
@@ -1577,6 +1579,8 @@ impl Renderer {
                                         net_core::frame::write_msg(&mut framed, &payload);
                                         let _ = tx.try_send(framed.clone());
                                     }
+                                } else {
+                                    log::warn!("pc cast MagicMissile but cmd_tx not set; no command sent");
                                 }
                                 // Start cooldown via SceneInputs
                                 let spell_id = "wiz.magic_missile.srd521";
@@ -1597,6 +1601,8 @@ impl Renderer {
                                     let mut framed = Vec::with_capacity(payload.len() + 8);
                                     net_core::frame::write_msg(&mut framed, &payload);
                                     let _ = tx.try_send(framed);
+                                } else {
+                                    log::warn!("pc cast Fireball but cmd_tx not set; no command sent");
                                 }
                                 let spell_id = "wiz.fireball.srd521";
                                 self.scene_inputs.start_cooldown(

@@ -305,7 +305,8 @@ impl ServerState {
         let mut i = 0usize;
         while i < self.projectiles.len() {
             let p0 = self.projectiles[i].pos;
-            let vel = self.projectiles[i].vel; // snag immutable copy
+            let kind = self.projectiles[i].kind; // copy
+            let vel = self.projectiles[i].vel; // copy
             self.projectiles[i].pos = p0 + vel * dt;
             let p1 = self.projectiles[i].pos;
             let mut removed = false;
@@ -315,13 +316,25 @@ impl ServerState {
                     continue;
                 }
                 if segment_hits_circle_xz(p0, p1, n.pos, n.radius) {
-                    let dmg = match self.projectiles[i].kind {
-                        ProjKind::Fireball { damage, .. } => damage,
-                        _ => 10,
-                    };
-                    n.hp = (n.hp - dmg).max(0);
-                    if n.hp == 0 {
-                        n.alive = false;
+                    match kind {
+                        ProjKind::Fireball { radius, damage } => {
+                            // AoE explode on impact
+                            let r2 = radius * radius;
+                            for m in &mut self.npcs {
+                                if !m.alive { continue; }
+                                let dx = m.pos.x - p1.x;
+                                let dz = m.pos.z - p1.z;
+                                if dx*dx + dz*dz <= r2 {
+                                    m.hp = (m.hp - damage).max(0);
+                                    if m.hp == 0 { m.alive = false; }
+                                }
+                            }
+                        }
+                        _ => {
+                            let dmg = 10;
+                            n.hp = (n.hp - dmg).max(0);
+                            if n.hp == 0 { n.alive = false; }
+                        }
                     }
                     removed = true;
                     break;
@@ -335,11 +348,24 @@ impl ServerState {
                     }
                     let r = 0.7f32;
                     if segment_hits_circle_xz(p0, p1, w.pos, r) {
-                        let dmg = match self.projectiles[i].kind {
-                            ProjKind::Fireball { damage, .. } => damage,
-                            _ => 10,
-                        };
-                        w.hp = (w.hp - dmg).max(0);
+                        match kind {
+                            ProjKind::Fireball { radius, damage } => {
+                                // Explode with friendly fire for wizards as well
+                                let r2 = radius * radius;
+                                for m in &mut self.wizards {
+                                    if m.hp <= 0 { continue; }
+                                    let dx = m.pos.x - p1.x;
+                                    let dz = m.pos.z - p1.z;
+                                    if dx*dx + dz*dz <= r2 {
+                                        m.hp = (m.hp - damage).max(0);
+                                    }
+                                }
+                            }
+                            _ => {
+                                let dmg = 10;
+                                w.hp = (w.hp - dmg).max(0);
+                            }
+                        }
                         removed = true;
                         break;
                     }
