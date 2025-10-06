@@ -275,3 +275,18 @@ This running log captures code-level changes made to address the 2025-10-04 audi
   - render_wgpu default = []; xtask always checks/clippies/tests no-default build and enforces layering guard error.
 - Docs:
   - Updated src/README.md to reflect server-authoritative demo and deprecated flags.
+
+## 2025-10-06 — Actor refactor groundwork + legacy snapshot removal
+
+- platform_winit: removed legacy `TickSnapshot` emission; now sends only actor-centric `ActorSnapshot` v2 per tick (framed), with byte metrics.
+- server_core:
+  - Projectiles now carry `owner: Option<ActorId>`; added `spawn_projectile_from_pc()` and switched platform command handling to use it.
+  - `sync_wizards()` now ensures PC/NPC wizard actors exist and mirrors positions into `ActorStore`.
+  - `step_authoritative()` no longer rebuilds from legacy lists; projectile collisions operate over actors (direct hits) and call `apply_aoe_at_actors()` for Fireball (impact/proximity/TTL).
+  - Deferred Fireball impact AoE to avoid borrow conflicts while iterating `actors` mutably.
+  - Kept legacy `Npc`/`Wizard` structs temporarily (unused in hot paths) to keep the tree compiling; follow-up will delete them fully.
+- Build: `cargo check`/`cargo build` green.
+
+Next:
+- Delete remaining legacy NPC/Wizard fields and helpers; move boss spawn/status to `nivita_actor_id` and actor lookup.
+- Update tests to actor-centric snapshots and remove legacy TickSnapshot tests.

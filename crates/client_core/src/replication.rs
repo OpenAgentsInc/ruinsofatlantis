@@ -71,8 +71,24 @@ impl ReplicationBuffer {
             self.npcs.clear();
             for a in &self.actors {
                 match a.kind {
-                    0 => self.wizards.push(WizardView { id: a.id, kind: 0, pos: a.pos, yaw: a.yaw, hp: a.hp, max: a.max }),
-                    1 | 2 => self.npcs.push(NpcView { id: a.id, hp: a.hp, max: a.max, pos: a.pos, radius: a.radius, alive: a.alive, attack_anim: 0.0, yaw: a.yaw }),
+                    0 => self.wizards.push(WizardView {
+                        id: a.id,
+                        kind: 0,
+                        pos: a.pos,
+                        yaw: a.yaw,
+                        hp: a.hp,
+                        max: a.max,
+                    }),
+                    1 | 2 => self.npcs.push(NpcView {
+                        id: a.id,
+                        hp: a.hp,
+                        max: a.max,
+                        pos: a.pos,
+                        radius: a.radius,
+                        alive: a.alive,
+                        attack_anim: 0.0,
+                        yaw: a.yaw,
+                    }),
                     _ => {}
                 }
             }

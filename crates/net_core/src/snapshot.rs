@@ -170,7 +170,7 @@ pub struct ActorRep {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActorSnapshot {
-    pub v: u8,         // must be 2
+    pub v: u8, // must be 2
     pub tick: u64,
     pub actors: Vec<ActorRep>,
     pub projectiles: Vec<ProjectileRep>,
@@ -187,7 +187,9 @@ impl SnapshotEncode for ActorSnapshot {
             out.extend_from_slice(&a.id.to_le_bytes());
             out.push(a.kind);
             out.push(a.team);
-            for c in &a.pos { out.extend_from_slice(&c.to_le_bytes()); }
+            for c in &a.pos {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
             out.extend_from_slice(&a.yaw.to_le_bytes());
             out.extend_from_slice(&a.radius.to_le_bytes());
             out.extend_from_slice(&a.hp.to_le_bytes());
@@ -199,8 +201,12 @@ impl SnapshotEncode for ActorSnapshot {
         for p in &self.projectiles {
             out.extend_from_slice(&p.id.to_le_bytes());
             out.push(p.kind);
-            for c in &p.pos { out.extend_from_slice(&c.to_le_bytes()); }
-            for c in &p.vel { out.extend_from_slice(&c.to_le_bytes()); }
+            for c in &p.pos {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
+            for c in &p.vel {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
         }
     }
 }
@@ -209,46 +215,97 @@ impl SnapshotDecode for ActorSnapshot {
     fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
         use anyhow::bail;
         fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
-            if inp.len() < N { anyhow::bail!("short read"); }
+            if inp.len() < N {
+                anyhow::bail!("short read");
+            }
             let (a, b) = inp.split_at(N);
             *inp = b;
             let mut buf = [0u8; N];
             buf.copy_from_slice(a);
             Ok(buf)
         }
-        let tag = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        let tag = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if tag != TAG_ACTOR_SNAPSHOT { bail!("not an ActorSnapshot tag"); }
-        let v = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+        if tag != TAG_ACTOR_SNAPSHOT {
+            bail!("not an ActorSnapshot tag");
+        }
+        let v = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if v != ACTOR_SNAP_VERSION { bail!("unsupported version: {v}"); }
+        if v != ACTOR_SNAP_VERSION {
+            bail!("unsupported version: {v}");
+        }
         let tick = u64::from_le_bytes(take::<8>(inp)?);
         let na = u32::from_le_bytes(take::<4>(inp)?) as usize;
         let mut actors = Vec::with_capacity(na);
         for _ in 0..na {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-            let team = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-            let mut pos = [0.0f32;3];
-            for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
+            let kind = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let team = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let mut pos = [0.0f32; 3];
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
             let yaw = f32::from_le_bytes(take::<4>(inp)?);
             let radius = f32::from_le_bytes(take::<4>(inp)?);
             let hp = i32::from_le_bytes(take::<4>(inp)?);
             let max = i32::from_le_bytes(take::<4>(inp)?);
-            let alive = match inp.first().copied() { Some(0)=>false, Some(_)=>true, None=>anyhow::bail!("short read") };
+            let alive = match inp.first().copied() {
+                Some(0) => false,
+                Some(_) => true,
+                None => anyhow::bail!("short read"),
+            };
             *inp = &inp[1..];
-            actors.push(ActorRep { id, kind, team, pos, yaw, radius, hp, max, alive });
+            actors.push(ActorRep {
+                id,
+                kind,
+                team,
+                pos,
+                yaw,
+                radius,
+                hp,
+                max,
+                alive,
+            });
         }
         let np = u32::from_le_bytes(take::<4>(inp)?) as usize;
         let mut projectiles = Vec::with_capacity(np);
         for _ in 0..np {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp=&inp[1..];
-            let mut pos = [0.0f32;3]; for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
-            let mut vel = [0.0f32;3]; for v in &mut vel { *v = f32::from_le_bytes(take::<4>(inp)?); }
+            let kind = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let mut pos = [0.0f32; 3];
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
+            let mut vel = [0.0f32; 3];
+            for v in &mut vel {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
             projectiles.push(ProjectileRep { id, kind, pos, vel });
         }
-        Ok(Self { v, tick, actors, projectiles })
+        Ok(Self {
+            v,
+            tick,
+            actors,
+            projectiles,
+        })
     }
 }
 

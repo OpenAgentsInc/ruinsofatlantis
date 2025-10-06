@@ -97,5 +97,7 @@ impl ActorStore {
 }
 
 impl ActorStore {
-    pub fn clone_default(&self) -> Self { Default::default() }
+    pub fn clone_default(&self) -> Self {
+        Default::default()
+    }
 }

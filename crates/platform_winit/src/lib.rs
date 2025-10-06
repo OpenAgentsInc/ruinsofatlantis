@@ -204,12 +204,7 @@ impl ApplicationHandler for App {
                                     d.z
                                 );
                                 // Owner wizard id 1 = PC in server_core
-                                srv.spawn_projectile_from_dir_owned(
-                                    p,
-                                    d,
-                                    server_core::ProjKind::Firebolt,
-                                    Some(1),
-                                );
+                                srv.spawn_projectile_from_pc(p, d, server_core::ProjKind::Firebolt);
                             }
                             net_core::command::ClientCmd::Fireball { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
@@ -224,12 +219,7 @@ impl ApplicationHandler for App {
                                     d.z
                                 );
                                 // Owner wizard id 1 = PC in server_core
-                                srv.spawn_projectile_from_dir_owned(
-                                    p,
-                                    d,
-                                    server_core::ProjKind::Fireball,
-                                    Some(1),
-                                );
+                                srv.spawn_projectile_from_pc(p, d, server_core::ProjKind::Fireball);
                             }
                             net_core::command::ClientCmd::MagicMissile { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
@@ -249,12 +239,7 @@ impl ApplicationHandler for App {
                                     let yaw = sgn;
                                     let ry = glam::Quat::from_rotation_y(yaw);
                                     let dir2 = (ry * d).normalize_or_zero();
-                                    srv.spawn_projectile_from_dir_owned(
-                                        p,
-                                        dir2,
-                                        server_core::ProjKind::MagicMissile,
-                                        Some(1),
-                                    );
+                                    srv.spawn_projectile_from_pc(p, dir2, server_core::ProjKind::MagicMissile);
                                 }
                             }
                         }
@@ -301,51 +286,7 @@ impl ApplicationHandler for App {
                         wiz_pos.len()
                     );
                 }
-                // Legacy: build small NPC list (kept for compatibility consumers)
-                let mut items: Vec<net_core::snapshot::NpcItem> = Vec::new();
-                for n in &srv.npcs {
-                    items.push(net_core::snapshot::NpcItem {
-                        id: n.id.0,
-                        hp: n.hp,
-                        max: n.max_hp,
-                        pos: [n.pos.x, n.pos.y, n.pos.z],
-                        radius: n.radius,
-                        alive: if n.alive { 1 } else { 0 },
-                        attack_anim: n.attack_anim,
-                    });
-                }
-                // Send authoritative TickSnapshot for current state BEFORE stepping
-                let ts = srv.tick_snapshot(self.tick);
-                if std::env::var("RA_LOG_REPL")
-                    .map(|v| v == "1")
-                    .unwrap_or(false)
-                {
-                    let wiz = ts.wizards.len();
-                    let npcs = ts.npcs.len();
-                    let mut min_wiz_hp = i32::MAX;
-                    let mut max_wiz_hp = i32::MIN;
-                    for w in &ts.wizards {
-                        min_wiz_hp = min_wiz_hp.min(w.hp);
-                        max_wiz_hp = max_wiz_hp.max(w.hp);
-                    }
-                    log::info!(
-                        "snapshot: tick={} wizards={} (hp min={}, max={}) npcs={} projectiles={}",
-                        self.tick,
-                        wiz,
-                        if wiz == 0 { 0 } else { min_wiz_hp },
-                        if wiz == 0 { 0 } else { max_wiz_hp },
-                        npcs,
-                        ts.projectiles.len()
-                    );
-                }
-                let mut p3 = Vec::new();
-                ts.encode(&mut p3);
-                let mut f3 = Vec::with_capacity(p3.len() + 8);
-                net_core::frame::write_msg(&mut f3, &p3);
-                metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f3.len() as u64);
-                let _ = srv_xport.try_send(f3);
-
-                // Also send actor-centric snapshot v2
+                // Send actor-centric snapshot v2 (authoritative snapshot)
                 let asnap = srv.tick_snapshot_actors(self.tick as u64);
                 let mut p4 = Vec::new();
                 asnap.encode(&mut p4);
