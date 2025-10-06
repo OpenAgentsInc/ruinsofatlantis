@@ -10,8 +10,8 @@
 
 pub mod apply;
 pub mod channel;
-pub mod interest;
 pub mod frame;
+pub mod interest;
 pub mod snapshot;
 
 #[cfg(test)]
