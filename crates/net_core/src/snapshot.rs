@@ -33,10 +33,7 @@ pub struct ChunkMeshDelta {
 const VERSION: u8 = 1;
 const ACTOR_SNAP_VERSION: u8 = 2;
 pub const TAG_ACTOR_SNAPSHOT: u8 = 0xA2;
-/// Distinct tag byte used to identify `TickSnapshot` payloads unambiguously.
-/// Keeping legacy per-message encodings intact, this leading tag ensures other
-/// decoders will quickly reject `TickSnapshot` payloads instead of mis-decoding.
-pub const TAG_TICK_SNAPSHOT: u8 = 0xA1;
+// Legacy TickSnapshot tag removed; ActorSnapshot v2 is canonical.
 const MAX_MESH_ELEMS: usize = 262_144; // conservative cap to prevent OOM
 
 impl SnapshotEncode for ChunkMeshDelta {
@@ -142,17 +139,9 @@ impl SnapshotDecode for ChunkMeshDelta {
         })
     }
 }
+ 
 
-/// Full server-authoritative tick snapshot for client presentation.
-#[derive(Debug, Clone, PartialEq)]
-pub struct TickSnapshot {
-    pub v: u8,
-    pub tick: u32,
-    pub wizards: Vec<WizardRep>,
-    pub npcs: Vec<NpcRep>,
-    pub projectiles: Vec<ProjectileRep>,
-    pub boss: Option<BossRep>,
-}
+// Legacy TickSnapshot removed; use ActorSnapshot v2.
 
 // Actor-centric snapshot (v2)
 #[derive(Debug, Clone, PartialEq)]
@@ -309,6 +298,7 @@ impl SnapshotDecode for ActorSnapshot {
     }
 }
 
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardRep {
     pub id: u32,
@@ -349,229 +339,6 @@ pub struct BossRep {
     pub ac: i32,
 }
 
-impl SnapshotEncode for TickSnapshot {
-    fn encode(&self, out: &mut Vec<u8>) {
-        // Tag + version for unambiguous decode
-        out.push(TAG_TICK_SNAPSHOT);
-        out.push(self.v);
-        out.extend_from_slice(&self.tick.to_le_bytes());
-        // Wizards
-        let nw = u16::try_from(self.wizards.len()).unwrap_or(0);
-        out.extend_from_slice(&nw.to_le_bytes());
-        for w in &self.wizards {
-            out.extend_from_slice(&w.id.to_le_bytes());
-            out.push(w.kind);
-            for c in &w.pos {
-                out.extend_from_slice(&c.to_le_bytes());
-            }
-            out.extend_from_slice(&w.yaw.to_le_bytes());
-            out.extend_from_slice(&w.hp.to_le_bytes());
-            out.extend_from_slice(&w.max.to_le_bytes());
-        }
-        // NPCs
-        let nn = u16::try_from(self.npcs.len()).unwrap_or(0);
-        out.extend_from_slice(&nn.to_le_bytes());
-        for n in &self.npcs {
-            out.extend_from_slice(&n.id.to_le_bytes());
-            out.push(n.archetype);
-            for c in &n.pos {
-                out.extend_from_slice(&c.to_le_bytes());
-            }
-            out.extend_from_slice(&n.yaw.to_le_bytes());
-            out.extend_from_slice(&n.radius.to_le_bytes());
-            out.extend_from_slice(&n.hp.to_le_bytes());
-            out.extend_from_slice(&n.max.to_le_bytes());
-            out.push(u8::from(n.alive));
-        }
-        // Projectiles
-        let np = u16::try_from(self.projectiles.len()).unwrap_or(0);
-        out.extend_from_slice(&np.to_le_bytes());
-        for p in &self.projectiles {
-            out.extend_from_slice(&p.id.to_le_bytes());
-            out.push(p.kind);
-            for c in &p.pos {
-                out.extend_from_slice(&c.to_le_bytes());
-            }
-            for c in &p.vel {
-                out.extend_from_slice(&c.to_le_bytes());
-            }
-        }
-        // Boss (optional)
-        match &self.boss {
-            Some(b) => {
-                out.push(1);
-                out.extend_from_slice(&b.id.to_le_bytes());
-                let nlen = u16::try_from(b.name.len()).unwrap_or(0);
-                out.extend_from_slice(&nlen.to_le_bytes());
-                out.extend_from_slice(b.name.as_bytes());
-                for c in &b.pos {
-                    out.extend_from_slice(&c.to_le_bytes());
-                }
-                out.extend_from_slice(&b.hp.to_le_bytes());
-                out.extend_from_slice(&b.max.to_le_bytes());
-                out.extend_from_slice(&b.ac.to_le_bytes());
-            }
-            None => out.push(0),
-        }
-    }
-}
-
-impl SnapshotDecode for TickSnapshot {
-    #[allow(clippy::too_many_lines)] // Flat, explicit decode for predictable bounds checks
-    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
-        use anyhow::bail;
-        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
-            if inp.len() < N {
-                anyhow::bail!("short read");
-            }
-            let (a, b) = inp.split_at(N);
-            *inp = b;
-            let mut buf = [0u8; N];
-            buf.copy_from_slice(a);
-            Ok(buf)
-        }
-        // Require tag + version first
-        let tag = inp
-            .first()
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("short read"))?;
-        *inp = &inp[1..];
-        if tag != TAG_TICK_SNAPSHOT {
-            bail!("not a TickSnapshot tag");
-        }
-        let v = inp
-            .first()
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("short read"))?;
-        *inp = &inp[1..];
-        if v != VERSION {
-            bail!("unsupported version: {v}");
-        }
-        let tick = u32::from_le_bytes(take::<4>(inp)?);
-        // Wizards
-        let nw = u16::from_le_bytes(take::<2>(inp)?) as usize;
-        let mut wizards = Vec::with_capacity(nw);
-        for _ in 0..nw {
-            let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = inp
-                .first()
-                .copied()
-                .ok_or_else(|| anyhow::anyhow!("short read"))?;
-            *inp = &inp[1..];
-            let mut pos = [0.0f32; 3];
-            for v in &mut pos {
-                *v = f32::from_le_bytes(take::<4>(inp)?);
-            }
-            let yaw = f32::from_le_bytes(take::<4>(inp)?);
-            let hp = i32::from_le_bytes(take::<4>(inp)?);
-            let max = i32::from_le_bytes(take::<4>(inp)?);
-            wizards.push(WizardRep {
-                id,
-                kind,
-                pos,
-                yaw,
-                hp,
-                max,
-            });
-        }
-        // NPCs
-        let nn = u16::from_le_bytes(take::<2>(inp)?) as usize;
-        let mut npcs = Vec::with_capacity(nn);
-        for _ in 0..nn {
-            let id = u32::from_le_bytes(take::<4>(inp)?);
-            let archetype = inp
-                .first()
-                .copied()
-                .ok_or_else(|| anyhow::anyhow!("short read"))?;
-            *inp = &inp[1..];
-            let mut pos = [0.0f32; 3];
-            for v in &mut pos {
-                *v = f32::from_le_bytes(take::<4>(inp)?);
-            }
-            let yaw = f32::from_le_bytes(take::<4>(inp)?);
-            let radius = f32::from_le_bytes(take::<4>(inp)?);
-            let hp = i32::from_le_bytes(take::<4>(inp)?);
-            let max = i32::from_le_bytes(take::<4>(inp)?);
-            let alive = match inp.first().copied() {
-                Some(0) => false,
-                Some(_) => true,
-                None => anyhow::bail!("short read"),
-            };
-            *inp = &inp[1..];
-            npcs.push(NpcRep {
-                id,
-                archetype,
-                pos,
-                yaw,
-                radius,
-                hp,
-                max,
-                alive,
-            });
-        }
-        // Projectiles
-        let np = u16::from_le_bytes(take::<2>(inp)?) as usize;
-        let mut projectiles = Vec::with_capacity(np);
-        for _ in 0..np {
-            let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = inp
-                .first()
-                .copied()
-                .ok_or_else(|| anyhow::anyhow!("short read"))?;
-            *inp = &inp[1..];
-            let mut pos = [0.0f32; 3];
-            for v in &mut pos {
-                *v = f32::from_le_bytes(take::<4>(inp)?);
-            }
-            let mut vel = [0.0f32; 3];
-            for v in &mut vel {
-                *v = f32::from_le_bytes(take::<4>(inp)?);
-            }
-            projectiles.push(ProjectileRep { id, kind, pos, vel });
-        }
-        // Boss
-        let has_boss = inp
-            .first()
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("short read"))?;
-        *inp = &inp[1..];
-        let boss = if has_boss != 0 {
-            let id = u32::from_le_bytes(take::<4>(inp)?);
-            let nlen = u16::from_le_bytes(take::<2>(inp)?) as usize;
-            if inp.len() < nlen {
-                anyhow::bail!("short name");
-            }
-            let (nb, rest) = inp.split_at(nlen);
-            *inp = rest;
-            let name = String::from_utf8(nb.to_vec()).unwrap_or_default();
-            let mut pos = [0.0f32; 3];
-            for v in &mut pos {
-                *v = f32::from_le_bytes(take::<4>(inp)?);
-            }
-            let hp = i32::from_le_bytes(take::<4>(inp)?);
-            let max = i32::from_le_bytes(take::<4>(inp)?);
-            let ac = i32::from_le_bytes(take::<4>(inp)?);
-            Some(BossRep {
-                id,
-                name,
-                pos,
-                hp,
-                max,
-                ac,
-            })
-        } else {
-            None
-        };
-        Ok(TickSnapshot {
-            v,
-            tick,
-            wizards,
-            npcs,
-            projectiles,
-            boss,
-        })
-    }
-}
 
 /// Minimal replicated record for a destructible instance's world AABB.
 #[derive(Debug, Clone, PartialEq)]
@@ -580,6 +347,8 @@ pub struct DestructibleInstance {
     pub world_min: [f32; 3],
     pub world_max: [f32; 3],
 }
+
+
 
 impl SnapshotEncode for DestructibleInstance {
     fn encode(&self, out: &mut Vec<u8>) {
@@ -630,6 +399,7 @@ impl SnapshotDecode for DestructibleInstance {
         })
     }
 }
+
 
 /// Minimal boss status snapshot for HUD/labels.
 #[derive(Debug, Clone, PartialEq)]
@@ -700,6 +470,7 @@ impl SnapshotDecode for BossStatusMsg {
         })
     }
 }
+
 
 /// Compact list of NPC statuses for client UI/presentation.
 #[derive(Debug, Clone, PartialEq)]
@@ -844,54 +615,5 @@ mod tests {
             assert!((a - b).abs() < 1.0e-6);
         }
     }
-    #[test]
-    fn tick_snapshot_roundtrip() {
-        let t = TickSnapshot {
-            v: VERSION,
-            tick: 42,
-            wizards: vec![WizardRep {
-                id: 1,
-                kind: 0,
-                pos: [1.0, 2.0, 3.0],
-                yaw: 0.5,
-                hp: 90,
-                max: 100,
-            }],
-            npcs: vec![NpcRep {
-                id: 10,
-                archetype: 0,
-                pos: [4.0, 0.6, -2.0],
-                yaw: 1.2,
-                radius: 0.9,
-                hp: 30,
-                max: 30,
-                alive: true,
-            }],
-            projectiles: vec![ProjectileRep {
-                id: 7,
-                kind: 0,
-                pos: [0.0, 1.0, 0.0],
-                vel: [0.0, 0.0, 1.0],
-            }],
-            boss: Some(BossRep {
-                id: 99,
-                name: "Nivita".into(),
-                pos: [0.0, 0.6, 0.0],
-                hp: 225,
-                max: 225,
-                ac: 18,
-            }),
-        };
-        let mut buf = Vec::new();
-        t.encode(&mut buf);
-        let mut slice: &[u8] = &buf;
-        let t2 = TickSnapshot::decode(&mut slice).expect("decode");
-        assert_eq!(t.tick, t2.tick);
-        assert_eq!(t.wizards.len(), t2.wizards.len());
-        assert!((t.npcs[0].yaw - t2.npcs[0].yaw).abs() < 1.0e-6);
-        assert_eq!(
-            t.boss.as_ref().unwrap().name,
-            t2.boss.as_ref().unwrap().name
-        );
-    }
+    // Legacy TickSnapshot roundtrip removed.
 }
