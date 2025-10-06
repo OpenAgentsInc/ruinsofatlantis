@@ -3678,17 +3678,50 @@ impl Renderer {
         if self.zombie_count == 0 || self.zombie_ids.is_empty() {
             return;
         }
-        // Map replicated id -> pos, radius, yaw (if provided)
+        // Map replicated id -> pos, radius, yaw, alive
         let mut pos_map: HashMap<u32, glam::Vec3> = HashMap::new();
         let mut radius_map: HashMap<u32, f32> = HashMap::new();
         let mut yaw_map: HashMap<u32, f32> = HashMap::new();
+        let mut alive_map: HashMap<u32, bool> = HashMap::new();
         for n in &self.repl_buf.npcs {
             pos_map.insert(n.id, n.pos);
             radius_map.insert(n.id, n.radius);
             yaw_map.insert(n.id, n.yaw);
+            alive_map.insert(n.id, n.alive);
         }
         if pos_map.is_empty() {
             return;
+        }
+        // Remove visuals for dead or missing NPCs
+        let mut removed_any = false;
+        let mut idx = self.zombie_ids.len();
+        while idx > 0 {
+            idx -= 1;
+            let id = self.zombie_ids[idx];
+            let alive = alive_map.get(&id).copied().unwrap_or(false);
+            if !alive {
+                self.zombie_ids.swap_remove(idx);
+                self.zombie_models.swap_remove(idx);
+                self.zombie_instances_cpu.swap_remove(idx);
+                if idx < self.zombie_prev_pos.len() {
+                    self.zombie_prev_pos.swap_remove(idx);
+                }
+                if idx < self.zombie_time_offset.len() {
+                    self.zombie_time_offset.swap_remove(idx);
+                }
+                if idx < self.zombie_forward_offsets.len() {
+                    self.zombie_forward_offsets.swap_remove(idx);
+                }
+                removed_any = true;
+            }
+        }
+        if removed_any {
+            self.zombie_count = self.zombie_ids.len() as u32;
+            for (i2, inst2) in self.zombie_instances_cpu.iter_mut().enumerate() {
+                inst2.palette_base = (i2 as u32) * self.zombie_joints;
+            }
+            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
+            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
         }
         // Wizard positions for facing
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
