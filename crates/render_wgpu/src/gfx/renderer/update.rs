@@ -1754,7 +1754,7 @@ impl Renderer {
                         } else {
                             let fb_col = [2.6, 0.7, 0.18];
                             self.spawn_firebolt(spawn, dir_w, t, Some(i), true, fb_col);
-                            log::info!("npc wizard {} cast Fire Bolt", i);
+                            log::debug!("npc wizard {} cast Fire Bolt", i);
                         }
                     }
                 }

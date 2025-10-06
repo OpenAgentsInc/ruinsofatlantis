@@ -159,7 +159,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 let _ = r.repl_buf.apply_message(b);
             }
             metrics::counter!("net.bytes_recv_total", "dir" => "rx").increment(total as u64);
-            if std::env::var("RA_LOG_REPL").map(|v| v == "1").unwrap_or(false) {
+            if std::env::var("RA_LOG_REPL")
+                .map(|v| v == "1")
+                .unwrap_or(false)
+            {
                 log::info!(
                     "replication: drained {} msg(s), npcs now {}",
                     msgs.len(),

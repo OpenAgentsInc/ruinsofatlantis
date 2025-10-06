@@ -256,7 +256,10 @@ impl ApplicationHandler for App {
                 let _hits = srv.step_npc_ai(dt, &wiz_pos);
                 server_core::systems::boss::boss_seek_and_integrate(srv, dt, &wiz_pos);
                 // Build replication messages
-                if std::env::var("RA_LOG_DEMO").map(|v| v == "1").unwrap_or(false) {
+                if std::env::var("RA_LOG_DEMO")
+                    .map(|v| v == "1")
+                    .unwrap_or(false)
+                {
                     log::info!(
                         "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
                         dt,

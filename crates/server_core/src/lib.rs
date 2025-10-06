@@ -86,6 +86,8 @@ pub struct Projectile {
     pub pos: Vec3,
     pub vel: Vec3,
     pub kind: ProjKind,
+    pub age: f32,
+    pub life: f32,
 }
 
 #[inline]
@@ -188,7 +190,11 @@ impl ServerState {
     pub fn spawn_projectile(&mut self, pos: Vec3, vel: Vec3, kind: ProjKind) {
         let id = self.next_proj_id;
         self.next_proj_id = self.next_proj_id.wrapping_add(1);
-        self.projectiles.push(Projectile { id, pos, vel, kind });
+        let (age, life) = match kind {
+            ProjKind::Fireball { .. } => (0.0, 2.0),
+            _ => (0.0, 1.5),
+        };
+        self.projectiles.push(Projectile { id, pos, vel, kind, age, life });
     }
     /// Spawn a projectile by unit direction; speed and damage/radius are chosen by kind.
     /// Spawn a projectile by unit direction; scales velocity using config defaults.
@@ -309,6 +315,7 @@ impl ServerState {
             let vel = self.projectiles[i].vel; // copy
             self.projectiles[i].pos = p0 + vel * dt;
             let p1 = self.projectiles[i].pos;
+            self.projectiles[i].age += dt;
             let mut removed = false;
             // Collide vs NPCs (direct hit)
             for n in &mut self.npcs {
@@ -440,6 +447,28 @@ impl ServerState {
                             m.hp = (m.hp - damage).max(0);
                         }
                     }
+                    removed = true;
+                }
+            }
+            // Fireball timeout explode at current position (server-authoritative)
+            if !removed {
+                let age = self.projectiles[i].age;
+                let life = self.projectiles[i].life;
+                if age >= life && let ProjKind::Fireball { radius, damage } = kind {
+                    let r2 = radius * radius;
+                    let cx = p1.x; let cz = p1.z;
+                    if std::env::var("RA_LOG_FIREBALL").map(|v| v == "1").unwrap_or(false) {
+                        log::info!("server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}", cx, p1.y, cz, radius, damage);
+                    }
+                    for m in &mut self.npcs {
+                        if !m.alive { continue; }
+                        let dx = m.pos.x - cx; let dz = m.pos.z - cz;
+                        if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); if m.hp == 0 { m.alive = false; } }
+                    }
+                    for m in &mut self.wizards { if m.hp > 0 {
+                        let dx = m.pos.x - cx; let dz = m.pos.z - cz;
+                        if dx*dx + dz*dz <= r2 { m.hp = (m.hp - damage).max(0); }
+                    }}
                     removed = true;
                 }
             }
