@@ -4,9 +4,7 @@ use ecs_core::components::{ControllerMode, InputProfile};
 
 #[test]
 fn alt_toggle_switches_modes_and_emits_pointer_lock_events() {
-    let mut state = ControllerState::default();
-    state.profile = InputProfile::ActionCombat;
-    state.mode = ControllerMode::Mouselook;
+    let mut state = ControllerState { profile: InputProfile::ActionCombat, mode: ControllerMode::Mouselook, ..Default::default() };
 
     let ui = UiFocus::default();
 
@@ -29,8 +27,7 @@ fn alt_toggle_switches_modes_and_emits_pointer_lock_events() {
 
 #[test]
 fn alt_hold_press_release_switches_modes() {
-    let mut state = ControllerState::default();
-    state.mode = ControllerMode::Mouselook;
+    let mut state = ControllerState { mode: ControllerMode::Mouselook, ..Default::default() };
     let ui = UiFocus::default();
     let mut host_events = Vec::new();
     handle_cursor_event(&mut state, &ui, CursorEvent::Hold(true), &mut host_events);
@@ -50,9 +47,7 @@ fn alt_hold_press_release_switches_modes() {
 
 #[test]
 fn classic_profile_rmb_hold_captures_and_releases() {
-    let mut state = ControllerState::default();
-    state.profile = InputProfile::ClassicCursor;
-    state.mode = ControllerMode::Cursor;
+    let mut state = ControllerState { profile: InputProfile::ClassicCursor, mode: ControllerMode::Cursor, ..Default::default() };
     let ui = UiFocus::default();
 
     let mut host_events = Vec::new();

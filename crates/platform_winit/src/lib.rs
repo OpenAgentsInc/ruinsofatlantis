@@ -291,7 +291,10 @@ impl ApplicationHandler for App {
                 // Authoritative TickSnapshot from server
                 srv.step_authoritative(dt, &wiz_pos);
                 let ts = srv.tick_snapshot(self.tick);
-                if std::env::var("RA_LOG_REPL").map(|v| v == "1").unwrap_or(false) {
+                if std::env::var("RA_LOG_REPL")
+                    .map(|v| v == "1")
+                    .unwrap_or(false)
+                {
                     let wiz = ts.wizards.len();
                     let npcs = ts.npcs.len();
                     let mut min_wiz_hp = i32::MAX;

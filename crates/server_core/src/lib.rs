@@ -166,50 +166,66 @@ pub struct ServerState {
 
 impl ServerState {
     #[inline]
-fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32) {
-    let mut hit_npc = 0u32;
-    for m in &mut self.npcs {
-        if !m.alive {
-            continue;
-        }
-        let dx = m.pos.x - cx;
-        let dz = m.pos.z - cz;
-        if dx * dx + dz * dz <= r2 {
-            let before = m.hp;
-            m.hp = (m.hp - damage).max(0);
-            if m.hp == 0 {
-                m.alive = false;
+    fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32) {
+        let mut hit_npc = 0u32;
+        for m in &mut self.npcs {
+            if !m.alive {
+                continue;
             }
-            hit_npc += 1;
-            if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
-                log::info!(
-                    "combat: npc {:?} hp {} -> {} by {} at ({:.2},{:.2})",
-                    m.id, before, m.hp, damage, cx, cz
-                );
+            let dx = m.pos.x - cx;
+            let dz = m.pos.z - cz;
+            if dx * dx + dz * dz <= r2 {
+                let before = m.hp;
+                m.hp = (m.hp - damage).max(0);
+                if m.hp == 0 {
+                    m.alive = false;
+                }
+                hit_npc += 1;
+                if std::env::var("RA_LOG_COMBAT")
+                    .map(|v| v == "1")
+                    .unwrap_or(false)
+                {
+                    log::info!(
+                        "combat: npc {:?} hp {} -> {} by {} at ({:.2},{:.2})",
+                        m.id,
+                        before,
+                        m.hp,
+                        damage,
+                        cx,
+                        cz
+                    );
+                }
             }
         }
+        let mut hit_wiz = 0u32;
+        for m in &mut self.wizards {
+            if m.hp <= 0 {
+                continue;
+            }
+            let dx = m.pos.x - cx;
+            let dz = m.pos.z - cz;
+            if dx * dx + dz * dz <= r2 {
+                let before = m.hp;
+                m.hp = (m.hp - damage).max(0);
+                hit_wiz += 1;
+                if std::env::var("RA_LOG_COMBAT")
+                    .map(|v| v == "1")
+                    .unwrap_or(false)
+                {
+                    log::info!(
+                        "combat: wizard id={} hp {} -> {} by {} at ({:.2},{:.2})",
+                        m.id,
+                        before,
+                        m.hp,
+                        damage,
+                        cx,
+                        cz
+                    );
+                }
+            }
+        }
+        (hit_npc, hit_wiz)
     }
-    let mut hit_wiz = 0u32;
-    for m in &mut self.wizards {
-        if m.hp <= 0 {
-            continue;
-        }
-        let dx = m.pos.x - cx;
-        let dz = m.pos.z - cz;
-        if dx * dx + dz * dz <= r2 {
-            let before = m.hp;
-            m.hp = (m.hp - damage).max(0);
-            hit_wiz += 1;
-            if std::env::var("RA_LOG_COMBAT").map(|v| v == "1").unwrap_or(false) {
-                log::info!(
-                    "combat: wizard id={} hp {} -> {} by {} at ({:.2},{:.2})",
-                    m.id, before, m.hp, damage, cx, cz
-                );
-            }
-        }
-    }
-    (hit_npc, hit_wiz)
-}
     pub fn new() -> Self {
         Self {
             next_id: 1,
@@ -999,6 +1015,177 @@ fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32)
     }
 }
 
+// ============================================================================
+// Tests – keep these at the bottom of crates/server_core/src/lib.rs
+// ============================================================================
+
+#[cfg(test)]
+mod tests_aoe {
+    use super::*;
+    use glam::{Vec3, vec3};
+
+    /// Ensure the server has at least the requested number of wizards/NPCs.
+    /// If missing, spawn minimal entries. Then normalize HP/max/alive.
+    fn ensure_min_entities(s: &mut ServerState, min_wiz: usize, min_npc: usize) {
+        // Wizards: use sync_wizards to create entries as needed
+        if s.wizards.len() < min_wiz {
+            let mut pos: Vec<Vec3> = Vec::with_capacity(min_wiz);
+            for _ in 0..min_wiz {
+                pos.push(Vec3::ZERO);
+            }
+            s.sync_wizards(&pos);
+        }
+        // NPCs
+        while s.npcs.len() < min_npc {
+            let id = s.spawn_npc(Vec3::ZERO, 0.9, 30);
+            let _ = id;
+        }
+        // Normalize fields relied on by tests
+        for w in &mut s.wizards {
+            w.hp = 100;
+            w.max_hp = 100;
+        }
+        for n in &mut s.npcs {
+            n.hp = 30;
+            n.max_hp = 30;
+            n.alive = true;
+        }
+    }
+
+    #[test]
+    fn apply_aoe_hits_wizards_and_npcs_and_clamps_hp_and_kills_npcs() {
+        let mut s = ServerState::new();
+        ensure_min_entities(&mut s, 3, 3);
+
+        // Explosion at origin with radius 6.0 (r2 = 36.0), damage = 28
+        let (cx, cz) = (0.0f32, 0.0f32);
+        let r = 6.0f32;
+        let r2 = r * r;
+        let dmg = 28i32;
+
+        // Wizards:
+        // - w0 at (1, 1) -> inside -> 100 -> 72
+        // - w1 at (5.9, 0) -> inside -> 100 -> 72
+        // - w2 at (6.1, 0) -> outside -> stays 100
+        s.wizards[0].pos = vec3(1.0, 0.0, 1.0);
+        s.wizards[1].pos = vec3(5.9, 0.0, 0.0);
+        s.wizards[2].pos = vec3(6.1, 0.0, 0.0);
+
+        // NPCs:
+        // - n0 at (0, 2) -> inside; set to 20 hp so it dies
+        // - n1 at (7, 0) -> outside -> stays 30 (alive)
+        // - n2 at (0, -5.9) -> inside -> 30 -> 2 (alive)
+        s.npcs[0].pos = vec3(0.0, 0.0, 2.0);
+        s.npcs[1].pos = vec3(7.0, 0.0, 0.0);
+        s.npcs[2].pos = vec3(0.0, 0.0, -5.9);
+        s.npcs[0].hp = 20; // 20 - 28 => 0 (and alive=false)
+
+        let (hit_npc, hit_wiz) = s.apply_aoe_at(cx, cz, r2, dmg);
+        assert_eq!(hit_wiz, 2, "expected to hit two wizards inside r=6.0");
+        assert_eq!(hit_npc, 2, "expected to hit two NPCs inside r=6.0");
+
+        // Wizards
+        assert_eq!(s.wizards[0].hp, 72);
+        assert_eq!(s.wizards[1].hp, 72);
+        assert_eq!(s.wizards[2].hp, 100);
+
+        // NPCs
+        assert_eq!(s.npcs[0].hp, 0, "n0 should be clamped to 0");
+        assert!(
+            !s.npcs[0].alive,
+            "n0 should be flagged dead when hp reaches 0"
+        );
+
+        assert_eq!(s.npcs[2].hp, 2, "n2 should be reduced but remain alive");
+        assert!(s.npcs[2].alive);
+
+        assert_eq!(s.npcs[1].hp, 30, "n1 should be untouched outside radius");
+        assert!(s.npcs[1].alive);
+    }
+
+    #[test]
+    fn apply_aoe_respects_inclusive_radius_boundary() {
+        let mut s = ServerState::new();
+        ensure_min_entities(&mut s, 2, 0);
+
+        // Explosion radius: r = 6.0 (r2 = 36.0)
+        let r2 = 36.0f32;
+
+        // Place w0 exactly on boundary (6.0, 0) -> must be hit
+        // Place w1 just outside (6.01, 0) -> must not be hit
+        s.wizards[0].hp = 50;
+        s.wizards[1].hp = 50;
+        s.wizards[0].pos = vec3(6.0, 0.0, 0.0);
+        s.wizards[1].pos = vec3(6.01, 0.0, 0.0);
+
+        let (_hit_npc, hit_wiz) = s.apply_aoe_at(0.0, 0.0, r2, 10);
+        assert_eq!(hit_wiz, 1, "inclusive boundary should count exactly r");
+        assert_eq!(s.wizards[0].hp, 40);
+        assert_eq!(s.wizards[1].hp, 50);
+    }
+
+    #[test]
+    fn apply_aoe_skips_dead_targets() {
+        let mut s = ServerState::new();
+        ensure_min_entities(&mut s, 1, 1);
+
+        // Mark wizard[0] dead-ish (hp=0), place inside radius. Should not count / not go negative.
+        s.wizards[0].hp = 0;
+        s.wizards[0].pos = vec3(0.5, 0.0, 0.5);
+
+        // NPC[0] alive and in range; verifies we still count the other type
+        s.npcs[0].hp = 10;
+        s.npcs[0].alive = true;
+        s.npcs[0].pos = vec3(0.5, 0.0, -0.5);
+
+        let (hit_npc, hit_wiz) = s.apply_aoe_at(0.0, 0.0, 4.0, 5);
+        assert_eq!(hit_wiz, 0, "dead wizards must be skipped");
+        assert_eq!(hit_npc, 1, "alive NPC in range must be hit");
+        assert_eq!(s.wizards[0].hp, 0, "wizard hp must remain clamped at 0");
+        assert_eq!(s.npcs[0].hp, 5, "npc took damage");
+        assert!(s.npcs[0].alive, "still alive since hp>0");
+    }
+
+    #[test]
+    fn spawn_projectile_owned_sets_owner_and_velocity_direction() {
+        let mut s = ServerState::new();
+
+        let pos = vec3(0.0, 0.0, 0.0);
+        let dir = vec3(1.0, 0.0, 0.0);
+        let before = s.projectiles.len();
+
+        s.spawn_projectile_from_dir_owned(pos, dir, ProjKind::Fireball, Some(1));
+
+        assert_eq!(
+            s.projectiles.len(),
+            before + 1,
+            "one projectile should be spawned"
+        );
+        let p = s.projectiles.last().expect("projectile exists");
+
+        assert!(matches!(p.kind, ProjKind::Fireball));
+        assert_eq!(p.owner, Some(1), "owner must be tagged as PC");
+
+        // Velocity should align with input dir (within tight tolerance)
+        let v_norm = p.vel.normalize_or_zero();
+        let d_norm = dir.normalize_or_zero();
+        let dot = v_norm.dot(d_norm);
+        assert!(
+            dot > 0.999,
+            "projectile velocity should align with dir; dot={dot}, v_norm={v_norm:?}, d_norm={d_norm:?}"
+        );
+
+        // And magnitude should match spec.speed_mps (within small epsilon)
+        let spec = s.projectile_spec(ProjKind::Fireball);
+        let speed = p.vel.length();
+        assert!(
+            (speed - spec.speed_mps).abs() < 1e-3,
+            "projectile speed mismatch; got {speed}, expected {}",
+            spec.speed_mps
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1073,6 +1260,118 @@ mod tests {
         assert!(
             n.hp < n.max_hp,
             "target should have taken damage from TTL explode"
+        );
+    }
+}
+
+// Additional focused Fireball authoritative tests covering impact/proximity AoE and hostility flip
+#[cfg(test)]
+mod tests_fireball {
+    use super::*;
+    use glam::{Vec3, vec3};
+
+    fn ensure_min_entities(s: &mut ServerState, min_wiz: usize, min_npc: usize) {
+        if s.wizards.len() < min_wiz {
+            let mut pos = Vec::with_capacity(min_wiz);
+            for _ in 0..min_wiz {
+                pos.push(Vec3::ZERO);
+            }
+            s.sync_wizards(&pos);
+        }
+        while s.npcs.len() < min_npc {
+            let _ = s.spawn_npc(Vec3::ZERO, 0.9, 30);
+        }
+        for w in &mut s.wizards {
+            w.hp = 100;
+            w.max_hp = 100;
+        }
+        for n in &mut s.npcs {
+            n.hp = 30;
+            n.max_hp = 30;
+            n.alive = true;
+        }
+    }
+
+    #[test]
+    fn fireball_aoe_hits_wizards_and_npcs_on_impact_and_removes_projectile() {
+        let mut s = ServerState::new();
+        ensure_min_entities(&mut s, 2, 1);
+
+        // Place wizard[1] and npc[0] near origin so an impact AoE catches both
+        s.wizards[1].pos = vec3(0.6, 0.6, 0.6);
+        s.npcs[0].pos = vec3(-0.6, 0.6, -0.6);
+
+        // Spawn PC-owned fireball that crosses near (0,0) to impact
+        s.spawn_projectile_from_dir_owned(
+            vec3(-0.8, 0.6, -0.8),
+            vec3(1.0, 0.0, 1.0),
+            ProjKind::Fireball,
+            Some(1),
+        );
+
+        // Authoritative step using mirrored wizard positions
+        let wiz_pos: Vec<Vec3> = s.wizards.iter().map(|w| w.pos).collect();
+        s.step_authoritative(0.1, &wiz_pos);
+
+        assert!(
+            s.wizards[1].hp < 100,
+            "wizard should take AoE damage on impact"
+        );
+        assert!(s.npcs[0].hp < 30, "npc should take AoE damage on impact");
+        assert!(
+            s.projectiles.is_empty(),
+            "fireball must be removed after detonation"
+        );
+    }
+
+    #[test]
+    fn fireball_proximity_aoe_hits_targets_and_removes_projectile() {
+        let mut s = ServerState::new();
+        ensure_min_entities(&mut s, 2, 1);
+
+        // Targets offset from the centerline; proximity should trigger
+        s.wizards[1].pos = vec3(2.5, 0.6, 0.0);
+        s.npcs[0].pos = vec3(-2.5, 0.6, 0.0);
+
+        s.spawn_projectile_from_dir_owned(
+            vec3(-6.0, 0.6, 0.0),
+            vec3(1.0, 0.0, 0.0),
+            ProjKind::Fireball,
+            Some(1),
+        );
+        let wiz_pos: Vec<Vec3> = s.wizards.iter().map(|w| w.pos).collect();
+        s.step_authoritative(0.2, &wiz_pos);
+
+        assert!(
+            s.wizards[1].hp < 100 || s.npcs[0].hp < 30,
+            "at least one target must take proximity damage"
+        );
+        assert!(
+            s.projectiles.is_empty(),
+            "fireball must be removed after proximity detonation"
+        );
+    }
+
+    #[test]
+    fn owner_pc_flip_hostility_on_wizard_damage() {
+        let mut s = ServerState::new();
+        ensure_min_entities(&mut s, 2, 0);
+
+        // Put wizard[1] in the path for direct impact -> AoE
+        s.wizards[1].pos = vec3(0.2, 0.6, 0.0);
+        s.spawn_projectile_from_dir_owned(
+            vec3(-0.2, 0.6, 0.0),
+            vec3(1.0, 0.0, 0.0),
+            ProjKind::Fireball,
+            Some(1),
+        );
+
+        let wiz_pos: Vec<Vec3> = s.wizards.iter().map(|w| w.pos).collect();
+        s.step_authoritative(0.05, &wiz_pos);
+
+        assert!(
+            s.wizards_hostile_to_pc,
+            "wizard damage by PC should flip hostility to PC"
         );
     }
 }

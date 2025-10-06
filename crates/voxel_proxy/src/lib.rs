@@ -431,7 +431,7 @@ mod tests {
         let meta = mk_meta(d, UVec3::new(8, 8, 8));
         let mut surf = vec![0u8; (d.x * d.y * d.z) as usize];
         // inner box spans [2..=13] each axis; mark its surface cells
-        let mut idx = |x: u32, y: u32, z: u32| -> usize { (x + y * d.x + z * d.x * d.y) as usize };
+        let idx = |x: u32, y: u32, z: u32| -> usize { (x + y * d.x + z * d.x * d.y) as usize };
         for z in 2..=13 {
             for y in 2..=13 {
                 for x in 2..=13 {

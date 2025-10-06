@@ -1,3 +1,16 @@
+#![allow(
+    clippy::assign_op_pattern,
+    clippy::collapsible_if,
+    clippy::collapsible_else_if,
+    clippy::needless_borrow,
+    clippy::manual_div_ceil,
+    clippy::identity_op,
+    clippy::useless_vec,
+    clippy::needless_range_loop,
+    clippy::unnecessary_cast
+)]
+// Developer tool: relax noisy pedantic lints for readability.
+
 use std::path::PathBuf;
 
 use anyhow::Result;

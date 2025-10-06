@@ -198,6 +198,49 @@ This running log captures code-level changes made to address the 2025-10-04 audi
     - `ReplicationBuffer::apply_message` now prefers `TickSnapshot` (boss + npcs) and falls back to `ChunkMeshDelta` → `NpcListMsg` → `BossStatusMsg` for migration.
     - `NpcView` extended with `yaw`; legacy list populates `yaw = 0.0`.
 
+## 2025-10-06 — Test wall for authoritative Fireball + replication (#107 follow-up)
+
+- Added a focused, multi-layer test suite to prevent regressions in the “Fireball doesn’t hurt wizards / no floaters / orb keeps flying” class of bugs.
+- Server tests (authoritative gameplay)
+  - File: `crates/server_core/src/lib.rs`
+  - New tests cover:
+    - Impact AoE: Fireball detonates on wizard/NPC and damages both; projectile removed.
+    - Proximity AoE: Fireball segment proximity triggers detonation; projectile removed.
+    - Owner flip: PC-owned Fireball that damages a wizard flips `wizards_hostile_to_pc = true`.
+  - Existing tests already covered TTL AoE, HP clamp/alive, Firebolt hits, and spawn owner/velocity properties.
+- Client replication tests
+  - File: `crates/client_core/src/replication.rs`
+  - Added `apply_tick_snapshot_populates_all_views` to lock that `ReplicationBuffer` populates wizards, NPCs, projectiles, and boss from `TickSnapshot` (framed).
+- Protocol tests
+  - File: `crates/net_core/src/snapshot.rs`
+  - Existing `tick_snapshot_roundtrip` already validates consolidated snapshot shape; no duplication added.
+- End-to-End headless integration
+  - File: `tests/e2e_authoritative.rs`
+  - Smoke test drives: PC-owned Fireball → authoritative `step_authoritative` → wizard HP drop → projectile removal → `tick_snapshot` reflects HP drop and no lingering Fireball.
+- Validation
+  - `cargo test -p server_core` — green (29 tests)
+  - `cargo test -p net_core` — green (12 tests)
+  - `cargo test -p client_core` — green (11 tests)
+  - `cargo test -p ruinsofatlantis --test e2e_authoritative` — green (1 test)
+  - Note: `cargo test --workspace` currently fails due to pre-existing issues in unrelated crates (`collision_static` missing deps and `sim-harness` API drift). Scope-limited tests above are green; we can open a follow-up to fix those crates or exclude them from CI if desired.
+
+## 2025-10-06 — Workspace tests green (voxel mesher + harness fixes)
+
+- Fix: voxel_mesh greedy mesher edge cases
+  - File: `crates/voxel_mesh/src/lib.rs`
+  - Correct neighbor checks (avoid saturating_sub) so boundary faces emit.
+  - Emit positive faces on the far side of the cell; negative on near side.
+  - Adjust winding for axis=Y to align face normals with stored vertex normals.
+  - Bias per-chunk meshing to the lower chunk at boundaries (X) so only one owner emits boundary faces; mirrored guards added for Y/Z.
+  - Result: all voxel_mesh tests pass.
+- Fix: collision_static test deps
+  - Added dev-dependencies `core_materials` and `core_units` (via `cargo add --dev`).
+- Fix: tools/sim-harness build
+  - Switched to `sim_core::sim::runner::run_scenario` public API.
+  - Added `serde_json` dependency (via `cargo add`).
+- Validation
+  - `cargo test --workspace` — green.
+
 - platform_winit: Emit TickSnapshot in addition to legacy messages
   - `crates/platform_winit/src/lib.rs`:
     - Track a local `tick` counter; after stepping the demo server each frame, build and send a framed `TickSnapshot` with NPC yaw computed toward the nearest wizard (temporary until the server sends yaw).

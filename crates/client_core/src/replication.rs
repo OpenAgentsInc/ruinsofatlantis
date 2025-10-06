@@ -183,8 +183,7 @@ mod tests {
     #[test]
     fn tick_snapshot_populates_npcs_and_projectiles() {
         use net_core::snapshot::{
-            BossRep, NpcRep, ProjectileRep, SnapshotDecode, SnapshotEncode, TAG_TICK_SNAPSHOT,
-            TickSnapshot, WizardRep,
+            BossRep, NpcRep, ProjectileRep, SnapshotEncode, TickSnapshot, WizardRep,
         };
         let ts = TickSnapshot {
             v: 1,
@@ -232,5 +231,61 @@ mod tests {
         assert_eq!(repl.npcs.len(), 1);
         assert_eq!(repl.projectiles.len(), 1);
         assert!(repl.boss_status.is_some());
+    }
+
+    #[test]
+    fn apply_tick_snapshot_populates_all_views() {
+        use net_core::snapshot::{
+            BossRep, NpcRep, ProjectileRep, SnapshotEncode, TickSnapshot, WizardRep,
+        };
+        let snap = TickSnapshot {
+            v: 1,
+            tick: 7,
+            wizards: vec![WizardRep {
+                id: 1,
+                kind: 0,
+                pos: [1.0, 0.6, 2.0],
+                yaw: 0.1,
+                hp: 72,
+                max: 100,
+            }],
+            npcs: vec![NpcRep {
+                id: 10,
+                archetype: 1,
+                pos: [0.0, 0.6, 0.0],
+                yaw: 0.0,
+                radius: 0.9,
+                hp: 2,
+                max: 30,
+                alive: true,
+            }],
+            projectiles: vec![ProjectileRep {
+                id: 77,
+                kind: 1,
+                pos: [0.0, 0.6, 3.0],
+                vel: [30.0, 0.0, 0.0],
+            }],
+            boss: Some(BossRep {
+                id: 999,
+                name: "Nivita".into(),
+                pos: [5.0, 1.2, 2.0],
+                hp: 225,
+                max: 225,
+                ac: 18,
+            }),
+        };
+        let mut bytes = Vec::new();
+        snap.encode(&mut bytes);
+        let mut framed = Vec::new();
+        net_core::frame::write_msg(&mut framed, &bytes);
+
+        let mut buf = ReplicationBuffer::default();
+        assert!(buf.apply_message(&framed));
+        assert_eq!(buf.wizards.len(), 1);
+        assert_eq!(buf.npcs.len(), 1);
+        assert_eq!(buf.projectiles.len(), 1);
+        assert_eq!(buf.wizards[0].hp, 72);
+        assert_eq!(buf.npcs[0].hp, 2);
+        assert!(buf.boss_status.is_some());
     }
 }

@@ -45,26 +45,63 @@ pub fn greedy_mesh_all(grid: &VoxelGrid) -> MeshBuffers {
             for j in 0..h {
                 for i in 0..w {
                     let (x, y, z) = to_xyz(axis, i, j, layer);
-                    // neighbor in -axis
-                    let (xn, yn, zn) = match axis {
-                        0 => (x.saturating_sub(1), y, z),
-                        1 => (x, y.saturating_sub(1), z),
-                        _ => (x, y, z.saturating_sub(1)),
-                    };
+                    // Neighbor checks; treat out-of-bounds neighbor as empty.
                     let here = if inside(d, x, y, z) {
                         grid.is_solid(x, y, z)
                     } else {
                         false
                     };
-                    let there = if inside(d, xn, yn, zn) {
-                        grid.is_solid(xn, yn, zn)
-                    } else {
-                        false
+                    let there_neg = match axis {
+                        0 => {
+                            if x == 0 {
+                                false
+                            } else {
+                                grid.is_solid(x - 1, y, z)
+                            }
+                        }
+                        1 => {
+                            if y == 0 {
+                                false
+                            } else {
+                                grid.is_solid(x, y - 1, z)
+                            }
+                        }
+                        _ => {
+                            if z == 0 {
+                                false
+                            } else {
+                                grid.is_solid(x, y, z - 1)
+                            }
+                        }
+                    };
+                    let there_pos = match axis {
+                        0 => {
+                            if x + 1 >= d.x {
+                                false
+                            } else {
+                                grid.is_solid(x + 1, y, z)
+                            }
+                        }
+                        1 => {
+                            if y + 1 >= d.y {
+                                false
+                            } else {
+                                grid.is_solid(x, y + 1, z)
+                            }
+                        }
+                        _ => {
+                            if z + 1 >= d.z {
+                                false
+                            } else {
+                                grid.is_solid(x, y, z + 1)
+                            }
+                        }
                     };
                     let m_idx = (i + j * w) as usize;
-                    // Solid→empty: positive face; empty→solid: negative face
-                    mask[m_idx] = here && !there;
-                    mask_neg[m_idx] = !here && there;
+                    // Solid→empty in +axis direction => positive face
+                    // Solid→empty in -axis direction => negative face
+                    mask[m_idx] = here && !there_pos;
+                    mask_neg[m_idx] = here && !there_neg;
                 }
             }
             // Emit quads for both directions
@@ -115,7 +152,9 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
             }
             greedy_emit(&mut mesh, &mask, 0, layer_rel, w, h, vm, origin, true);
         }
-        // Negative normal (-X): own faces where (x-1,y,z) solid is inside chunk and (x,y,z) empty
+        // Negative normal (-X): own faces at plane x where left side (inside this chunk)
+        // is empty and right side (x,y,z) is solid. This biases ownership of boundary
+        // faces to the lower X chunk (left) while still emitting interior faces correctly.
         for layer_rel in 1..=ld {
             // layer_rel corresponds to current (x) and x-1 must be inside [xr.start..xr.end)
             let x = xr.start + layer_rel;
@@ -124,13 +163,18 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
                 for i in 0..w {
                     let y = yr.start + i;
                     let z = zr.start + j;
-                    // At the upper chunk boundary, x may equal dims.x; treat out-of-bounds as empty
-                    let here = if x < dims.x {
+                    // Left side 'here': inside this chunk -> treat as empty when x==xr.end.
+                    let here = if x <= xr.end {
+                        false
+                    } else {
+                        grid.is_solid(x - 1, y, z)
+                    };
+                    // Right side 'there': sample (x,y,z) if in-bounds
+                    let there = if x < dims.x {
                         grid.is_solid(x, y, z)
                     } else {
                         false
                     };
-                    let there = grid.is_solid(x - 1, y, z); // x-1 is inside chunk by loop start
                     mask[(i + j * w) as usize] = !here && there;
                 }
             }
@@ -162,7 +206,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
             }
             greedy_emit(&mut mesh, &mask, 1, layer_rel, w, h, vm, origin, true);
         }
-        // -Y (y-1 must be inside chunk)
+        // -Y (y-1 must be inside chunk). Bias ownership to lower chunk along Y.
         for layer_rel in 1..=ld {
             let y = yr.start + layer_rel;
             let mut mask = vec![false; (w * h) as usize];
@@ -170,7 +214,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
                 for i in 0..w {
                     let x = xr.start + i;
                     let z = zr.start + j;
-                    let here = if y < dims.y {
+                    let here = if y < dims.y && y < yr.end {
                         grid.is_solid(x, y, z)
                     } else {
                         false
@@ -207,7 +251,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
             }
             greedy_emit(&mut mesh, &mask, 2, layer_rel, w, h, vm, origin, true);
         }
-        // -Z (z-1 must be inside chunk)
+        // -Z (z-1 must be inside chunk). Bias ownership to lower chunk along Z.
         for layer_rel in 1..=ld {
             let z = zr.start + layer_rel;
             let mut mask = vec![false; (w * h) as usize];
@@ -215,7 +259,7 @@ pub fn greedy_mesh_chunk(grid: &VoxelGrid, chunk: UVec3) -> MeshBuffers {
                 for i in 0..w {
                     let x = xr.start + i;
                     let y = yr.start + j;
-                    let here = if z < dims.z {
+                    let here = if z < dims.z && z < zr.end {
                         grid.is_solid(x, y, z)
                     } else {
                         false
@@ -439,8 +483,9 @@ fn emit_rect(
         1 => (Vec3::X, Vec3::Z, Vec3::Y),
         _ => (Vec3::X, Vec3::Y, Vec3::Z),
     };
-    // layer is along ax_w
-    let base = ax_w * (layer as f32);
+    // layer is along ax_w; positive-normal faces live at the far side of the voxel cell
+    // (layer + 1), while negative-normal faces live at the near side (layer).
+    let base = ax_w * (layer as f32 + if pos_normal { 1.0 } else { 0.0 });
     let p0 = base + ax_u * (x as f32) + ax_v * (y as f32);
     let p1 = base + ax_u * ((x + w) as f32) + ax_v * (y as f32);
     let p2 = base + ax_u * ((x + w) as f32) + ax_v * ((y + h) as f32);
@@ -455,8 +500,10 @@ fn emit_rect(
     add(mesh, p1, normal);
     add(mesh, p2, normal);
     add(mesh, p3, normal);
-    // Two triangles; flip winding when normal is negative to keep faces front-facing
-    if pos_normal {
+    // Two triangles. For axis=Y the base UV coordinate system leads to opposite
+    // winding; compensate by inverting the choice.
+    let use_normal_order = if axis == 1 { !pos_normal } else { pos_normal };
+    if use_normal_order {
         mesh.indices
             .extend_from_slice(&[i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3]);
     } else {
@@ -502,7 +549,7 @@ mod tests {
 
     #[test]
     fn rod_1x1x8_produces_six_quads() {
-        let mut g = mk_full_grid(UVec3::new(1, 1, 8));
+        let g = mk_full_grid(UVec3::new(1, 1, 8));
         // Already filled by mk_full_grid; just mesh
         let m = greedy_mesh_all(&g);
         assert_eq!(m.quad_count(), 6);

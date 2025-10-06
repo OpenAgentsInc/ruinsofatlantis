@@ -10,4 +10,6 @@ voxel_proxy = { version = "0.1.0", path = "../voxel_proxy" }
 
 [dev-dependencies]
 approx = "0.5"
+core_materials = { path = "../core_materials" }
+core_units = { path = "../core_units" }
 

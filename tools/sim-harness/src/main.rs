@@ -12,10 +12,8 @@ fn main() {
     let path = &args[1];
     let txt = loader::read_json(Path::new(path)).expect("read scenario json");
     let scen: scenario::Scenario = serde_json::from_str(&txt).expect("parse scenario json");
-    let mut state = runner::SimState::from_scenario(&scen).expect("build state");
-    // Run a fixed number of steps
-    for _ in 0..1000 {
-        runner::step(&mut state, 16);
-    }
-    println!("ok");
+    // Use the runner's public API to execute the scenario end-to-end
+    // Print full events and final HPs (result_only=false); if you only want the
+    // result summary, set to true.
+    runner::run_scenario(&scen, false);
 }

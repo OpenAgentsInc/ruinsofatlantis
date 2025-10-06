@@ -683,7 +683,9 @@ mod tests {
         assert_eq!(s.ac, s2.ac);
         assert_eq!(s.hp, s2.hp);
         assert_eq!(s.max, s2.max);
-        assert_eq!(s.pos, s2.pos);
+        for (a, b) in s.pos.iter().zip(s2.pos.iter()) {
+            assert!((a - b).abs() < 1.0e-6);
+        }
     }
     #[test]
     fn tick_snapshot_roundtrip() {
@@ -729,7 +731,7 @@ mod tests {
         let t2 = TickSnapshot::decode(&mut slice).expect("decode");
         assert_eq!(t.tick, t2.tick);
         assert_eq!(t.wizards.len(), t2.wizards.len());
-        assert_eq!(t.npcs[0].yaw, t2.npcs[0].yaw);
+        assert!((t.npcs[0].yaw - t2.npcs[0].yaw).abs() < 1.0e-6);
         assert_eq!(
             t.boss.as_ref().unwrap().name,
             t2.boss.as_ref().unwrap().name

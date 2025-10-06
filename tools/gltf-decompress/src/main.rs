@@ -1,6 +1,6 @@
 use std::{env, ffi::OsStr, fs, path::PathBuf, process::Command};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use ra_assets::gltf::load_gltf_mesh;
@@ -96,7 +96,9 @@ fn run(cmd: &std::ffi::OsStr, first: Option<&OsStr>, rest: &[&OsStr]) -> bool {
     }
 }
 
-fn native_decompress(input: &PathBuf, output: &PathBuf) -> Result<()> {
+use std::path::Path;
+
+fn native_decompress(input: &Path, output: &Path) -> Result<()> {
     let mesh = load_gltf_mesh(input)
         .with_context(|| format!("decode Draco from {} (native)", input.display()))?;
     // Flatten into a single interleaved buffer: positions, normals, then indices (u16)
