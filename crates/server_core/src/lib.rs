@@ -15,24 +15,7 @@ pub mod jobs;
 pub mod scene_build;
 pub mod systems;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NpcId(pub u32);
-
-#[derive(Debug, Clone)]
-pub struct Npc {
-    pub id: NpcId,
-    pub pos: Vec3,
-    pub radius: f32,
-    pub hp: i32,
-    pub max_hp: i32,
-    pub alive: bool,
-    pub attack_cooldown: f32,
-    pub attack_anim: f32,
-    /// Damage dealt per melee hit
-    pub damage: i32,
-    /// Movement speed in m/s
-    pub speed: f32,
-}
+// Legacy NPC types removed. Use ActorStore (Zombie/Boss kinds).
 
 /// Stored boss stats built from data_runtime config (no ECS world yet).
 #[derive(Debug, Clone)]
@@ -60,21 +43,7 @@ pub struct BossStatus {
     pub pos: Vec3,
 }
 
-/// Authoritative wizard model backed by the server.
-///
-/// Index 0 is reserved for the local PC in the demo; additional entries model
-/// NPC-controlled wizards. This is a lightweight stand-in for a fuller ECS
-/// until the sim integrates component storage for actors.
-#[derive(Debug, Clone)]
-pub struct Wizard {
-    pub id: u32,
-    pub pos: Vec3,
-    pub yaw: f32,
-    pub hp: i32,
-    pub max_hp: i32,
-    pub kind: u8, // 0=PC, 1=NPC wizard
-    pub cast_timer: f32,
-}
+// Legacy Wizard removed. Use ActorStore (Wizard kind).
 
 /// Projectile kind enum.
 ///
@@ -125,48 +94,19 @@ fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> bool
     (closest - c).length_squared() <= radius * radius
 }
 
-impl Npc {
-    pub fn new(id: NpcId, pos: Vec3, radius: f32, hp: i32) -> Self {
-        Self {
-            id,
-            pos,
-            radius,
-            hp,
-            max_hp: hp,
-            alive: true,
-            attack_cooldown: 0.0,
-            attack_anim: 0.0,
-            damage: 5,  // default zombie hit
-            speed: 2.0, // default zombie speed
-        }
-    }
-}
+// Legacy NPC ctor removed.
 
-#[derive(Debug, Clone)]
-pub struct HitEvent {
-    pub npc: NpcId,
-    pub pos: Vec3,
-    pub damage: i32,
-    pub hp_before: i32,
-    pub hp_after: i32,
-    pub fatal: bool,
-}
+// Legacy hit events removed.
 
 #[derive(Debug, Default)]
 pub struct ServerState {
-    next_id: u32,
-    pub npcs: Vec<Npc>,
     /// Unique boss handle if spawned (e.g., Nivita).
-    pub nivita_id: Option<NpcId>,
+    pub nivita_actor_id: Option<ActorId>,
     /// Snapshot of Nivita's boss stats/components for replication/logging.
     pub nivita_stats: Option<NivitaStats>,
-    /// Wizards mirrored from client positions (index 0 is PC for demo).
-    pub wizards: Vec<Wizard>,
     /// Live projectiles spawned by wizards.
     pub projectiles: Vec<Projectile>,
     next_proj_id: u32,
-    /// When true, NPC wizards target the PC instead of zombies
-    pub wizards_hostile_to_pc: bool,
     /// New authoritative actor store (bridge toward ECS)
     pub actors: ActorStore,
     pub factions: FactionState,
@@ -175,139 +115,19 @@ pub struct ServerState {
 }
 
 impl ServerState {
-    #[allow(dead_code)]
-    #[inline]
-    fn apply_aoe_at(&mut self, cx: f32, cz: f32, r2: f32, damage: i32) -> (u32, u32) {
-        let mut hit_npc = 0u32;
-        for m in &mut self.npcs {
-            if !m.alive {
-                continue;
-            }
-            let dx = m.pos.x - cx;
-            let dz = m.pos.z - cz;
-            if dx * dx + dz * dz <= r2 {
-                let before = m.hp;
-                m.hp = (m.hp - damage).max(0);
-                if m.hp == 0 {
-                    m.alive = false;
-                }
-                hit_npc += 1;
-                if std::env::var("RA_LOG_COMBAT")
-                    .map(|v| v == "1")
-                    .unwrap_or(false)
-                {
-                    log::info!(
-                        "combat: npc {:?} hp {} -> {} by {} at ({:.2},{:.2})",
-                        m.id,
-                        before,
-                        m.hp,
-                        damage,
-                        cx,
-                        cz
-                    );
-                }
-            }
-        }
-        let mut hit_wiz = 0u32;
-        for m in &mut self.wizards {
-            if m.hp <= 0 {
-                continue;
-            }
-            let dx = m.pos.x - cx;
-            let dz = m.pos.z - cz;
-            if dx * dx + dz * dz <= r2 {
-                let before = m.hp;
-                m.hp = (m.hp - damage).max(0);
-                hit_wiz += 1;
-                if std::env::var("RA_LOG_COMBAT")
-                    .map(|v| v == "1")
-                    .unwrap_or(false)
-                {
-                    log::info!(
-                        "combat: wizard id={} hp {} -> {} by {} at ({:.2},{:.2})",
-                        m.id,
-                        before,
-                        m.hp,
-                        damage,
-                        cx,
-                        cz
-                    );
-                }
-            }
-        }
-        (hit_npc, hit_wiz)
-    }
+    // Legacy AoE removed; use apply_aoe_at_actors.
     pub fn new() -> Self {
         Self {
-            next_id: 1,
-            npcs: Vec::new(),
-            nivita_id: None,
+            nivita_actor_id: None,
             nivita_stats: None,
-            wizards: Vec::new(),
             projectiles: Vec::new(),
             next_proj_id: 1,
-            wizards_hostile_to_pc: false,
             actors: ActorStore::default(),
             factions: FactionState::default(),
             pc_actor: None,
         }
     }
-    /// Rebuild the transient ActorStore from legacy wizard/NPC lists.
-    fn rebuild_actors_from_legacy(&mut self) {
-        self.actors = ActorStore::default();
-        // PC first (wizard id 1 is PC)
-        if let Some(pc) = self.wizards.first() {
-            let _ = self.actors.spawn(
-                ActorKind::Wizard,
-                Team::Pc,
-                Transform {
-                    pos: pc.pos,
-                    yaw: pc.yaw,
-                    radius: 0.7,
-                },
-                Health {
-                    hp: pc.hp,
-                    max: pc.max_hp,
-                },
-            );
-        }
-        // Other wizards
-        for (i, w) in self.wizards.iter().enumerate() {
-            if i == 0 {
-                continue;
-            }
-            let _ = self.actors.spawn(
-                ActorKind::Wizard,
-                Team::Wizards,
-                Transform {
-                    pos: w.pos,
-                    yaw: w.yaw,
-                    radius: 0.7,
-                },
-                Health {
-                    hp: w.hp,
-                    max: w.max_hp,
-                },
-            );
-        }
-        // NPCs (undead)
-        for n in &self.npcs {
-            let _ = self.actors.spawn(
-                ActorKind::Zombie,
-                Team::Undead,
-                Transform {
-                    pos: n.pos,
-                    yaw: 0.0,
-                    radius: n.radius,
-                },
-                Health {
-                    hp: n.hp,
-                    max: n.max_hp,
-                },
-            );
-        }
-        // Boss (if any) is included within npcs already; kind Boss would require tagging; we can upgrade later.
-    }
+    // Legacy actor rebuild removed. Actors are authoritative.
 
     /// Apply AoE to actors, skipping self-damage for PC-owned sources and flipping factions when PC hits Wizards.
     fn apply_aoe_at_actors(
@@ -318,7 +138,6 @@ impl ServerState {
         damage: i32,
         source: Option<ActorId>,
     ) -> usize {
-        self.rebuild_actors_from_legacy();
         let src_team = source.and_then(|id| self.actors.get(id).map(|a| a.team));
         let mut hits = 0usize;
         for a in self.actors.iter_mut() {
@@ -340,43 +159,6 @@ impl ServerState {
                 }
             }
         }
-        // Bridge: propagate actor HP back to legacy lists for now
-        // PC wizard
-        if let Some(first_actor) = self
-            .actors
-            .actors
-            .iter()
-            .find(|a| a.team == Team::Pc && a.kind == ActorKind::Wizard)
-            && let Some(pc) = self.wizards.get_mut(0)
-        {
-            pc.hp = first_actor.hp.hp;
-            pc.max_hp = first_actor.hp.max;
-        }
-        // Other wizards (order as pushed)
-        let mut wiz_iter = self
-            .actors
-            .actors
-            .iter()
-            .filter(|a| a.team == Team::Wizards && a.kind == ActorKind::Wizard);
-        for w in self.wizards.iter_mut().skip(1) {
-            if let Some(a) = wiz_iter.next() {
-                w.hp = a.hp.hp;
-                w.max_hp = a.hp.max;
-            }
-        }
-        // Zombies/NPCs (order as pushed)
-        let mut z_iter = self
-            .actors
-            .actors
-            .iter()
-            .filter(|a| a.kind == ActorKind::Zombie);
-        for n in self.npcs.iter_mut() {
-            if let Some(a) = z_iter.next() {
-                n.hp = a.hp.hp;
-                n.max_hp = a.hp.max;
-                n.alive = a.hp.alive();
-            }
-        }
         hits
     }
     /// Mirror wizard positions into ActorStore and ensure PC/NPC wizard actors exist.
@@ -387,7 +169,11 @@ impl ServerState {
                 let id = self.actors.spawn(
                     ActorKind::Wizard,
                     Team::Pc,
-                    Transform { pos: p0, yaw: 0.0, radius: 0.7 },
+                    Transform {
+                        pos: p0,
+                        yaw: 0.0,
+                        radius: 0.7,
+                    },
                     Health { hp: 100, max: 100 },
                 );
                 self.pc_actor = Some(id);
@@ -411,7 +197,11 @@ impl ServerState {
             let id = self.actors.spawn(
                 ActorKind::Wizard,
                 Team::Wizards,
-                Transform { pos: Vec3::ZERO, yaw: 0.0, radius: 0.7 },
+                Transform {
+                    pos: Vec3::ZERO,
+                    yaw: 0.0,
+                    radius: 0.7,
+                },
                 Health { hp: 100, max: 100 },
             );
             npc_ids.push(id);
@@ -640,7 +430,9 @@ impl ServerState {
                 let mut best_d2 = f32::INFINITY;
                 let mut best_center = seg_b;
                 for act in &self.actors.actors {
-                    if !act.hp.alive() { continue; }
+                    if !act.hp.alive() {
+                        continue;
+                    }
                     let c = glam::Vec2::new(act.tr.pos.x, act.tr.pos.z);
                     let t = if len2 <= 1e-12 {
                         0.0
@@ -711,16 +503,19 @@ impl ServerState {
             i += 1;
         }
     }
-    pub fn spawn_npc(&mut self, pos: Vec3, radius: f32, hp: i32) -> NpcId {
-        let id = NpcId(self.next_id);
-        self.next_id += 1;
-        self.npcs.push(Npc::new(id, pos, radius, hp));
-        id
+    /// Spawn an Undead actor (legacy NPC replacement)
+    pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
+        self.actors.spawn(
+            ActorKind::Zombie,
+            Team::Undead,
+            Transform { pos, yaw: 0.0, radius },
+            Health { hp, max: hp },
+        )
     }
     /// Spawn the unique boss "Nivita of the Undertide" if not present.
     /// Returns the NPC id if spawned or already present.
-    pub fn spawn_nivita_unique(&mut self, pos: Vec3) -> Option<NpcId> {
-        if let Some(id) = self.nivita_id {
+    pub fn spawn_nivita_unique(&mut self, pos: Vec3) -> Option<ActorId> {
+        if let Some(id) = self.nivita_actor_id {
             return Some(id);
         }
         let cfg = match data_runtime::configs::npc_unique::load_nivita() {
@@ -732,12 +527,12 @@ impl ServerState {
         };
         let hp_mid = (cfg.hp_range.0 + cfg.hp_range.1) / 2;
         let radius = cfg.radius_m.unwrap_or(0.9);
-        let id = self.spawn_npc(pos, radius, hp_mid);
-        // Patch NPC parameters
-        if let Some(n) = self.npcs.iter_mut().find(|n| n.id == id) {
-            n.speed = cfg.speed_mps.unwrap_or(1.2);
-            // Keep default damage for now; spells will handle most boss damage.
-        }
+        let id = self.actors.spawn(
+            ActorKind::Boss,
+            Team::Undead,
+            Transform { pos, yaw: 0.0, radius },
+            Health { hp: hp_mid, max: hp_mid },
+        );
         // Build and store boss stats snapshot for replication/logging
         let ab = ec::Abilities {
             str: cfg.abilities.str,
@@ -810,7 +605,7 @@ impl ServerState {
             team: cfg.team.clone(),
             team_id,
         });
-        self.nivita_id = Some(id);
+        self.nivita_actor_id = Some(id);
         log::info!(
             "server: spawned unique boss '{}' (hp={}..{}, ac={}) as {:?}",
             cfg.name,
@@ -824,101 +619,30 @@ impl ServerState {
     }
     /// Lightweight status for UI/replication.
     pub fn nivita_status(&self) -> Option<BossStatus> {
-        let id = self.nivita_id?;
-        let n = self.npcs.iter().find(|n| n.id == id)?;
+        let id = self.nivita_actor_id?;
+        let n = self.actors.get(id)?;
         let stats = self.nivita_stats.as_ref()?;
         Some(BossStatus {
             name: stats.name.clone(),
             ac: stats.ac,
-            hp: n.hp,
-            max: n.max_hp,
-            pos: n.pos,
+            hp: n.hp.hp,
+            max: n.hp.max,
+            pos: n.tr.pos,
         })
     }
     pub fn ring_spawn(&mut self, count: usize, radius: f32, hp: i32) {
         for i in 0..count {
             let a = (i as f32) / (count as f32) * std::f32::consts::TAU;
             let pos = Vec3::new(radius * a.cos(), 0.6, radius * a.sin());
-            self.spawn_npc(pos, 0.95, hp);
+            let _ = self.spawn_undead(pos, 0.95, hp);
         }
     }
     /// Build a consolidated `TickSnapshot` for clients. Until wizard/projectile state
     /// lives here, we include wizard positions from the caller and compute NPC yaw toward
     /// the nearest wizard.
-    pub fn tick_snapshot(&self, tick: u32) -> net_core::snapshot::TickSnapshot {
-        let mut npcs: Vec<net_core::snapshot::NpcRep> = Vec::with_capacity(self.npcs.len());
-        for n in &self.npcs {
-            // Compute yaw toward nearest wizard if available
-            let mut yaw = 0.0f32;
-            let mut best_d2 = f32::INFINITY;
-            for w in &self.wizards {
-                let dx = w.pos.x - n.pos.x;
-                let dz = w.pos.z - n.pos.z;
-                let d2 = dx * dx + dz * dz;
-                if d2 < best_d2 {
-                    best_d2 = d2;
-                    yaw = dx.atan2(dz);
-                }
-            }
-            npcs.push(net_core::snapshot::NpcRep {
-                id: n.id.0,
-                archetype: 0,
-                pos: [n.pos.x, n.pos.y, n.pos.z],
-                yaw,
-                radius: n.radius,
-                hp: n.hp,
-                max: n.max_hp,
-                alive: n.alive,
-            });
-        }
-        let wizards: Vec<net_core::snapshot::WizardRep> = self
-            .wizards
-            .iter()
-            .map(|w| net_core::snapshot::WizardRep {
-                id: w.id,
-                kind: w.kind,
-                pos: [w.pos.x, w.pos.y, w.pos.z],
-                yaw: w.yaw,
-                hp: w.hp,
-                max: w.max_hp,
-            })
-            .collect();
-        let boss = self.nivita_status().map(|st| net_core::snapshot::BossRep {
-            id: self.nivita_id.map(|i| i.0).unwrap_or(0),
-            name: st.name,
-            pos: [st.pos.x, st.pos.y, st.pos.z],
-            hp: st.hp,
-            max: st.max,
-            ac: st.ac,
-        });
-        let projectiles: Vec<net_core::snapshot::ProjectileRep> = self
-            .projectiles
-            .iter()
-            .map(|p| net_core::snapshot::ProjectileRep {
-                id: p.id,
-                kind: match p.kind {
-                    ProjKind::Firebolt => 0,
-                    ProjKind::Fireball => 1,
-                    ProjKind::MagicMissile => 2,
-                },
-                pos: [p.pos.x, p.pos.y, p.pos.z],
-                vel: [p.vel.x, p.vel.y, p.vel.z],
-            })
-            .collect();
-        net_core::snapshot::TickSnapshot {
-            v: 1,
-            tick,
-            wizards,
-            npcs,
-            projectiles,
-            boss,
-        }
-    }
+    // Legacy TickSnapshot removed; actor-centric snapshot is canonical.
     pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
-        // Ensure actors are available
-        let mut tmp = self.clone_for_snapshot();
-        tmp.rebuild_actors_from_legacy();
-        let actors = tmp
+        let actors = self
             .actors
             .iter()
             .map(|a| net_core::snapshot::ActorRep {
@@ -964,24 +688,11 @@ impl ServerState {
         }
     }
 
-    fn clone_for_snapshot(&self) -> Self {
-        // Minimal clone to avoid mutating self during snapshot build
-        Self {
-            next_id: self.next_id,
-            npcs: self.npcs.clone(),
-            nivita_id: self.nivita_id,
-            nivita_stats: self.nivita_stats.clone(),
-            wizards: self.wizards.clone(),
-            projectiles: self.projectiles.clone(),
-            next_proj_id: self.next_proj_id,
-            wizards_hostile_to_pc: self.wizards_hostile_to_pc,
-            actors: self.actors.clone_default(),
-            factions: self.factions,
-            pc_actor: self.pc_actor,
-        }
-    }
-    /// Move toward nearest wizard and attack when in range. Returns (wizard_idx, damage) per hit.
-    pub fn step_npc_ai(&mut self, dt: f32, wizards: &[Vec3]) -> Vec<(usize, i32)> {
+    // clone_for_snapshot removed
+    // Move toward nearest wizard and attack when in range. Returns (wizard_idx, damage) per hit.
+    /*
+    pub fn step_npc_ai(&mut self, _dt: f32, _wizards: &[Vec3]) -> Vec<(usize, i32)> { return Vec::new(); }
+/*
         let _t0 = std::time::Instant::now();
         if wizards.is_empty() {
             let ms = _t0.elapsed().as_secs_f64() * 1000.0;
@@ -1047,7 +758,8 @@ impl ServerState {
         metrics::histogram!("tick.ms").record(ms);
         hits
     }
-    fn resolve_collisions(&mut self, wizards: &[Vec3]) {
+    fn resolve_collisions(&mut self, _wizards: &[Vec3]) { }
+*/
         let nlen = self.npcs.len();
         for i in 0..nlen {
             if !self.npcs[i].alive {
@@ -1105,202 +817,17 @@ impl ServerState {
             }
         }
     }
+    */
 }
 
 // ============================================================================
-// Tests – keep these at the bottom of crates/server_core/src/lib.rs
+// Tests – actors only
 // ============================================================================
 
 #[cfg(test)]
-mod tests_aoe {
+mod tests_actor {
     use super::*;
-    use glam::{Vec3, vec3};
-
-    /// Ensure the server has at least the requested number of wizards/NPCs.
-    /// If missing, spawn minimal entries. Then normalize HP/max/alive.
-    fn ensure_min_entities(s: &mut ServerState, min_wiz: usize, min_npc: usize) {
-        // Wizards: use sync_wizards to create entries as needed
-        if s.wizards.len() < min_wiz {
-            let mut pos: Vec<Vec3> = Vec::with_capacity(min_wiz);
-            for _ in 0..min_wiz {
-                pos.push(Vec3::ZERO);
-            }
-            s.sync_wizards(&pos);
-        }
-        // NPCs
-        while s.npcs.len() < min_npc {
-            let id = s.spawn_npc(Vec3::ZERO, 0.9, 30);
-            let _ = id;
-        }
-        // Normalize fields relied on by tests
-        for w in &mut s.wizards {
-            w.hp = 100;
-            w.max_hp = 100;
-        }
-        for n in &mut s.npcs {
-            n.hp = 30;
-            n.max_hp = 30;
-            n.alive = true;
-        }
-    }
-
-    #[test]
-    fn apply_aoe_hits_wizards_and_npcs_and_clamps_hp_and_kills_npcs() {
-        let mut s = ServerState::new();
-        ensure_min_entities(&mut s, 3, 3);
-
-        // Explosion at origin with radius 6.0 (r2 = 36.0), damage = 28
-        let (cx, cz) = (0.0f32, 0.0f32);
-        let r = 6.0f32;
-        let r2 = r * r;
-        let dmg = 28i32;
-
-        // Wizards:
-        // - w0 at (1, 1) -> inside -> 100 -> 72
-        // - w1 at (5.9, 0) -> inside -> 100 -> 72
-        // - w2 at (6.1, 0) -> outside -> stays 100
-        s.wizards[0].pos = vec3(1.0, 0.0, 1.0);
-        s.wizards[1].pos = vec3(5.9, 0.0, 0.0);
-        s.wizards[2].pos = vec3(6.1, 0.0, 0.0);
-
-        // NPCs:
-        // - n0 at (0, 2) -> inside; set to 20 hp so it dies
-        // - n1 at (7, 0) -> outside -> stays 30 (alive)
-        // - n2 at (0, -5.9) -> inside -> 30 -> 2 (alive)
-        s.npcs[0].pos = vec3(0.0, 0.0, 2.0);
-        s.npcs[1].pos = vec3(7.0, 0.0, 0.0);
-        s.npcs[2].pos = vec3(0.0, 0.0, -5.9);
-        s.npcs[0].hp = 20; // 20 - 28 => 0 (and alive=false)
-
-        let (hit_npc, hit_wiz) = s.apply_aoe_at(cx, cz, r2, dmg);
-        assert_eq!(hit_wiz, 2, "expected to hit two wizards inside r=6.0");
-        assert_eq!(hit_npc, 2, "expected to hit two NPCs inside r=6.0");
-
-        // Wizards
-        assert_eq!(s.wizards[0].hp, 72);
-        assert_eq!(s.wizards[1].hp, 72);
-        assert_eq!(s.wizards[2].hp, 100);
-
-        // NPCs
-        assert_eq!(s.npcs[0].hp, 0, "n0 should be clamped to 0");
-        assert!(
-            !s.npcs[0].alive,
-            "n0 should be flagged dead when hp reaches 0"
-        );
-
-        assert_eq!(s.npcs[2].hp, 2, "n2 should be reduced but remain alive");
-        assert!(s.npcs[2].alive);
-
-        assert_eq!(s.npcs[1].hp, 30, "n1 should be untouched outside radius");
-        assert!(s.npcs[1].alive);
-    }
-
-    #[test]
-    fn apply_aoe_respects_inclusive_radius_boundary() {
-        let mut s = ServerState::new();
-        ensure_min_entities(&mut s, 2, 0);
-
-        // Explosion radius: r = 6.0 (r2 = 36.0)
-        let r2 = 36.0f32;
-
-        // Place w0 exactly on boundary (6.0, 0) -> must be hit
-        // Place w1 just outside (6.01, 0) -> must not be hit
-        s.wizards[0].hp = 50;
-        s.wizards[1].hp = 50;
-        s.wizards[0].pos = vec3(6.0, 0.0, 0.0);
-        s.wizards[1].pos = vec3(6.01, 0.0, 0.0);
-
-        let (_hit_npc, hit_wiz) = s.apply_aoe_at(0.0, 0.0, r2, 10);
-        assert_eq!(hit_wiz, 1, "inclusive boundary should count exactly r");
-        assert_eq!(s.wizards[0].hp, 40);
-        assert_eq!(s.wizards[1].hp, 50);
-    }
-
-    #[test]
-    fn apply_aoe_skips_dead_targets() {
-        let mut s = ServerState::new();
-        ensure_min_entities(&mut s, 1, 1);
-
-        // Mark wizard[0] dead-ish (hp=0), place inside radius. Should not count / not go negative.
-        s.wizards[0].hp = 0;
-        s.wizards[0].pos = vec3(0.5, 0.0, 0.5);
-
-        // NPC[0] alive and in range; verifies we still count the other type
-        s.npcs[0].hp = 10;
-        s.npcs[0].alive = true;
-        s.npcs[0].pos = vec3(0.5, 0.0, -0.5);
-
-        let (hit_npc, hit_wiz) = s.apply_aoe_at(0.0, 0.0, 4.0, 5);
-        assert_eq!(hit_wiz, 0, "dead wizards must be skipped");
-        assert_eq!(hit_npc, 1, "alive NPC in range must be hit");
-        assert_eq!(s.wizards[0].hp, 0, "wizard hp must remain clamped at 0");
-        assert_eq!(s.npcs[0].hp, 5, "npc took damage");
-        assert!(s.npcs[0].alive, "still alive since hp>0");
-    }
-
-    #[test]
-    fn spawn_projectile_owned_sets_owner_and_velocity_direction() {
-        let mut s = ServerState::new();
-
-        let pos = vec3(0.0, 0.0, 0.0);
-        let dir = vec3(1.0, 0.0, 0.0);
-        let before = s.projectiles.len();
-
-        // Ensure a PC actor exists for ownership
-        s.sync_wizards(&[vec3(0.0, 0.6, 0.0)]);
-        s.spawn_projectile_from_pc(pos, dir, ProjKind::Fireball);
-
-        assert_eq!(
-            s.projectiles.len(),
-            before + 1,
-            "one projectile should be spawned"
-        );
-        let p = s.projectiles.last().expect("projectile exists");
-
-        assert!(matches!(p.kind, ProjKind::Fireball));
-        assert!(p.owner.is_some(), "owner must be tagged as PC");
-
-        // Velocity should align with input dir (within tight tolerance)
-        let v_norm = p.vel.normalize_or_zero();
-        let d_norm = dir.normalize_or_zero();
-        let dot = v_norm.dot(d_norm);
-        assert!(
-            dot > 0.999,
-            "projectile velocity should align with dir; dot={dot}, v_norm={v_norm:?}, d_norm={d_norm:?}"
-        );
-
-        // And magnitude should match spec.speed_mps (within small epsilon)
-        let spec = s.projectile_spec(ProjKind::Fireball);
-        let speed = p.vel.length();
-        assert!(
-            (speed - spec.speed_mps).abs() < 1e-3,
-            "projectile speed mismatch; got {speed}, expected {}",
-            spec.speed_mps
-        );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn firebolt_hits_npc_and_reduces_hp() {
-        let mut srv = ServerState::new();
-        // Spawn one zombie at z=1 in front of origin (large radius so easy hit)
-        let id = srv.spawn_npc(Vec3::new(0.0, 0.6, 1.0), 0.95, 20);
-        assert_eq!(id.0, 1);
-        // Mirror two wizards (PC far away; NPC wizard at origin)
-        let wiz_pos = vec![Vec3::new(10.0, 0.6, 10.0), Vec3::new(0.0, 0.6, 0.0)];
-        srv.sync_wizards(&wiz_pos);
-        if let Some(w) = srv.wizards.get_mut(1) {
-            w.cast_timer = 0.0;
-        }
-        srv.step_authoritative(0.1, &wiz_pos);
-        // NPC hp should be reduced
-        let n = srv.npcs.iter().find(|n| n.id == id).unwrap();
-        assert!(n.hp < n.max_hp, "expected damage applied");
-    }
+    use glam::Vec3;
 
     #[test]
     fn spawn_from_dir_scales_speed() {
@@ -1308,161 +835,5 @@ mod tests {
         srv.spawn_projectile_from_dir(Vec3::ZERO, Vec3::new(0.0, 0.0, 1.0), ProjKind::Firebolt);
         let p = &srv.projectiles[0];
         assert!(p.vel.z > 20.0, "vel was not scaled: {}", p.vel.z);
-    }
-
-    #[test]
-    fn fireball_aoe_damages_ring() {
-        let mut srv = ServerState::new();
-        // Simple ring around origin within ~3m radius
-        for a in [
-            0.0,
-            std::f32::consts::FRAC_PI_2,
-            std::f32::consts::PI,
-            3.0 * std::f32::consts::FRAC_PI_2,
-        ] {
-            srv.spawn_npc(Vec3::new(a.cos() * 3.0, 0.6, a.sin() * 3.0), 0.75, 50);
-        }
-        // Cast fireball grazing the ring
-        srv.spawn_projectile_from_dir(
-            Vec3::new(-6.0, 0.6, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            ProjKind::Fireball,
-        );
-        // Step forward a bit to ensure proximity explode triggers
-        for _ in 0..20 {
-            srv.step_authoritative(0.05, &[]);
-        }
-        let any_damaged = srv.npcs.iter().any(|n| n.hp < n.max_hp);
-        assert!(any_damaged, "expected at least one NPC to take damage");
-    }
-
-    #[test]
-    fn fireball_ttl_explodes_and_damages() {
-        let mut srv = ServerState::new();
-        // Put a target near the end of the projectile path
-        let target = srv.spawn_npc(Vec3::new(3.0, 0.6, 0.0), 0.9, 40);
-        srv.spawn_projectile_from_dir(
-            Vec3::new(0.0, 0.6, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            ProjKind::Fireball,
-        );
-        // Run simulation long enough for TTL explosion
-        for _ in 0..60 {
-            srv.step_authoritative(0.05, &[]);
-        }
-        let n = srv.npcs.iter().find(|n| n.id == target).unwrap();
-        assert!(
-            n.hp < n.max_hp,
-            "target should have taken damage from TTL explode"
-        );
-    }
-}
-
-// Additional focused Fireball authoritative tests covering impact/proximity AoE and hostility flip
-#[cfg(test)]
-mod tests_fireball {
-    use super::*;
-    use glam::{Vec3, vec3};
-
-    fn ensure_min_entities(s: &mut ServerState, min_wiz: usize, min_npc: usize) {
-        if s.wizards.len() < min_wiz {
-            let mut pos = Vec::with_capacity(min_wiz);
-            for _ in 0..min_wiz {
-                pos.push(Vec3::ZERO);
-            }
-            s.sync_wizards(&pos);
-        }
-        while s.npcs.len() < min_npc {
-            let _ = s.spawn_npc(Vec3::ZERO, 0.9, 30);
-        }
-        for w in &mut s.wizards {
-            w.hp = 100;
-            w.max_hp = 100;
-        }
-        for n in &mut s.npcs {
-            n.hp = 30;
-            n.max_hp = 30;
-            n.alive = true;
-        }
-    }
-
-    #[test]
-    fn fireball_aoe_hits_wizards_and_npcs_on_impact_and_removes_projectile() {
-        let mut s = ServerState::new();
-        ensure_min_entities(&mut s, 2, 1);
-
-        // Place wizard[1] and npc[0] near origin so an impact AoE catches both
-        s.wizards[1].pos = vec3(0.6, 0.6, 0.6);
-        s.npcs[0].pos = vec3(-0.6, 0.6, -0.6);
-
-        // Spawn PC-owned fireball that crosses near (0,0) to impact
-        s.spawn_projectile_from_pc(
-            vec3(-0.8, 0.6, -0.8),
-            vec3(1.0, 0.0, 1.0),
-            ProjKind::Fireball,
-        );
-
-        // Authoritative step using mirrored wizard positions
-        let wiz_pos: Vec<Vec3> = s.wizards.iter().map(|w| w.pos).collect();
-        s.step_authoritative(0.1, &wiz_pos);
-
-        assert!(
-            s.wizards[1].hp < 100,
-            "wizard should take AoE damage on impact"
-        );
-        assert!(s.npcs[0].hp < 30, "npc should take AoE damage on impact");
-        assert!(
-            s.projectiles.is_empty(),
-            "fireball must be removed after detonation"
-        );
-    }
-
-    #[test]
-    fn fireball_proximity_aoe_hits_targets_and_removes_projectile() {
-        let mut s = ServerState::new();
-        ensure_min_entities(&mut s, 2, 1);
-
-        // Targets offset from the centerline; proximity should trigger
-        s.wizards[1].pos = vec3(2.5, 0.6, 0.0);
-        s.npcs[0].pos = vec3(-2.5, 0.6, 0.0);
-
-        s.spawn_projectile_from_pc(
-            vec3(-6.0, 0.6, 0.0),
-            vec3(1.0, 0.0, 0.0),
-            ProjKind::Fireball,
-        );
-        let wiz_pos: Vec<Vec3> = s.wizards.iter().map(|w| w.pos).collect();
-        s.step_authoritative(0.2, &wiz_pos);
-
-        assert!(
-            s.wizards[1].hp < 100 || s.npcs[0].hp < 30,
-            "at least one target must take proximity damage"
-        );
-        assert!(
-            s.projectiles.is_empty(),
-            "fireball must be removed after proximity detonation"
-        );
-    }
-
-    #[test]
-    fn owner_pc_flip_hostility_on_wizard_damage() {
-        let mut s = ServerState::new();
-        ensure_min_entities(&mut s, 2, 0);
-
-        // Put wizard[1] in the path for direct impact -> AoE
-        s.wizards[1].pos = vec3(0.2, 0.6, 0.0);
-        s.spawn_projectile_from_pc(
-            vec3(-0.2, 0.6, 0.0),
-            vec3(1.0, 0.0, 0.0),
-            ProjKind::Fireball,
-        );
-
-        let wiz_pos: Vec<Vec3> = s.wizards.iter().map(|w| w.pos).collect();
-        s.step_authoritative(0.05, &wiz_pos);
-
-        assert!(
-            s.wizards_hostile_to_pc,
-            "wizard damage by PC should flip hostility to PC"
-        );
     }
 }

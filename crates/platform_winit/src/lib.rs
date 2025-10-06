@@ -239,7 +239,11 @@ impl ApplicationHandler for App {
                                     let yaw = sgn;
                                     let ry = glam::Quat::from_rotation_y(yaw);
                                     let dir2 = (ry * d).normalize_or_zero();
-                                    srv.spawn_projectile_from_pc(p, dir2, server_core::ProjKind::MagicMissile);
+                                    srv.spawn_projectile_from_pc(
+                                        p,
+                                        dir2,
+                                        server_core::ProjKind::MagicMissile,
+                                    );
                                 }
                             }
                         }
@@ -265,26 +269,18 @@ impl ApplicationHandler for App {
                 };
                 // wizard positions from renderer
                 let wiz_pos: Vec<glam::Vec3> = s.wizard_positions();
-                let _hits = srv.step_npc_ai(dt, &wiz_pos);
+                // NPC AI now runs within authoritative step (actors-only); no separate call here.
                 server_core::systems::boss::boss_seek_and_integrate(srv, dt, &wiz_pos);
                 // Build replication messages
                 if std::env::var("RA_LOG_DEMO")
                     .map(|v| v == "1")
                     .unwrap_or(false)
                 {
-                    log::info!(
-                        "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
-                        dt,
-                        srv.npcs.len(),
-                        wiz_pos.len()
-                    );
+                    let actors = srv.actors.actors.len();
+                    log::info!("demo_server: stepping dt={:.3}s; actors={} wizards={}", dt, actors, wiz_pos.len());
                 } else {
-                    log::debug!(
-                        "demo_server: stepping dt={:.3}s; npcs={} wizards={}",
-                        dt,
-                        srv.npcs.len(),
-                        wiz_pos.len()
-                    );
+                    let actors = srv.actors.actors.len();
+                    log::debug!("demo_server: stepping dt={:.3}s; actors={} wizards={} ", dt, actors, wiz_pos.len());
                 }
                 // Send actor-centric snapshot v2 (authoritative snapshot)
                 let asnap = srv.tick_snapshot_actors(self.tick as u64);

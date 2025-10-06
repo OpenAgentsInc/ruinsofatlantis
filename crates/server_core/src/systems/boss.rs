@@ -7,10 +7,10 @@ use crate::ServerState;
 /// Set Nivita's velocity implicitly by moving her pos toward the nearest wizard.
 /// This v0 helper operates directly on position; later we can add explicit Velocity.
 pub fn boss_seek_and_integrate(state: &mut ServerState, dt: f32, wizards: &[Vec3]) {
-    let Some(id) = state.nivita_id else {
+    let Some(id) = state.nivita_actor_id else {
         return;
     };
-    let Some(n) = state.npcs.iter_mut().find(|n| n.id == id) else {
+    let Some(n) = state.actors.get_mut(id) else {
         return;
     };
     if wizards.is_empty() {
@@ -20,8 +20,8 @@ pub fn boss_seek_and_integrate(state: &mut ServerState, dt: f32, wizards: &[Vec3
     let mut best = 0usize;
     let mut best_d2 = f32::INFINITY;
     for (i, w) in wizards.iter().enumerate() {
-        let dx = w.x - n.pos.x;
-        let dz = w.z - n.pos.z;
+        let dx = w.x - n.tr.pos.x;
+        let dz = w.z - n.tr.pos.z;
         let d2 = dx * dx + dz * dz;
         if d2 < best_d2 {
             best_d2 = d2;
@@ -29,11 +29,13 @@ pub fn boss_seek_and_integrate(state: &mut ServerState, dt: f32, wizards: &[Vec3
         }
     }
     let target = wizards[best];
-    let to = Vec3::new(target.x - n.pos.x, 0.0, target.z - n.pos.z);
+    let to = Vec3::new(target.x - n.tr.pos.x, 0.0, target.z - n.tr.pos.z);
     let dist = to.length();
     if dist > 1e-4 {
-        let step = (n.speed * dt).min(dist);
-        n.pos += to.normalize() * step;
+        // Use a conservative default speed until components carry it
+        let speed = 1.2f32;
+        let step = (speed * dt).min(dist);
+        n.tr.pos += to.normalize() * step;
     }
 }
 
@@ -43,15 +45,13 @@ mod tests {
     #[test]
     fn nivita_moves_toward_target() {
         let mut s = ServerState::new();
-        let id = s
-            .spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0))
-            .expect("spawn");
-        let start = s.npcs.iter().find(|n| n.id == id).unwrap().pos;
+        let id = s.spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0)).expect("spawn");
+        let start = s.actors.get(id).unwrap().tr.pos;
         let wizards = [Vec3::new(5.0, 0.6, 0.0)];
         boss_seek_and_integrate(&mut s, 0.5, &wizards);
-        let now = s.npcs.iter().find(|n| n.id == id).unwrap().pos;
+        let now = s.actors.get(id).unwrap().tr.pos;
         assert!(now.x > start.x);
-        let max_step = s.npcs.iter().find(|n| n.id == id).unwrap().speed * 0.5 + 1e-4;
-        assert!((now.x - start.x) <= max_step);
+        let max_step = 1.2 * 0.5 + 1e-4;
+        assert!((now.x - start.x) <= max_step, "exceeded step");
     }
 }
