@@ -903,4 +903,47 @@ mod tests_actor {
         let p = &srv.projectiles[0];
         assert!(p.vel.z > 20.0, "vel was not scaled: {}", p.vel.z);
     }
+
+    #[test]
+    fn aoe_hits_wizard_and_undead_and_clamps() {
+        let mut s = ServerState::new();
+        // PC + one NPC wizard
+        s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0), Vec3::new(5.9, 0.6, 0.0)]);
+        // One undead inside radius
+        let _z = s.spawn_undead(Vec3::new(0.0, 0.6, 2.0), 0.9, 20);
+        // Centered explosion radius 6.0, damage 28
+        let hits = s.apply_aoe_at_actors(0.0, 0.0, 36.0, 28, None);
+        assert!(hits >= 2, "should hit at least wizard+undead");
+        // Check actor hp decreased for those in range
+        let mut damaged = 0;
+        for a in s.actors.iter() {
+            if (a.tr.pos.x.powi(2) + a.tr.pos.z.powi(2)) <= 36.0 && a.hp.hp < a.hp.max {
+                damaged += 1;
+            }
+        }
+        assert!(damaged >= 2);
+    }
+
+    #[test]
+    fn aoe_boundary_inclusive() {
+        let mut s = ServerState::new();
+        s.sync_wizards(&[Vec3::new(6.0, 0.6, 0.0), Vec3::new(6.01, 0.6, 0.0)]);
+        let _ = s.apply_aoe_at_actors(0.0, 0.0, 36.0, 10, None);
+        // Find actors exactly on boundary vs outside
+        let on = s.actors.iter().find(|a| (a.tr.pos.x - 6.0).abs() < 1e-3).unwrap();
+        let out = s.actors.iter().find(|a| (a.tr.pos.x - 6.01).abs() < 1e-3).unwrap();
+        assert!(on.hp.hp < on.hp.max, "boundary actor should be hit");
+        assert_eq!(out.hp.hp, out.hp.max, "outside actor should not be hit");
+    }
+
+    #[test]
+    fn aoe_skips_dead_targets_and_pc_self() {
+        let mut s = ServerState::new();
+        s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0), Vec3::new(0.5, 0.6, 0.5)]);
+        // Mark PC dead then apply AoE sourced by PC; PC should not be damaged further
+        if let Some(pc) = s.pc_actor && let Some(a) = s.actors.get_mut(pc) { a.hp.hp = 0; }
+        let src = s.pc_actor;
+        let _ = s.apply_aoe_at_actors(0.0, 0.0, 4.0, 5, src);
+        if let Some(pc) = s.pc_actor { assert_eq!(s.actors.get(pc).unwrap().hp.hp, 0); }
+    }
 }

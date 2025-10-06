@@ -102,7 +102,7 @@ Note: the old `core/` facade has been removed; crates use `data_runtime` and `si
 
 Gameplay wiring (server‑authoritative)
 - A local server (in‑process) runs NPC AI, wizard casting, projectiles, and damage.
-- The client sends input/cast commands (ClientCmd) and renders snapshots (TickSnapshot) from the server. The renderer never mutates game state.
+- The client sends input/cast commands (ClientCmd) and renders snapshots (ActorSnapshot v2) from the server. The renderer never mutates game state.
 - Health bars/HUD derive from replicated HP only.
 - Projectile tuning (speed/life/radius/damage) is server-only. Clients send intent only; the server resolves params from `data_runtime::specs::projectiles`.
   - types.rs — GPU‑POD buffer types and vertex layouts (Globals/Model/Vertex/Instance/Particles).

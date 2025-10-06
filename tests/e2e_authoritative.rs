@@ -5,7 +5,7 @@ use server_core::{ProjKind, ServerState};
 /// - Spawn a PC-owned Fireball toward an NPC wizard
 /// - Step the server once (authoritative)
 /// - Assert wizard HP drops, projectile is removed, hostility flips
-/// - Build a TickSnapshot and assert it reflects the HP drop and no Fireball remains
+/// - Build an ActorSnapshot and assert it reflects the projectile removal
 #[test]
 fn e2e_pc_fireball_damages_wizard_and_removes_projectile() {
     let mut s = ServerState::new();

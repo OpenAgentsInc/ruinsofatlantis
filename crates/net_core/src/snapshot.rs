@@ -139,7 +139,6 @@ impl SnapshotDecode for ChunkMeshDelta {
         })
     }
 }
- 
 
 // Legacy TickSnapshot removed; use ActorSnapshot v2.
 
@@ -298,7 +297,6 @@ impl SnapshotDecode for ActorSnapshot {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardRep {
     pub id: u32,
@@ -339,7 +337,6 @@ pub struct BossRep {
     pub ac: i32,
 }
 
-
 /// Minimal replicated record for a destructible instance's world AABB.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DestructibleInstance {
@@ -347,8 +344,6 @@ pub struct DestructibleInstance {
     pub world_min: [f32; 3],
     pub world_max: [f32; 3],
 }
-
-
 
 impl SnapshotEncode for DestructibleInstance {
     fn encode(&self, out: &mut Vec<u8>) {
@@ -399,7 +394,6 @@ impl SnapshotDecode for DestructibleInstance {
         })
     }
 }
-
 
 /// Minimal boss status snapshot for HUD/labels.
 #[derive(Debug, Clone, PartialEq)]
@@ -470,7 +464,6 @@ impl SnapshotDecode for BossStatusMsg {
         })
     }
 }
-
 
 /// Compact list of NPC statuses for client UI/presentation.
 #[derive(Debug, Clone, PartialEq)]
