@@ -771,7 +771,7 @@ impl Renderer {
         let total_z_mats = self.zombie_count as usize * self.zombie_joints as usize;
         self.zombie_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("zombie-palettes"),
-            size: (total_z_mats * 64) as u64,
+            size: ((total_z_mats.max(1)) * 64) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -795,7 +795,7 @@ impl Renderer {
         let total_dk_mats = self.dk_count as usize * self.dk_joints as usize;
         self.dk_palettes_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("deathknight-palettes"),
-            size: (total_dk_mats * 64) as u64,
+            size: ((total_dk_mats.max(1)) * 64) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

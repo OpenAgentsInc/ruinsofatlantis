@@ -943,7 +943,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 // Palette buffer (single instance)
                 let pc_pal_buf = device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("pc-ubc-palettes"),
-                    size: (joints as usize * 64) as u64,
+                    size: ((joints.max(1) as usize) * 64) as u64,
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
@@ -1039,7 +1039,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let total_z_mats = zombie_count as usize * zombie_joints as usize;
     let zombie_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("zombie-palettes"),
-        size: (total_z_mats * 64) as u64,
+        size: ((total_z_mats.max(1)) * 64) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1068,7 +1068,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let total_dk_mats = dk_count as usize * dk_joints as usize;
     let dk_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("deathknight-palettes"),
-        size: (total_dk_mats * 64) as u64,
+        size: ((total_dk_mats.max(1)) * 64) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
