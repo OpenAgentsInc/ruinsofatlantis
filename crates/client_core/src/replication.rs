@@ -16,6 +16,7 @@ pub struct ReplicationBuffer {
     pub updated_chunks: usize,
     pending_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
     pub boss_status: Option<BossStatus>,
+    pub wizards: Vec<WizardView>,
     pub npcs: Vec<NpcView>,
     pub projectiles: Vec<ProjectileView>,
 }
@@ -40,6 +41,17 @@ impl ReplicationBuffer {
         // 0) Prefer new consolidated TickSnapshot, which includes boss + npcs.
         let mut slice_ts: &[u8] = payload;
         if let Ok(ts) = net_core::snapshot::TickSnapshot::decode(&mut slice_ts) {
+            self.wizards.clear();
+            for w in ts.wizards {
+                self.wizards.push(WizardView {
+                    id: w.id,
+                    kind: w.kind,
+                    pos: glam::vec3(w.pos[0], w.pos[1], w.pos[2]),
+                    yaw: w.yaw,
+                    hp: w.hp,
+                    max: w.max,
+                });
+            }
             self.npcs.clear();
             for n in ts.npcs {
                 self.npcs.push(NpcView {
@@ -101,6 +113,7 @@ impl ReplicationBuffer {
                 }
                 true
             } else {
+                // Legacy BossStatusMsg used without wizard list; leave wizards unchanged.
                 let mut bs_slice: &[u8] = payload; // reset for boss status
                 if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut bs_slice) {
                     self.boss_status = Some(BossStatus {
@@ -139,6 +152,16 @@ pub struct NpcView {
     pub alive: bool,
     pub attack_anim: f32,
     pub yaw: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WizardView {
+    pub id: u32,
+    pub kind: u8,
+    pub pos: glam::Vec3,
+    pub yaw: f32,
+    pub hp: i32,
+    pub max: i32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
