@@ -75,6 +75,7 @@ impl Schedule {
         ctx.spatial.rebuild(srv);
         effects_tick(srv, ctx);
         ai_move_hostiles_toward_wizards(srv, ctx);
+        separate_undead(srv);
         melee_apply_when_contact(srv, ctx);
         homing_acquire_targets(srv, ctx);
         homing_update(srv, ctx);
@@ -537,6 +538,45 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
                 {
                     m.ready_in_s = cd_ready;
                 }
+            }
+        }
+    }
+}
+
+/// Simple separation pass to keep Undead from stacking on the same spot.
+/// O(N^2) over Undead; acceptable for demo sizes. Pushes each pair apart equally.
+fn separate_undead(srv: &mut ServerState) {
+    // Collect indices of alive undead (including Boss under Undead team)
+    let ids: Vec<ActorId> = srv
+        .ecs
+        .iter()
+        .filter(|a| a.hp.alive() && a.team == crate::actor::Team::Undead)
+        .map(|a| a.id)
+        .collect();
+    let n = ids.len();
+    if n < 2 { return; }
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let (ai, aj) = (ids[i], ids[j]);
+            let (pi, ri) = if let Some(a) = srv.ecs.get(ai) {
+                (a.tr.pos, a.tr.radius)
+            } else { continue };
+            let (pj, rj) = if let Some(a) = srv.ecs.get(aj) {
+                (a.tr.pos, a.tr.radius)
+            } else { continue };
+            let to = pj - pi;
+            let min_d = ri + rj + 0.1; // pad
+            let d = to.length();
+            if d < 1e-6 { // same position; nudge along X
+                if let Some(a) = srv.ecs.get_mut(ai) { a.tr.pos.x -= min_d * 0.5; }
+                if let Some(a) = srv.ecs.get_mut(aj) { a.tr.pos.x += min_d * 0.5; }
+                continue;
+            }
+            if d < min_d {
+                let push = (min_d - d) * 0.5;
+                let dir = to / d.max(1e-6);
+                if let Some(a) = srv.ecs.get_mut(ai) { a.tr.pos -= dir * push; }
+                if let Some(a) = srv.ecs.get_mut(aj) { a.tr.pos += dir * push; }
             }
         }
     }
