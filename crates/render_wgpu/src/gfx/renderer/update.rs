@@ -2,31 +2,23 @@
 
 // use Debris via fully-qualified path
 use crate::gfx::Renderer;
-#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+#[cfg(feature = "vox_onepath_demo")]
 use crate::gfx::chunkcol;
 use crate::gfx::types::{Instance, InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
-#[cfg(feature = "legacy_client_combat")]
-use crate::server_ext::CollideProjectiles;
-#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+#[cfg(feature = "vox_onepath_demo")]
 use glam::DVec3;
 use ra_assets::types::AnimClip;
 use rand::Rng as _;
 // use destructible via fully-qualified path
-#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+#[cfg(feature = "vox_onepath_demo")]
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};
-#[cfg(all(
-    any(feature = "legacy_client_carve", feature = "vox_onepath_demo"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "vox_onepath_demo", not(target_arch = "wasm32")))]
 #[allow(unused_imports)]
 use std::time::Instant;
-#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+#[cfg(feature = "vox_onepath_demo")]
 use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
-#[cfg(all(
-    any(feature = "legacy_client_carve", feature = "vox_onepath_demo"),
-    target_arch = "wasm32"
-))]
+#[cfg(all(feature = "vox_onepath_demo", target_arch = "wasm32"))]
 use web_time::Instant;
 // device buffer init now handled via voxel_upload helper
 
@@ -41,10 +33,7 @@ macro_rules! destruct_log {
 
 // Tiny deterministic RNG for demo variations (no external deps)
 #[inline]
-#[cfg_attr(
-    not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")),
-    allow(dead_code)
-)]
+#[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
 fn splitmix64(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
@@ -54,20 +43,14 @@ fn splitmix64(state: &mut u64) -> u64 {
 }
 
 #[inline]
-#[cfg_attr(
-    not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")),
-    allow(dead_code)
-)]
+#[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
 fn rand01(s: &mut u64) -> f32 {
     let r = splitmix64(s);
     ((r >> 40) as u32) as f32 / (1u32 << 24) as f32
 }
 
 #[inline]
-#[cfg_attr(
-    not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")),
-    allow(dead_code)
-)]
+#[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -390,13 +373,13 @@ impl Renderer {
         best
     }
 
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn get_or_spawn_proxy(&mut self, did: crate::gfx::DestructibleId) -> &mut crate::gfx::VoxProxy {
         // For now, reuse ruins-specific spawner; generic builder can be added later
         self.get_or_spawn_ruin_proxy(did.0)
     }
 
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     #[allow(clippy::too_many_arguments)]
     fn explode_fireball_against_destructible(
         &mut self,
@@ -529,14 +512,14 @@ impl Renderer {
             );
         }
         let before = self.voxel_meshes.len();
-        #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+        #[cfg(feature = "vox_onepath_demo")]
         self.process_all_ruin_queues();
         let after = self.voxel_meshes.len();
         log::info!("[destruct] mesh upload: chunks {} → {}", before, after);
     }
 
-    #[cfg(feature = "legacy_client_carve")]
-    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+    #[cfg(feature = "vox_onepath_demo")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn build_ruin_proxy_from_aabb(
         &self,
         ruin_idx: usize,
@@ -614,8 +597,8 @@ impl Renderer {
     }
 
     // Build a proxy using the actual ruins mesh triangles transformed by the instance model
-    #[cfg(feature = "legacy_client_carve")]
-    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+    #[cfg(feature = "vox_onepath_demo")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn build_ruin_proxy_from_mesh(&self, ruin_idx: usize) -> crate::gfx::RuinVox {
         // Fetch CPU triangles for ruins; fallback to AABB solid box if unavailable
         if self.destruct_meshes_cpu.is_empty() {
@@ -822,8 +805,8 @@ impl Renderer {
         }
     }
 
-    #[cfg(feature = "legacy_client_carve")]
-    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+    #[cfg(feature = "vox_onepath_demo")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn get_or_spawn_ruin_proxy(&mut self, ruin_idx: usize) -> &mut crate::gfx::RuinVox {
         if !self
             .destr_voxels
@@ -888,8 +871,8 @@ impl Renderer {
             .unwrap()
     }
 
-    #[cfg(feature = "legacy_client_carve")]
-    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+    #[cfg(feature = "vox_onepath_demo")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn process_one_ruin_vox(&mut self, ruin_idx: usize, budget: usize) {
         if budget == 0 {
             return;
@@ -948,8 +931,8 @@ impl Renderer {
         );
     }
 
-    #[cfg(feature = "legacy_client_carve")]
-    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+    #[cfg(feature = "vox_onepath_demo")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn process_all_ruin_queues(&mut self) {
         if self.destr_voxels.is_empty() {
             return;
@@ -1022,7 +1005,7 @@ impl Renderer {
     ) {
         // visuals + damage
         self.explode_fireball_at(owner, p1, radius, damage);
-        #[cfg(feature = "legacy_client_carve")]
+        #[cfg(feature = "vox_onepath_demo")]
         {
             // Voxel impact along the shot segment
             let blast_r = radius * 0.25;
@@ -1129,7 +1112,7 @@ impl Renderer {
         }
     }
 
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     #[allow(dead_code)]
     fn explode_fireball_against_ruin(
         &mut self,
@@ -1237,8 +1220,8 @@ impl Renderer {
         }
     }
 
-    #[cfg(feature = "legacy_client_carve")]
-    #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+    #[cfg(feature = "vox_onepath_demo")]
+    #[cfg(feature = "vox_onepath_demo")]
     fn hide_ruins_instance(&mut self, index: usize) {
         if index >= self.ruins_instances_cpu.len() {
             return;
@@ -1750,7 +1733,7 @@ impl Renderer {
                                 target_dist = (pc - wpos).length();
                             }
                         } else {
-                            #[cfg(feature = "legacy_client_ai")]
+                            #[cfg(any())]
                             {
                                 let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
                                 for n in &self.server.npcs {
@@ -1876,7 +1859,7 @@ impl Renderer {
                     let p1 = pr.pos;
                     if let Some((_did, _t)) = self.find_destructible_hit(p0, p1) {
                         destruct_log!("[destruct] hit did={:?}", _did);
-                        #[cfg(feature = "legacy_client_carve")]
+                        #[cfg(feature = "vox_onepath_demo")]
                         {
                             self.explode_fireball_against_destructible(
                                 pr.owner_wizard,
@@ -1890,7 +1873,7 @@ impl Renderer {
                             self.projectiles.swap_remove(i);
                             continue;
                         }
-                        #[cfg(not(feature = "legacy_client_carve"))]
+                        #[cfg(not(feature = "vox_onepath_demo"))]
                         {
                             // Default: still show explosion visuals on destructible hit
                             self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
@@ -1898,12 +1881,12 @@ impl Renderer {
                             continue;
                         }
                     }
-                    #[cfg(feature = "legacy_client_ai")]
+                    #[cfg(any())]
                     let mut exploded = false;
-                    #[cfg(not(feature = "legacy_client_ai"))]
+                    #[cfg(not(any()))]
                     let exploded = false;
                     // collide against any alive NPC cylinder in XZ
-                    #[cfg(feature = "legacy_client_ai")]
+                    #[cfg(any())]
                     if !self.server.npcs.is_empty() {
                         for n in &self.server.npcs {
                             if !n.alive {
@@ -1955,7 +1938,7 @@ impl Renderer {
             }
         }
         // 2.55) Server-side collision vs NPCs (normal single-hit projectiles)
-        #[cfg(feature = "legacy_client_combat")]
+        #[cfg(any())]
         if !self.projectiles.is_empty() && !self.server.npcs.is_empty() {
             let damage = 10; // TODO: integrate with spell spec dice
             let hits = self
@@ -2073,7 +2056,7 @@ impl Renderer {
         }
 
         // 2.6) Collide with wizards/PC (friendly fire on) — legacy/demo only
-        #[cfg(feature = "legacy_client_combat")]
+        #[cfg(any())]
         if !self.projectiles.is_empty() {
             self.collide_with_wizards(dt, 10);
         }
@@ -2177,7 +2160,7 @@ impl Renderer {
         }
     }
 
-    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
+    #[allow(dead_code)]
     pub(crate) fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
         let mut i = 0usize;
         while i < self.projectiles.len() {
@@ -2271,13 +2254,13 @@ impl Renderer {
 
         // 2.7) Process voxel chunk work budget per frame
         // Multi‑proxy: process all ruin queues, then the single‑grid demo if present
-        #[cfg(feature = "legacy_client_carve")]
+        #[cfg(feature = "vox_onepath_demo")]
         self.process_all_ruin_queues();
         #[cfg(feature = "vox_onepath_demo")]
         self.process_voxel_queues();
     }
 
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     pub(crate) fn try_voxel_impact(&mut self, p0: glam::Vec3, p1: glam::Vec3) {
         let is_demo = self.is_vox_onepath();
         let Some(grid) = self.voxel_grid.as_mut() else {
@@ -2542,11 +2525,11 @@ impl Renderer {
         let g = glam::Vec3::new(0.0, -9.8, 0.0);
         let mut instances: Vec<Instance> = Vec::with_capacity(self.debris.len());
         let vsize = {
-            #[cfg(feature = "legacy_client_carve")]
+            #[cfg(feature = "vox_onepath_demo")]
             {
                 self.destruct_cfg.voxel_size_m.0 as f32
             }
-            #[cfg(not(feature = "legacy_client_carve"))]
+            #[cfg(not(feature = "vox_onepath_demo"))]
             {
                 0.25f32
             }
@@ -2700,7 +2683,7 @@ impl Renderer {
             });
         }
         // Damage NPCs in radius — legacy/demo only; default build uses server-authoritative HP
-        #[cfg(feature = "legacy_client_combat")]
+        #[cfg(any())]
         {
             let r2 = radius * radius;
             // Snapshot current replicated NPCs to avoid borrow conflicts
@@ -2752,7 +2735,7 @@ impl Renderer {
             }
         }
         // In default builds, still show damage floaters for any replicated NPCs + Wizards inside AoE
-        #[cfg(not(feature = "legacy_client_combat"))]
+        #[cfg(not(any()))]
         {
             let r2 = radius * radius;
             // NPCs (replicated)
@@ -2783,7 +2766,7 @@ impl Renderer {
             }
         }
         // Always show damage floaters for replicated NPCs inside AoE (visual-only)
-        #[cfg(not(feature = "legacy_client_combat"))]
+        #[cfg(not(any()))]
         {
             let r2 = radius * radius;
             // snapshot to avoid borrow conflicts
@@ -2807,7 +2790,7 @@ impl Renderer {
             }
         }
         // Handle DK first for despawn behavior
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         if let Some(dk_id) = self.dk_id
             && let Some(n) = self.server.npcs.iter_mut().find(|n| n.id.0 == dk_id)
             && n.alive
@@ -2907,75 +2890,9 @@ impl Renderer {
                 }
             }
         }
-        // Generic NPCs + zombies
-        #[cfg(feature = "legacy_client_ai")]
-        let mut k = 0usize;
-        #[cfg(feature = "legacy_client_ai")]
-        while k < self.server.npcs.len() {
-            let id = self.server.npcs[k].id.0;
-            if !self.server.npcs[k].alive {
-                k += 1;
-                continue;
-            }
-            let dx = self.server.npcs[k].pos.x - center.x;
-            let dz = self.server.npcs[k].pos.z - center.z;
-            if dx * dx + dz * dz <= r2 {
-                let before = self.server.npcs[k].hp;
-                self.server.npcs[k].hp = (self.server.npcs[k].hp - damage).max(0);
-                let fatal = self.server.npcs[k].hp == 0;
-                if fatal {
-                    self.server.npcs[k].alive = false;
-                }
-                // UI floater
-                if let Some(idx) = self.zombie_ids.iter().position(|nid| *nid == id) {
-                    // Spawn above zombie head using its model
-                    let m = self
-                        .zombie_models
-                        .get(idx)
-                        .copied()
-                        .unwrap_or(glam::Mat4::IDENTITY);
-                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-                    self.damage.spawn(head.truncate(), damage);
-                    if fatal {
-                        self.zombie_ids.swap_remove(idx);
-                        self.zombie_models.swap_remove(idx);
-                        if (idx as u32) < self.zombie_count {
-                            self.zombie_instances_cpu.swap_remove(idx);
-                            self.zombie_count -= 1;
-                            for (i, inst) in self.zombie_instances_cpu.iter_mut().enumerate() {
-                                inst.palette_base = (i as u32) * self.zombie_joints;
-                            }
-                            let bytes: &[u8] = bytemuck::cast_slice(&self.zombie_instances_cpu);
-                            self.queue.write_buffer(&self.zombie_instances, 0, bytes);
-                        }
-                    }
-                } else {
-                    let (hgt, _n) = crate::gfx::terrain::height_at(
-                        &self.terrain_cpu,
-                        self.server.npcs[k].pos.x,
-                        self.server.npcs[k].pos.z,
-                    );
-                    self.damage.spawn(
-                        glam::vec3(
-                            self.server.npcs[k].pos.x,
-                            hgt + self.server.npcs[k].radius + 0.9,
-                            self.server.npcs[k].pos.z,
-                        ),
-                        damage,
-                    );
-                }
-                let _ = before;
-            }
-            k += 1;
-        }
-        // Damage wizards (including PC) in radius; trigger aggro if player-owned explosion hits any wizard
-        #[cfg(feature = "legacy_client_combat")]
-        let mut hit_any_wizard = false;
-        #[cfg(feature = "legacy_client_combat")]
-        let mut to_remove: Vec<usize> = Vec::new();
-        #[cfg(feature = "legacy_client_combat")]
-        let r2 = radius * radius;
-        #[cfg(feature = "legacy_client_combat")]
+        // Legacy server-NPC AoE path removed
+        // Client-combat wizard damage removed (server-authoritative)
+        #[cfg(any())]
         for j in 0..(self.wizard_count as usize) {
             let hp = self.wizard_hp.get(j).copied().unwrap_or(self.wizard_hp_max);
             if hp <= 0 {
@@ -3002,32 +2919,7 @@ impl Renderer {
             }
         }
         // Remove dead wizards after the loop (descending indices to preserve validity)
-        #[cfg(feature = "legacy_client_combat")]
-        if !to_remove.is_empty() {
-            to_remove.sort_unstable_by(|a, b| b.cmp(a));
-            for idx in to_remove {
-                if idx < self.wizard_count as usize {
-                    self.remove_wizard_at(idx);
-                }
-            }
-        }
-        #[cfg(feature = "legacy_client_combat")]
-        if hit_any_wizard {
-            self.wizards_hostile_to_pc = true;
-            // Ensure NPC wizards resume casting loop even if all monsters are dead
-            for i in 0..(self.wizard_count as usize) {
-                if i == self.pc_index {
-                    continue;
-                }
-                if self.wizard_hp.get(i).copied().unwrap_or(0) <= 0 {
-                    continue;
-                }
-                if self.wizard_anim_index[i] != 0 {
-                    self.wizard_anim_index[i] = 0;
-                    self.wizard_last_phase[i] = 0.0;
-                }
-            }
-        }
+        // client-combat wizard damage/aggro omitted
     }
 
     pub(crate) fn right_hand_world(&self, clip: &AnimClip, phase: f32) -> Option<glam::Vec3> {
@@ -3065,7 +2957,7 @@ impl Renderer {
     fn seed_voxel_chunk_colliders(&mut self, _grid: &voxel_proxy::VoxelGrid) {}
 }
 
-#[cfg(not(feature = "legacy_client_carve"))]
+#[cfg(not(feature = "vox_onepath_demo"))]
 impl Renderer {
     pub(crate) fn try_voxel_impact(&mut self, _p0: glam::Vec3, _p1: glam::Vec3) {}
 }

@@ -340,13 +340,13 @@ pub struct Renderer {
     projectiles: Vec<Projectile>,
     particles: Vec<Particle>,
     // Client-side damage overlay for replicated NPCs (id -> hp) — legacy/demo only
-    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
+    #[allow(dead_code)]
     npc_hp_overlay: std::collections::HashMap<u32, i32>,
     // Client-side damage overlay cache for replicated wizards (id -> hp)
     #[allow(dead_code)]
     wiz_hp_overlay: std::collections::HashMap<u32, i32>,
     // Client-side melee cooldowns per replicated zombie (seconds until next allowed hit)
-    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
+    #[allow(dead_code)]
     zombie_melee_cd: std::collections::HashMap<u32, f32>,
 
     // Data-driven spec
@@ -411,20 +411,14 @@ pub struct Renderer {
     debris_ib: wgpu::Buffer,
     debris_index_count: u32,
     debris_instances: wgpu::Buffer,
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     debris_capacity: u32,
     debris_count: u32,
     debris: Vec<Debris>,
     debris_model_bg: wgpu::BindGroup,
 
     // Destructibles registry (CPU mesh + instances)
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     destruct_meshes_cpu: Vec<DestructMeshCpu>,
     #[allow(dead_code)]
     destruct_instances: Vec<DestructInstance>,
@@ -436,16 +430,10 @@ pub struct Renderer {
     boss_status_next_emit: f32,
 
     // Demo helpers
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     #[allow(dead_code)]
     voxel_grid_initial: Option<VoxelGrid>,
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     recent_impacts: Vec<(glam::DVec3, f64)>,
     demo_hint_until: Option<f32>,
 
@@ -529,7 +517,7 @@ pub struct DestructInstance {
 // Per‑destructible voxel proxy container
 pub struct VoxProxy {
     pub grid: voxel_proxy::VoxelGrid,
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     pub chunk_queue: server_core::destructible::queue::ChunkQueue,
     pub queue_len: usize,
     pub colliders: Vec<chunkcol::StaticChunk>,
@@ -3350,7 +3338,7 @@ impl Renderer {
         self.sorc_prev_pos = prev_pos;
 
         // If server has a Nivita status, follow it (server-authoritative).
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         if let Some(status) = self.server.nivita_status() {
             let pos = status.pos;
             // Face nearest wizard for better presentation
@@ -3413,9 +3401,9 @@ impl Renderer {
         }
     }
 
-    #[cfg(feature = "legacy_client_ai")]
+    #[cfg(any())]
     fn update_deathknight_from_server(&mut self) {
-        #[cfg(not(feature = "legacy_client_ai"))]
+        #[cfg(any())]
         {
             return;
         }
@@ -3427,7 +3415,7 @@ impl Renderer {
         } else {
             return;
         };
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         let npc = if let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id) {
             n
         } else {
@@ -3472,12 +3460,12 @@ impl Renderer {
         }
     }
 
-    #[cfg(feature = "legacy_client_ai")]
+    #[cfg(any())]
     fn update_zombies_from_server(&mut self) {
         // Build map from id -> pos
         use std::collections::HashMap;
         let mut pos_map: HashMap<u32, glam::Vec3> = HashMap::new();
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         for n in &self.server.npcs {
             pos_map.insert(n.id.0, n.pos);
         }

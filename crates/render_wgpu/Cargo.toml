@@ -12,9 +12,6 @@ required-features = ["vox_onepath_demo"]
 default = []
 vox_onepath_demo = ["dep:server_core"]
 destruct_debug = []
-legacy_client_carve = []
-legacy_client_ai = []
-legacy_client_combat = []
 
 [dependencies]
 ab_glyph = "0.2.31"

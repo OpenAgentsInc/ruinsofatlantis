@@ -849,12 +849,13 @@ This document tracks today’s hardening toward an ECS/server‑authority‑only
 ## Next Up (execution plan)
 
 1) Remove legacy client‑side AI/combat/carve code (hard cut)
-   - Delete all `#[cfg(feature = "legacy_client_*" )]` blocks in:
-     - `crates/render_wgpu/src/gfx/mod.rs`
-     - `crates/render_wgpu/src/gfx/renderer/init.rs`
-     - `crates/render_wgpu/src/gfx/renderer/update.rs`
-     - `crates/render_wgpu/src/gfx/renderer/render.rs`
-   - Add a CI guard in `xtask` to fail builds if `git grep -n "legacy_client_"` returns anything.
+   - Default render/update paths no longer call or depend on legacy server code; HUD/bars/nameplates are replication‑only. Done in:
+     - `crates/render_wgpu/src/gfx/renderer/render.rs` (deleted all legacy fallbacks)
+     - `crates/render_wgpu/src/gfx/renderer/init.rs` (zombie instances always non‑server path; destructible gating switched to `vox_onepath_demo`)
+     - `crates/render_wgpu/src/gfx/zombies.rs` (single non‑server build_instances)
+     - `crates/render_wgpu/src/gfx/npcs.rs` (removed client‑spawn/server field)
+     - `crates/render_wgpu/src/gfx/mod.rs` (no legacy calls in active paths)
+   - Next (step 2): remove the `legacy_client_*` feature flags and add a CI grep guard.
 
 2) Keep replication v3 only end‑to‑end
    - Platform already sends v3 deltas; client is v3‑only now. Remove any stale v2 references/comments.

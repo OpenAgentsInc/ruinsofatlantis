@@ -1811,7 +1811,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         rmb_down: false,
         last_cursor_pos: None,
         screenshot_start: None,
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         server,
         wizard_hp: vec![100; scene_build.wizard_count as usize],
         wizard_hp_max: 100,
@@ -1947,7 +1947,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Vox sandbox: remove mobs/boss for a clean destructible demo
     #[cfg(feature = "vox_onepath_demo")]
     if renderer.destruct_cfg.vox_sandbox {
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         {
             renderer.server.npcs.clear();
         }

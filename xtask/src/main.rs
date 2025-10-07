@@ -48,6 +48,7 @@ fn ci() -> Result<()> {
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
     layering_guard()?;
     wgsl_validate()?;
+    legacy_flags_guard()?;
     cargo_deny()?;
     // Build packs so golden tests can read outputs
     build_packs()?;
@@ -65,8 +66,8 @@ fn ci() -> Result<()> {
         "warnings",
     ])?;
     cargo(&["test", "-p", "render_wgpu", "--no-default-features"])?;
-    // Feature combo: vox_onepath_demo + legacy_client_carve + destruct_debug
-    let feat = "vox_onepath_demo,legacy_client_carve,destruct_debug";
+    // Feature combo: vox_onepath_demo + destruct_debug
+    let feat = "vox_onepath_demo,destruct_debug";
     if std::env::var("RA_CHECK_RENDER_FEATURE_COMBO")
         .map(|v| v == "1")
         .unwrap_or(false)
@@ -105,6 +106,23 @@ fn ci() -> Result<()> {
         eprintln!(
             "xtask: skipping render_wgpu feature-combo checks (set RA_CHECK_RENDER_FEATURE_COMBO=1 to enable)"
         );
+    }
+    Ok(())
+}
+
+fn legacy_flags_guard() -> Result<()> {
+    // Fail if legacy_client_* appears in renderer code (sweep complete)
+    let output = std::process::Command::new("rg")
+        .args([
+            "-n",
+            "legacy_client_",
+            "crates/render_wgpu/src",
+        ])
+        .output()
+        .ok();
+    if let Some(out) = output && !out.stdout.is_empty() {
+        let s = String::from_utf8_lossy(&out.stdout);
+        bail!("legacy flags found in render_wgpu/src:\n{}", s);
     }
     Ok(())
 }

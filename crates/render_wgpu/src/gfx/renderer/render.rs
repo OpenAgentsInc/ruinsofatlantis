@@ -584,7 +584,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 wiz_pos.push(glam::vec3(c[12], c[13], c[14]));
             }
         }
-        #[cfg(feature = "legacy_client_ai")]
+        #[cfg(any())]
         for (widx, dmg) in r.server.step_npc_ai(dt, &wiz_pos) {
             if let Some(hp) = r.wizard_hp.get_mut(widx) {
                 let before = *hp;
@@ -960,10 +960,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Bars for wizards
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         for (i, m) in r.wizard_models.iter().enumerate() {
-            #[cfg(feature = "legacy_client_carve")]
-            if r.destruct_cfg.hide_wizards && i != r.pc_index {
-                continue;
-            }
+            // vox_onepath_demo only hides wizards when sandboxing is enabled
             let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
             let frac = (r.wizard_hp.get(i).copied().unwrap_or(r.wizard_hp_max) as f32)
                 / (r.wizard_hp_max as f32);
@@ -1363,7 +1360,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     bs.name, bs.hp, bs.max, bs.ac
                 ));
             } else {
-                #[cfg(feature = "legacy_client_ai")]
+                #[cfg(any())]
                 if let Some(st) = r.server.nivita_status() {
                     boss_line = Some(format!(
                         "{} — HP {}/{}  AC {}",
@@ -1449,7 +1446,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, &line, 4);
             } else {
-                #[cfg(feature = "legacy_client_ai")]
+                #[cfg(any())]
                 if let Some(st) = r.server.nivita_status() {
                     let line = format!("Boss: {}  HP {}/{}  AC {}", st.name, st.hp, st.max, st.ac);
                     r.hud
