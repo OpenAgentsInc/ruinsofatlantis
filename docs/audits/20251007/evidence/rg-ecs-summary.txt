@@ -1,0 +1,27 @@
+Search highlights (ripgrep)
+
+ActorStore present
+- crates/server_core/src/actor.rs:58:pub struct ActorStore {
+
+Server ECS world and schedule
+- crates/server_core/src/ecs/mod.rs:15:mod world;
+- crates/server_core/src/ecs/mod.rs:16:pub use world::*;
+- crates/server_core/src/ecs/mod.rs:17:pub mod schedule;
+- crates/server_core/src/ecs/schedule.rs:39:impl Schedule {
+
+ServerState + sync_wizards bridge
+- crates/server_core/src/lib.rs:104:pub struct ServerState {
+- crates/server_core/src/lib.rs:168:pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) {
+
+Spatial grid + projectile broad‑phase
+- crates/server_core/src/ecs/schedule.rs:41-53 (grid rebuild)
+- crates/server_core/src/ecs/schedule.rs:171-238 (projectile collide/explode)
+- crates/server_core/src/ecs/schedule.rs:323-364 (grid impl)
+
+Renderer legacy features
+- crates/render_wgpu/Cargo.toml: legacy_client_ai, legacy_client_combat, legacy_client_carve
+- crates/render_wgpu/src/gfx/renderer/update.rs:2035-2040 (legacy collide)
+
+Client legacy decoders
+- crates/client_core/src/replication.rs:162-180 (NpcListMsg/BossStatusMsg)
+

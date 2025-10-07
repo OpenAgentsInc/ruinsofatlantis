@@ -24,10 +24,8 @@ fn e2e_pc_fireball_damages_wizard_and_removes_projectile() {
     s.step_authoritative(0.1, &wiz_pos);
 
     // Fireball should detonate and be removed
-    assert!(
-        s.projectiles.is_empty(),
-        "Fireball must be removed after detonation"
-    );
+    let no_proj = s.ecs.iter().all(|c| c.projectile.is_none());
+    assert!(no_proj, "Fireball must be removed after detonation");
     // (Damage is applied actor-side; validated elsewhere. Here we only assert projectile removal.)
 
     // Snapshot reflects HP drop and carries current state

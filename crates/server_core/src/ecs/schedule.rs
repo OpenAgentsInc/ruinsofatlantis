@@ -8,6 +8,7 @@ use glam::{Vec2, Vec3};
 
 use crate::actor::{ActorId, ActorKind, Team};
 use crate::ServerState;
+use crate::ecs::geom::segment_hits_circle_xz;
 
 #[derive(Copy, Clone, Debug)]
 pub struct DamageEvent {
@@ -30,8 +31,8 @@ pub struct Ctx {
     pub time_s: f32,
     pub dmg: Vec<DamageEvent>,
     pub boom: Vec<ExplodeEvent>,
-    pub remove_proj_ids: Vec<u32>,
     pub spatial: SpatialGrid,
+    pub cmd: crate::ecs::world::CmdBuf,
 }
 
 pub struct Schedule;
@@ -42,14 +43,16 @@ impl Schedule {
         ctx.spatial.rebuild(srv);
         // Boss movement (keep behavior parity for now)
         crate::systems::boss::boss_seek_and_integrate(srv, ctx.dt, wizard_positions);
+        ingest_projectile_spawns(srv, ctx);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
         melee_apply_when_contact(srv, ctx);
-        projectile_integrate(srv, ctx);
-        projectile_collision(srv, ctx);
+        projectile_integrate_ecs(srv, ctx);
+        projectile_collision_ecs(srv, ctx);
         aoe_apply_explosions(srv, ctx);
         faction_flip_on_pc_hits_wizards(srv, ctx);
         apply_damage_to_ecs(srv, ctx);
         cleanup(srv, ctx);
+        srv.ecs.apply_cmds(&mut ctx.cmd);
     }
 }
 
@@ -60,6 +63,32 @@ fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
         .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
         .map(|a| (a.id, a.tr.pos, a.tr.radius))
         .collect()
+}
+
+fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
+    if srv.pending_projectiles.is_empty() { return; }
+    let pending: Vec<_> = srv.pending_projectiles.drain(..).collect();
+    for cmd in pending {
+        let spec = srv.projectile_spec(cmd.kind);
+        let v = cmd.dir.normalize_or_zero() * spec.speed_mps;
+        let yaw = cmd.dir.x.atan2(cmd.dir.z);
+        let comps = crate::ecs::world::Components {
+            id: crate::actor::ActorId(0),
+            kind: crate::actor::ActorKind::Wizard, // unused for projectile
+            team: crate::actor::Team::Neutral,
+            tr: crate::actor::Transform { pos: cmd.pos, yaw, radius: 0.1 },
+            hp: crate::actor::Health { hp: 1, max: 1 },
+            move_speed: None,
+            aggro: None,
+            attack: None,
+            melee: None,
+            projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
+            velocity: Some(crate::ecs::world::Velocity { v }),
+            owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
+            homing: None,
+        };
+        ctx.cmd.spawns.push(comps);
+    }
 }
 
 fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[Vec3]) {
@@ -165,52 +194,49 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
     }
 }
 
-fn projectile_integrate(srv: &mut ServerState, ctx: &mut Ctx) {
-    // Precompute Fireball radius^2 to avoid borrowing conflicts
-    let fireball_r2 = {
-        let s = srv.projectile_spec(crate::ProjKind::Fireball);
-        (s.aoe_radius_m * s.aoe_radius_m).max(0.0)
-    };
-    for p in &mut srv.projectiles {
-        p.pos += p.vel * ctx.dt;
-        p.age += ctx.dt;
-        if p.age >= p.life {
-            if matches!(p.kind, crate::ProjKind::Fireball) {
-                ctx.boom.push(ExplodeEvent {
-                    center_xz: Vec2::new(p.pos.x, p.pos.z),
-                    r2: fireball_r2,
-                    src: p.owner,
-                });
+fn projectile_integrate_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
+    let fb_aoe_r2 = { let s = srv.projectile_spec(crate::ProjKind::Fireball); (s.aoe_radius_m * s.aoe_radius_m).max(0.0) };
+    for c in srv.ecs.iter_mut() {
+        if let (Some(proj), Some(vel)) = (c.projectile.as_mut(), c.velocity.as_ref()) {
+            c.tr.pos += vel.v * ctx.dt;
+            proj.age_s += ctx.dt;
+            if proj.age_s >= proj.ttl_s {
+                if matches!(proj.kind, crate::ProjKind::Fireball) {
+                    ctx.boom.push(ExplodeEvent { center_xz: Vec2::new(c.tr.pos.x, c.tr.pos.z), r2: fb_aoe_r2, src: c.owner.map(|o| o.id) });
+                }
+                ctx.cmd.despawns.push(c.id);
             }
-            ctx.remove_proj_ids.push(p.id);
         }
     }
 }
 
-fn projectile_collision(srv: &mut ServerState, ctx: &mut Ctx) {
+fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     // copy list of ids to iterate without borrow issues
     let fireball_r2 = {
         let s = srv.projectile_spec(crate::ProjKind::Fireball);
         (s.aoe_radius_m * s.aoe_radius_m).max(0.0)
     };
-    let ids: Vec<u32> = srv.projectiles.iter().map(|p| p.id).collect();
-    for pid in ids {
-        let Some((idx, p)) = srv.projectiles.iter().enumerate().find(|(_, p)| p.id == pid) else { continue; };
-        let p0 = p.pos - p.vel * ctx.dt; // previous pos approximated
-        let p1 = p.pos;
-        let owner = p.owner;
+    let mut list = Vec::new();
+    for c in srv.ecs.iter() {
+        if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+            let p1 = c.tr.pos;
+            let p0 = p1 - vel.v * ctx.dt;
+            list.push((c.id, p0, p1, proj.kind, c.owner.map(|o| o.id)));
+        }
+    }
+    for (pid, p0, p1, kind, owner) in list {
         // test against actors
         let mut hit_any = false;
         for a in srv.ecs.iter() {
             if !a.hp.alive() { continue; }
             if let Some(owner_id) = owner && owner_id == a.id { continue; }
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
-                match p.kind {
+                match kind {
                     crate::ProjKind::Fireball => {
                         ctx.boom.push(ExplodeEvent { center_xz: Vec2::new(p1.x, p1.z), r2: fireball_r2, src: owner });
                     }
                     _ => {
-                        ctx.dmg.push(DamageEvent { src: owner, dst: a.id, amount: projectile_damage(srv, p.kind) });
+                        ctx.dmg.push(DamageEvent { src: owner, dst: a.id, amount: projectile_damage(srv, kind) });
                     }
                 }
                 hit_any = true;
@@ -218,8 +244,8 @@ fn projectile_collision(srv: &mut ServerState, ctx: &mut Ctx) {
             }
         }
         if hit_any {
-            ctx.remove_proj_ids.push(pid);
-        } else if matches!(p.kind, crate::ProjKind::Fireball) {
+            ctx.cmd.despawns.push(pid);
+        } else if matches!(kind, crate::ProjKind::Fireball) {
             // proximity explode: nearest pass within AoE radius
             let r2 = fireball_r2;
             let seg_a = Vec2::new(p0.x, p0.z);
@@ -228,7 +254,11 @@ fn projectile_collision(srv: &mut ServerState, ctx: &mut Ctx) {
             let len2 = ab.length_squared();
             let mut best_d2 = f32::INFINITY;
             let mut best_center = seg_b;
-            for act in srv.ecs.iter() {
+            let mid = (seg_a + seg_b) * 0.5;
+            let seg_half = (seg_b - seg_a).length() * 0.5;
+            let query_r = seg_half + r2.sqrt() + 1.0;
+            for aid in ctx.spatial.query_circle(mid, query_r) {
+                let Some(act) = srv.ecs.get(aid) else { continue; };
                 if !act.hp.alive() { continue; }
                 let c = Vec2::new(act.tr.pos.x, act.tr.pos.z);
                 let t = if len2 <= 1e-12 { 0.0 } else { ((c - seg_a).dot(ab) / len2).clamp(0.0, 1.0) };
@@ -238,10 +268,9 @@ fn projectile_collision(srv: &mut ServerState, ctx: &mut Ctx) {
             }
             if best_d2 <= r2 {
                 ctx.boom.push(ExplodeEvent { center_xz: best_center, r2, src: owner });
-                ctx.remove_proj_ids.push(pid);
+                ctx.cmd.despawns.push(pid);
             }
         }
-        let _ = idx; // silence unused warning when optimized differently
     }
 }
 
@@ -277,14 +306,7 @@ fn apply_damage_to_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     }
 }
 
-fn cleanup(srv: &mut ServerState, ctx: &mut Ctx) {
-    if !ctx.remove_proj_ids.is_empty() {
-        use std::collections::HashSet;
-        let set: HashSet<u32> = ctx.remove_proj_ids.drain(..).collect();
-        srv.projectiles.retain(|p| !set.contains(&p.id));
-    }
-    srv.ecs.remove_dead();
-}
+fn cleanup(srv: &mut ServerState, _ctx: &mut Ctx) { srv.ecs.remove_dead(); }
 
 #[inline]
 fn projectile_damage(srv: &ServerState, kind: crate::ProjKind) -> i32 {
@@ -296,20 +318,7 @@ fn projectile_damage_aoe(srv: &ServerState) -> i32 {
     srv.projectile_spec(crate::ProjKind::Fireball).damage
 }
 
-#[inline]
-fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> bool {
-    let a = Vec2::new(p0.x, p0.z);
-    let b = Vec2::new(p1.x, p1.z);
-    let c = Vec2::new(center.x, center.z);
-    let ab = b - a;
-    let len2 = ab.length_squared();
-    if len2 <= 1e-12 {
-        return (a - c).length_squared() <= radius * radius;
-    }
-    let t = ((c - a).dot(ab) / len2).clamp(0.0, 1.0);
-    let closest = a + ab * t;
-    (closest - c).length_squared() <= radius * radius
-}
+// segment intersection helper is in ecs::geom
 
 // ----------------------------------------------------------------------------
 // Spatial grid (2D XZ uniform grid) for broad-phase queries
@@ -349,6 +358,7 @@ impl SpatialGrid {
                 }
             }
         }
+        out.sort_by_key(|id| id.0);
         out.into_iter()
     }
 }

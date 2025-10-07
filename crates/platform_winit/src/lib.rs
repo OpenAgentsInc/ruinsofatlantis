@@ -383,15 +383,17 @@ impl ApplicationHandler for App {
                 for id in self.baseline.keys() {
                     if !cur.contains_key(id) { removals.push(*id); }
                 }
-                // projectiles (full)
+                // projectiles (full from ECS)
                 let mut projectiles = Vec::new();
-                for p in srv.projectiles.iter() {
-                    projectiles.push(net_core::snapshot::ProjectileRep {
-                        id: p.id,
-                        kind: match p.kind { server_core::ProjKind::Firebolt => 0, server_core::ProjKind::Fireball => 1, server_core::ProjKind::MagicMissile => 2 },
-                        pos: [p.pos.x, p.pos.y, p.pos.z],
-                        vel: [p.vel.x, p.vel.y, p.vel.z],
-                    });
+                for c in srv.ecs.iter() {
+                    if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+                        projectiles.push(net_core::snapshot::ProjectileRep {
+                            id: c.id.0,
+                            kind: match proj.kind { server_core::ProjKind::Firebolt => 0, server_core::ProjKind::Fireball => 1, server_core::ProjKind::MagicMissile => 2 },
+                            pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
+                            vel: [vel.v.x, vel.v.y, vel.v.z],
+                        });
+                    }
                 }
                 let delta = net_core::snapshot::ActorSnapshotDelta { v: 3, tick: tick64, baseline: self.baseline_tick, spawns, updates, removals, projectiles };
                 // encode + send

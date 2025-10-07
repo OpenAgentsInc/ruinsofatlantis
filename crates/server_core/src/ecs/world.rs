@@ -39,6 +39,10 @@ pub struct Components {
     pub aggro: Option<AggroRadius>,
     pub attack: Option<AttackRadius>,
     pub melee: Option<Melee>,
+    pub projectile: Option<Projectile>,
+    pub velocity: Option<Velocity>,
+    pub owner: Option<Owner>,
+    pub homing: Option<Homing>,
 }
 
 #[derive(Default, Debug)]
@@ -69,8 +73,24 @@ impl WorldEcs {
             aggro: None,
             attack: None,
             melee: None,
+            projectile: None,
+            velocity: None,
+            owner: None,
+            homing: None,
         });
         id
+    }
+
+    pub fn spawn_from_components(&mut self, mut c: Components) -> ActorId {
+        // Assign id if not set
+        if c.id.0 == 0 {
+            c.id = ActorId(self.next_id);
+            self.next_id = self.next_id.wrapping_add(1);
+        }
+        let _e = Entity(self.next_ent);
+        self.next_ent = self.next_ent.wrapping_add(1);
+        self.ents.push(c);
+        c.id
     }
 
     pub fn get(&self, id: ActorId) -> Option<&Components> {
@@ -107,4 +127,49 @@ impl WorldEcs {
 fn hostile_default(a: Team, b: Team) -> bool {
     use Team::*;
     matches!((a, b), (Pc, Undead) | (Undead, Pc) | (Wizards, Undead) | (Undead, Wizards))
+}
+
+// ----------------------------------------------------------------------------
+// Projectile-related components
+// ----------------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct Projectile {
+    pub kind: crate::ProjKind,
+    pub ttl_s: f32,
+    pub age_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Velocity {
+    pub v: Vec3,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Owner {
+    pub id: ActorId,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Homing {
+    pub target: ActorId,
+    pub turn_rate: f32,
+}
+
+#[derive(Default)]
+pub struct CmdBuf {
+    pub spawns: Vec<Components>,
+    pub despawns: Vec<ActorId>,
+}
+
+impl WorldEcs {
+    pub fn apply_cmds(&mut self, cmds: &mut CmdBuf) {
+        for c in cmds.spawns.drain(..) {
+            let _ = self.spawn_from_components(c);
+        }
+        if !cmds.despawns.is_empty() {
+            self.ents.retain(|e| !cmds.despawns.contains(&e.id));
+            cmds.despawns.clear();
+        }
+    }
 }

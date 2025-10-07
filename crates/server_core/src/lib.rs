@@ -58,16 +58,12 @@ pub enum ProjKind {
     MagicMissile,
 }
 
-/// Server-side projectile state used for authoritative collision.
+/// Pending projectile input; schedule spawns ECS projectiles from this queue.
 #[derive(Debug, Clone)]
-pub struct Projectile {
-    pub id: u32,
+pub struct PendingProjectile {
     pub pos: Vec3,
-    pub vel: Vec3,
+    pub dir: Vec3,
     pub kind: ProjKind,
-    pub age: f32,
-    pub life: f32,
-    /// Optional owner wizard id (1=PC, >=2=NPC wizard)
     pub owner: Option<ActorId>,
 }
 
@@ -106,9 +102,8 @@ pub struct ServerState {
     pub nivita_actor_id: Option<ActorId>,
     /// Snapshot of Nivita's boss stats/components for replication/logging.
     pub nivita_stats: Option<NivitaStats>,
-    /// Live projectiles spawned by wizards.
-    pub projectiles: Vec<Projectile>,
-    next_proj_id: u32,
+    /// Pending projectile spawns from input (consumed by schedule)
+    pub pending_projectiles: Vec<PendingProjectile>,
     /// New authoritative ECS world (phase 1)
     pub ecs: ecs::WorldEcs,
     pub factions: FactionState,
@@ -117,13 +112,12 @@ pub struct ServerState {
 }
 
 impl ServerState {
-    // Legacy AoE removed; use apply_aoe_at_actors.
+    // Legacy AoE removed; production path is in ECS schedule systems.
     pub fn new() -> Self {
         Self {
             nivita_actor_id: None,
             nivita_stats: None,
-            projectiles: Vec::new(),
-            next_proj_id: 1,
+            pending_projectiles: Vec::new(),
             ecs: ecs::WorldEcs::default(),
             factions: FactionState::default(),
             pc_actor: None,
@@ -216,80 +210,11 @@ impl ServerState {
             }
         }
     }
-    pub fn spawn_projectile(&mut self, pos: Vec3, vel: Vec3, kind: ProjKind) {
-        let id = self.next_proj_id;
-        self.next_proj_id = self.next_proj_id.wrapping_add(1);
-        let spec = self.projectile_spec(kind);
-        let (age, life) = (0.0, spec.life_s);
-        self.projectiles.push(Projectile {
-            id,
-            pos,
-            vel,
-            kind,
-            age,
-            life,
-            owner: None,
-        });
-    }
-    /// Spawn a projectile by unit direction; velocity is scaled using server specs.
-    pub fn spawn_projectile_from_dir(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
-        let d = dir.normalize_or_zero();
-        let spec = self.projectile_spec(kind);
-        if std::env::var("RA_LOG_FIREBALL")
-            .map(|v| v == "1")
-            .unwrap_or(false)
-            && matches!(kind, ProjKind::Fireball)
-        {
-            log::info!(
-                "server: Fireball spawn speed={:.1} life={:.2}s r={:.1} dmg={}",
-                spec.speed_mps,
-                spec.life_s,
-                spec.aoe_radius_m,
-                spec.damage
-            );
-        }
-        // Default owner is None; platform/NPC-cast may override via helper below
-        let id = self.next_proj_id;
-        self.next_proj_id = self.next_proj_id.wrapping_add(1);
-        let (age, life) = (0.0, spec.life_s);
-        self.projectiles.push(Projectile {
-            id,
-            pos,
-            vel: d * spec.speed_mps,
-            kind,
-            age,
-            life,
-            owner: None,
-        });
-    }
-
-    /// Owned variant: attaches the owner wizard id (1=PC, >=2=NPC)
-    pub fn spawn_projectile_from_dir_owned(
-        &mut self,
-        pos: Vec3,
-        dir: Vec3,
-        kind: ProjKind,
-        owner: Option<ActorId>,
-    ) {
-        let d = dir.normalize_or_zero();
-        let spec = self.projectile_spec(kind);
-        let id = self.next_proj_id;
-        self.next_proj_id = self.next_proj_id.wrapping_add(1);
-        let (age, life) = (0.0, spec.life_s);
-        self.projectiles.push(Projectile {
-            id,
-            pos,
-            vel: d * spec.speed_mps,
-            kind,
-            age,
-            life,
-            owner,
-        });
-    }
-    /// Convenience spawner for PC-owned projectiles.
+    // Projectiles are spawned via schedule ingestion using pending_projectiles.
+    /// Convenience enqueue for PC-owned projectile input; schedule consumes.
     pub fn spawn_projectile_from_pc(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
         let owner = self.pc_actor;
-        self.spawn_projectile_from_dir_owned(pos, dir, kind, owner);
+        self.pending_projectiles.push(PendingProjectile { pos, dir, kind, owner });
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
@@ -558,20 +483,17 @@ impl ServerState {
                 alive: a.hp.alive(),
             })
             .collect();
-        let projectiles = self
-            .projectiles
-            .iter()
-            .map(|p| net_core::snapshot::ProjectileRep {
-                id: p.id,
-                kind: match p.kind {
-                    ProjKind::Firebolt => 0,
-                    ProjKind::Fireball => 1,
-                    ProjKind::MagicMissile => 2,
-                },
-                pos: [p.pos.x, p.pos.y, p.pos.z],
-                vel: [p.vel.x, p.vel.y, p.vel.z],
-            })
-            .collect();
+        let mut projectiles = Vec::new();
+        for c in self.ecs.iter() {
+            if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+                projectiles.push(net_core::snapshot::ProjectileRep {
+                    id: c.id.0,
+                    kind: match proj.kind { ProjKind::Firebolt => 0, ProjKind::Fireball => 1, ProjKind::MagicMissile => 2 },
+                    pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
+                    vel: [vel.v.x, vel.v.y, vel.v.z],
+                });
+            }
+        }
         net_core::snapshot::ActorSnapshot {
             v: 2,
             tick,
@@ -724,9 +646,17 @@ mod tests_actor {
     #[test]
     fn spawn_from_dir_scales_speed() {
         let mut srv = ServerState::new();
-        srv.spawn_projectile_from_dir(Vec3::ZERO, Vec3::new(0.0, 0.0, 1.0), ProjKind::Firebolt);
-        let p = &srv.projectiles[0];
-        assert!(p.vel.z > 20.0, "vel was not scaled: {}", p.vel.z);
+        // enqueue one projectile and run ingest
+        srv.pending_projectiles.push(PendingProjectile { pos: Vec3::ZERO, dir: Vec3::new(0.0, 0.0, 1.0), kind: ProjKind::Firebolt, owner: None });
+        let mut ctx = crate::ecs::schedule::Ctx::default();
+        let mut sched = crate::ecs::schedule::Schedule;
+        sched.run(&mut srv, &mut ctx, &[]);
+        // ensure a projectile entity exists with velocity > 20 m/s
+        let mut found = false;
+        for c in srv.ecs.iter() {
+            if let Some(v) = c.velocity.as_ref() && v.v.z > 20.0 { found = true; break; }
+        }
+        assert!(found, "no projectile with expected speed found");
     }
 
     #[test]
