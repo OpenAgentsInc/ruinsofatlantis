@@ -386,13 +386,13 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
         // Translate spell to projectiles
         match cmd.spell {
             crate::SpellId::Firebolt => {
-                srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Firebolt)
+                srv.spawn_projectile_from(caster, cmd.pos, cmd.dir, crate::ProjKind::Firebolt)
             }
             crate::SpellId::Fireball => {
-                srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Fireball)
+                srv.spawn_projectile_from(caster, cmd.pos, cmd.dir, crate::ProjKind::Fireball)
             }
             crate::SpellId::MagicMissile => {
-                srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
+                srv.spawn_projectile_from(caster, cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
             }
         }
         if std::env::var("RA_LOG_CASTS")

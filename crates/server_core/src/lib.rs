@@ -381,6 +381,16 @@ impl ServerState {
             caster,
         });
     }
+
+    /// Convenience: enqueue a projectile owned by a specific caster.
+    pub fn spawn_projectile_from(&mut self, caster: ActorId, pos: Vec3, dir: Vec3, kind: ProjKind) {
+        self.pending_projectiles.push(PendingProjectile {
+            pos,
+            dir,
+            kind,
+            owner: Some(caster),
+        });
+    }
     /// Spawn the PC actor at a chosen position if missing; attach casting resources.
     pub fn spawn_pc_at(&mut self, pos: Vec3) -> ActorId {
         if let Some(id) = self.pc_actor
