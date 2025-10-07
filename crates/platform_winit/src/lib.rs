@@ -269,8 +269,7 @@ impl ApplicationHandler for App {
                 };
                 // wizard positions from renderer
                 let wiz_pos: Vec<glam::Vec3> = s.wizard_positions();
-                // NPC AI now runs within authoritative step (actors-only); no separate call here.
-                server_core::systems::boss::boss_seek_and_integrate(srv, dt, &wiz_pos);
+                // NPC AI/boss now run within authoritative step via ECS schedule.
                 // Build replication messages
                 if std::env::var("RA_LOG_DEMO")
                     .map(|v| v == "1")

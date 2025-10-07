@@ -81,6 +81,7 @@ struct ProjectileSpec {
 }
 
 #[inline]
+#[allow(dead_code)]
 fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> bool {
     let a = glam::Vec2::new(p0.x, p0.z);
     let b = glam::Vec2::new(p1.x, p1.z);
@@ -131,6 +132,7 @@ impl ServerState {
     // Legacy actor rebuild removed. Actors are authoritative.
 
     /// Apply AoE to actors, skipping self-damage for PC-owned sources and flipping factions when PC hits Wizards.
+    #[allow(dead_code)]
     fn apply_aoe_at_actors(
         &mut self,
         x: f32,
@@ -353,209 +355,12 @@ impl ServerState {
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
     /// integration/collision. Collisions reduce HP for both NPCs and wizards.
     pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
-        // Ensure we mirror wizard positions
+        // Ensure we mirror wizard positions first
         self.sync_wizards(wizard_positions);
-        // 1) Minimal actor-based NPC AI (Undead seek nearest hostile Wizard/PC, melee on contact)
-        {
-            // Snapshot candidates to avoid borrow conflicts
-            let wizard_targets: Vec<(ActorId, Vec3, f32)> = self
-                .ecs
-                .iter()
-                .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
-                .map(|a| (a.id, a.tr.pos, a.tr.radius))
-                .collect();
-            let undead_ids: Vec<ActorId> = self
-                .ecs
-                .iter()
-                .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Zombie))
-                .map(|a| a.id)
-                .collect();
-            for uid in undead_ids {
-                // Defaults until components carry these
-                let speed = 2.0f32;
-                let damage = 5i32;
-                let (pos_u, rad_u) = if let Some(a) = self.ecs.get(uid) {
-                    (a.tr.pos, a.tr.radius)
-                } else {
-                    continue;
-                };
-                // Find nearest wizard target
-                let mut best: Option<(f32, ActorId, Vec3, f32)> = None;
-                for (tid, p, r) in &wizard_targets {
-                    // Undead are hostile to both Pc and Wizards teams by default via FactionState
-                    let dx = p.x - pos_u.x;
-                    let dz = p.z - pos_u.z;
-                    let d2 = dx * dx + dz * dz;
-                    if best.as_ref().map(|(b, _, _, _)| d2 < *b).unwrap_or(true) {
-                        best = Some((d2, *tid, *p, *r));
-                    }
-                }
-                if let Some((_d2, tid, tp, tr)) = best {
-                    let to = Vec3::new(tp.x - pos_u.x, 0.0, tp.z - pos_u.z);
-                    let dist = to.length();
-                    let contact = rad_u + tr + 0.35f32;
-                    if dist > contact + 0.02 {
-                        let step = (speed * dt).min(dist - contact);
-                        if step > 1e-4
-                            && let Some(a) = self.ecs.get_mut(uid)
-                        {
-                            a.tr.pos += to.normalize_or_zero() * step;
-                        }
-                    } else {
-                        // Apply melee damage when in range
-                        if let Some(t) = self.ecs.get_mut(tid) {
-                            t.hp.hp = (t.hp.hp - damage).max(0);
-                        }
-                    }
-                }
-            }
-        }
-        // 3) Step projectiles and collide vs NPCs and wizards (friendly fire on)
-        let mut i = 0usize;
-        while i < self.projectiles.len() {
-            let p0 = self.projectiles[i].pos;
-            let kind = self.projectiles[i].kind; // copy
-            let vel = self.projectiles[i].vel; // copy
-            self.projectiles[i].pos = p0 + vel * dt;
-            let p1 = self.projectiles[i].pos;
-            self.projectiles[i].age += dt;
-            let mut removed = false;
-            // Resolve projectile spec once for this step to avoid borrow conflicts
-            let spec_kind = self.projectile_spec(kind);
-            let owner_id = self.projectiles[i].owner;
-            // Collide vs actors (direct hit) with deferred AoE to avoid borrow conflicts
-            if !removed {
-                let mut pending_aoe: Option<(f32, f32, i32)> = None;
-                let mut hit_any = false;
-                for a in self.ecs.iter_mut() {
-                    if !a.hp.alive() {
-                        continue;
-                    }
-                    // Skip self for PC-owned projectiles
-                    if let Some(owner) = owner_id
-                        && owner == a.id
-                    {
-                        continue;
-                    }
-                    if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
-                        let spec = spec_kind;
-                        if matches!(kind, ProjKind::Fireball) {
-                            let cx = p1.x;
-                            let cz = p1.z;
-                            pending_aoe = Some((cx, cz, spec.damage));
-                        } else {
-                            let dmg = spec.damage;
-                            a.hp.hp = (a.hp.hp - dmg).max(0);
-                        }
-                        hit_any = true;
-                        break;
-                    }
-                }
-                if hit_any {
-                    removed = true;
-                    if let Some((cx, cz, dmg)) = pending_aoe {
-                        let r2 = spec_kind.aoe_radius_m * spec_kind.aoe_radius_m;
-                        let _ = self.apply_aoe_at_actors(cx, cz, r2, dmg, owner_id);
-                        if std::env::var("RA_LOG_FIREBALL")
-                            .map(|v| v == "1")
-                            .unwrap_or(false)
-                        {
-                            log::info!(
-                                "server: Fireball impact explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                                cx,
-                                p1.y,
-                                cz,
-                                spec_kind.aoe_radius_m,
-                                dmg
-                            );
-                        }
-                    }
-                }
-            }
-            // (renderer/client wizards are actors; handled in the actor loop above)
-            // Fireball proximity explode: if we passed within AoE radius of any NPC or wizard this step
-            if !removed && matches!(kind, ProjKind::Fireball) {
-                let spec = spec_kind;
-                let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
-                let seg_a = glam::Vec2::new(p0.x, p0.z);
-                let seg_b = glam::Vec2::new(p1.x, p1.z);
-                let ab = seg_b - seg_a;
-                let len2 = ab.length_squared();
-                let mut best_d2 = f32::INFINITY;
-                let mut best_center = seg_b;
-                for act in self.ecs.iter() {
-                    if !act.hp.alive() {
-                        continue;
-                    }
-                    let c = glam::Vec2::new(act.tr.pos.x, act.tr.pos.z);
-                    let t = if len2 <= 1e-12 {
-                        0.0
-                    } else {
-                        ((c - seg_a).dot(ab) / len2).clamp(0.0, 1.0)
-                    };
-                    let closest = seg_a + ab * t;
-                    let d2 = (closest - c).length_squared();
-                    if d2 < best_d2 {
-                        best_d2 = d2;
-                        best_center = closest;
-                    }
-                }
-                // (All actors already considered above)
-                if best_d2 <= r2 {
-                    let cx = best_center.x;
-                    let cz = best_center.y;
-                    // Apply AoE via actors
-                    let _hits = self.apply_aoe_at_actors(cx, cz, r2, spec.damage, owner_id);
-                    if std::env::var("RA_LOG_FIREBALL")
-                        .map(|v| v == "1")
-                        .unwrap_or(false)
-                    {
-                        log::info!(
-                            "server: Fireball proximity explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                            cx,
-                            p1.y,
-                            cz,
-                            spec.aoe_radius_m,
-                            spec.damage
-                        );
-                    }
-                    // hostility flip handled in apply_aoe_at_actors
-                    removed = true;
-                }
-            }
-            // Fireball timeout explode at current position (server-authoritative)
-            if !removed {
-                let age = self.projectiles[i].age;
-                let life = self.projectiles[i].life;
-                if age >= life && matches!(kind, ProjKind::Fireball) {
-                    let spec = spec_kind;
-                    let r2 = spec.aoe_radius_m * spec.aoe_radius_m;
-                    let cx = p1.x;
-                    let cz = p1.z;
-                    let _hits = self.apply_aoe_at_actors(cx, cz, r2, spec.damage, owner_id);
-                    if std::env::var("RA_LOG_FIREBALL")
-                        .map(|v| v == "1")
-                        .unwrap_or(false)
-                    {
-                        log::info!(
-                            "server: Fireball timeout explode at ({:.2},{:.2},{:.2}) r={:.1} dmg={}",
-                            cx,
-                            p1.y,
-                            cz,
-                            spec.aoe_radius_m,
-                            spec.damage
-                        );
-                    }
-                    // hostility flip handled in apply_aoe_at_actors
-                    removed = true;
-                }
-            }
-            if removed {
-                self.projectiles.swap_remove(i);
-                continue;
-            }
-            i += 1;
-        }
+        // Run ECS schedule
+        let mut ctx = crate::ecs::schedule::Ctx { dt, time_s: 0.0, ..Default::default() };
+        let mut sched = crate::ecs::schedule::Schedule;
+        sched.run(self, &mut ctx, wizard_positions);
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
