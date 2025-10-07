@@ -237,6 +237,13 @@ Addendum — Implementation log (2025-10-07)
   - Kept wizard actors without melee/speed by default; unchanged behavior.
   - Clippy/tests green.
 
+- PR‑4 (Phase 4) — partial (spatial grid) on main:
+  - Added a simple 2D XZ spatial grid (`SpatialGrid`) in the ECS schedule for broad‑phase queries.
+  - Grid rebuilt once per tick; used for:
+    - AoE candidate gathering (circle query instead of full scan).
+    - Fireball proximity explode broad‑phase (bounding circle around segment).
+  - Interest management and snapshot deltas are not yet implemented; can be added next as separate follow‑ups.
+
 
 ## What I recommend you do **immediately**
 

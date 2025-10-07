@@ -31,12 +31,15 @@ pub struct Ctx {
     pub dmg: Vec<DamageEvent>,
     pub boom: Vec<ExplodeEvent>,
     pub remove_proj_ids: Vec<u32>,
+    pub spatial: SpatialGrid,
 }
 
 pub struct Schedule;
 
 impl Schedule {
     pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx, wizard_positions: &[Vec3]) {
+        // Rebuild spatial grid once
+        ctx.spatial.rebuild(srv);
         // Boss movement (keep behavior parity for now)
         crate::systems::boss::boss_seek_and_integrate(srv, ctx.dt, wizard_positions);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
@@ -306,4 +309,45 @@ fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> bool
     let t = ((c - a).dot(ab) / len2).clamp(0.0, 1.0);
     let closest = a + ab * t;
     (closest - c).length_squared() <= radius * radius
+}
+
+// ----------------------------------------------------------------------------
+// Spatial grid (2D XZ uniform grid) for broad-phase queries
+// ----------------------------------------------------------------------------
+
+use std::collections::HashMap;
+
+#[derive(Default)]
+pub struct SpatialGrid {
+    cell: f32,
+    buckets: HashMap<(i32, i32), Vec<ActorId>>,
+}
+
+impl SpatialGrid {
+    pub fn rebuild(&mut self, srv: &ServerState) {
+        self.cell = 4.0; // meters per cell
+        self.buckets.clear();
+        for a in srv.ecs.iter() {
+            let key = self.key(a.tr.pos.x, a.tr.pos.z);
+            self.buckets.entry(key).or_default().push(a.id);
+        }
+    }
+    fn key(&self, x: f32, z: f32) -> (i32, i32) {
+        let cx = (x / self.cell).floor() as i32;
+        let cz = (z / self.cell).floor() as i32;
+        (cx, cz)
+    }
+    pub fn query_circle(&self, center: Vec2, r: f32) -> impl Iterator<Item = ActorId> + '_ {
+        let cr = (r / self.cell).ceil() as i32;
+        let (cx, cz) = ((center.x / self.cell).floor() as i32, (center.y / self.cell).floor() as i32);
+        let mut out: Vec<ActorId> = Vec::new();
+        for dx in -cr..=cr {
+            for dz in -cr..=cr {
+                if let Some(v) = self.buckets.get(&(cx + dx, cz + dz)) {
+                    out.extend_from_slice(v);
+                }
+            }
+        }
+        out.into_iter()
+    }
 }
