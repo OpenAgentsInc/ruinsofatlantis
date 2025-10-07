@@ -1777,7 +1777,7 @@ impl Renderer {
         }
         // 2.25) Collide projectiles with replicated NPCs (demo/visual path)
         // disabled: server-authoritative collisions; visuals handled by AoE/voxel hits below
-// 2.5) Fireball collisions (custom AoE explode on hit)
+        // 2.5) Fireball collisions (custom AoE explode on hit)
         if !self.projectiles.is_empty() {
             let mut i = 0usize;
             while i < self.projectiles.len() {
