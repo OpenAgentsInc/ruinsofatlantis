@@ -338,7 +338,7 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
         let bypass_gating = std::env::var("RA_SKIP_CAST_GATING")
             .map(|v| v == "1")
             .unwrap_or(false);
-        let (cost, cd_s, _gcd) = srv.spell_cost_cooldown(cmd.spell);
+        let (cost, cd_s, gcd_s) = srv.spell_cost_cooldown(cmd.spell);
         let Some(c) = srv.ecs.get_mut(caster) else {
             continue;
         };
@@ -350,6 +350,16 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
             // Back-compat: if enum types mismatch, allow cast
         }
         // Gating (stun/mana/GCD) unless bypassed by env
+        // Gather pre-state for logging
+        let mana_before: Option<i32> = c.pool.as_ref().map(|p| p.mana);
+        let mut mana_after: Option<i32> = None;
+        let mut gcd_ready_val: f32 = c.cooldowns.as_ref().map(|cd| cd.gcd_ready).unwrap_or(0.0);
+        let mut spell_cd_val: f32 = c
+            .cooldowns
+            .as_ref()
+            .and_then(|cd| cd.per_spell.get(&cmd.spell).copied())
+            .unwrap_or(0.0);
+
         if !bypass_gating {
             // Stun blocks casting
             if c.stunned.is_some() {
@@ -371,6 +381,9 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
                     cd.gcd_ready = cd.gcd_s.max(0.0);
                     cd.per_spell.insert(cmd.spell, cd_s.max(0.0));
                 }
+                // refresh for logging after potential writes
+                gcd_ready_val = cd.gcd_ready;
+                spell_cd_val = cd.per_spell.get(&cmd.spell).copied().unwrap_or(0.0);
             }
             if ok && let Some(pool) = c.pool.as_mut() {
                 if pool.mana < cost {
@@ -378,29 +391,51 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
                 } else {
                     pool.mana -= cost;
                 }
+                mana_after = Some(pool.mana);
             }
             if !ok {
-                log::info!("srv: cast rejected (mana/cooldown)");
+                if std::env::var("RA_LOG_CASTS").ok().as_deref() == Some("1") {
+                    let mb = mana_before.unwrap_or(-1);
+                    let ma = mana_after.unwrap_or(mb);
+                    log::info!(
+                        target: "server_core::ecs::schedule",
+                        "srv: cast rejected {:?} gcd_ready={:.2} spell_cd={:.2} mana={}/{} cost={}",
+                        cmd.spell,
+                        gcd_ready_val,
+                        spell_cd_val,
+                        ma,
+                        c.pool.as_ref().map(|p| p.max).unwrap_or(0),
+                        cost
+                    );
+                }
                 continue;
             }
         }
-        // Translate spell to projectiles
-        match cmd.spell {
+        // Capture values for logging before releasing borrow of caster
+        let mb = mana_before.unwrap_or(-1);
+        let ma = mana_after.unwrap_or(mb);
+        let spell = cmd.spell;
+        let pos = cmd.pos;
+        let dir = cmd.dir;
+        let _ = c;
+        // Translate spell to projectiles (no borrow of caster's components beyond id)
+        match spell {
             crate::SpellId::Firebolt => {
-                srv.spawn_projectile_from(caster, cmd.pos, cmd.dir, crate::ProjKind::Firebolt)
+                srv.spawn_projectile_from(caster, pos, dir, crate::ProjKind::Firebolt)
             }
             crate::SpellId::Fireball => {
-                srv.spawn_projectile_from(caster, cmd.pos, cmd.dir, crate::ProjKind::Fireball)
+                srv.spawn_projectile_from(caster, pos, dir, crate::ProjKind::Fireball)
             }
             crate::SpellId::MagicMissile => {
-                srv.spawn_projectile_from(caster, cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
+                srv.spawn_projectile_from(caster, pos, dir, crate::ProjKind::MagicMissile)
             }
         }
-        if std::env::var("RA_LOG_CASTS")
-            .map(|v| v == "1")
-            .unwrap_or(false)
-        {
-            log::info!("srv: cast accepted {:?}", cmd.spell);
+        if std::env::var("RA_LOG_CASTS").ok().as_deref() == Some("1") {
+            log::info!(
+                target: "server_core::ecs::schedule",
+                "srv: cast accepted {:?} cost={} gcd_s={:.2} cd_s={:.2} mana_before={} mana_after={}",
+                spell, cost, gcd_s, cd_s, mb, ma
+            );
         }
     }
 }

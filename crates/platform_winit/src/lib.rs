@@ -246,17 +246,25 @@ impl ApplicationHandler for App {
                     };
                     let mut slice: &[u8] = payload;
                     if let Ok(cmd) = net_core::command::ClientCmd::decode(&mut slice) {
-                        // rate limit: 20 cmds/sec
-                        let now = std::time::Instant::now();
-                        if now.duration_since(self.last_sec_start).as_secs_f32() >= 1.0 {
-                            self.last_sec_start = now;
-                            self.cmds_this_sec = 0;
+                        // Rate limit only spell-cast commands; Move/Aim are intents (state).
+                        let rate_limited = matches!(
+                            cmd,
+                            net_core::command::ClientCmd::FireBolt { .. }
+                                | net_core::command::ClientCmd::Fireball { .. }
+                                | net_core::command::ClientCmd::MagicMissile { .. }
+                        );
+                        if rate_limited {
+                            let now = std::time::Instant::now();
+                            if now.duration_since(self.last_sec_start).as_secs_f32() >= 1.0 {
+                                self.last_sec_start = now;
+                                self.cmds_this_sec = 0;
+                            }
+                            if self.cmds_this_sec >= 20 {
+                                log::debug!("rate-limit: dropping spell cmd");
+                                continue;
+                            }
+                            self.cmds_this_sec += 1;
                         }
-                        if self.cmds_this_sec >= 20 {
-                            log::debug!("rate-limit: dropping client cmd");
-                            continue;
-                        }
-                        self.cmds_this_sec += 1;
                         match cmd {
                             net_core::command::ClientCmd::FireBolt { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
