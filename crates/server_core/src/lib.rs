@@ -194,10 +194,20 @@ impl ServerState {
                 self.pc_actor = Some(id);
                 // Attach basic casting resources to PC
                 if let Some(pc) = self.ecs.get_mut(id) {
-                    pc.pool = Some(ecs::ResourcePool { mana: 20, max: 20, regen_per_s: 1.0 });
+                    pc.pool = Some(ecs::ResourcePool {
+                        mana: 20,
+                        max: 20,
+                        regen_per_s: 1.0,
+                    });
                     use std::collections::HashMap;
-                    pc.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
-                    pc.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+                    pc.cooldowns = Some(ecs::Cooldowns {
+                        gcd_s: 0.30,
+                        gcd_ready: 0.0,
+                        per_spell: HashMap::new(),
+                    });
+                    pc.spellbook = Some(ecs::Spellbook {
+                        known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
+                    });
                 }
             }
             if let Some(id) = self.pc_actor
@@ -250,7 +260,12 @@ impl ServerState {
     /// Enqueue a cast; cast system will validate and translate to projectiles.
     pub fn enqueue_cast(&mut self, pos: Vec3, dir: Vec3, spell: SpellId) {
         let caster = self.pc_actor; // local demo assumes one PC caster
-        self.pending_casts.push(CastCmd { pos, dir, spell, caster });
+        self.pending_casts.push(CastCmd {
+            pos,
+            dir,
+            spell,
+            caster,
+        });
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.

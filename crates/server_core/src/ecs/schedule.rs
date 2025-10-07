@@ -104,18 +104,29 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 let dir = rotate_y(cmd.dir, *yaw_off).normalize_or_zero();
                 let v = dir * spec.speed_mps;
                 let target = picks.get(i).copied();
-                let homing = target.map(|tid| crate::ecs::world::Homing { target: tid, turn_rate: 3.5 });
+                let homing = target.map(|tid| crate::ecs::world::Homing {
+                    target: tid,
+                    turn_rate: 3.5,
+                });
                 let comps = crate::ecs::world::Components {
                     id: crate::actor::ActorId(0),
                     kind: crate::actor::ActorKind::Wizard,
                     team: crate::actor::Team::Neutral,
-                    tr: crate::actor::Transform { pos: cmd.pos, yaw: yaw + *yaw_off, radius: 0.1 },
+                    tr: crate::actor::Transform {
+                        pos: cmd.pos,
+                        yaw: yaw + *yaw_off,
+                        radius: 0.1,
+                    },
                     hp: crate::actor::Health { hp: 1, max: 1 },
                     move_speed: None,
                     aggro: None,
                     attack: None,
                     melee: None,
-                    projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
+                    projectile: Some(crate::ecs::world::Projectile {
+                        kind: cmd.kind,
+                        ttl_s: spec.life_s,
+                        age_s: 0.0,
+                    }),
                     velocity: Some(crate::ecs::world::Velocity { v }),
                     owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
                     homing,
@@ -131,13 +142,21 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 id: crate::actor::ActorId(0),
                 kind: crate::actor::ActorKind::Wizard, // unused for projectile
                 team: crate::actor::Team::Neutral,
-                tr: crate::actor::Transform { pos: cmd.pos, yaw, radius: 0.1 },
+                tr: crate::actor::Transform {
+                    pos: cmd.pos,
+                    yaw,
+                    radius: 0.1,
+                },
                 hp: crate::actor::Health { hp: 1, max: 1 },
                 move_speed: None,
                 aggro: None,
                 attack: None,
                 melee: None,
-                projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
+                projectile: Some(crate::ecs::world::Projectile {
+                    kind: cmd.kind,
+                    ttl_s: spec.life_s,
+                    age_s: 0.0,
+                }),
                 velocity: Some(crate::ecs::world::Velocity { v }),
                 owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
                 homing: None,
@@ -223,12 +242,18 @@ fn cooldown_and_mana_tick(srv: &mut ServerState, ctx: &Ctx) {
 }
 
 fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
-    if srv.pending_casts.is_empty() { return; }
+    if srv.pending_casts.is_empty() {
+        return;
+    }
     let casts: Vec<_> = srv.pending_casts.drain(..).collect();
     for cmd in casts {
-        let Some(caster) = cmd.caster else { continue; };
+        let Some(caster) = cmd.caster else {
+            continue;
+        };
         let (cost, cd_s, _gcd) = srv.spell_cost_cooldown(cmd.spell);
-        let Some(c) = srv.ecs.get_mut(caster) else { continue; };
+        let Some(c) = srv.ecs.get_mut(caster) else {
+            continue;
+        };
         // Spellbook check (optional in demo)
         if let Some(book) = c.spellbook.as_ref()
             && !book.known.contains(&spell_id_map(cmd.spell))
@@ -239,30 +264,48 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
         // Cooldown & mana checks
         let mut ok = true;
         if let Some(cd) = c.cooldowns.as_mut() {
-            if cd.gcd_ready > 0.0 { ok = false; }
-            if let Some(rem) = cd.per_spell.get(&cmd.spell) && *rem > 0.0 { ok = false; }
+            if cd.gcd_ready > 0.0 {
+                ok = false;
+            }
+            if let Some(rem) = cd.per_spell.get(&cmd.spell)
+                && *rem > 0.0
+            {
+                ok = false;
+            }
             if ok {
                 cd.gcd_ready = cd.gcd_s.max(0.0);
                 cd.per_spell.insert(cmd.spell, cd_s.max(0.0));
             }
         }
-        if ok
-            && let Some(pool) = c.pool.as_mut()
-        {
-            if pool.mana < cost { ok = false; } else { pool.mana -= cost; }
+        if ok && let Some(pool) = c.pool.as_mut() {
+            if pool.mana < cost {
+                ok = false;
+            } else {
+                pool.mana -= cost;
+            }
         }
-        if !ok { continue; }
+        if !ok {
+            continue;
+        }
         // Translate spell to projectiles
         match cmd.spell {
-            crate::SpellId::Firebolt => srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Firebolt),
-            crate::SpellId::Fireball => srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Fireball),
-            crate::SpellId::MagicMissile => srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile),
+            crate::SpellId::Firebolt => {
+                srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Firebolt)
+            }
+            crate::SpellId::Fireball => {
+                srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Fireball)
+            }
+            crate::SpellId::MagicMissile => {
+                srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
+            }
         }
     }
 }
 
 #[inline]
-fn spell_id_map(s: crate::SpellId) -> crate::SpellId { s }
+fn spell_id_map(s: crate::SpellId) -> crate::SpellId {
+    s
+}
 
 fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[Vec3]) {
     let wiz = wizard_targets(srv);
