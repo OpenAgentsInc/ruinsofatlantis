@@ -1,7 +1,4 @@
-#![cfg(not(any(
-    feature = "vox_onepath_demo",
-    feature = "destruct_debug"
-)))]
+#![cfg(not(any(feature = "vox_onepath_demo", feature = "destruct_debug")))]
 #[test]
 fn default_build_has_no_mutation_features() {
     // 95A guarantee: default build should be non-mutating on the client.

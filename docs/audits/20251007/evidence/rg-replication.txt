@@ -1,0 +1,106 @@
+crates/server_core/src/lib.rs:632:    pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
+crates/server_core/src/lib.rs:657:        let mut projectiles: Vec<net_core::snapshot::ProjectileRep> = Vec::new();
+crates/server_core/src/lib.rs:660:                projectiles.push(net_core::snapshot::ProjectileRep {
+crates/render_wgpu/src/gfx/vox_onepath.rs:883:        let _ = tx.send(res);
+crates/render_wgpu/src/gfx/mod.rs:428:    repl_buf: client_core::replication::ReplicationBuffer,
+crates/render_wgpu/src/gfx/mod.rs:569:    /// Attach a server-command transmitter so the client can send actions to the server.
+crates/render_wgpu/src/gfx/util.rs:64:/// Octahedral decode back to a unit normal.
+crates/render_wgpu/src/gfx/util.rs:66:pub fn oct_decode(e: glam::Vec2) -> glam::Vec3 {
+crates/render_wgpu/src/gfx/util.rs:93:            let d = oct_decode(e);
+crates/platform_winit/src/lib.rs:20:    // Loopback transport (server side) used to send snapshots to the client/renderer
+crates/platform_winit/src/lib.rs:234:                    if let Ok(cmd) = net_core::command::ClientCmd::decode(&mut slice) {
+crates/platform_winit/src/lib.rs:314:                // Build and send replication messages AFTER stepping
+crates/platform_winit/src/lib.rs:336:                // Always build v3 deltas with interest limiting and send after stepping
+crates/platform_winit/src/lib.rs:337:                let asnap = srv.tick_snapshot_actors(tick64);
+crates/platform_winit/src/lib.rs:409:                        projectiles.push(net_core::snapshot::ProjectileRep {
+crates/platform_winit/src/lib.rs:421:                let delta = net_core::snapshot::ActorSnapshotDelta {
+crates/platform_winit/src/lib.rs:433:                net_core::frame::write_msg(&mut f4, &p4);
+crates/platform_winit/src/lib.rs:435:                let _ = srv_xport.try_send(f4);
+crates/platform_winit/src/lib.rs:491:                    net_core::frame::write_msg(&mut fh, &hb);
+crates/platform_winit/src/lib.rs:494:                    let _ = srv_xport.try_send(fh);
+crates/net_core/src/channel.rs:16:/// Create a sender/receiver pair with default capacity.
+crates/net_core/src/channel.rs:22:/// Create a sender/receiver pair with the given bounded capacity.
+crates/net_core/src/channel.rs:30:    /// Try to send; returns false if the receiver is dropped or the channel is full.
+crates/net_core/src/channel.rs:32:    pub fn try_send(&self, bytes: Vec<u8>) -> bool {
+crates/net_core/src/channel.rs:33:        match self.0.try_send(bytes) {
+crates/net_core/src/channel.rs:73:    fn send_and_drain() {
+crates/net_core/src/channel.rs:75:        assert!(tx.try_send(vec![1, 2, 3]));
+crates/net_core/src/channel.rs:76:        assert!(tx.try_send(vec![4, 5]));
+crates/net_core/src/channel.rs:84:        assert!(tx.try_send(b"a".to_vec()));
+crates/net_core/src/channel.rs:85:        assert!(tx.try_send(b"b".to_vec()));
+crates/net_core/src/channel.rs:86:        // Now channel is full; next try_send should return false (dropped).
+crates/net_core/src/channel.rs:87:        assert!(!tx.try_send(b"c".to_vec()));
+crates/net_core/src/snapshot.rs:1://! Snapshot encode/decode traits and message types for replication.
+crates/net_core/src/snapshot.rs:13:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self>;
+crates/net_core/src/snapshot.rs:72:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:166:    pub projectiles: Vec<ProjectileRep>,
+crates/net_core/src/snapshot.rs:205:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:291:            projectiles.push(ProjectileRep { id, kind, pos, vel });
+crates/net_core/src/snapshot.rs:315:pub struct ActorSnapshotDelta {
+crates/net_core/src/snapshot.rs:322:    pub projectiles: Vec<ProjectileRep>,
+crates/net_core/src/snapshot.rs:325:impl SnapshotEncode for ActorSnapshotDelta {
+crates/net_core/src/snapshot.rs:390:impl SnapshotDecode for ActorSnapshotDelta {
+crates/net_core/src/snapshot.rs:392:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:410:            bail!("not an ActorSnapshotDelta tag");
+crates/net_core/src/snapshot.rs:543:            projectiles.push(ProjectileRep { id, kind, pos, vel });
+crates/net_core/src/snapshot.rs:620:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:705:pub struct ProjectileRep {
+crates/net_core/src/snapshot.rs:744:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:806:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:887:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/net_core/src/snapshot.rs:953:        let d2 = ChunkMeshDelta::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:969:        let d2 = DestructibleInstance::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:984:        let s2 = BossStatusMsg::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:997:        let delta = ActorSnapshotDelta {
+crates/net_core/src/snapshot.rs:1021:            projectiles: vec![ProjectileRep {
+crates/net_core/src/snapshot.rs:1031:        let dec = ActorSnapshotDelta::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:1046:        assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
+crates/net_core/src/snapshot.rs:1050:        assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
+crates/net_core/src/snapshot.rs:1068:        let dec = HudStatusMsg::decode(&mut slice).expect("decode");
+crates/net_core/src/snapshot.rs:1076:        assert!(HudStatusMsg::decode(&mut slice).is_err());
+crates/net_core/src/lib.rs:4://! - Defines minimal snapshot encode/decode traits and stub messages
+crates/client_core/src/replication.rs:16:pub struct ReplicationBuffer {
+crates/client_core/src/replication.rs:36:impl ReplicationBuffer {
+crates/client_core/src/replication.rs:47:        if let Ok(d) = net_core::snapshot::ActorSnapshotDelta::decode(&mut slice_delta_v3) {
+crates/client_core/src/replication.rs:154:        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
+crates/client_core/src/replication.rs:166:        if let Ok(hud) = net_core::snapshot::HudStatusMsg::decode(&mut hud_slice) {
+crates/client_core/src/replication.rs:254:        let b = ReplicationBuffer::default();
+crates/client_core/src/replication.rs:259:        // Legacy TickSnapshot no longer decoded; expect no-op on garbage bytes
+crates/client_core/src/replication.rs:260:        let mut repl = ReplicationBuffer::default();
+crates/client_core/src/replication.rs:266:        let mut buf = ReplicationBuffer::default();
+crates/client_core/tests/hud_decode.rs:19:    net_core::frame::write_msg(&mut framed, &buf);
+crates/client_core/tests/hud_decode.rs:21:    let mut repl = client_core::replication::ReplicationBuffer::default();
+crates/net_core/src/transport.rs:17:    fn try_send(&self, bytes: Vec<u8>) -> Result<(), TrySendError>;
+crates/net_core/src/transport.rs:55:    fn try_send(&self, bytes: Vec<u8>) -> Result<(), TrySendError> {
+crates/net_core/src/transport.rs:56:        if self.tx.try_send(bytes) {
+crates/net_core/src/transport.rs:74:    fn loopback_send_recv() {
+crates/net_core/src/transport.rs:76:        a.try_send(b"ping".to_vec()).unwrap();
+crates/net_core/src/transport.rs:77:        b.try_send(b"pong".to_vec()).unwrap();
+crates/net_core/src/command.rs:5://!   (`TAG_CLIENT_CMD`) distinct from `TickSnapshot` framing, so decoders can
+crates/net_core/src/command.rs:7://! - Used by the client renderer to send cast/projectile actions to the server.
+crates/net_core/src/command.rs:15://!   data specs. Clients send only intent (kind + origin + direction).
+crates/net_core/src/command.rs:64:    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+crates/client_core/tests/replication_sparse_ids.rs:1:use net_core::snapshot::{ActorRep, ActorSnapshotDelta, SnapshotEncode};
+crates/client_core/tests/replication_sparse_ids.rs:5:    let delta = ActorSnapshotDelta {
+crates/client_core/tests/replication_sparse_ids.rs:27:    net_core::frame::write_msg(&mut framed, &buf);
+crates/client_core/tests/replication_sparse_ids.rs:29:    let mut repl = client_core::replication::ReplicationBuffer::default();
+crates/client_core/tests/replication_local.rs:1:use client_core::replication::ReplicationBuffer;
+crates/client_core/tests/replication_local.rs:5:    snapshot::{ActorRep, ActorSnapshotDelta, ChunkMeshDelta, ProjectileRep, SnapshotEncode},
+crates/client_core/tests/replication_local.rs:21:fn local_loop_sends_and_applies_chunk_mesh() {
+crates/client_core/tests/replication_local.rs:33:    assert!(tx.try_send(buf));
+crates/client_core/tests/replication_local.rs:36:    let mut repl = ReplicationBuffer::default();
+crates/client_core/tests/replication_local.rs:59:    let mut repl = ReplicationBuffer::default();
+crates/client_core/tests/replication_local.rs:61:    let delta = ActorSnapshotDelta {
+crates/client_core/tests/replication_local.rs:78:        projectiles: vec![ProjectileRep {
+crates/client_core/tests/replication_local.rs:89:    net_core::frame::write_msg(&mut framed, &buf);
+crates/render_wgpu/src/gfx/renderer/replication.rs:6:use client_core::replication::ReplicationBuffer;
+crates/render_wgpu/src/gfx/renderer/replication.rs:9:/// Apply a batch of serialized messages and issue mesh uploads for any decoded
+crates/render_wgpu/src/gfx/renderer/replication.rs:14:    repl: &mut ReplicationBuffer,
+crates/render_wgpu/src/gfx/renderer/replication.rs:44:    fn bridge_uploads_from_decoded_messages() {
+crates/render_wgpu/src/gfx/renderer/replication.rs:55:        let mut repl = ReplicationBuffer::default();
+crates/render_wgpu/src/gfx/renderer/update.rs:1565:                                    net_core::frame::write_msg(&mut framed, &payload);
+crates/render_wgpu/src/gfx/renderer/update.rs:1566:                                    let _ = tx.try_send(framed);
+crates/render_wgpu/src/gfx/renderer/update.rs:1589:                                    net_core::frame::write_msg(&mut framed, &payload);
+crates/render_wgpu/src/gfx/renderer/update.rs:1590:                                    let _ = tx.try_send(framed);
+crates/render_wgpu/src/gfx/renderer/update.rs:1612:                                    net_core::frame::write_msg(&mut framed, &payload);
+crates/render_wgpu/src/gfx/renderer/update.rs:1613:                                    let _ = tx.try_send(framed);

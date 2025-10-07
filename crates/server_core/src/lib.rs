@@ -320,6 +320,19 @@ impl ServerState {
                 },
                 Health { hp: 100, max: 100 },
             );
+            // Attach basic casting resources to NPC wizard for AI
+            if let Some(w) = self.ecs.get_mut(id) {
+                if w.pool.is_none() {
+                    w.pool = Some(ecs::ResourcePool { mana: 20, max: 20, regen_per_s: 0.5 });
+                }
+                if w.cooldowns.is_none() {
+                    use std::collections::HashMap;
+                    w.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+                }
+                if w.spellbook.is_none() {
+                    w.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+                }
+            }
             npc_ids.push(id);
         }
         for (i, id) in npc_ids.into_iter().enumerate() {
@@ -357,6 +370,46 @@ impl ServerState {
             spell,
             caster,
         });
+    }
+    /// Spawn the PC actor at a chosen position if missing; attach casting resources.
+    pub fn spawn_pc_at(&mut self, pos: Vec3) -> ActorId {
+        if let Some(id) = self.pc_actor
+            && self.ecs.get(id).is_some()
+        {
+            return id;
+        }
+        let id = self.ecs.spawn(
+            ActorKind::Wizard,
+            Team::Pc,
+            Transform { pos, yaw: 0.0, radius: 0.7 },
+            Health { hp: 100, max: 100 },
+        );
+        self.pc_actor = Some(id);
+        if let Some(pc) = self.ecs.get_mut(id) {
+            pc.pool = Some(ecs::ResourcePool { mana: 20, max: 20, regen_per_s: 1.0 });
+            use std::collections::HashMap;
+            pc.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+            pc.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+            pc.move_speed = Some(ecs::MoveSpeed { mps: 5.0 });
+        }
+        id
+    }
+
+    /// Set a movement intent on the PC actor (consumed by schedule at start of tick).
+    pub fn apply_move_intent(&mut self, dx: f32, dz: f32, run: bool) {
+        if let Some(id) = self.pc_actor
+            && let Some(pc) = self.ecs.get_mut(id)
+        {
+            pc.intent_move = Some(crate::ecs::IntentMove { dx, dz, run });
+        }
+    }
+    /// Set an aim/yaw intent on the PC actor.
+    pub fn apply_aim_intent(&mut self, yaw: f32) {
+        if let Some(id) = self.pc_actor
+            && let Some(pc) = self.ecs.get_mut(id)
+        {
+            pc.intent_aim = Some(crate::ecs::IntentAim { yaw });
+        }
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
@@ -438,9 +491,8 @@ impl ServerState {
     }
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
     /// integration/collision. Collisions reduce HP for both NPCs and wizards.
-    pub fn step_authoritative(&mut self, dt: f32, wizard_positions: &[Vec3]) {
-        // Ensure we mirror wizard positions first
-        self.sync_wizards(wizard_positions);
+    /// Wizard positions are no longer mirrored here; movement/aim are applied via intents.
+    pub fn step_authoritative(&mut self, dt: f32, _wizard_positions: &[Vec3]) {
         // Run ECS schedule
         let mut ctx = crate::ecs::schedule::Ctx {
             dt,
@@ -448,7 +500,7 @@ impl ServerState {
             ..Default::default()
         };
         let mut sched = crate::ecs::schedule::Schedule;
-        sched.run(self, &mut ctx, wizard_positions);
+        sched.run(self, &mut ctx, _wizard_positions);
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
@@ -473,6 +525,42 @@ impl ServerState {
                 cooldown_s: 0.6,
                 ready_in_s: 0.0,
             });
+        }
+        id
+    }
+    /// Spawn a Death Knight (boss-like hostile). Not unique by design.
+    pub fn spawn_death_knight(&mut self, pos: Vec3) -> ActorId {
+        let pos = push_out_of_pc_bubble(self, pos);
+        let id = self.ecs.spawn(
+            ActorKind::Boss,
+            Team::Undead,
+            Transform { pos, yaw: 0.0, radius: 1.0 },
+            Health { hp: 400, max: 400 },
+        );
+        if let Some(a) = self.ecs.get_mut(id) {
+            a.name = Some("Death Knight".to_string());
+            a.move_speed = Some(ecs::MoveSpeed { mps: 2.2 });
+            a.aggro = Some(ecs::AggroRadius { m: 40.0 });
+            a.attack = Some(ecs::AttackRadius { m: 0.45 });
+            a.melee = Some(ecs::Melee { damage: 18, cooldown_s: 0.9, ready_in_s: 0.0 });
+        }
+        id
+    }
+    /// Spawn an NPC wizard (hostile to Undead) for demo or scripted scenes.
+    pub fn spawn_wizard_npc(&mut self, pos: Vec3) -> ActorId {
+        let pos = push_out_of_pc_bubble(self, pos);
+        let id = self.ecs.spawn(
+            ActorKind::Wizard,
+            Team::Wizards,
+            Transform { pos, yaw: 0.0, radius: 0.7 },
+            Health { hp: 100, max: 100 },
+        );
+        if let Some(w) = self.ecs.get_mut(id) {
+            // Stationary caster by default; give casting resources
+            use std::collections::HashMap;
+            w.pool = Some(ecs::ResourcePool { mana: 30, max: 30, regen_per_s: 0.5 });
+            w.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+            w.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
         }
         id
     }
@@ -507,6 +595,7 @@ impl ServerState {
             },
         );
         if let Some(a) = self.ecs.get_mut(id) {
+            a.name = Some(cfg.name.clone());
             a.move_speed = Some(ecs::MoveSpeed { mps: 2.6 });
             a.aggro = Some(ecs::AggroRadius { m: 35.0 });
             a.attack = Some(ecs::AttackRadius { m: 0.35 });

@@ -1,6 +1,9 @@
 use client_core::replication::ReplicationBuffer;
 use client_core::upload::{ChunkMeshEntry, MeshUpload};
-use net_core::{channel, snapshot::{ChunkMeshDelta, SnapshotEncode, ActorSnapshotDelta, ActorRep, ProjectileRep}};
+use net_core::{
+    channel,
+    snapshot::{ActorRep, ActorSnapshotDelta, ChunkMeshDelta, ProjectileRep, SnapshotEncode},
+};
 
 struct DummyUploader {
     uploads: usize,
@@ -49,7 +52,6 @@ fn local_loop_sends_and_applies_chunk_mesh() {
     assert_eq!(last.0, 7);
     assert_eq!(last.1, (1, 2, 3));
     assert_eq!(last.2.indices, vec![0, 1, 2]);
-
 }
 
 #[test]
@@ -60,10 +62,25 @@ fn v3_delta_populates_projectiles() {
         v: 3,
         tick: 1,
         baseline: 0,
-        spawns: vec![ActorRep { id: 1, kind: 0, team: 0, pos: [0.0, 0.0, 0.0], yaw: 0.0, radius: 0.7, hp: 100, max: 100, alive: true }],
+        spawns: vec![ActorRep {
+            id: 1,
+            kind: 0,
+            team: 0,
+            pos: [0.0, 0.0, 0.0],
+            yaw: 0.0,
+            radius: 0.7,
+            hp: 100,
+            max: 100,
+            alive: true,
+        }],
         updates: vec![],
         removals: vec![],
-        projectiles: vec![ProjectileRep { id: 99, kind: 1, pos: [1.0, 0.5, 2.0], vel: [0.0, 0.0, 1.0] }],
+        projectiles: vec![ProjectileRep {
+            id: 99,
+            kind: 1,
+            pos: [1.0, 0.5, 2.0],
+            vel: [0.0, 0.0, 1.0],
+        }],
     };
     let mut buf = Vec::new();
     delta.encode(&mut buf);

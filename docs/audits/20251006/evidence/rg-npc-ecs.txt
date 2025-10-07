@@ -1,0 +1,98 @@
+crates/server_core/src/ecs/schedule.rs:69:        crate::systems::boss::boss_seek_and_integrate(srv, ctx.dt, wizard_positions);
+crates/server_core/src/ecs/schedule.rs:70:        cast_system(srv, ctx);
+crates/server_core/src/ecs/schedule.rs:77:        ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
+crates/server_core/src/ecs/schedule.rs:78:        melee_apply_when_contact(srv, ctx);
+crates/server_core/src/ecs/schedule.rs:137:                let homing = target.map(|tid| crate::ecs::world::Homing {
+crates/server_core/src/ecs/schedule.rs:143:                let comps = crate::ecs::world::Components {
+crates/server_core/src/ecs/schedule.rs:177:            let comps = crate::ecs::world::Components {
+crates/server_core/src/ecs/schedule.rs:322:fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
+crates/server_core/src/ecs/schedule.rs:323:    if srv.pending_casts.is_empty() {
+crates/server_core/src/ecs/schedule.rs:326:    let casts: Vec<_> = srv.pending_casts.drain(..).collect();
+crates/server_core/src/ecs/schedule.rs:338:        // Spellbook check (optional in demo)
+crates/server_core/src/ecs/schedule.rs:406:fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[Vec3]) {
+crates/server_core/src/ecs/schedule.rs:461:fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
+crates/server_core/tests/despawn_timer_ticks.rs:6:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/despawn_timer_ticks.rs:7:    let z = s.spawn_undead(Vec3::new(0.5, 0.6, 0.5), 0.9, 10);
+crates/ecs_core/src/components.rs:306:pub struct Spellbook {
+crates/server_core/src/systems/boss.rs:9:pub fn boss_seek_and_integrate(state: &mut ServerState, dt: f32, wizards: &[Vec3]) {
+crates/server_core/src/systems/boss.rs:49:            .spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0))
+crates/server_core/src/systems/boss.rs:53:        boss_seek_and_integrate(&mut s, 0.5, &wizards);
+crates/server_core/tests/nivita_spawn_unique.rs:7:        .spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0))
+crates/server_core/tests/nivita_spawn_unique.rs:10:        .spawn_nivita_unique(glam::vec3(5.0, 0.6, 15.0))
+crates/server_core/tests/nivita_spawn_unique.rs:13:    let st = s.nivita_status().expect("status");
+crates/server_core/src/ecs/world.rs:22:pub struct Melee {
+crates/server_core/src/ecs/world.rs:33:pub struct Components {
+crates/server_core/src/ecs/world.rs:42:    pub melee: Option<Melee>,
+crates/server_core/src/ecs/world.rs:46:    pub homing: Option<Homing>,
+crates/server_core/src/ecs/world.rs:47:    pub spellbook: Option<Spellbook>,
+crates/server_core/src/ecs/world.rs:48:    pub pool: Option<ResourcePool>,
+crates/server_core/src/ecs/world.rs:49:    pub cooldowns: Option<Cooldowns>,
+crates/server_core/src/ecs/world.rs:79:        self.ents.push(Components {
+crates/server_core/src/ecs/world.rs:163:impl Components {
+crates/server_core/src/ecs/world.rs:232:pub struct Homing {
+crates/server_core/src/ecs/world.rs:272:pub struct Spellbook {
+crates/server_core/src/ecs/world.rs:277:pub struct ResourcePool {
+crates/server_core/src/ecs/world.rs:284:pub struct Cooldowns {
+crates/server_core/src/lib.rs:46:pub struct HomingSpec {
+crates/server_core/src/lib.rs:56:    pub homing: HomingSpec,
+crates/server_core/src/lib.rs:85:            homing: HomingSpec {
+crates/server_core/src/lib.rs:105:    pub spellbook: ec::Spellbook,
+crates/server_core/src/lib.rs:198:    pub pending_casts: Vec<CastCmd>,
+crates/server_core/src/lib.rs:215:            pending_casts: Vec::new(),
+crates/server_core/src/lib.rs:258:    pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) {
+crates/server_core/src/lib.rs:283:                    pc.pool = Some(ecs::ResourcePool {
+crates/server_core/src/lib.rs:289:                    pc.cooldowns = Some(ecs::Cooldowns {
+crates/server_core/src/lib.rs:294:                    pc.spellbook = Some(ecs::Spellbook {
+crates/server_core/src/lib.rs:354:        self.pending_casts.push(CastCmd {
+crates/server_core/src/lib.rs:443:        self.sync_wizards(wizard_positions);
+crates/server_core/src/lib.rs:454:    pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
+crates/server_core/src/lib.rs:471:            a.melee = Some(ecs::Melee {
+crates/server_core/src/lib.rs:481:    pub fn spawn_nivita_unique(&mut self, pos: Vec3) -> Option<ActorId> {
+crates/server_core/src/lib.rs:497:            ActorKind::Boss,
+crates/server_core/src/lib.rs:513:            a.melee = Some(ecs::Melee {
+crates/server_core/src/lib.rs:567:        let book = ec::Spellbook {
+crates/server_core/src/lib.rs:604:    pub fn nivita_status(&self) -> Option<BossStatus> {
+crates/server_core/src/lib.rs:624:                let _ = self.spawn_undead(pos, 0.95, hp);
+crates/server_core/src/lib.rs:632:    pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
+crates/server_core/src/lib.rs:641:                    ActorKind::Boss => 2,
+crates/server_core/src/lib.rs:898:        s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0), Vec3::new(5.9, 0.6, 0.0)]);
+crates/server_core/src/lib.rs:900:        let _z = s.spawn_undead(Vec3::new(0.0, 0.6, 2.0), 0.9, 20);
+crates/server_core/src/lib.rs:917:        s.sync_wizards(&[Vec3::new(6.0, 0.6, 0.0), Vec3::new(6.01, 0.6, 0.0)]);
+crates/server_core/src/lib.rs:937:        s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0), Vec3::new(0.5, 0.6, 0.5)]);
+crates/server_core/tests/boss_spawn_safety.rs:7:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/boss_spawn_safety.rs:9:    let id = s.spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0)).unwrap();
+crates/server_core/tests/spawn_safety.rs:7:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/spawn_safety.rs:8:    // Attempt to spawn very close to PC; spawn_undead must push it out
+crates/server_core/tests/spawn_safety.rs:9:    let z = s.spawn_undead(Vec3::new(0.5, 0.6, 0.5), 0.9, 10);
+crates/server_core/tests/mm_homing_cast.rs:13:    s.sync_wizards(&[pc]);
+crates/server_core/tests/mm_homing_cast.rs:15:    let _z1 = s.spawn_undead(vec3(6.0, 0.6, 0.0), 0.9, 20);
+crates/server_core/tests/mm_homing_cast.rs:16:    let _z2 = s.spawn_undead(vec3(-6.0, 0.6, 0.0), 0.9, 20);
+crates/server_core/tests/mm_homing_cast.rs:17:    let _z3 = s.spawn_undead(vec3(0.0, 0.6, 6.0), 0.9, 20);
+crates/server_core/tests/mm_homing_cast.rs:44:    s.sync_wizards(&[pc]);
+crates/server_core/tests/mm_homing_cast.rs:45:    let _z = s.spawn_undead(vec3(12.0, 0.6, 0.0), 0.9, 20);
+crates/server_core/tests/mm_homing_cast.rs:86:    s.sync_wizards(&[pc]);
+crates/server_core/tests/effects_and_lifecycle.rs:8:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/effects_and_lifecycle.rs:9:    let z = s.spawn_undead(Vec3::new(3.0, 0.6, 0.0), 0.9, 50);
+crates/server_core/tests/effects_and_lifecycle.rs:38:    s_no_slow.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/effects_and_lifecycle.rs:39:    let z0 = s_no_slow.spawn_undead(Vec3::new(0.0, 0.6, 5.0), 0.9, 30);
+crates/server_core/tests/effects_and_lifecycle.rs:56:    s_slow.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/effects_and_lifecycle.rs:57:    let z1 = s_slow.spawn_undead(Vec3::new(0.0, 0.6, 5.0), 0.9, 30);
+crates/server_core/tests/effects_and_lifecycle.rs:88:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/effects_and_lifecycle.rs:115:    s.sync_wizards(&[glam::vec3(0.0, 0.6, 0.0)]);
+crates/server_core/tests/effects_and_lifecycle.rs:116:    let z = s.spawn_undead(glam::vec3(0.5, 0.6, 0.5), 0.9, 5);
+crates/server_core/tests/firebolt_hits_wizard.rs:13:    s.sync_wizards(&[pc, wiz]);
+crates/server_core/tests/magic_missile_slow.rs:7:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/magic_missile_slow.rs:8:    let z = s.spawn_undead(Vec3::new(0.0, 0.6, 8.0), 0.9, 40);
+crates/server_core/tests/stun_blocks_move_and_melee.rs:7:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/server_core/tests/stun_blocks_move_and_melee.rs:8:    let z = s.spawn_undead(Vec3::new(0.0, 0.6, 1.2), 0.9, 30);
+crates/server_core/tests/nivita_status_values.rs:7:        .spawn_nivita_unique(glam::vec3(0.0, 0.6, 10.0))
+crates/server_core/tests/nivita_status_values.rs:9:    let st = s.nivita_status().expect("status");
+crates/server_core/tests/cast_spawns_projectiles.rs:7:    s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
+crates/data_runtime/src/configs/npc_unique.rs:38:    pub spellbook: SpellbookCfg,
+crates/data_runtime/src/configs/npc_unique.rs:83:pub struct SpellbookCfg {
+crates/platform_winit/src/lib.rs:117:                        srv.sync_wizards(&wiz_now);
+crates/platform_winit/src/lib.rs:124:                    let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+crates/platform_winit/src/lib.rs:337:                let asnap = srv.tick_snapshot_actors(tick64);
+crates/render_wgpu/src/gfx/renderer/render.rs:1361:                if let Some(st) = r.server.nivita_status() {
+crates/render_wgpu/src/gfx/renderer/render.rs:1447:                if let Some(st) = r.server.nivita_status() {
+crates/render_wgpu/src/gfx/mod.rs:3338:        if let Some(status) = self.server.nivita_status() {

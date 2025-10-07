@@ -1,27 +1,29 @@
-# Executive Summary — 2025-10-07 (ECS Refactor Alignment)
+NPC ECS Audit — 2025-10-07
 
 Scope
-- Full repo scan against the architecture in `docs/issues/ecs_refactor_part_2.md` with focus on: authoritative ECS world, ordered systems/schedule, event-based damage, spatial index, interest-managed replication, and removal of legacy client-side AI/combat.
+- Verify all NPCs (zombies, wizard NPCs, Nivita, Death Knight) are fully server-authoritative via the ECS.
+- Identify any residual non‑ECS behavior and propose concrete ECS‑only fixes.
 
-Status (high level)
-- Core server ECS now matches the refactor doc much more closely:
-  - `server_core::ecs::WorldEcs` is authoritative; schedule includes cooldown/mana tick, cast pipeline, ingest of pending spawns, AI move/melee, homing, projectile integrate/collide, AoE, faction, apply‑damage, cleanup, and despawn timers.
-  - Projectiles moved into ECS with components (`projectile`, `velocity`, `owner`, `homing`). MagicMissile homes with reacquisition via spatial grid.
-  - Effects pipeline active: Fireball applies Burning over time; MagicMissile applies Slow; Stun gates move/melee/cast; unit tests cover these.
-  - Replication: v2 snapshots and optional v3 deltas with interest and rate limiting; new HUD status channel sends mana, GCD, per‑spell CDs, and active effects.
-- Primary deviations remaining are legacy client paths (feature‑gated) and the temporary `sync_wizards` bridge for PC/NPC wizard positions and PC respawn.
+Summary
+- Zombies: Fully ECS-driven. Spawned via `spawn_undead`, move toward wizards, and melee via ECS systems.
+- NPC wizards: Exist as `ActorKind::Wizard` (Team::Wizards) mirrored from the platform, but do not cast. No ECS AI system enqueues their casts yet.
+- Nivita (boss): Spawned as `ActorKind::Boss` with movement toward wizards. Has Melee components, but melee system only targets Zombies, so Nivita does not attack.
+- Death Knight: Present as renderer visuals only. Not spawned/owned by the ECS; no behavior on server.
+- Replication: Actor + projectile replication is ECS-based. HUD boss status comes from server.
 
-Top Deviations
-- Legacy scaffolding remains in renderer and client: `legacy_client_ai`, `legacy_client_combat`, and compatibility decoders for `NpcListMsg`/`BossStatusMsg` are still in tree. See `crates/render_wgpu/src/gfx/renderer/update.rs:2035`, `crates/client_core/src/replication.rs:218`.
-- `ActorStore` (pre‑ECS) type still exists (unused by `ServerState`). See `crates/server_core/src/actor.rs:58`.
-- `ServerState::sync_wizards()` still mirrors renderer wizard positions; it also respawns the PC and attaches casting resources if absent/dead. Long‑term, server movement/respawn should be authoritative via intents and policy. See `crates/server_core/src/lib.rs:216`.
-- Spatial grid is present and used for AoE/homing reacquire but is rebuilt each tick; projectile segment broad‑phase still not fully cell‑culled. See `crates/server_core/src/ecs/schedule.rs:120` and `:1080` (grid).
+Top Findings (P0–P1)
+- F-NPC-001 (P0): No ECS wizard-casting AI. NPC wizards never fire.
+- F-NPC-002 (P0): Melee system filters by `Zombie` kind; Boss (Nivita) never attacks.
+- F-NPC-003 (P1): Death Knight has no ECS registration; renderer-only.
+- F-NPC-004 (P1): Movement AI is split (zombies vs boss helper). Generalize to component-based movement.
+- F-NPC-005 (P1): Player mirroring (`sync_wizards`) remains; intents not wired yet.
 
-Impact
-- With defaults, the app honors server authority (casts, projectiles, AI, effects, death/despawn) and replication; legacy code is off by default. Remaining legacy/bridge code adds maintenance overhead and small coupling risks.
+Outcomes Required to be “All ECS”
+- Add ECS systems for NPC wizard spellcasting + facing.
+- Include all hostile actors with `MoveSpeed`/`AggroRadius` in movement and melee, not just Zombies.
+- Register Death Knight as a server actor (reuse Boss kind or add a subkind indicator for visuals).
+- Replace `sync_wizards()` with authoritative intents.
 
-Plan (condensed)
-- Phase out legacy client AI/combat/features and delete unused pre‑ECS types.
-- Replace `sync_wizards` with authoritative movement intents and a respawn policy (server‑side).
-- Incrementalize spatial grid and use for projectile segment broad‑phase.
-- Make v3 deltas the default (RA_SEND_V3=1 by default) and remove `NpcListMsg`/`BossStatusMsg` compatibility.
+Evidence
+- See `evidence/rg-npc-core.txt`, `evidence/rg-replication.txt`, `evidence/rg-boss-dk.txt`.
+

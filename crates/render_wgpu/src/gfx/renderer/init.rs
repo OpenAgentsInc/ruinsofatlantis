@@ -20,7 +20,7 @@ use std::time::Instant;
 #[cfg(not(feature = "vox_onepath_demo"))]
 use voxel_proxy::VoxelGrid;
 #[cfg(feature = "vox_onepath_demo")]
-use voxel_proxy::{voxelize_surface_fill, VoxelGrid, VoxelProxyMeta};
+use voxel_proxy::{VoxelGrid, VoxelProxyMeta, voxelize_surface_fill};
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1817,7 +1817,6 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_hp_max: 100,
         cmd_tx: None,
         pc_alive: true,
-        wizards_hostile_to_pc: false,
         wizard_fire_cycle_count: vec![0; scene_build.wizard_count as usize],
         wizard_fireball_next_at: {
             let mut v = vec![0u32; scene_build.wizard_count as usize];

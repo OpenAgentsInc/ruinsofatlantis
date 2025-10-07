@@ -476,8 +476,6 @@ pub struct Renderer {
     wizard_hp: Vec<i32>,
     wizard_hp_max: i32,
     pc_alive: bool,
-    // If true, non‑PC wizards will focus the player as their target
-    wizards_hostile_to_pc: bool,
     // NPC wizard casting rotation state
     wizard_fire_cycle_count: Vec<u32>,
     wizard_fireball_next_at: Vec<u32>,
@@ -597,48 +595,12 @@ impl Renderer {
         };
         self.pointer_lock_request = None;
     }
-    /// Handle player character death: hide visuals, disable input/casting,
-    /// and keep camera in a spectator orbit around the last position.
-    // moved: kill_pc -> renderer/update.rs
-    fn kill_pc(&mut self) {
-        if !self.pc_alive {
-            return;
-        }
-        self.pc_alive = false;
-        // Clear player aggro so NPC wizards stop prioritizing the player after death
-        self.wizards_hostile_to_pc = false;
-        if let Some(hp) = self.wizard_hp.get_mut(self.pc_index) {
-            *hp = 0;
-        }
-        self.pc_cast_queued = false;
-        self.input.clear();
-        // Move PC far off-screen to avoid AI targeting and hide the model by scaling it down.
-        // Keep instance slot to avoid reindexing other wizards; UI bars already omit 0 HP.
-        if self.pc_index < self.wizard_models.len() {
-            let hide_pos = glam::vec3(1.0e6, -1.0e6, 1.0e6);
-            let m = glam::Mat4::from_scale_rotation_translation(
-                glam::Vec3::splat(0.0001),
-                glam::Quat::IDENTITY,
-                hide_pos,
-            );
-            self.wizard_models[self.pc_index] = m;
-            if self.pc_index < self.wizard_instances_cpu.len() {
-                let mut inst = self.wizard_instances_cpu[self.pc_index];
-                inst.model = m.to_cols_array_2d();
-                self.wizard_instances_cpu[self.pc_index] = inst;
-                let offset = (self.pc_index * std::mem::size_of::<InstanceSkin>()) as u64;
-                self.queue
-                    .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
-            }
-        }
-        log::info!("PC died; spectator camera engaged");
-    }
+    /// Handle player character death: legacy path removed (server-authoritative).
 
     // moved: respawn -> renderer/update.rs
     fn respawn(&mut self) {
         // Rebuild scene and server similar to initial construction.
         // Clear any lingering player aggro from before death
-        self.wizards_hostile_to_pc = false;
         // 1) Rebuild wizard scene instances and reset player state
         let terrain_extent = self.max_dim as f32 * 0.5;
         let ruins_base_offset = 0.4f32;
@@ -800,36 +762,6 @@ impl Renderer {
         self.projectiles.clear();
         self.particles.clear();
         log::info!("Respawn complete");
-    }
-    fn remove_wizard_at(&mut self, idx: usize) {
-        if idx >= self.wizard_count as usize {
-            return;
-        }
-        // Keep PC for now; skip removal if it's the player character to avoid breaking input/camera
-        if idx == self.pc_index {
-            return;
-        }
-        self.wizard_models.swap_remove(idx);
-        self.wizard_instances_cpu.swap_remove(idx);
-        self.wizard_anim_index.swap_remove(idx);
-        self.wizard_time_offset.swap_remove(idx);
-        self.wizard_last_phase.swap_remove(idx);
-        self.wizard_hp.swap_remove(idx);
-        // If swap removed moved the old PC index, adjust pc_index
-        if self.pc_index == self.wizard_count as usize - 1 && idx < self.pc_index {
-            // if PC was last element and we removed a lower index, PC index shifts down by 1
-            self.pc_index -= 1;
-        } else if idx < self.pc_index {
-            self.pc_index -= 1;
-        }
-        // Recompute palette_base for contiguous layout
-        for (i, inst) in self.wizard_instances_cpu.iter_mut().enumerate() {
-            inst.palette_base = (i as u32) * self.joints_per_wizard;
-        }
-        self.wizard_count = self.wizard_instances_cpu.len() as u32;
-        // Upload full instances buffer
-        let bytes: &[u8] = bytemuck::cast_slice(&self.wizard_instances_cpu);
-        self.queue.write_buffer(&self.wizard_instances, 0, bytes);
     }
     /// Create a renderer bound to a window surface.
     /// Delegates to renderer::init to keep this file thin.
@@ -2110,13 +2042,7 @@ impl Renderer {
                         let head = self.wizard_models[widx] * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
                         self.damage.spawn(head.truncate(), dmg);
                     }
-                    if fatal {
-                        if widx == self.pc_index {
-                            self.kill_pc();
-                        } else {
-                            self.remove_wizard_at(widx);
-                        }
-                    }
+                    // fatal handling removed in legacy path
                 }
             }
             self.update_zombies_from_server();
@@ -3137,11 +3063,11 @@ impl Renderer {
         // No single bulk upload; we wrote per-instance segments above.
     }
 
-    /// Default build melee: apply zombie contact damage to nearest wizard with a simple cooldown.
+    /*
+    /// Default build melee demo removed (server-authoritative). Kept under cfg for legacy gating.
+    #[allow(dead_code)]
+    #[cfg(any())]
     fn apply_zombie_melee_demo(&mut self, dt: f32) {
-        if self.zombie_count == 0 || self.wizard_count == 0 || self.repl_buf.npcs.is_empty() {
-            return;
-        }
         // Precompute wizard positions and head points
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(self.wizard_models.len());
         for m in &self.wizard_models {
@@ -3200,20 +3126,14 @@ impl Renderer {
                     // Floater at wizard head
                     let head = wiz_pos[j] + glam::vec3(0.0, 1.7, 0.0);
                     self.damage.spawn(head, damage);
-                    // Fatal handling
-                    if after == 0 {
-                        if j == self.pc_index {
-                            self.kill_pc();
-                        } else {
-                            self.remove_wizard_at(j);
-                        }
-                    }
+                    // fatal handling removed (legacy path)
                     // Reset cooldown
                     self.zombie_melee_cd.insert(nid, attack_cd);
                 }
             }
         }
     }
+    */
 
     fn update_deathknight_palettes(&mut self, time_global: f32) {
         if self.dk_count == 0 {
@@ -3327,11 +3247,10 @@ impl Renderer {
         self.queue
             .write_buffer(&self.sorc_palettes_buf, 0, bytemuck::cast_slice(&raw));
     }
-
-    fn update_sorceress_motion(&mut self, dt: f32) {
-        if self.sorc_count == 0 || self.sorc_models.is_empty() {
-            return;
-        }
+        /* Client-side sorceress motion removed; keep legacy under cfg.
+        #[allow(dead_code)]
+        #[cfg(any())]
+        fn update_sorceress_motion(&mut self, dt: f32) {
         // Read previous position
         let c_prev = self.sorc_models[0].to_cols_array();
         let prev_pos = glam::vec3(c_prev[12], c_prev[13], c_prev[14]);
@@ -3368,6 +3287,7 @@ impl Renderer {
             }
             return;
         }
+        }
 
         // Fallback: client-side slow walk toward PC
         let mut pos = prev_pos;
@@ -3400,6 +3320,7 @@ impl Renderer {
             }
         }
     }
+    */
 
     #[cfg(any())]
     fn update_deathknight_from_server(&mut self) {
@@ -3759,13 +3680,7 @@ impl Renderer {
                     // Floating damage number
                     let head = center + glam::vec3(0.0, 1.7, 0.0);
                     self.damage.spawn(head, damage);
-                    if fatal {
-                        if j == self.pc_index {
-                            self.kill_pc();
-                        } else {
-                            self.remove_wizard_at(j);
-                        }
-                    }
+                    let _ = fatal;
                     // impact burst
                     for _ in 0..14 {
                         let a = rand_unit() * std::f32::consts::TAU;

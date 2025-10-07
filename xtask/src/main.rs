@@ -113,14 +113,12 @@ fn ci() -> Result<()> {
 fn legacy_flags_guard() -> Result<()> {
     // Fail if legacy_client_* appears in renderer code (sweep complete)
     let output = std::process::Command::new("rg")
-        .args([
-            "-n",
-            "legacy_client_",
-            "crates/render_wgpu/src",
-        ])
+        .args(["-n", "legacy_client_", "crates/render_wgpu/src"])
         .output()
         .ok();
-    if let Some(out) = output && !out.stdout.is_empty() {
+    if let Some(out) = output
+        && !out.stdout.is_empty()
+    {
         let s = String::from_utf8_lossy(&out.stdout);
         bail!("legacy flags found in render_wgpu/src:\n{}", s);
     }

@@ -34,6 +34,7 @@ pub struct Components {
     pub id: ActorId,
     pub kind: ActorKind,
     pub team: Team,
+    pub name: Option<String>,
     pub tr: Transform,
     pub hp: Health,
     pub move_speed: Option<MoveSpeed>,
@@ -47,6 +48,9 @@ pub struct Components {
     pub spellbook: Option<Spellbook>,
     pub pool: Option<ResourcePool>,
     pub cooldowns: Option<Cooldowns>,
+    // Intents (authoritative inputs)
+    pub intent_move: Option<IntentMove>,
+    pub intent_aim: Option<IntentAim>,
     // Effects & lifecycle
     pub burning: Option<Burning>,
     pub slow: Option<Slow>,
@@ -80,6 +84,7 @@ impl WorldEcs {
             id,
             kind,
             team,
+            name: None,
             tr,
             hp,
             move_speed: None,
@@ -93,6 +98,8 @@ impl WorldEcs {
             spellbook: None,
             pool: None,
             cooldowns: None,
+            intent_move: None,
+            intent_aim: None,
             burning: None,
             slow: None,
             stunned: None,
@@ -110,6 +117,8 @@ impl WorldEcs {
         let _e = Entity(self.next_ent);
         self.next_ent = self.next_ent.wrapping_add(1);
         let id = c.id;
+        if c.intent_move.is_none() { c.intent_move = None; }
+        if c.intent_aim.is_none() { c.intent_aim = None; }
         self.ents.push(c);
         id
     }
@@ -262,6 +271,22 @@ pub struct Stunned {
 #[derive(Copy, Clone, Debug)]
 pub struct DespawnAfter {
     pub seconds: f32,
+}
+
+// ----------------------------------------------------------------------------
+// Intents (authoritative inputs)
+// ----------------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct IntentMove {
+    pub dx: f32,
+    pub dz: f32,
+    pub run: bool,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct IntentAim {
+    pub yaw: f32,
 }
 
 // ----------------------------------------------------------------------------

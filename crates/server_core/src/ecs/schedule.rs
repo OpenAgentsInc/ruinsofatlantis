@@ -63,10 +63,10 @@ pub struct Ctx {
 pub struct Schedule;
 
 impl Schedule {
-    pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx, wizard_positions: &[Vec3]) {
+    pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx, _wizard_positions: &[Vec3]) {
+        input_apply_intents(srv, ctx);
         cooldown_and_mana_tick(srv, ctx);
-        // Boss movement (keep behavior parity for now)
-        crate::systems::boss::boss_seek_and_integrate(srv, ctx.dt, wizard_positions);
+        ai_wizard_cast_and_face(srv, ctx);
         cast_system(srv, ctx);
         ingest_projectile_spawns(srv, ctx);
         // Apply spawns immediately so integration/collision see them this tick
@@ -74,7 +74,7 @@ impl Schedule {
         // Rebuild spatial grid once per frame after spawns
         ctx.spatial.rebuild(srv);
         effects_tick(srv, ctx);
-        ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
+        ai_move_hostiles_toward_wizards(srv, ctx);
         melee_apply_when_contact(srv, ctx);
         homing_acquire_targets(srv, ctx);
         homing_update(srv, ctx);
@@ -144,6 +144,7 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                     id: crate::actor::ActorId(0),
                     kind: crate::actor::ActorKind::Wizard,
                     team: crate::actor::Team::Neutral,
+                    name: None,
                     tr: crate::actor::Transform {
                         pos: spawn_pos,
                         yaw: yaw + *yaw_off,
@@ -165,6 +166,8 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                     spellbook: None,
                     pool: None,
                     cooldowns: None,
+                    intent_move: None,
+                    intent_aim: None,
                     burning: None,
                     slow: None,
                     stunned: None,
@@ -178,6 +181,7 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 id: crate::actor::ActorId(0),
                 kind: crate::actor::ActorKind::Wizard, // unused for projectile
                 team: crate::actor::Team::Neutral,
+                name: None,
                 tr: crate::actor::Transform {
                     pos: spawn_pos,
                     yaw,
@@ -199,6 +203,8 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 spellbook: None,
                 pool: None,
                 cooldowns: None,
+                intent_move: None,
+                intent_aim: None,
                 burning: None,
                 slow: None,
                 stunned: None,
@@ -403,16 +409,23 @@ fn spell_id_map(s: crate::SpellId) -> crate::SpellId {
     s
 }
 
-fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[Vec3]) {
+fn ai_move_hostiles_toward_wizards(srv: &mut ServerState, ctx: &Ctx) {
     let wiz = wizard_targets(srv);
-    let undead_ids: Vec<ActorId> = srv
+    if wiz.is_empty() {
+        return;
+    }
+    // Any alive actor with MoveSpeed + AggroRadius and hostile to Wizards
+    let mover_ids: Vec<ActorId> = srv
         .ecs
         .iter()
-        .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Zombie))
+        .filter(|a| a.hp.alive() && a.move_speed.is_some() && a.aggro.is_some())
+        .filter(|a| srv
+            .factions
+            .effective_hostile(a.team, crate::actor::Team::Wizards))
         .map(|a| a.id)
         .collect();
-    for uid in undead_ids {
-        let (pos_u, rad_u, speed, extra, aggro_m, stunned) = if let Some(a) = srv.ecs.get(uid) {
+    for uid in mover_ids {
+        let (pos, rad, speed, extra, aggro_m, stunned) = if let Some(a) = srv.ecs.get(uid) {
             (
                 a.tr.pos,
                 a.tr.radius,
@@ -430,8 +443,8 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
         // Find nearest wizard
         let mut best: Option<(f32, Vec3, f32)> = None;
         for (_tid, p, r) in &wiz {
-            let dx = p.x - pos_u.x;
-            let dz = p.z - pos_u.z;
+            let dx = p.x - pos.x;
+            let dz = p.z - pos.z;
             let d2 = dx * dx + dz * dz;
             if let Some(a) = aggro_m
                 && d2 > a * a
@@ -443,9 +456,9 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
             }
         }
         if let Some((_d2, tp, tr)) = best {
-            let to = Vec3::new(tp.x - pos_u.x, 0.0, tp.z - pos_u.z);
+            let to = Vec3::new(tp.x - pos.x, 0.0, tp.z - pos.z);
             let dist = to.length();
-            let contact = rad_u + tr + extra;
+            let contact = rad + tr + extra;
             if dist > contact + 0.02 {
                 let step = (speed * ctx.dt).min(dist - contact);
                 if step > 1e-4
@@ -460,13 +473,17 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
 
 fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
     let wiz = wizard_targets(srv);
-    let undead_ids: Vec<ActorId> = srv
+    // Any hostile actor that has a Melee component
+    let attacker_ids: Vec<ActorId> = srv
         .ecs
         .iter()
-        .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Zombie))
+        .filter(|a| a.hp.alive() && a.melee.is_some())
+        .filter(|a| srv
+            .factions
+            .effective_hostile(a.team, crate::actor::Team::Wizards))
         .map(|a| a.id)
         .collect();
-    for uid in undead_ids {
+    for uid in attacker_ids {
         let (pos_u, rad_u, extra, mut cd_ready, cd_total, dmg, stunned) =
             if let Some(a) = srv.ecs.get(uid) {
                 (
@@ -519,6 +536,122 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
                     m.ready_in_s = cd_ready;
                 }
             }
+        }
+    }
+}
+
+fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
+    use crate::{SpellId, CastCmd};
+    // Build hostile candidates map (alive, hostile to Wizards)
+    let mut hostile: Vec<(ActorId, Vec3, crate::actor::Team)> = Vec::new();
+    for a in srv.ecs.iter() {
+        if a.hp.alive()
+            && srv
+                .factions
+                .effective_hostile(a.team, crate::actor::Team::Wizards)
+        {
+            hostile.push((a.id, a.tr.pos, a.team));
+        }
+    }
+    if hostile.is_empty() {
+        return;
+    }
+    // Iterate NPC wizards and pick a target
+    let wiz_ids: Vec<ActorId> = srv
+        .ecs
+        .iter()
+        .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard) && a.team == crate::actor::Team::Wizards)
+        .map(|a| a.id)
+        .collect();
+    for wid in wiz_ids {
+        let (wpos, stunned) = if let Some(w) = srv.ecs.get(wid) {
+            (w.tr.pos, w.stunned.is_some())
+        } else {
+            continue;
+        };
+        // Choose nearest hostile
+        let mut best: Option<(f32, Vec3)> = None;
+        for (_id, p, _t) in &hostile {
+            let dx = p.x - wpos.x;
+            let dz = p.z - wpos.z;
+            let d2 = dx * dx + dz * dz;
+            if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
+                best = Some((d2, *p));
+            }
+        }
+        let Some((_d2, tp)) = best else { continue };
+        let dir = tp - wpos;
+        let dir_n = if dir.length_squared() > 1e-6 { dir.normalize() } else { Vec3::new(0.0, 0.0, 1.0) };
+        let yaw = dir_n.x.atan2(dir_n.z);
+        if let Some(w) = srv.ecs.get_mut(wid) {
+            w.tr.yaw = yaw;
+            // Ensure casting components exist
+            if w.spellbook.is_none() {
+                w.spellbook = Some(crate::ecs::world::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+            }
+            if w.pool.is_none() {
+                w.pool = Some(crate::ecs::world::ResourcePool { mana: 20, max: 20, regen_per_s: 0.5 });
+            }
+            if w.cooldowns.is_none() {
+                use std::collections::HashMap;
+                w.cooldowns = Some(crate::ecs::world::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+            }
+        }
+        if stunned { continue; }
+        // Choose spell by situation
+        let dist = (tp - wpos).length();
+        let fb_aoe_r = srv.projectile_spec(crate::ProjKind::Fireball).aoe_radius_m.max(0.0);
+        let mut near_count = 0usize;
+        for (_id, p, _t) in &hostile {
+            let d = (p - tp).length();
+            if d <= fb_aoe_r { near_count += 1; }
+        }
+        let want_spell = if near_count >= 2 && dist >= 12.0 && dist <= 25.0 { Some(SpellId::Fireball) }
+            else if dist <= 10.0 { Some(SpellId::MagicMissile) }
+            else { Some(SpellId::Firebolt) };
+        // Line-of-fire: must be roughly in front
+        let facing = glam::vec3(yaw.sin(), 0.0, yaw.cos());
+        let dot = facing.normalize_or_zero().dot(dir_n);
+        if dot < 0.7 { continue; }
+        // Pre-check cooldowns & mana for chosen spell
+        let mut ok = true;
+        if let Some(w) = srv.ecs.get(wid) {
+            if let Some(cd) = w.cooldowns.as_ref() {
+                if cd.gcd_ready > 0.0 { ok = false; }
+                if let Some(sp) = want_spell { if cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0 { ok = false; } }
+            }
+            if let Some(pool) = w.pool.as_ref() {
+                if let Some(sp) = want_spell {
+                    let (cost, _cd, _gcd) = srv.spell_cost_cooldown(sp);
+                    if pool.mana < cost { ok = false; }
+                }
+            }
+        }
+        if !ok { continue; }
+        // Enqueue the chosen spell; cast_system will gate and spawn projectiles
+        let muzzle = wpos + dir_n * 0.35;
+        if let Some(sp) = want_spell {
+            srv.pending_casts.push(CastCmd { pos: muzzle, dir: dir_n, spell: sp, caster: Some(wid) });
+        }
+    }
+}
+
+fn input_apply_intents(srv: &mut ServerState, ctx: &mut Ctx) {
+    let dt = ctx.dt;
+    for c in srv.ecs.iter_mut() {
+        // Aim intent
+        if let Some(aim) = c.intent_aim.take() {
+            c.tr.yaw = aim.yaw;
+        }
+        // Move intent
+        if let Some(mov) = c.intent_move.take() {
+            if c.stunned.is_some() { continue; }
+            let mut dir = Vec3::new(mov.dx, 0.0, mov.dz);
+            if dir.length_squared() <= 1e-6 { continue; }
+            dir = dir.normalize();
+            let base = c.move_speed.map(|s| s.mps).unwrap_or(5.0);
+            let speed = base * if mov.run { 1.6 } else { 1.0 } * c.slow.map(|s| s.mul).unwrap_or(1.0);
+            c.tr.pos += dir * speed * dt;
         }
     }
 }

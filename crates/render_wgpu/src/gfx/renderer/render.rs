@@ -487,6 +487,46 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.queue
         .write_buffer(&r.sky_buf, 0, bytemuck::bytes_of(&r.sky.sky_uniform));
 
+    // Send authoritative Move/Aim intents each frame when command TX is present
+    if let Some(tx) = &r.cmd_tx {
+        // Compute camera-relative movement on XZ
+        let mut mx = 0.0f32;
+        let mut mz = 0.0f32;
+        if r.input.forward { mz += 1.0; }
+        if r.input.backward { mz -= 1.0; }
+        if r.input.right { mx += 1.0; }
+        if r.input.left { mx -= 1.0; }
+        let mut dx = 0.0f32;
+        let mut dz = 0.0f32;
+        if mx != 0.0 || mz != 0.0 {
+            let cam_fwd = (r.cam_follow.current_look - r.cam_follow.current_pos).normalize_or_zero();
+            let fwd_xz = glam::vec2(cam_fwd.x, cam_fwd.z).normalize_or_zero();
+            let right_xz = glam::vec2(fwd_xz.y, -fwd_xz.x); // rotate 90° CW on XZ
+            let v = right_xz * mx + fwd_xz * mz;
+            let v = if v.length_squared() > 1.0 { v.normalize() } else { v };
+            dx = v.x;
+            dz = v.y;
+        }
+        // Move intent
+        {
+            let cmd = net_core::command::ClientCmd::Move { dx, dz, run: u8::from(r.input.run) };
+            let mut payload = Vec::new();
+            cmd.encode(&mut payload);
+            let mut framed = Vec::with_capacity(payload.len() + 8);
+            net_core::frame::write_msg(&mut framed, &payload);
+            let _ = tx.try_send(framed);
+        }
+        // Aim intent (use current player yaw)
+        {
+            let cmd = net_core::command::ClientCmd::Aim { yaw: r.player.yaw };
+            let mut payload = Vec::new();
+            cmd.encode(&mut payload);
+            let mut framed = Vec::with_capacity(payload.len() + 8);
+            net_core::frame::write_msg(&mut framed, &payload);
+            let _ = tx.try_send(framed);
+        }
+    }
+
     // Keep model base identity to avoid moving instances globally
     let shard_mtx = glam::Mat4::IDENTITY;
     let shard_model = Model {
@@ -517,14 +557,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
             let m = r.wizard_models[i];
             let pos = (m * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
-            let tgt = if r.wizards_hostile_to_pc && r.pc_alive {
-                if let Some(pm) = r.wizard_models.get(r.pc_index) {
-                    let c = pm.to_cols_array();
-                    glam::vec3(c[12], c[13], c[14])
-                } else {
-                    pos
-                }
-            } else if !targets.is_empty() {
+            let tgt = if !targets.is_empty() {
                 let mut best = pos;
                 let mut best_d2 = f32::INFINITY;
                 for tpos in &targets {
@@ -602,20 +635,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     let head = r.wizard_models[widx] * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
                     r.damage.spawn(head.truncate(), dmg);
                 }
-                if fatal {
-                    if widx == r.pc_index {
-                        r.kill_pc();
-                    } else {
-                        r.remove_wizard_at(widx);
-                    }
-                }
+                let _ = fatal;
             }
         }
         r.update_zombies_from_replication();
-        r.apply_zombie_melee_demo(dt);
         r.update_zombie_palettes(t);
-        // Move sorceress client-side toward the wizards (slow walk)
-        r.update_sorceress_motion(dt);
     }
     // Death Knight palettes (single instance)
     r.update_deathknight_palettes(t);
@@ -880,7 +904,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Skinned: wizards (PC always visible even if hide_wizards)
         if r.is_vox_onepath() {
             // skip wizard visuals entirely in one‑path demo
-        } else if std::env::var("RA_DRAW_WIZARDS").map(|v| v != "0").unwrap_or(true) {
+        } else if std::env::var("RA_DRAW_WIZARDS")
+            .map(|v| v != "0")
+            .unwrap_or(true)
+        {
             log::debug!("draw: wizards x{}", r.wizard_count);
             r.draw_wizards(&mut rp);
             r.draw_calls += 1;
@@ -989,7 +1016,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Death Knight health bar (use server HP; lower vertical offset)
-        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied()
+        if r.dk_count > 0
+            && let Some(m) = r.dk_models.first().copied()
         {
             // Prefer replication; if not present, only fallback under legacy feature.
             if let Some(bs) = r.repl_buf.boss_status.as_ref() {

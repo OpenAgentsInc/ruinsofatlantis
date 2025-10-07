@@ -107,21 +107,32 @@ impl ApplicationHandler for App {
                 #[cfg(feature = "demo_server")]
                 {
                     let mut srv = server_core::ServerState::new();
-                    // Ensure PC actor exists first so spawn safety can apply
+                    // Ensure a PC actor exists (server-authoritative player); place at renderer's first wizard or origin
                     let wiz_now = self
                         .state
                         .as_ref()
                         .map(|s| s.wizard_positions())
                         .unwrap_or_default();
-                    if !wiz_now.is_empty() {
-                        srv.sync_wizards(&wiz_now);
+                    let pc0 = wiz_now.first().copied().unwrap_or(glam::vec3(0.0, 0.6, 0.0));
+                    if srv.pc_actor.is_none() {
+                        let _ = srv.spawn_pc_at(pc0);
                     }
-                    // Spawn a few rings so NPC wizards have targets on spawn
+                    // Spawn a few rings of undead for combat targets
                     srv.ring_spawn(8, 15.0, 20);
                     srv.ring_spawn(12, 30.0, 25);
                     srv.ring_spawn(15, 45.0, 30);
+                    // Spawn a small circle of NPC wizard casters near center
+                    let wiz_count = 4usize;
+                    let wiz_r = 8.0f32;
+                    for i in 0..wiz_count {
+                        let a = (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
+                        let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                        let _ = srv.spawn_wizard_npc(p);
+                    }
                     // Spawn the unique boss near center
                     let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                    // Spawn a Death Knight a bit further out (demo)
+                    let _dk = srv.spawn_death_knight(glam::vec3(25.0, 0.6, -15.0));
                     self.demo_server = Some(srv);
                 }
                 self.last_time = Some(std::time::Instant::now());
@@ -285,6 +296,13 @@ impl ApplicationHandler for App {
                                     d.z
                                 );
                                 srv.enqueue_cast(p, d, server_core::SpellId::MagicMissile);
+                            }
+                            net_core::command::ClientCmd::Move { dx, dz, run } => {
+                                let runb = run != 0;
+                                srv.apply_move_intent(dx, dz, runb);
+                            }
+                            net_core::command::ClientCmd::Aim { yaw } => {
+                                srv.apply_aim_intent(yaw);
                             }
                         }
                     }

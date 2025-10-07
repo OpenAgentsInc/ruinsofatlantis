@@ -23,6 +23,9 @@ pub enum ClientCmd {
     FireBolt { pos: [f32; 3], dir: [f32; 3] },
     Fireball { pos: [f32; 3], dir: [f32; 3] },
     MagicMissile { pos: [f32; 3], dir: [f32; 3] },
+    // Authoritative movement/aim intents
+    Move { dx: f32, dz: f32, run: u8 },
+    Aim { yaw: f32 },
 }
 
 impl ClientCmd {
@@ -56,6 +59,16 @@ impl ClientCmd {
                     out.extend_from_slice(&c.to_le_bytes());
                 }
             }
+            ClientCmd::Move { dx, dz, run } => {
+                out.push(3);
+                out.extend_from_slice(&dx.to_le_bytes());
+                out.extend_from_slice(&dz.to_le_bytes());
+                out.push(*run);
+            }
+            ClientCmd::Aim { yaw } => {
+                out.push(4);
+                out.extend_from_slice(&yaw.to_le_bytes());
+            }
         }
     }
 }
@@ -86,20 +99,32 @@ impl SnapshotDecode for ClientCmd {
             .copied()
             .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        let mut pos = [0.0f32; 3];
-        for v in &mut pos {
-            *v = f32::from_le_bytes(take::<4>(inp)?);
-        }
-        let mut dir = [0.0f32; 3];
-        for v in &mut dir {
-            *v = f32::from_le_bytes(take::<4>(inp)?);
-        }
-        let out = if kind == 1 {
-            Self::Fireball { pos, dir }
-        } else if kind == 2 {
-            Self::MagicMissile { pos, dir }
-        } else {
-            Self::FireBolt { pos, dir }
+        let out = match kind {
+            0 | 1 | 2 => {
+                let mut pos = [0.0f32; 3];
+                for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
+                let mut dir = [0.0f32; 3];
+                for v in &mut dir { *v = f32::from_le_bytes(take::<4>(inp)?); }
+                if kind == 1 {
+                    Self::Fireball { pos, dir }
+                } else if kind == 2 {
+                    Self::MagicMissile { pos, dir }
+                } else {
+                    Self::FireBolt { pos, dir }
+                }
+            }
+            3 => {
+                let dx = f32::from_le_bytes(take::<4>(inp)?);
+                let dz = f32::from_le_bytes(take::<4>(inp)?);
+                let run = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                Self::Move { dx, dz, run }
+            }
+            4 => {
+                let yaw = f32::from_le_bytes(take::<4>(inp)?);
+                Self::Aim { yaw }
+            }
+            _ => anyhow::bail!("unknown client cmd kind"),
         };
         Ok(out)
     }

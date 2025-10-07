@@ -1,0 +1,39 @@
+crates/server_core/src/lib.rs:497:            ActorKind::Boss,
+crates/server_core/src/lib.rs:641:                    ActorKind::Boss => 2,
+crates/render_wgpu/src/gfx/mod.rs:29:mod deathknight;
+crates/render_wgpu/src/gfx/mod.rs:184:    // Death Knight skinned geometry
+crates/render_wgpu/src/gfx/mod.rs:226:    // Death Knight instances
+crates/render_wgpu/src/gfx/mod.rs:274:    // Death Knight
+crates/render_wgpu/src/gfx/mod.rs:763:        // 3.5) Rebuild Death Knight instance and server entry at original spawn
+crates/render_wgpu/src/gfx/mod.rs:765:            deathknight::build_instances(&self.device, &self.terrain_cpu, self.dk_joints);
+crates/render_wgpu/src/gfx/mod.rs:773:            label: Some("deathknight-palettes"),
+crates/render_wgpu/src/gfx/mod.rs:779:            label: Some("deathknight-palettes-bg"),
+crates/render_wgpu/src/gfx/mod.rs:786:        // Do not spawn Death Knight into server here; renderer should be presentation-only
+crates/render_wgpu/src/gfx/mod.rs:3214:    fn update_deathknight_palettes(&mut self, time_global: f32) {
+crates/render_wgpu/src/gfx/mod.rs:3401:    fn update_deathknight_from_server(&mut self) {
+crates/render_wgpu/src/gfx/draw.rs:104:    pub(crate) fn draw_deathknight(&self, rpass: &mut wgpu::RenderPass<'_>) {
+crates/render_wgpu/src/gfx/deathknight.rs:1://! Death Knight assets and instance building.
+crates/render_wgpu/src/gfx/deathknight.rs:17:pub struct DeathKnightAssets {
+crates/render_wgpu/src/gfx/deathknight.rs:24:pub fn load_assets(device: &wgpu::Device) -> Result<DeathKnightAssets> {
+crates/render_wgpu/src/gfx/deathknight.rs:41:        label: Some("deathknight-vb"),
+crates/render_wgpu/src/gfx/deathknight.rs:46:        label: Some("deathknight-ib"),
+crates/render_wgpu/src/gfx/deathknight.rs:51:    Ok(DeathKnightAssets {
+crates/render_wgpu/src/gfx/deathknight.rs:59:/// Build a single instance for the Death Knight.
+crates/render_wgpu/src/gfx/deathknight.rs:82:        label: Some("deathknight-instances"),
+crates/render_wgpu/src/gfx/renderer/render.rs:613:    // Death Knight palettes (single instance)
+crates/render_wgpu/src/gfx/renderer/render.rs:614:    r.update_deathknight_palettes(t);
+crates/render_wgpu/src/gfx/renderer/render.rs:891:        // Skinned: Death Knight (boss)
+crates/render_wgpu/src/gfx/renderer/render.rs:893:            log::debug!("draw: deathknight x{}", r.dk_count);
+crates/render_wgpu/src/gfx/renderer/render.rs:894:            r.draw_deathknight(&mut rp);
+crates/render_wgpu/src/gfx/renderer/render.rs:987:        // Death Knight health bar (use server HP; lower vertical offset)
+crates/render_wgpu/src/gfx/renderer/render.rs:1097:        // Death Knight nameplate (single instance)
+crates/render_wgpu/src/gfx/renderer/render.rs:1115:                "Death Knight",
+crates/render_wgpu/src/gfx/renderer/init.rs:976:    // Death Knight assets (skinned, single instance)
+crates/render_wgpu/src/gfx/renderer/init.rs:978:        super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
+crates/render_wgpu/src/gfx/renderer/init.rs:1050:    // Death Knight single-instance buffers and palettes
+crates/render_wgpu/src/gfx/renderer/init.rs:1052:        super::super::deathknight::build_instances(&device, &terrain_cpu, dk_joints);
+crates/render_wgpu/src/gfx/renderer/init.rs:1053:    // Server authority: do not spawn Death Knight from renderer. The visual
+crates/render_wgpu/src/gfx/renderer/init.rs:1065:        label: Some("deathknight-palettes"),
+crates/render_wgpu/src/gfx/renderer/init.rs:1071:        label: Some("deathknight-palettes-bg"),
+crates/render_wgpu/src/gfx/renderer/init.rs:1079:    // Sorceress — single idle instance behind the Death Knight (configurable model)
+crates/render_wgpu/src/gfx/renderer/update.rs:1978:                // 1) Death Knight (handle first so we can despawn on fatal)

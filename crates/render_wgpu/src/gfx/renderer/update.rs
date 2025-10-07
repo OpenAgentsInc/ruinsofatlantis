@@ -1652,7 +1652,7 @@ impl Renderer {
             let zombies_alive = self.any_zombies_alive();
             // If zombies have (re)appeared and we are not hostile to the player, ensure
             // NPC wizards re-enter the PortalOpen casting loop.
-            if zombies_alive && !self.wizards_hostile_to_pc {
+            if zombies_alive {
                 for i in 0..(self.wizard_count as usize) {
                     if i == self.pc_index {
                         continue;
@@ -1674,8 +1674,7 @@ impl Renderer {
                 let crossed = (prev <= bolt_offset && phase >= bolt_offset)
                     || (prev > phase && (prev <= bolt_offset || phase >= bolt_offset));
                 // If wizards have aggroed on the player, they may fire even without zombies present
-                let allowed = i == self.pc_index || zombies_alive || self.wizards_hostile_to_pc;
-                if allowed && crossed && i != self.pc_index {
+                if crossed && i != self.pc_index && zombies_alive {
                     let clip = self.select_clip(self.wizard_anim_index[i]);
                     let clip_time = if clip.duration > 0.0 {
                         phase.min(clip.duration)
@@ -1695,16 +1694,7 @@ impl Renderer {
                         let mut dir_w = (inst * glam::Vec4::new(0.0, 0.0, 1.0, 0.0))
                             .truncate()
                             .normalize_or_zero();
-                        if self.wizards_hostile_to_pc && self.pc_alive {
-                            if let Some(pm) = self.wizard_models.get(self.pc_index) {
-                                let c = pm.to_cols_array();
-                                let pc = glam::vec3(c[12], c[13], c[14]);
-                                let d = glam::vec3(pc.x - wpos.x, 0.0, pc.z - wpos.z);
-                                if d.length_squared() > 1e-8 {
-                                    dir_w = d.normalize();
-                                }
-                            }
-                        } else if !self.repl_buf.npcs.is_empty() {
+                        if !self.repl_buf.npcs.is_empty() {
                             let mut best_d2 = f32::INFINITY;
                             let mut tgt: Option<glam::Vec3> = None;
                             for n in &self.repl_buf.npcs {
@@ -1734,25 +1724,16 @@ impl Renderer {
                         // Decide between Fire Bolt (default) and Fireball (occasional, far targets only)
                         let min_fireball_dist = 10.0f32; // meters
                         let mut target_dist = f32::INFINITY;
-                        if self.wizards_hostile_to_pc && self.pc_alive {
-                            if let Some(pm) = self.wizard_models.get(self.pc_index) {
-                                let c = pm.to_cols_array();
-                                let pc = glam::vec3(c[12], c[13], c[14]);
-                                let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
-                                target_dist = (pc - wpos).length();
-                            }
-                        } else {
-                            #[cfg(any())]
-                            {
-                                let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
-                                for n in &self.server.npcs {
-                                    if !n.alive {
-                                        continue;
-                                    }
-                                    let d = glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
-                                    if d < target_dist {
-                                        target_dist = d;
-                                    }
+                        // Estimate target distance from nearest replicated NPC (if any)
+                        if !self.repl_buf.npcs.is_empty() {
+                            let wpos = (inst * glam::Vec4::new(0.0, 0.0, 0.0, 1.0)).truncate();
+                            for n in &self.repl_buf.npcs {
+                                if !n.alive {
+                                    continue;
+                                }
+                                let d = glam::vec2(n.pos.x - wpos.x, n.pos.z - wpos.z).length();
+                                if d < target_dist {
+                                    target_dist = d;
                                 }
                             }
                         }
@@ -1833,6 +1814,32 @@ impl Renderer {
                     // Show explosion visuals for fireball
                     if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } = pr.kind {
                         self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
+                    }
+                    // Visible impact burst for non-fireball hits
+                    if !matches!(pr.kind, crate::gfx::fx::ProjectileKind::Fireball { .. }) {
+                        // compact burst at impact
+                        let mut burst: Vec<Particle> = Vec::new();
+                        burst.push(Particle {
+                            pos: p1,
+                            vel: glam::Vec3::ZERO,
+                            age: 0.0,
+                            life: 0.10,
+                            size: 0.05,
+                            color: [1.6, 1.0, 0.3],
+                        });
+                        for _ in 0..10 {
+                            let a = rand_unit() * std::f32::consts::TAU;
+                            let r = 2.6 + rand_unit() * 0.6;
+                            burst.push(Particle {
+                                pos: p1,
+                                vel: glam::vec3(a.cos() * r, 1.2 + rand_unit() * 0.8, a.sin() * r),
+                                age: 0.0,
+                                life: 0.10,
+                                size: 0.012,
+                                color: [1.5, 0.9, 0.3],
+                            });
+                        }
+                        self.particles.append(&mut burst);
                     }
                     // If fatal, remove the zombie visual
                     if after == 0
@@ -2157,7 +2164,7 @@ impl Renderer {
         }
 
         // 5) If no zombies remain, retire NPC wizards from the casting loop unless hostile to player
-        if !self.any_zombies_alive() && !self.wizards_hostile_to_pc {
+        if !self.any_zombies_alive() {
             for i in 0..(self.wizard_count as usize) {
                 if i == self.pc_index {
                     continue;
@@ -2170,6 +2177,7 @@ impl Renderer {
     }
 
     #[allow(dead_code)]
+    #[cfg(any())]
     pub(crate) fn collide_with_wizards(&mut self, dt: f32, damage: i32) {
         let mut i = 0usize;
         while i < self.projectiles.len() {
@@ -2215,13 +2223,7 @@ impl Renderer {
                             }
                         }
                     }
-                    if fatal {
-                        if j == self.pc_index {
-                            self.kill_pc();
-                        } else {
-                            self.remove_wizard_at(j);
-                        }
-                    }
+                    let _ = fatal;
                     // impact burst
                     for _ in 0..14 {
                         let a = rand_unit() * std::f32::consts::TAU;
@@ -2920,7 +2922,7 @@ impl Renderer {
                 self.damage.spawn(head, damage);
                 if after == 0 {
                     if j == self.pc_index {
-                        self.kill_pc();
+                        // legacy path removed
                     } else {
                         to_remove.push(j);
                     }
@@ -2968,6 +2970,7 @@ impl Renderer {
 
 #[cfg(not(feature = "vox_onepath_demo"))]
 impl Renderer {
+    #[allow(dead_code)]
     pub(crate) fn try_voxel_impact(&mut self, _p0: glam::Vec3, _p1: glam::Vec3) {}
 }
 
