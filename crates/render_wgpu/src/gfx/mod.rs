@@ -2762,8 +2762,12 @@ impl Renderer {
                     self.size.height,
                     pc_hp,
                     self.wizard_hp_max,
+                    self.repl_buf.hud.mana as i32,
+                    self.repl_buf.hud.mana_max as i32,
                     cast_frac,
                     gcd_frac,
+                    0.0,
+                    0.0,
                     cast_label,
                 );
                 if self.hud_model.perf_enabled() {

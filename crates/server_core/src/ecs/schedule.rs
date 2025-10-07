@@ -554,29 +554,44 @@ fn separate_undead(srv: &mut ServerState) {
         .map(|a| a.id)
         .collect();
     let n = ids.len();
-    if n < 2 { return; }
+    if n < 2 {
+        return;
+    }
     for i in 0..n {
         for j in (i + 1)..n {
             let (ai, aj) = (ids[i], ids[j]);
             let (pi, ri) = if let Some(a) = srv.ecs.get(ai) {
                 (a.tr.pos, a.tr.radius)
-            } else { continue };
+            } else {
+                continue;
+            };
             let (pj, rj) = if let Some(a) = srv.ecs.get(aj) {
                 (a.tr.pos, a.tr.radius)
-            } else { continue };
+            } else {
+                continue;
+            };
             let to = pj - pi;
             let min_d = ri + rj + 0.1; // pad
             let d = to.length();
-            if d < 1e-6 { // same position; nudge along X
-                if let Some(a) = srv.ecs.get_mut(ai) { a.tr.pos.x -= min_d * 0.5; }
-                if let Some(a) = srv.ecs.get_mut(aj) { a.tr.pos.x += min_d * 0.5; }
+            if d < 1e-6 {
+                // same position; nudge along X
+                if let Some(a) = srv.ecs.get_mut(ai) {
+                    a.tr.pos.x -= min_d * 0.5;
+                }
+                if let Some(a) = srv.ecs.get_mut(aj) {
+                    a.tr.pos.x += min_d * 0.5;
+                }
                 continue;
             }
             if d < min_d {
                 let push = (min_d - d) * 0.5;
                 let dir = to / d.max(1e-6);
-                if let Some(a) = srv.ecs.get_mut(ai) { a.tr.pos -= dir * push; }
-                if let Some(a) = srv.ecs.get_mut(aj) { a.tr.pos += dir * push; }
+                if let Some(a) = srv.ecs.get_mut(ai) {
+                    a.tr.pos -= dir * push;
+                }
+                if let Some(a) = srv.ecs.get_mut(aj) {
+                    a.tr.pos += dir * push;
+                }
             }
         }
     }

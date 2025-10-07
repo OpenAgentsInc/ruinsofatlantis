@@ -1391,6 +1391,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.size.height,
                 pc_hp,
                 r.wizard_hp_max,
+                r.repl_buf.hud.mana as i32,
+                r.repl_buf.hud.mana_max as i32,
                 cast_frac,
                 cd1,
                 cd2,

@@ -1376,6 +1376,8 @@ impl Hud {
         surface_h: u32,
         pc_hp: i32,
         pc_hp_max: i32,
+        pc_mana: i32,
+        pc_mana_max: i32,
         cast_frac: f32,
         cd1_frac: f32,
         cd2_frac: f32,
@@ -1439,6 +1441,50 @@ impl Hud {
             x0 + 6.0,
             y0 + bar_h - 3.0,
             &label,
+            [0.0, 0.0, 0.0, 0.95],
+        );
+
+        // Player Mana (below HP)
+        let my0 = y1 + 6.0;
+        let my1 = my0 + bar_h;
+        // Border
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0 - 2.0,
+            my0 - 2.0,
+            x1 + 2.0,
+            my1 + 2.0,
+            [0.05, 0.05, 0.05, 0.95],
+        );
+        // Background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0,
+            my0,
+            x1,
+            my1,
+            [0.10, 0.10, 0.10, 0.85],
+        );
+        let mfrac = if pc_mana_max > 0 {
+            (pc_mana.max(0) as f32) / (pc_mana_max as f32)
+        } else {
+            0.0
+        };
+        if mfrac > 0.0 {
+            let fx1 = x0 + bar_w * mfrac.clamp(0.0, 1.0);
+            // blue/cyan gradient
+            let col = [0.2, 0.6 + 0.4 * mfrac, 1.8, 1.0];
+            self.push_rect(surface_w, surface_h, x0, my0, fx1, my1, col);
+        }
+        let mlabel = format!("Mana {} / {}", pc_mana.max(0), pc_mana_max.max(1));
+        self.push_text_line(
+            surface_w,
+            surface_h,
+            x0 + 6.0,
+            my0 + bar_h - 3.0,
+            &mlabel,
             [0.0, 0.0, 0.0, 0.95],
         );
 
