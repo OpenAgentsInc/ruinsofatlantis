@@ -492,24 +492,41 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Compute camera-relative movement on XZ
         let mut mx = 0.0f32;
         let mut mz = 0.0f32;
-        if r.input.forward { mz += 1.0; }
-        if r.input.backward { mz -= 1.0; }
-        if r.input.right { mx += 1.0; }
-        if r.input.left { mx -= 1.0; }
+        if r.input.forward {
+            mz += 1.0;
+        }
+        if r.input.backward {
+            mz -= 1.0;
+        }
+        if r.input.right {
+            mx += 1.0;
+        }
+        if r.input.left {
+            mx -= 1.0;
+        }
         let mut dx = 0.0f32;
         let mut dz = 0.0f32;
         if mx != 0.0 || mz != 0.0 {
-            let cam_fwd = (r.cam_follow.current_look - r.cam_follow.current_pos).normalize_or_zero();
+            let cam_fwd =
+                (r.cam_follow.current_look - r.cam_follow.current_pos).normalize_or_zero();
             let fwd_xz = glam::vec2(cam_fwd.x, cam_fwd.z).normalize_or_zero();
             let right_xz = glam::vec2(fwd_xz.y, -fwd_xz.x); // rotate 90° CW on XZ
             let v = right_xz * mx + fwd_xz * mz;
-            let v = if v.length_squared() > 1.0 { v.normalize() } else { v };
+            let v = if v.length_squared() > 1.0 {
+                v.normalize()
+            } else {
+                v
+            };
             dx = v.x;
             dz = v.y;
         }
         // Move intent
         {
-            let cmd = net_core::command::ClientCmd::Move { dx, dz, run: u8::from(r.input.run) };
+            let cmd = net_core::command::ClientCmd::Move {
+                dx,
+                dz,
+                run: u8::from(r.input.run),
+            };
             let mut payload = Vec::new();
             cmd.encode(&mut payload);
             let mut framed = Vec::with_capacity(payload.len() + 8);

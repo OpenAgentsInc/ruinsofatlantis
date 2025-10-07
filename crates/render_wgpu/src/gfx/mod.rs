@@ -3247,7 +3247,7 @@ impl Renderer {
         self.queue
             .write_buffer(&self.sorc_palettes_buf, 0, bytemuck::cast_slice(&raw));
     }
-        /* Client-side sorceress motion removed; keep legacy under cfg.
+    /* Client-side sorceress motion removed; keep legacy under cfg.
         #[allow(dead_code)]
         #[cfg(any())]
         fn update_sorceress_motion(&mut self, dt: f32) {

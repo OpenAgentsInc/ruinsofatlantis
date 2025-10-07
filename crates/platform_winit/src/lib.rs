@@ -113,7 +113,10 @@ impl ApplicationHandler for App {
                         .as_ref()
                         .map(|s| s.wizard_positions())
                         .unwrap_or_default();
-                    let pc0 = wiz_now.first().copied().unwrap_or(glam::vec3(0.0, 0.6, 0.0));
+                    let pc0 = wiz_now
+                        .first()
+                        .copied()
+                        .unwrap_or(glam::vec3(0.0, 0.6, 0.0));
                     if srv.pc_actor.is_none() {
                         let _ = srv.spawn_pc_at(pc0);
                     }

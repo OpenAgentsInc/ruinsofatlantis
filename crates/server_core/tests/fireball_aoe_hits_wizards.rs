@@ -27,7 +27,11 @@ fn fireball_aoe_hits_wizards() {
         server_core::Health { hp: 100, max: 100 },
     );
     // Cast Fireball toward cluster
-    s.enqueue_cast(vec3(0.0, 0.6, 0.0), vec3(0.0, 0.0, 1.0), server_core::SpellId::Fireball);
+    s.enqueue_cast(
+        vec3(0.0, 0.6, 0.0),
+        vec3(0.0, 0.0, 1.0),
+        server_core::SpellId::Fireball,
+    );
     // Step forward until explosion resolves
     for _ in 0..120 {
         s.step_authoritative(0.016, &[]);
@@ -35,4 +39,3 @@ fn fireball_aoe_hits_wizards() {
     let hp_after = s.ecs.get(w1).map(|a| a.hp.hp).unwrap_or(0);
     assert!(hp_after < 100, "wizard did not take AoE damage");
 }
-

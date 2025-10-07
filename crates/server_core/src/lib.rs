@@ -323,14 +323,24 @@ impl ServerState {
             // Attach basic casting resources to NPC wizard for AI
             if let Some(w) = self.ecs.get_mut(id) {
                 if w.pool.is_none() {
-                    w.pool = Some(ecs::ResourcePool { mana: 20, max: 20, regen_per_s: 0.5 });
+                    w.pool = Some(ecs::ResourcePool {
+                        mana: 20,
+                        max: 20,
+                        regen_per_s: 0.5,
+                    });
                 }
                 if w.cooldowns.is_none() {
                     use std::collections::HashMap;
-                    w.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+                    w.cooldowns = Some(ecs::Cooldowns {
+                        gcd_s: 0.30,
+                        gcd_ready: 0.0,
+                        per_spell: HashMap::new(),
+                    });
                 }
                 if w.spellbook.is_none() {
-                    w.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+                    w.spellbook = Some(ecs::Spellbook {
+                        known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
+                    });
                 }
             }
             npc_ids.push(id);
@@ -381,15 +391,29 @@ impl ServerState {
         let id = self.ecs.spawn(
             ActorKind::Wizard,
             Team::Pc,
-            Transform { pos, yaw: 0.0, radius: 0.7 },
+            Transform {
+                pos,
+                yaw: 0.0,
+                radius: 0.7,
+            },
             Health { hp: 100, max: 100 },
         );
         self.pc_actor = Some(id);
         if let Some(pc) = self.ecs.get_mut(id) {
-            pc.pool = Some(ecs::ResourcePool { mana: 20, max: 20, regen_per_s: 1.0 });
+            pc.pool = Some(ecs::ResourcePool {
+                mana: 20,
+                max: 20,
+                regen_per_s: 1.0,
+            });
             use std::collections::HashMap;
-            pc.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
-            pc.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+            pc.cooldowns = Some(ecs::Cooldowns {
+                gcd_s: 0.30,
+                gcd_ready: 0.0,
+                per_spell: HashMap::new(),
+            });
+            pc.spellbook = Some(ecs::Spellbook {
+                known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
+            });
             pc.move_speed = Some(ecs::MoveSpeed { mps: 5.0 });
         }
         id
@@ -534,7 +558,11 @@ impl ServerState {
         let id = self.ecs.spawn(
             ActorKind::Boss,
             Team::Undead,
-            Transform { pos, yaw: 0.0, radius: 1.0 },
+            Transform {
+                pos,
+                yaw: 0.0,
+                radius: 1.0,
+            },
             Health { hp: 400, max: 400 },
         );
         if let Some(a) = self.ecs.get_mut(id) {
@@ -542,7 +570,11 @@ impl ServerState {
             a.move_speed = Some(ecs::MoveSpeed { mps: 2.2 });
             a.aggro = Some(ecs::AggroRadius { m: 40.0 });
             a.attack = Some(ecs::AttackRadius { m: 0.45 });
-            a.melee = Some(ecs::Melee { damage: 18, cooldown_s: 0.9, ready_in_s: 0.0 });
+            a.melee = Some(ecs::Melee {
+                damage: 18,
+                cooldown_s: 0.9,
+                ready_in_s: 0.0,
+            });
         }
         id
     }
@@ -552,15 +584,29 @@ impl ServerState {
         let id = self.ecs.spawn(
             ActorKind::Wizard,
             Team::Wizards,
-            Transform { pos, yaw: 0.0, radius: 0.7 },
+            Transform {
+                pos,
+                yaw: 0.0,
+                radius: 0.7,
+            },
             Health { hp: 100, max: 100 },
         );
         if let Some(w) = self.ecs.get_mut(id) {
             // Stationary caster by default; give casting resources
             use std::collections::HashMap;
-            w.pool = Some(ecs::ResourcePool { mana: 30, max: 30, regen_per_s: 0.5 });
-            w.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
-            w.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+            w.pool = Some(ecs::ResourcePool {
+                mana: 30,
+                max: 30,
+                regen_per_s: 0.5,
+            });
+            w.cooldowns = Some(ecs::Cooldowns {
+                gcd_s: 0.30,
+                gcd_ready: 0.0,
+                per_spell: HashMap::new(),
+            });
+            w.spellbook = Some(ecs::Spellbook {
+                known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
+            });
         }
         id
     }

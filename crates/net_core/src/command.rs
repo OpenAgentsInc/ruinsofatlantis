@@ -100,11 +100,15 @@ impl SnapshotDecode for ClientCmd {
             .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
         let out = match kind {
-            0 | 1 | 2 => {
+            0..=2 => {
                 let mut pos = [0.0f32; 3];
-                for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
+                for v in &mut pos {
+                    *v = f32::from_le_bytes(take::<4>(inp)?);
+                }
                 let mut dir = [0.0f32; 3];
-                for v in &mut dir { *v = f32::from_le_bytes(take::<4>(inp)?); }
+                for v in &mut dir {
+                    *v = f32::from_le_bytes(take::<4>(inp)?);
+                }
                 if kind == 1 {
                     Self::Fireball { pos, dir }
                 } else if kind == 2 {
@@ -116,7 +120,10 @@ impl SnapshotDecode for ClientCmd {
             3 => {
                 let dx = f32::from_le_bytes(take::<4>(inp)?);
                 let dz = f32::from_le_bytes(take::<4>(inp)?);
-                let run = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?;
+                let run = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
                 *inp = &inp[1..];
                 Self::Move { dx, dz, run }
             }

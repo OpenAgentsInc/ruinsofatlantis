@@ -117,8 +117,12 @@ impl WorldEcs {
         let _e = Entity(self.next_ent);
         self.next_ent = self.next_ent.wrapping_add(1);
         let id = c.id;
-        if c.intent_move.is_none() { c.intent_move = None; }
-        if c.intent_aim.is_none() { c.intent_aim = None; }
+        if c.intent_move.is_none() {
+            c.intent_move = None;
+        }
+        if c.intent_aim.is_none() {
+            c.intent_aim = None;
+        }
         self.ents.push(c);
         id
     }
