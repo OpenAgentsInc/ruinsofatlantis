@@ -54,6 +54,7 @@ pub struct Ctx {
     pub time_s: f32,
     pub dmg: Vec<DamageEvent>,
     pub boom: Vec<ExplodeEvent>,
+    #[allow(dead_code)]
     pub hits: Vec<HitEvent>,
     pub deaths: Vec<DeathEvent>,
     pub spatial: SpatialGrid,

@@ -1,4 +1,6 @@
-use net_core::snapshot::{ActorSnapshotDelta, HitFx, ProjectileRep, SnapshotDecode, SnapshotEncode};
+use net_core::snapshot::{
+    ActorSnapshotDelta, HitFx, ProjectileRep, SnapshotDecode, SnapshotEncode,
+};
 
 #[test]
 fn hitfx_roundtrip_in_actor_delta() {
@@ -9,8 +11,16 @@ fn hitfx_roundtrip_in_actor_delta() {
         spawns: vec![],
         updates: vec![],
         removals: vec![],
-        projectiles: vec![ProjectileRep { id: 1, kind: 0, pos: [0.0, 0.6, 0.0], vel: [1.0, 0.0, 0.0] }],
-        hits: vec![HitFx { kind: 2, pos: [3.0, 0.6, -1.0] }],
+        projectiles: vec![ProjectileRep {
+            id: 1,
+            kind: 0,
+            pos: [0.0, 0.6, 0.0],
+            vel: [1.0, 0.0, 0.0],
+        }],
+        hits: vec![HitFx {
+            kind: 2,
+            pos: [3.0, 0.6, -1.0],
+        }],
     };
     let mut buf = Vec::new();
     delta.encode(&mut buf);
@@ -23,4 +33,3 @@ fn hitfx_roundtrip_in_actor_delta() {
     assert_eq!(d2.hits[0].kind, 2);
     assert!((d2.hits[0].pos[0] - 3.0).abs() < 1.0e-6);
 }
-

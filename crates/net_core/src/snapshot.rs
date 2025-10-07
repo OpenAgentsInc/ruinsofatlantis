@@ -326,8 +326,8 @@ pub struct ActorSnapshotDelta {
 /// Lightweight hit effect for client VFX without client-side gameplay.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HitFx {
-    pub kind: u8,       // 0=Firebolt, 1=Fireball (optional), 2=MagicMissile, etc.
-    pub pos: [f32; 3],  // world-space position
+    pub kind: u8,      // 0=Firebolt, 1=Fireball (optional), 2=MagicMissile, etc.
+    pub pos: [f32; 3], // world-space position
 }
 
 impl SnapshotEncode for ActorSnapshotDelta {
@@ -1060,7 +1060,10 @@ mod tests {
                 pos: [0.0, 1.0, 2.0],
                 vel: [3.0, 4.0, 5.0],
             }],
-            hits: vec![HitFx { kind: 0, pos: [1.0, 0.6, 2.0] }],
+            hits: vec![HitFx {
+                kind: 0,
+                pos: [1.0, 0.6, 2.0],
+            }],
         };
         let mut buf = Vec::new();
         delta.encode(&mut buf);
