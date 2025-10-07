@@ -26,7 +26,11 @@ fn magic_missile_spawns_three_and_distinct_targets() {
         .filter(|c| c.projectile.is_some())
         .filter_map(|c| c.homing.as_ref().map(|h| h.target))
         .collect();
-    assert!(homing_targets.len() >= 3, "expected 3 homing projectiles, got {}", homing_targets.len());
+    assert!(
+        homing_targets.len() >= 3,
+        "expected 3 homing projectiles, got {}",
+        homing_targets.len()
+    );
     use std::collections::HashSet;
     let set: HashSet<_> = homing_targets.iter().cloned().collect();
     assert!(set.len() >= 3, "targets not distinct: {:?}", homing_targets);
@@ -55,7 +59,9 @@ fn homing_steers_toward_target_over_time() {
     let desired = (vec3(12.0, 0.6, 0.0) - p0).normalize_or_zero();
     let angle0 = v0.normalize_or_zero().angle_between(desired);
     // Step a few frames, then measure angle again
-    for _ in 0..5 { s.step_authoritative(0.02, &[pc]); }
+    for _ in 0..5 {
+        s.step_authoritative(0.02, &[pc]);
+    }
     let mut v1 = None;
     for c in s.ecs.iter() {
         if c.projectile.is_some() && c.homing.is_some() {
@@ -65,7 +71,12 @@ fn homing_steers_toward_target_over_time() {
     }
     let v1 = v1.expect("homing projectile disappeared too early");
     let angle1 = v1.normalize_or_zero().angle_between(desired);
-    assert!(angle1 < angle0, "homing did not reduce angle: {} -> {}", angle0, angle1);
+    assert!(
+        angle1 < angle0,
+        "homing did not reduce angle: {} -> {}",
+        angle0,
+        angle1
+    );
 }
 
 #[test]
@@ -77,7 +88,7 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
     let mana0 = s
         .ecs
         .iter()
-        .find(|c| c.team == server_core::actor::Team::Pc)
+        .find(|c| c.team == server_core::Team::Pc)
         .and_then(|c| c.pool.as_ref().map(|p| p.mana))
         .unwrap_or(0);
     // Cast Fireball (cost=5)
@@ -88,7 +99,7 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
         let c = s
             .ecs
             .iter()
-            .find(|c| c.team == server_core::actor::Team::Pc)
+            .find(|c| c.team == server_core::Team::Pc)
             .expect("pc present");
         let gcd = c.cooldowns.as_ref().map(|cd| cd.gcd_ready).unwrap_or(0.0);
         let cd = c
@@ -109,4 +120,3 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
     let after = count_projectiles(&s);
     assert_eq!(before, after, "projectile count changed while on GCD");
 }
-

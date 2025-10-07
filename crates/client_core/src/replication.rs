@@ -20,6 +20,7 @@ pub struct ReplicationBuffer {
     pub wizards: Vec<WizardView>,
     pub npcs: Vec<NpcView>,
     pub projectiles: Vec<ProjectileView>,
+    pub hud: HudState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -236,16 +237,27 @@ impl ReplicationBuffer {
                 // Legacy BossStatusMsg used without wizard list; leave wizards unchanged.
                 let mut bs_slice: &[u8] = payload; // reset for boss status
                 if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut bs_slice) {
-                    self.boss_status = Some(BossStatus {
-                        name: bs.name,
-                        ac: bs.ac,
-                        hp: bs.hp,
-                        max: bs.max,
-                        pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]),
-                    });
+                    self.boss_status = Some(BossStatus { name: bs.name, ac: bs.ac, hp: bs.hp, max: bs.max, pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]) });
                     true
                 } else {
-                    false
+                    // HUD status message
+                    let mut hud_slice: &[u8] = payload;
+                    if let Ok(hud) = net_core::snapshot::HudStatusMsg::decode(&mut hud_slice) {
+                        self.hud.mana = hud.mana;
+                        self.hud.mana_max = hud.mana_max;
+                        self.hud.gcd_ms = hud.gcd_ms;
+                        // map spell ids 0,1,2
+                        self.hud.spell_cds = [0, 0, 0];
+                        for (id, ms) in hud.spell_cds {
+                            if (id as usize) < self.hud.spell_cds.len() { self.hud.spell_cds[id as usize] = ms; }
+                        }
+                        self.hud.burning_ms = hud.burning_ms;
+                        self.hud.slow_ms = hud.slow_ms;
+                        self.hud.stunned_ms = hud.stunned_ms;
+                        true
+                    } else {
+                        false
+                    }
                 }
             }
         }
@@ -285,6 +297,17 @@ pub struct ActorView {
     pub hp: i32,
     pub max: i32,
     pub alive: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct HudState {
+    pub mana: u16,
+    pub mana_max: u16,
+    pub gcd_ms: u16,
+    pub spell_cds: [u16; 3],
+    pub burning_ms: u16,
+    pub slow_ms: u16,
+    pub stunned_ms: u16,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardView {

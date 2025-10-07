@@ -47,6 +47,11 @@ pub struct Components {
     pub spellbook: Option<Spellbook>,
     pub pool: Option<ResourcePool>,
     pub cooldowns: Option<Cooldowns>,
+    // Effects & lifecycle
+    pub burning: Option<Burning>,
+    pub slow: Option<Slow>,
+    pub stunned: Option<Stunned>,
+    pub despawn_after: Option<DespawnAfter>,
 }
 
 #[derive(Default, Debug)]
@@ -88,6 +93,10 @@ impl WorldEcs {
             spellbook: None,
             pool: None,
             cooldowns: None,
+            burning: None,
+            slow: None,
+            stunned: None,
+            despawn_after: None,
         });
         id
     }
@@ -151,6 +160,32 @@ impl WorldEcs {
     }
 }
 
+impl Components {
+    pub fn apply_burning(&mut self, dps: i32, dur: f32, src: Option<ActorId>) {
+        self.burning = Some(match self.burning {
+            Some(b) => Burning {
+                dps: b.dps.max(dps),
+                remaining_s: b.remaining_s.max(dur),
+                src: src.or(b.src),
+            },
+            None => Burning { dps, remaining_s: dur, src },
+        });
+    }
+    pub fn apply_slow(&mut self, mul: f32, dur: f32) {
+        let m = mul.clamp(0.0, 1.0);
+        self.slow = Some(match self.slow {
+            Some(s) => Slow { mul: s.mul.min(m), remaining_s: s.remaining_s.max(dur) },
+            None => Slow { mul: m, remaining_s: dur },
+        });
+    }
+    pub fn apply_stun(&mut self, dur: f32) {
+        self.stunned = Some(match self.stunned {
+            Some(s) => Stunned { remaining_s: s.remaining_s.max(dur) },
+            None => Stunned { remaining_s: dur },
+        });
+    }
+}
+
 #[inline]
 fn hostile_default(a: Team, b: Team) -> bool {
     use Team::*;
@@ -185,6 +220,34 @@ pub struct Owner {
 pub struct Homing {
     pub target: ActorId,
     pub turn_rate: f32,
+}
+
+// Status effects --------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct Burning {
+    pub dps: i32,
+    pub remaining_s: f32,
+    pub src: Option<crate::actor::ActorId>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Slow {
+    /// Multiply base MoveSpeed.mps by this factor (0.0..=1.0).
+    pub mul: f32,
+    pub remaining_s: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Stunned {
+    pub remaining_s: f32,
+}
+
+// Lifecycle -------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct DespawnAfter {
+    pub seconds: f32,
 }
 
 // ----------------------------------------------------------------------------

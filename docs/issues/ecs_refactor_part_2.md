@@ -270,6 +270,36 @@ Addendum — Implementation log (2025-10-07)
   - Platform logs include tx byte count; simple rate limiting prevents command spam.
   - Next polish (optional): feature flag/env to toggle v2 full vs v3 delta in platform; add metrics for actors replicated per tick and update counts.
 
+- PR‑7 (Phase 7) complete — Server‑side cast pipeline (spellbook/GCD/mana)
+  - Why: Make combat fully data‑driven and server‑authoritative; remove ad‑hoc client→projectile spawns; centralize anti‑cheat, costs, and cooldowns.
+  - What changed:
+    - Added `SpellId` (Firebolt, Fireball, MagicMissile) and a server‑side `CastCmd` queue in `ServerState`.
+    - Introduced ECS components for casting:
+      - `Spellbook { known: Vec<SpellId> }`
+      - `ResourcePool { mana, max, regen_per_s }`
+      - `Cooldowns { gcd_s, gcd_ready, per_spell: HashMap<SpellId, f32> }`
+    - New systems in schedule:
+      - `cooldown_and_mana_tick`: decrements GCD and per‑spell timers; regenerates mana.
+      - `cast_system`: validates `Spellbook`/`Cooldowns`/`ResourcePool`, applies GCD/costs, and translates cast into `pending_projectiles` (which `ingest_projectile_spawns` turns into ECS projectiles next).
+      - Order updated to: cooldown→boss→cast→ingest→apply spawns→grid→AI/move→melee→homing→integrate→collide→AoE→faction flip→apply→cleanup→apply despawns.
+    - Platform now routes `ClientCmd::{FireBolt,Fireball,MagicMissile}` to `ServerState::enqueue_cast` instead of spawning projectiles directly.
+    - MagicMissile casting produces three homing missiles via the same pipeline (see PR‑5/6 notes for homing/targets), preserving distinct targets when available.
+  - Default spell specs (server‑tuned):
+    - Firebolt: cost=0, cooldown=0.30s, GCD=0.30s; straight shot
+    - Fireball: cost=5, cooldown=4.00s, GCD=0.50s; AoE (impact/prox/TTL)
+    - MagicMissile: cost=2, cooldown=1.50s, GCD=0.30s; 3 homing missiles, acquire_r=25–30m, turn_rate≈3.5 rad/s
+  - Acceptance:
+    - Invalid casts (unknown spell, on GCD/per‑spell cooldown, insufficient mana) result in no projectiles spawned; valid casts debit mana and set timers.
+    - MagicMissile spawns three missiles; each acquires a distinct hostile target when ≥3 exist within range; missiles steer smoothly and despawn on hit/TTL.
+    - Client input only requests spells; all gameplay effects and projectile specs are server‑owned.
+  - Tests:
+    - MM distinct targets and steering angle reduction are covered by new unit tests.
+    - Cooldown/mana gating test verifies GCD set, per‑spell cooldown applied, and mana debited; immediate re‑cast gated while on GCD.
+  - Next polish (optional):
+    - Add retargeting when targets die/leave range (currently drops target; reacquire step can be added as a separate system).
+    - Expose metrics for cast rejections/accepts, mana usage, and per‑spell cast counts.
+    - Data‑drive spell specs in `data_runtime` and wire server to use schema instead of inline table.
+
 
 ## What I recommend you do **immediately**
 

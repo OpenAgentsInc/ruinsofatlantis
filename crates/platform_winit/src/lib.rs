@@ -430,6 +430,30 @@ impl ApplicationHandler for App {
                 net_core::frame::write_msg(&mut f4, &p4);
                 metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f4.len() as u64);
                 let _ = srv_xport.try_send(f4);
+                // Send HUD status for local PC
+                if let Some(pc_id) = srv.pc_actor
+                    && let Some(pc) = srv.ecs.get(pc_id)
+                {
+                    let mana = pc.pool.as_ref().map(|p| p.mana).unwrap_or(0).clamp(0, u16::MAX as i32) as u16;
+                    let mana_max = pc.pool.as_ref().map(|p| p.max).unwrap_or(0).clamp(0, u16::MAX as i32) as u16;
+                    let gcd_ms = (pc.cooldowns.as_ref().map(|c| c.gcd_ready).unwrap_or(0.0) * 1000.0).clamp(0.0, u16::MAX as f32) as u16;
+                    let cd = |sid: server_core::SpellId| -> f32 { pc.cooldowns.as_ref().and_then(|c| c.per_spell.get(&sid).copied()).unwrap_or(0.0) };
+                    let spell_cds = vec![
+                        (0u8, (cd(server_core::SpellId::Firebolt) * 1000.0) as u16),
+                        (1u8, (cd(server_core::SpellId::Fireball) * 1000.0) as u16),
+                        (2u8, (cd(server_core::SpellId::MagicMissile) * 1000.0) as u16),
+                    ];
+                    let burning_ms = (pc.burning.as_ref().map(|b| b.remaining_s).unwrap_or(0.0) * 1000.0) as u16;
+                    let slow_ms = (pc.slow.as_ref().map(|s| s.remaining_s).unwrap_or(0.0) * 1000.0) as u16;
+                    let stunned_ms = (pc.stunned.as_ref().map(|s| s.remaining_s).unwrap_or(0.0) * 1000.0) as u16;
+                    let hud = net_core::snapshot::HudStatusMsg { v: net_core::snapshot::HUD_STATUS_VERSION, mana, mana_max, gcd_ms, spell_cds, burning_ms, slow_ms, stunned_ms };
+                    let mut hb = Vec::new();
+                    hud.encode(&mut hb);
+                    let mut fh = Vec::with_capacity(hb.len() + 8);
+                    net_core::frame::write_msg(&mut fh, &hb);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(fh.len() as u64);
+                    let _ = srv_xport.try_send(fh);
+                }
                 // update baseline
                 self.baseline = cur;
                 self.baseline_tick = tick64;

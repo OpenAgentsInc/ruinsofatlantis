@@ -578,6 +578,68 @@ pub fn dqyaw(y: u16) -> f32 {
     f32::from(y) * (std::f32::consts::TAU / 65535.0)
 }
 
+// ---------------------------------------------------------------------------
+// HUD status (per-local-player)
+// ---------------------------------------------------------------------------
+
+pub const TAG_HUD_STATUS: u8 = 0xB1;
+pub const HUD_STATUS_VERSION: u8 = 1;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HudStatusMsg {
+    pub v: u8,
+    pub mana: u16,
+    pub mana_max: u16,
+    pub gcd_ms: u16,
+    pub spell_cds: Vec<(u8, u16)>,
+    pub burning_ms: u16,
+    pub slow_ms: u16,
+    pub stunned_ms: u16,
+}
+
+impl SnapshotEncode for HudStatusMsg {
+    fn encode(&self, out: &mut Vec<u8>) {
+        out.push(TAG_HUD_STATUS);
+        out.push(self.v);
+        out.extend_from_slice(&self.mana.to_le_bytes());
+        out.extend_from_slice(&self.mana_max.to_le_bytes());
+        out.extend_from_slice(&self.gcd_ms.to_le_bytes());
+        let n = u8::try_from(self.spell_cds.len()).unwrap_or(0);
+        out.push(n);
+        for (id, ms) in &self.spell_cds {
+            out.push(*id);
+            out.extend_from_slice(&ms.to_le_bytes());
+        }
+        out.extend_from_slice(&self.burning_ms.to_le_bytes());
+        out.extend_from_slice(&self.slow_ms.to_le_bytes());
+        out.extend_from_slice(&self.stunned_ms.to_le_bytes());
+    }
+}
+
+impl SnapshotDecode for HudStatusMsg {
+    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+        use anyhow::bail;
+        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
+            if inp.len() < N { anyhow::bail!("short read"); }
+            let (a, b) = inp.split_at(N); *inp = b; let mut buf = [0u8; N]; buf.copy_from_slice(a); Ok(buf)
+        }
+        let tag = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+        if tag != TAG_HUD_STATUS { bail!("not a HudStatus tag"); }
+        let v = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+        if v != HUD_STATUS_VERSION { bail!("unsupported version: {v}"); }
+        let mana = u16::from_le_bytes(take::<2>(inp)?);
+        let mana_max = u16::from_le_bytes(take::<2>(inp)?);
+        let gcd_ms = u16::from_le_bytes(take::<2>(inp)?);
+        let n = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))? as usize; *inp = &inp[1..];
+        let mut spell_cds = Vec::with_capacity(n);
+        for _ in 0..n { let id = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; let ms = u16::from_le_bytes(take::<2>(inp)?); spell_cds.push((id, ms)); }
+        let burning_ms = u16::from_le_bytes(take::<2>(inp)?);
+        let slow_ms = u16::from_le_bytes(take::<2>(inp)?);
+        let stunned_ms = u16::from_le_bytes(take::<2>(inp)?);
+        Ok(HudStatusMsg { v, mana, mana_max, gcd_ms, spell_cds, burning_ms, slow_ms, stunned_ms })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardRep {
     pub id: u32,
@@ -947,5 +1009,31 @@ mod tests {
         let buf = vec![TAG_ACTOR_SNAPSHOT_DELTA, 99];
         let mut slice: &[u8] = &buf;
         assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
+    }
+
+    #[test]
+    fn hud_status_roundtrip() {
+        let msg = HudStatusMsg {
+            v: HUD_STATUS_VERSION,
+            mana: 10,
+            mana_max: 20,
+            gcd_ms: 250,
+            spell_cds: vec![(0, 0), (1, 1500), (2, 500)],
+            burning_ms: 1000,
+            slow_ms: 500,
+            stunned_ms: 0,
+        };
+        let mut buf = Vec::new();
+        msg.encode(&mut buf);
+        let mut slice: &[u8] = &buf;
+        let dec = HudStatusMsg::decode(&mut slice).expect("decode");
+        assert_eq!(msg, dec);
+    }
+
+    #[test]
+    fn hud_status_rejects_bad() {
+        let buf = vec![0xEE, 1, 0, 0];
+        let mut slice: &[u8] = &buf;
+        assert!(HudStatusMsg::decode(&mut slice).is_err());
     }
 }

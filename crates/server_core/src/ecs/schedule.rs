@@ -24,6 +24,29 @@ pub struct ExplodeEvent {
     pub src: Option<ActorId>,
 }
 
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub enum HitKind {
+    Direct,
+    AoE,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub struct HitEvent {
+    pub src: Option<ActorId>,
+    pub dst: ActorId,
+    pub world_xz: Vec2,
+    pub kind: HitKind,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
+pub struct DeathEvent {
+    pub id: ActorId,
+    pub killer: Option<ActorId>,
+}
+
 #[derive(Default)]
 pub struct Ctx {
     pub dt: f32,
@@ -31,6 +54,8 @@ pub struct Ctx {
     pub time_s: f32,
     pub dmg: Vec<DamageEvent>,
     pub boom: Vec<ExplodeEvent>,
+    pub hits: Vec<HitEvent>,
+    pub deaths: Vec<DeathEvent>,
     pub spatial: SpatialGrid,
     pub cmd: crate::ecs::world::CmdBuf,
 }
@@ -48,6 +73,7 @@ impl Schedule {
         srv.ecs.apply_cmds(&mut ctx.cmd);
         // Rebuild spatial grid once per frame after spawns
         ctx.spatial.rebuild(srv);
+        effects_tick(srv, ctx);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
         melee_apply_when_contact(srv, ctx);
         homing_update(srv, ctx);
@@ -56,6 +82,7 @@ impl Schedule {
         aoe_apply_explosions(srv, ctx);
         faction_flip_on_pc_hits_wizards(srv, ctx);
         apply_damage_to_ecs(srv, ctx);
+        // death_fx_and_flags(srv, ctx); // hook reserved for SFX/analytics
         cleanup(srv, ctx);
         srv.ecs.apply_cmds(&mut ctx.cmd);
     }
@@ -133,6 +160,10 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                     spellbook: None,
                     pool: None,
                     cooldowns: None,
+                    burning: None,
+                    slow: None,
+                    stunned: None,
+                    despawn_after: None,
                 };
                 ctx.cmd.spawns.push(comps);
             }
@@ -163,6 +194,10 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 spellbook: None,
                 pool: None,
                 cooldowns: None,
+                burning: None,
+                slow: None,
+                stunned: None,
+                despawn_after: None,
             };
             ctx.cmd.spawns.push(comps);
         }
@@ -225,6 +260,36 @@ fn homing_update(srv: &mut ServerState, ctx: &mut Ctx) {
     }
 }
 
+fn effects_tick(srv: &mut ServerState, ctx: &mut Ctx) {
+    let dt = ctx.dt;
+    for c in srv.ecs.iter_mut() {
+        // Burning ticks damage
+        if let Some(mut b) = c.burning {
+            if b.remaining_s > 0.0 {
+                let dmg = ((b.dps as f32) * dt).floor() as i32;
+                if dmg > 0 {
+                    ctx.dmg.push(DamageEvent { src: b.src, dst: c.id, amount: dmg });
+                }
+                b.remaining_s = (b.remaining_s - dt).max(0.0);
+                c.burning = if b.remaining_s > 0.0 { Some(b) } else { None };
+            } else {
+                c.burning = None;
+            }
+        }
+        // Slow decay
+        if let Some(mut s) = c.slow {
+            s.remaining_s = (s.remaining_s - dt).max(0.0);
+            c.slow = if s.remaining_s > 0.0 { Some(s) } else { None };
+        }
+        // Stun decay
+        if let Some(mut s) = c.stunned {
+            s.remaining_s = (s.remaining_s - dt).max(0.0);
+            c.stunned = if s.remaining_s > 0.0 { Some(s) } else { None };
+        }
+        // Despawn timers tick in cleanup
+    }
+}
+
 fn cooldown_and_mana_tick(srv: &mut ServerState, ctx: &Ctx) {
     let dt = ctx.dt;
     for c in srv.ecs.iter_mut() {
@@ -261,6 +326,8 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
         {
             // Back-compat: if enum types mismatch, allow cast
         }
+        // Stun blocks casting
+        if c.stunned.is_some() { continue; }
         // Cooldown & mana checks
         let mut ok = true;
         if let Some(cd) = c.cooldowns.as_mut() {
@@ -316,17 +383,20 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
         .map(|a| a.id)
         .collect();
     for uid in undead_ids {
-        let (pos_u, rad_u, speed, extra, aggro_m) = if let Some(a) = srv.ecs.get(uid) {
+        let (pos_u, rad_u, speed, extra, aggro_m, stunned) = if let Some(a) = srv.ecs.get(uid) {
             (
                 a.tr.pos,
                 a.tr.radius,
-                a.move_speed.map(|s| s.mps).unwrap_or(2.0),
+                a.move_speed.map(|s| s.mps).unwrap_or(2.0)
+                    * a.slow.map(|s| s.mul).unwrap_or(1.0),
                 a.attack.map(|r| r.m).unwrap_or(0.35),
                 a.aggro.map(|ag| ag.m),
+                a.stunned.is_some(),
             )
         } else {
             continue;
         };
+        if stunned { continue; }
         // Find nearest wizard
         let mut best: Option<(f32, Vec3, f32)> = None;
         for (_tid, p, r) in &wiz {
@@ -367,7 +437,7 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
         .map(|a| a.id)
         .collect();
     for uid in undead_ids {
-        let (pos_u, rad_u, extra, mut cd_ready, cd_total, dmg) = if let Some(a) = srv.ecs.get(uid) {
+        let (pos_u, rad_u, extra, mut cd_ready, cd_total, dmg, stunned) = if let Some(a) = srv.ecs.get(uid) {
             (
                 a.tr.pos,
                 a.tr.radius,
@@ -375,10 +445,12 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
                 a.melee.map(|m| m.ready_in_s).unwrap_or(0.0),
                 a.melee.map(|m| m.cooldown_s).unwrap_or(0.6),
                 a.melee.map(|m| m.damage).unwrap_or(5),
+                a.stunned.is_some(),
             )
         } else {
             continue;
         };
+        if stunned { continue; }
         let mut best: Option<(ActorId, f32, Vec3, f32)> = None;
         for (tid, p, r) in &wiz {
             let dx = p.x - pos_u.x;
@@ -455,6 +527,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             list.push((c.id, p0, p1, proj.kind, c.owner.map(|o| o.id)));
         }
     }
+    let mut to_apply_slow: Vec<ActorId> = Vec::new();
     for (pid, p0, p1, kind, owner) in list {
         // test against actors
         let mut hit_any = false;
@@ -477,11 +550,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                         });
                     }
                     _ => {
-                        ctx.dmg.push(DamageEvent {
-                            src: owner,
-                            dst: a.id,
-                            amount: projectile_damage(srv, kind),
-                        });
+                        ctx.dmg.push(DamageEvent { src: owner, dst: a.id, amount: projectile_damage(srv, kind) });
+                        ctx.hits.push(HitEvent { src: owner, dst: a.id, world_xz: Vec2::new(p1.x, p1.z), kind: HitKind::Direct });
+                        if matches!(kind, crate::ProjKind::MagicMissile) { to_apply_slow.push(a.id); }
                     }
                 }
                 hit_any = true;
@@ -532,24 +603,23 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             }
         }
     }
+    for id in to_apply_slow { if let Some(t) = srv.ecs.get_mut(id) { t.apply_slow(0.7, 2.0); } }
 }
 
 fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
     for e in ctx.boom.drain(..) {
-        for a in srv.ecs.iter() {
-            if !a.hp.alive() {
-                continue;
-            }
-            let dx = a.tr.pos.x - e.center_xz.x;
-            let dz = a.tr.pos.z - e.center_xz.y;
+        let snapshot: Vec<_> = srv.ecs.iter().map(|a| (a.id, a.tr.pos, a.hp.alive())).collect();
+        let mut burning_ids = Vec::new();
+        for (aid, pos, alive) in &snapshot {
+            if !*alive { continue; }
+            let dx = pos.x - e.center_xz.x;
+            let dz = pos.z - e.center_xz.y;
             if dx * dx + dz * dz <= e.r2 {
-                ctx.dmg.push(DamageEvent {
-                    src: e.src,
-                    dst: a.id,
-                    amount: projectile_damage_aoe(srv),
-                });
+                ctx.dmg.push(DamageEvent { src: e.src, dst: *aid, amount: projectile_damage_aoe(srv) });
+                burning_ids.push(*aid);
             }
         }
+        for id in burning_ids { if let Some(t) = srv.ecs.get_mut(id) { t.apply_burning(6, 3.0, e.src); } }
     }
 }
 
@@ -568,12 +638,30 @@ fn faction_flip_on_pc_hits_wizards(srv: &mut ServerState, ctx: &mut Ctx) {
 fn apply_damage_to_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     for d in ctx.dmg.drain(..) {
         if let Some(a) = srv.ecs.get_mut(d.dst) {
+            let pre = a.hp.hp;
             a.hp.hp = (a.hp.hp - d.amount).max(0);
+            if pre > 0 && a.hp.hp == 0 {
+                ctx.deaths.push(DeathEvent { id: a.id, killer: d.src });
+                a.despawn_after = Some(crate::ecs::world::DespawnAfter { seconds: 2.0 });
+            }
         }
     }
 }
 
 fn cleanup(srv: &mut ServerState, _ctx: &mut Ctx) {
+    // Despawn entities whose timers reached 0
+    let mut to_despawn = Vec::new();
+    for c in srv.ecs.iter() {
+        if let Some(d) = c.despawn_after
+            && d.seconds <= 0.0
+        {
+            to_despawn.push(c.id);
+        }
+    }
+    if !to_despawn.is_empty() {
+        let mut cmd = crate::ecs::world::CmdBuf { spawns: Vec::new(), despawns: to_despawn };
+        srv.ecs.apply_cmds(&mut cmd);
+    }
     srv.ecs.remove_dead();
 }
 
