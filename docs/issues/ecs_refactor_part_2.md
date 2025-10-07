@@ -198,6 +198,80 @@ Use a simple Vec per tick; drain in systems 8–9 above.
 * Server runs on **ECS world** with an explicit **system schedule**; no gameplay logic buried in `ServerState` methods.
 * **All** damage, flips, and deaths go through **events**; one system mutates `Health`.
 * **Spatial grid** is used for melee/proximity/AoE lookups.
+
+---
+
+## PR‑5 — Projectiles in ECS (landed)
+
+Goal: Move projectiles to ECS with explicit integrate/collision/AoE systems and evented damage.
+
+- Added components: `Projectile { kind, ttl_s, age_s }`, `Velocity { v }`, `Owner { id }`, `Homing`.
+- Systems: `ingest_projectile_spawns`, `projectile_integrate_ecs`, `projectile_collision_ecs` (segment), `aoe_apply_explosions`.
+- Snapshots include projectiles built from ECS; no renderer‑side spawns.
+- Tests: projectile round‑trips and segment collision logic validated.
+
+## PR‑6 — Interest + Delta snapshots (v3) (landed)
+
+Goal: Reduce bandwidth with per‑client interest windows and delta framing.
+
+- Added `ActorSnapshotDelta v3` (spawns/updates/removals + projectiles) with quant helpers `qpos/dqpos`, `qyaw/dqyaw`.
+- Platform builds per‑tick deltas around PC (~40m) with a per‑client baseline.
+- Client applies v3 when present; falls back to v2 for migration.
+- Tests: delta encode/decode (+ bad tag/version) added.
+
+## PR‑7 — Server‑side cast pipeline (landed)
+
+Goal: Authoritative spells with costs/cooldowns and homing missiles.
+
+- Components: `Spellbook`, `ResourcePool { mana/max/regen }`, `Cooldowns { gcd_s/gcd_ready/per_spell }`.
+- Systems: `cooldown_and_mana_tick`, `cast_system` (validates + enqueues projectiles).
+- MagicMissile expands to 3 homing missiles with distinct nearest targets when available.
+- Tests: `mm_homing_cast.rs` ensures expansion/homing; cooldown/mana gating covered.
+
+## PR‑8 — Effects, Death/Despawn, HUD replication (landed)
+
+Goal: Basic status effects + clean death pipeline + player HUD replication.
+
+- Effects: `Burning` (DoT), `Slow` (speed mul), `Stunned` (blocks move/melee/cast) with helpers and `effects_tick`.
+- Death: `DeathEvent` and `DespawnAfter { seconds }`; cleanup waits for timer (no immediate purge).
+- HUD: `HudStatusMsg` (mana/max, GCD, per‑spell CDs, effect timers); platform sends; client stores in `ReplicationBuffer.hud`.
+- Tests:
+  - `effects_and_lifecycle.rs` (burning tick/expire, slow speed reduction, stun blocks cast, death→despawn presence).
+  - `magic_missile_slow.rs` (MM direct hit applies Slow).
+  - `client_core/tests/hud_decode.rs` (client decodes HUD).
+
+Notes
+
+- AI/move/melee respect `Stunned`; homing update remains simple (reacquire is a future PR).
+- Cleanup now avoids immediate `remove_dead()` to honor despawn timers; dead without timers are despawned immediately as a safety net.
+
+## PR‑9 — Homing Reacquire (landed)
+
+Goal: Prevent orphaned MagicMissiles by reacquiring targets when current dies or leaves range.
+
+- Added schedule system `homing_acquire_targets` (runs before `homing_update`) that:
+  - Checks each projectile with `Homing` and, if `reacquire` is true, tests whether the target is missing/dead or beyond `max_range_m`.
+  - Queries `SpatialGrid` for candidates within range, filters by faction hostility (owner vs target), and picks nearest by distance (tie‑break on `ActorId`).
+  - Writes the new `Homing.target` when found; otherwise leaves current target (homing_update will no‑op if target missing).
+- Extended `ecs::Homing` with `max_range_m` and `reacquire` flags.
+- MagicMissile spawns now set homing `turn_rate`, `max_range_m`, and `reacquire` based on specs.
+
+## PR‑10 — Centralized Specs (landed)
+
+Goal: Replace scattered literals with a single `Specs` table on `ServerState`.
+
+- New types: `SpellSpec`, `SpellsSpec`, `EffectsSpec`, `HomingSpec`, and `Specs`.
+- ServerState now owns `specs: Specs` (defaults):
+  - Spells: Firebolt(0/0.30/0.30), Fireball(5/4.00/0.50), MagicMissile(2/1.50/0.30)
+  - Effects: Fireball Burning (6 dps, 3.0 s), MagicMissile Slow (0.7 mul, 2.0 s)
+  - Homing: MM turn_rate=3.5 rad/s, max_range=35 m, reacquire=true
+- Replaced literals:
+  - `spell_cost_cooldown` returns from `self.specs.spells`.
+  - Slow/Burning application use `self.specs.effects`.
+  - Homing spawns use `self.specs.homing`.
+
+Acceptance
+- All unit tests and clippy with `-D warnings` pass.
 * **ActorSnapshot v2** comes **only** from ECS queries; bandwidth reduced by quantization (and later deltas/interest).
 * Boss + Undead behaviors defined by **components**, not hardcoded constants.
 * Workspace: `cargo clippy --all-targets --workspace -D warnings` and `cargo test --workspace` stay green.

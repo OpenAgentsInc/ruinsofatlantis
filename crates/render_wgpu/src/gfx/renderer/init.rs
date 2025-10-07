@@ -1788,6 +1788,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         recent_impacts: Vec::new(),
         demo_hint_until: Some(5.0),
         impact_id: 0,
+        last_repl_projectiles: std::collections::HashMap::new(),
         pc_index: scene_build.pc_index,
         player: client_core::controller::PlayerController::new(pc_initial_pos),
         scene_inputs: client_runtime::SceneInputs::new(pc_initial_pos),

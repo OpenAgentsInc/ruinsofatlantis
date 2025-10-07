@@ -1630,6 +1630,7 @@ impl Renderer {
 
     /// Update and render-side state for projectiles/particles
     pub(crate) fn update_fx(&mut self, t: f32, dt: f32) {
+        log::info!("renderer: projectiles this frame = {}", self.projectiles.len());
         // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
         if self.wizard_count > 0 {
             let zombies_alive = self.any_zombies_alive();
@@ -1764,8 +1765,7 @@ impl Renderer {
             p.pos += p.vel * dt;
             p.pos = gfx::util::clamp_above_terrain(&self.terrain_cpu, p.pos, ground_clearance);
         }
-        // 2.25) Collide NPC wizard projectiles with replicated NPCs (legacy/demo path)
-        #[cfg(feature = "legacy_client_combat")]
+        // 2.25) Collide projectiles with replicated NPCs (demo/visual path)
         if !self.projectiles.is_empty() && !self.repl_buf.npcs.is_empty() {
             let mut i = 0usize;
             while i < self.projectiles.len() {
@@ -1801,6 +1801,10 @@ impl Renderer {
                     let (hgt, _nrm) =
                         crate::gfx::terrain::height_at(&self.terrain_cpu, cpos.x, cpos.z);
                     self.damage.spawn(glam::vec3(cpos.x, hgt + 0.9, cpos.z), 10);
+                    // Show explosion visuals for fireball
+                    if let crate::gfx::fx::ProjectileKind::Fireball { radius, damage } = pr.kind {
+                        self.explode_fireball_at(pr.owner_wizard, p1, radius, damage);
+                    }
                     // If fatal, remove the zombie visual
                     if after == 0
                         && let Some(idx) = self.zombie_ids.iter().position(|z| *z == nid)
@@ -2638,7 +2642,7 @@ impl Renderer {
     }
 
     #[allow(unused_variables)]
-    fn explode_fireball_at(
+    pub(crate) fn explode_fireball_at(
         &mut self,
         owner: Option<usize>,
         center: glam::Vec3,

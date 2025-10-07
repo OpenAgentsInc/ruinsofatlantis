@@ -10,6 +10,7 @@
 /// Client-side replication buffer that accumulates incoming deltas (chunks,
 /// entity snapshots) and exposes a coherent view for presentation layers.
 use net_core::snapshot::SnapshotDecode;
+use std::collections::HashMap;
 
 #[derive(Default, Debug)]
 pub struct ReplicationBuffer {
@@ -44,17 +45,16 @@ impl ReplicationBuffer {
         // Prefer actor delta snapshot (v3) first
         let mut slice_delta_v3: &[u8] = payload;
         if let Ok(d) = net_core::snapshot::ActorSnapshotDelta::decode(&mut slice_delta_v3) {
-            // Build id->index map for current actors
-            use std::collections::HashMap;
-            let mut idx: HashMap<u32, usize> = HashMap::new();
-            for (i, a) in self.actors.iter().enumerate() {
-                idx.insert(a.id, i);
-            }
             // Removals
             if !d.removals.is_empty() {
                 self.actors.retain(|a| !d.removals.contains(&a.id));
                 self.wizards.retain(|w| !d.removals.contains(&w.id));
                 self.npcs.retain(|n| !d.removals.contains(&n.id));
+            }
+            // Build id->index map AFTER removals so indices are valid
+            let mut idx: HashMap<u32, usize> = HashMap::new();
+            for (i, a) in self.actors.iter().enumerate() {
+                idx.insert(a.id, i);
             }
             // Updates
             for u in d.updates {

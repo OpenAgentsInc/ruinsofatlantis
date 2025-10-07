@@ -198,6 +198,41 @@ This running log captures code-level changes made to address the 2025-10-04 audi
     - `ReplicationBuffer::apply_message` now prefers `TickSnapshot` (boss + npcs) and falls back to `ChunkMeshDelta` → `NpcListMsg` → `BossStatusMsg` for migration.
     - `NpcView` extended with `yaw`; legacy list populates `yaw = 0.0`.
 
+## 2025-10-07 — Effects/cleanup polish + tests tightened
+
+- Server cleanup honors `DespawnAfter` timers
+  - Changed `ecs::schedule::cleanup` to remove the blanket `remove_dead()` call. Entities now linger until their `despawn_after.seconds` elapses; as a safety net, dead entities without a timer are despawned immediately.
+  - Files: `crates/server_core/src/ecs/schedule.rs`.
+- Tests and clippy hygiene
+  - Brought `SnapshotEncode` into scope in `client_core/tests/hud_decode.rs`.
+  - Collapsed nested ifs in server tests to satisfy `clippy::collapsible-if` with `-D warnings`.
+  - `cargo test` and `cargo clippy --all-targets -D warnings` are green across the workspace.
+
+## 2025-10-07 — PR‑9 (Homing reacquire) + PR‑10 (Specs) landed
+
+- Homing reacquire for MagicMissile
+  - Added `homing_acquire_targets()` in ECS schedule, executed before `homing_update`. Reacquires when target is dead/missing or out of range, using `SpatialGrid` and faction hostility checks.
+  - Extended `ecs::Homing` with `max_range_m` and `reacquire` fields.
+  - Wired MagicMissile spawns to set `Homing { turn_rate, max_range_m, reacquire }` from specs.
+- Central specs table
+  - Introduced `Specs` on `ServerState` with `SpellsSpec`, `EffectsSpec`, and `HomingSpec`.
+  - Replaced literals with specs:
+    - Cast costs/CD/GCD via `spell_cost_cooldown` now read from `self.specs.spells`.
+    - MagicMissile Slow mul/dur and Fireball Burning dps/dur read from `self.specs.effects`.
+    - Homing turn rate/range from `self.specs.homing`.
+- Validation
+  - `cargo test` and `cargo clippy --all-targets -D warnings` green.
+
+## 2025-10-07 — Projectile replication and logs
+
+- Stepped server before replication; v2 snapshots (actors + projectiles) flow each frame by default (RA_SEND_V3 toggles deltas).
+- Added logs for casts and snapshots:
+  - `srv: enqueue_cast …` when commands arrive
+  - `srv: cast accepted/rejected …` in `cast_system`
+  - `snapshot_v2: tick=… actors=… projectiles=…` before sending
+  - `renderer: projectiles this frame = …` at FX update start
+- Added optional gating bypass via `RA_SKIP_CAST_GATING=1` for quick demo verification.
+
 ## 2025-10-06 — Test wall for authoritative Fireball + replication (#107 follow-up)
 
 - Added a focused, multi-layer test suite to prevent regressions in the “Fireball doesn’t hurt wizards / no floaters / orb keeps flying” class of bugs.

@@ -16,6 +16,65 @@ pub mod jobs;
 pub mod scene_build;
 pub mod systems;
 
+// ----------------------------------------------------------------------------
+// Specs (tuning tables)
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+pub struct SpellSpec { pub cost: i32, pub cd_s: f32, pub gcd_s: f32 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct SpellsSpec {
+    pub firebolt: SpellSpec,
+    pub fireball: SpellSpec,
+    pub magic_missile: SpellSpec,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EffectsSpec {
+    pub fireball_burn_dps: i32,
+    pub fireball_burn_s: f32,
+    pub mm_slow_mul: f32,
+    pub mm_slow_s: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct HomingSpec {
+    pub mm_turn_rate: f32,
+    pub mm_max_range_m: f32,
+    pub reacquire: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Specs {
+    pub spells: SpellsSpec,
+    pub effects: EffectsSpec,
+    pub homing: HomingSpec,
+}
+
+impl Default for Specs {
+    fn default() -> Self {
+        Self {
+            spells: SpellsSpec {
+                firebolt: SpellSpec { cost: 0, cd_s: 0.30, gcd_s: 0.30 },
+                fireball: SpellSpec { cost: 5, cd_s: 4.00, gcd_s: 0.50 },
+                magic_missile: SpellSpec { cost: 2, cd_s: 1.50, gcd_s: 0.30 },
+            },
+            effects: EffectsSpec {
+                fireball_burn_dps: 6,
+                fireball_burn_s: 3.0,
+                mm_slow_mul: 0.7,
+                mm_slow_s: 2.0,
+            },
+            homing: HomingSpec {
+                mm_turn_rate: 3.5,
+                mm_max_range_m: 35.0,
+                reacquire: true,
+            },
+        }
+    }
+}
+
 // Legacy NPC types removed. Use ActorStore (Zombie/Boss kinds).
 
 /// Stored boss stats built from data_runtime config (no ECS world yet).
@@ -126,6 +185,8 @@ pub struct ServerState {
     pub factions: FactionState,
     /// Cached PC actor id (spawned during sync)
     pub pc_actor: Option<ActorId>,
+    /// Tuning tables for spells, effects, and homing.
+    pub specs: Specs,
 }
 
 impl ServerState {
@@ -139,6 +200,7 @@ impl ServerState {
             ecs: ecs::WorldEcs::default(),
             factions: FactionState::default(),
             pc_actor: None,
+            specs: Specs::default(),
         }
     }
     // Legacy actor rebuild removed. Actors are authoritative.
@@ -180,7 +242,15 @@ impl ServerState {
     pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) {
         // PC (index 0)
         if let Some(p0) = wiz_pos.first().copied() {
-            if self.pc_actor.is_none() {
+            // If missing or dead, (re)spawn the PC actor so casts always have a valid caster
+            let need_spawn = match self.pc_actor {
+                None => true,
+                Some(id) => match self.ecs.get(id) {
+                    None => true,
+                    Some(a) => !a.hp.alive(),
+                },
+            };
+            if need_spawn {
                 let id = self.ecs.spawn(
                     ActorKind::Wizard,
                     Team::Pc,
@@ -209,8 +279,7 @@ impl ServerState {
                         known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
                     });
                 }
-            }
-            if let Some(id) = self.pc_actor
+            } else if let Some(id) = self.pc_actor
                 && let Some(a) = self.ecs.get_mut(id)
             {
                 a.tr.pos = p0;
@@ -260,6 +329,7 @@ impl ServerState {
     /// Enqueue a cast; cast system will validate and translate to projectiles.
     pub fn enqueue_cast(&mut self, pos: Vec3, dir: Vec3, spell: SpellId) {
         let caster = self.pc_actor; // local demo assumes one PC caster
+        log::info!("srv: enqueue_cast {:?} (caster={:?})", spell, caster);
         self.pending_casts.push(CastCmd {
             pos,
             dir,
@@ -331,9 +401,18 @@ impl ServerState {
 
     fn spell_cost_cooldown(&self, spell: SpellId) -> (i32, f32, f32) {
         match spell {
-            SpellId::Firebolt => (0, 0.30, 0.30),
-            SpellId::Fireball => (5, 4.00, 0.50),
-            SpellId::MagicMissile => (2, 1.50, 0.30),
+            SpellId::Firebolt => {
+                let s = &self.specs.spells.firebolt;
+                (s.cost, s.cd_s, s.gcd_s)
+            }
+            SpellId::Fireball => {
+                let s = &self.specs.spells.fireball;
+                (s.cost, s.cd_s, s.gcd_s)
+            }
+            SpellId::MagicMissile => {
+                let s = &self.specs.spells.magic_missile;
+                (s.cost, s.cd_s, s.gcd_s)
+            }
         }
     }
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
@@ -351,7 +430,8 @@ impl ServerState {
         sched.run(self, &mut ctx, wizard_positions);
     }
     /// Spawn an Undead actor (legacy NPC replacement)
-    pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
+pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
+        let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Zombie,
             Team::Undead,
@@ -390,6 +470,8 @@ impl ServerState {
         };
         let hp_mid = (cfg.hp_range.0 + cfg.hp_range.1) / 2;
         let radius = cfg.radius_m.unwrap_or(0.9);
+        // Respect PC safety bubble when placing the boss
+        let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Boss,
             Team::Undead,
@@ -514,7 +596,12 @@ impl ServerState {
         for i in 0..count {
             let a = (i as f32) / (count as f32) * std::f32::consts::TAU;
             let pos = Vec3::new(radius * a.cos(), 0.6, radius * a.sin());
-            let _ = self.spawn_undead(pos, 0.95, hp);
+            if is_safe_from_pc(self, pos) {
+                if std::env::var("RA_LOG_SPAWNS").ok().as_deref() == Some("1") {
+                    log::info!("spawn undead at {:?}", pos);
+                }
+                let _ = self.spawn_undead(pos, 0.95, hp);
+            }
         }
     }
     /// Build a consolidated `TickSnapshot` for clients. Until wizard/projectile state
@@ -522,7 +609,7 @@ impl ServerState {
     /// the nearest wizard.
     // Legacy TickSnapshot removed; actor-centric snapshot is canonical.
     pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
-        let actors = self
+        let actors: Vec<net_core::snapshot::ActorRep> = self
             .ecs
             .iter()
             .map(|a| net_core::snapshot::ActorRep {
@@ -546,7 +633,7 @@ impl ServerState {
                 alive: a.hp.alive(),
             })
             .collect();
-        let mut projectiles = Vec::new();
+        let mut projectiles: Vec<net_core::snapshot::ProjectileRep> = Vec::new();
         for c in self.ecs.iter() {
             if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
                 projectiles.push(net_core::snapshot::ProjectileRep {
@@ -561,6 +648,12 @@ impl ServerState {
                 });
             }
         }
+        log::info!(
+            "snapshot_v2: tick={} actors={} projectiles={}",
+            tick,
+            actors.len(),
+            projectiles.len()
+        );
         net_core::snapshot::ActorSnapshot {
             v: 2,
             tick,
@@ -699,6 +792,42 @@ impl ServerState {
             }
         }
         */
+}
+
+const SAFE_SPAWN_RADIUS_M: f32 = 10.0;
+
+fn is_safe_from_pc(srv: &ServerState, pos: Vec3) -> bool {
+    if let Some(pc) = srv.pc_actor
+        && let Some(pc_c) = srv.ecs.get(pc)
+    {
+        let dx = pos.x - pc_c.tr.pos.x;
+        let dz = pos.z - pc_c.tr.pos.z;
+        return dx * dx + dz * dz >= SAFE_SPAWN_RADIUS_M * SAFE_SPAWN_RADIUS_M;
+    }
+    true
+}
+
+fn push_out_of_pc_bubble(srv: &ServerState, mut pos: Vec3) -> Vec3 {
+    if let Some(pc) = srv.pc_actor
+        && let Some(pc_c) = srv.ecs.get(pc)
+    {
+        let pcpos = pc_c.tr.pos;
+        let dx = pos.x - pcpos.x;
+        let dz = pos.z - pcpos.z;
+        let d2 = dx * dx + dz * dz;
+        let r = SAFE_SPAWN_RADIUS_M;
+        if d2 < r * r {
+            let mut dir = glam::Vec3::new(dx, 0.0, dz);
+            let len = dir.length();
+            if len < 1e-3 {
+                dir = glam::Vec3::Z;
+            } else {
+                dir /= len;
+            }
+            pos = pcpos + dir * r;
+        }
+    }
+    pos
 }
 
 // ============================================================================

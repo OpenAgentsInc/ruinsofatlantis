@@ -232,6 +232,8 @@ pub struct Owner {
 pub struct Homing {
     pub target: ActorId,
     pub turn_rate: f32,
+    pub max_range_m: f32,
+    pub reacquire: bool,
 }
 
 // Status effects --------------------------------------------------------------

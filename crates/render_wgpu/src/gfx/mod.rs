@@ -138,6 +138,8 @@ pub struct Renderer {
     ssr_scene_bg: wgpu::BindGroup,
     _post_sampler: wgpu::Sampler,
     point_sampler: wgpu::Sampler,
+    // Track last replicated projectiles to trigger VFX on disappear (e.g., Fireball explosion)
+    last_repl_projectiles: std::collections::HashMap<u32, (u8, glam::Vec3)>,
     sky_bg: wgpu::BindGroup,
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,

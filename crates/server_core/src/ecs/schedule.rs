@@ -76,6 +76,7 @@ impl Schedule {
         effects_tick(srv, ctx);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
         melee_apply_when_contact(srv, ctx);
+        homing_acquire_targets(srv, ctx);
         homing_update(srv, ctx);
         projectile_integrate_ecs(srv, ctx);
         projectile_collision_ecs(srv, ctx);
@@ -103,7 +104,9 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
     let pending: Vec<_> = srv.pending_projectiles.drain(..).collect();
     for cmd in pending {
         let spec = srv.projectile_spec(cmd.kind);
-        let yaw = cmd.dir.x.atan2(cmd.dir.z);
+        let dir_n = cmd.dir.normalize_or_zero();
+        let yaw = dir_n.x.atan2(dir_n.z);
+        let spawn_pos = cmd.pos + dir_n * 0.35; // offset forward to avoid immediate self-collision
         if matches!(cmd.kind, crate::ProjKind::MagicMissile) {
             // Acquire up to 3 distinct targets nearest-first within 30m
             let owner_team = cmd
@@ -128,19 +131,21 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
             let off = 8.0_f32.to_radians();
             let offs = [-off, 0.0, off];
             for (i, yaw_off) in offs.iter().enumerate() {
-                let dir = rotate_y(cmd.dir, *yaw_off).normalize_or_zero();
+                let dir = rotate_y(dir_n, *yaw_off).normalize_or_zero();
                 let v = dir * spec.speed_mps;
                 let target = picks.get(i).copied();
                 let homing = target.map(|tid| crate::ecs::world::Homing {
                     target: tid,
-                    turn_rate: 3.5,
+                    turn_rate: srv.specs.homing.mm_turn_rate,
+                    max_range_m: srv.specs.homing.mm_max_range_m,
+                    reacquire: srv.specs.homing.reacquire,
                 });
                 let comps = crate::ecs::world::Components {
                     id: crate::actor::ActorId(0),
                     kind: crate::actor::ActorKind::Wizard,
                     team: crate::actor::Team::Neutral,
                     tr: crate::actor::Transform {
-                        pos: cmd.pos,
+                        pos: spawn_pos,
                         yaw: yaw + *yaw_off,
                         radius: 0.1,
                     },
@@ -168,13 +173,13 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 ctx.cmd.spawns.push(comps);
             }
         } else {
-            let v = cmd.dir.normalize_or_zero() * spec.speed_mps;
+            let v = dir_n * spec.speed_mps;
             let comps = crate::ecs::world::Components {
                 id: crate::actor::ActorId(0),
                 kind: crate::actor::ActorKind::Wizard, // unused for projectile
                 team: crate::actor::Team::Neutral,
                 tr: crate::actor::Transform {
-                    pos: cmd.pos,
+                    pos: spawn_pos,
                     yaw,
                     radius: 0.1,
                 },
@@ -291,6 +296,10 @@ fn effects_tick(srv: &mut ServerState, ctx: &mut Ctx) {
             c.stunned = if s.remaining_s > 0.0 { Some(s) } else { None };
         }
         // Despawn timers tick in cleanup
+        if let Some(mut d) = c.despawn_after {
+            d.seconds = (d.seconds - dt).max(0.0);
+            c.despawn_after = Some(d);
+        }
     }
 }
 
@@ -319,6 +328,9 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
         let Some(caster) = cmd.caster else {
             continue;
         };
+        let bypass_gating = std::env::var("RA_SKIP_CAST_GATING")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let (cost, cd_s, _gcd) = srv.spell_cost_cooldown(cmd.spell);
         let Some(c) = srv.ecs.get_mut(caster) else {
             continue;
@@ -330,35 +342,40 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
         {
             // Back-compat: if enum types mismatch, allow cast
         }
-        // Stun blocks casting
-        if c.stunned.is_some() {
-            continue;
-        }
-        // Cooldown & mana checks
-        let mut ok = true;
-        if let Some(cd) = c.cooldowns.as_mut() {
-            if cd.gcd_ready > 0.0 {
-                ok = false;
+        // Gating (stun/mana/GCD) unless bypassed by env
+        if !bypass_gating {
+            // Stun blocks casting
+            if c.stunned.is_some() {
+                log::info!("srv: cast rejected (stunned)");
+                continue;
             }
-            if let Some(rem) = cd.per_spell.get(&cmd.spell)
-                && *rem > 0.0
-            {
-                ok = false;
+            // Cooldown & mana checks
+            let mut ok = true;
+            if let Some(cd) = c.cooldowns.as_mut() {
+                if cd.gcd_ready > 0.0 {
+                    ok = false;
+                }
+                if let Some(rem) = cd.per_spell.get(&cmd.spell)
+                    && *rem > 0.0
+                {
+                    ok = false;
+                }
+                if ok {
+                    cd.gcd_ready = cd.gcd_s.max(0.0);
+                    cd.per_spell.insert(cmd.spell, cd_s.max(0.0));
+                }
             }
-            if ok {
-                cd.gcd_ready = cd.gcd_s.max(0.0);
-                cd.per_spell.insert(cmd.spell, cd_s.max(0.0));
+            if ok && let Some(pool) = c.pool.as_mut() {
+                if pool.mana < cost {
+                    ok = false;
+                } else {
+                    pool.mana -= cost;
+                }
             }
-        }
-        if ok && let Some(pool) = c.pool.as_mut() {
-            if pool.mana < cost {
-                ok = false;
-            } else {
-                pool.mana -= cost;
+            if !ok {
+                log::info!("srv: cast rejected (mana/cooldown)");
+                continue;
             }
-        }
-        if !ok {
-            continue;
         }
         // Translate spell to projectiles
         match cmd.spell {
@@ -372,6 +389,7 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
                 srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
             }
         }
+        log::info!("srv: cast accepted {:?}", cmd.spell);
     }
 }
 
@@ -529,25 +547,37 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         let s = srv.projectile_spec(crate::ProjKind::Fireball);
         (s.aoe_radius_m * s.aoe_radius_m).max(0.0)
     };
-    let mut list = Vec::new();
+    let mut list: Vec<(ActorId, Vec3, Vec3, crate::ProjKind, Option<ActorId>, f32)> = Vec::new();
     for c in srv.ecs.iter() {
         if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
             let p1 = c.tr.pos;
             let p0 = p1 - vel.v * ctx.dt;
-            list.push((c.id, p0, p1, proj.kind, c.owner.map(|o| o.id)));
+            list.push((c.id, p0, p1, proj.kind, c.owner.map(|o| o.id), proj.age_s));
         }
     }
     let mut to_apply_slow: Vec<ActorId> = Vec::new();
-    for (pid, p0, p1, kind, owner) in list {
+    for (pid, p0, p1, kind, owner, age_s) in list {
+        // Arming delay: skip collisions for the first few milliseconds to prevent
+        // immediate detonation on spawn and ensure at least one snapshot includes the projectile.
+        if age_s < 0.05 { continue; }
+        let owner_team = owner
+            .and_then(|id| srv.ecs.get(id).map(|a| a.team))
+            .unwrap_or(Team::Pc);
         // test against actors
         let mut hit_any = false;
         for a in srv.ecs.iter() {
             if !a.hp.alive() {
                 continue;
             }
-            if let Some(owner_id) = owner
-                && owner_id == a.id
-            {
+            if let Some(owner_id) = owner && owner_id == a.id {
+                continue;
+            }
+            // Only hit hostiles relative to owner team
+            let mut hostile = srv.factions.effective_hostile(owner_team, a.team);
+            if !hostile && owner_team == Team::Pc && a.team == Team::Wizards {
+                hostile = true;
+            }
+            if !hostile {
                 continue;
             }
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
@@ -601,6 +631,11 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                 if !act.hp.alive() {
                     continue;
                 }
+                let mut hostile = srv.factions.effective_hostile(owner_team, act.team);
+                if !hostile && owner_team == Team::Pc && act.team == Team::Wizards {
+                    hostile = true;
+                }
+                if !hostile { continue; }
                 let c = Vec2::new(act.tr.pos.x, act.tr.pos.z);
                 let t = if len2 <= 1e-12 {
                     0.0
@@ -626,7 +661,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     }
     for id in to_apply_slow {
         if let Some(t) = srv.ecs.get_mut(id) {
-            t.apply_slow(0.7, 2.0);
+            t.apply_slow(srv.specs.effects.mm_slow_mul, srv.specs.effects.mm_slow_s);
         }
     }
 }
@@ -656,7 +691,11 @@ fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
         }
         for id in burning_ids {
             if let Some(t) = srv.ecs.get_mut(id) {
-                t.apply_burning(6, 3.0, e.src);
+                t.apply_burning(
+                    srv.specs.effects.fireball_burn_dps,
+                    srv.specs.effects.fireball_burn_s,
+                    e.src,
+                );
             }
         }
     }
@@ -691,12 +730,18 @@ fn apply_damage_to_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
 }
 
 fn cleanup(srv: &mut ServerState, _ctx: &mut Ctx) {
-    // Despawn entities whose timers reached 0
+    // Despawn entities whose timers reached 0. If an entity is dead but has no
+    // timer (should be rare), despawn it immediately to avoid leaks. We avoid
+    // calling `remove_dead()` here so bodies can linger until their timer elapses.
     let mut to_despawn = Vec::new();
     for c in srv.ecs.iter() {
-        if let Some(d) = c.despawn_after
-            && d.seconds <= 0.0
-        {
+        if let Some(d) = c.despawn_after {
+            if d.seconds <= 0.0 {
+                to_despawn.push(c.id);
+            }
+            continue;
+        }
+        if !c.hp.alive() {
             to_despawn.push(c.id);
         }
     }
@@ -707,7 +752,6 @@ fn cleanup(srv: &mut ServerState, _ctx: &mut Ctx) {
         };
         srv.ecs.apply_cmds(&mut cmd);
     }
-    srv.ecs.remove_dead();
 }
 
 #[inline]
@@ -765,5 +809,70 @@ impl SpatialGrid {
         }
         out.sort_by_key(|id| id.0);
         out.into_iter()
+    }
+}
+fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
+    // Build quick maps to avoid borrow conflicts
+    use std::collections::HashMap;
+    let mut alive: HashMap<ActorId, (Vec3, crate::actor::Team)> = HashMap::new();
+    for a in srv.ecs.iter() {
+        if a.hp.alive() {
+            alive.insert(a.id, (a.tr.pos, a.team));
+        }
+    }
+
+    // Iterate projectiles and reacquire if needed
+    // Collect ids first to avoid borrowing issues
+    let mut proj_ids = Vec::new();
+    for c in srv.ecs.iter() {
+        if c.projectile.is_some() && c.homing.is_some() {
+            proj_ids.push(c.id);
+        }
+    }
+
+    for pid in proj_ids {
+        let (p_pos, owner_team, homing) = if let Some(c) = srv.ecs.get(pid) {
+            let team = c
+                .owner
+                .and_then(|o| srv.ecs.get(o.id).map(|a| a.team))
+                .unwrap_or(crate::actor::Team::Pc);
+            (c.tr.pos, team, c.homing)
+        } else {
+            continue;
+        };
+        let Some(hm) = homing else { continue; };
+        if !hm.reacquire { continue; }
+
+        let need_reacquire = match alive.get(&hm.target) {
+            None => true,
+            Some((tpos, _)) => {
+                let dx = tpos.x - p_pos.x;
+                let dz = tpos.z - p_pos.z;
+                let d2 = dx * dx + dz * dz;
+                d2 > hm.max_range_m * hm.max_range_m
+            }
+        };
+        if !need_reacquire { continue; }
+
+        // Query spatial grid within range and pick nearest hostile
+        let center = glam::Vec2::new(p_pos.x, p_pos.z);
+        let mut best: Option<(f32, ActorId)> = None;
+        for aid in ctx.spatial.query_circle(center, hm.max_range_m) {
+            if let Some((apos, ateam)) = alive.get(&aid) {
+                if !srv.factions.effective_hostile(owner_team, *ateam) { continue; }
+                let dx = apos.x - p_pos.x;
+                let dz = apos.z - p_pos.z;
+                let d2 = dx * dx + dz * dz;
+                if best.map(|(bd2, bid)| (d2, aid.0) < (bd2, bid.0)).unwrap_or(true) {
+                    best = Some((d2, aid));
+                }
+            }
+        }
+        if let Some((_, pick)) = best
+            && let Some(c) = srv.ecs.get_mut(pid)
+            && let Some(h) = c.homing.as_mut()
+        {
+            h.target = pick;
+        }
     }
 }
