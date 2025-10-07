@@ -1638,10 +1638,6 @@ impl Renderer {
 
     /// Update and render-side state for projectiles/particles
     pub(crate) fn update_fx(&mut self, t: f32, dt: f32) {
-        log::info!(
-            "renderer: projectiles this frame = {}",
-            self.projectiles.len()
-        );
         if std::env::var("RA_LOG_PROJECTILES")
             .map(|v| v == "1")
             .unwrap_or(false)
@@ -1654,6 +1650,19 @@ impl Renderer {
         // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
         if self.wizard_count > 0 {
             let zombies_alive = self.any_zombies_alive();
+            // If zombies have (re)appeared and we are not hostile to the player, ensure
+            // NPC wizards re-enter the PortalOpen casting loop.
+            if zombies_alive && !self.wizards_hostile_to_pc {
+                for i in 0..(self.wizard_count as usize) {
+                    if i == self.pc_index {
+                        continue;
+                    }
+                    if self.wizard_anim_index[i] != 0 {
+                        self.wizard_anim_index[i] = 0;
+                        self.wizard_last_phase[i] = 0.0;
+                    }
+                }
+            }
             let cycle = 5.0f32; // synthetic cycle period
             let bolt_offset = 1.5f32; // trigger point in the cycle
             for i in 0..(self.wizard_count as usize) {
