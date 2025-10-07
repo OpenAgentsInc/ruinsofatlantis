@@ -40,6 +40,59 @@ impl ReplicationBuffer {
             Ok(p) => p,
             Err(_) => bytes,
         };
+        // Prefer actor delta snapshot (v3) first
+        let mut slice_delta_v3: &[u8] = payload;
+        if let Ok(d) = net_core::snapshot::ActorSnapshotDelta::decode(&mut slice_delta_v3) {
+            // Build id->index map for current actors
+            use std::collections::HashMap;
+            let mut idx: HashMap<u32, usize> = HashMap::new();
+            for (i, a) in self.actors.iter().enumerate() { idx.insert(a.id, i); }
+            // Removals
+            if !d.removals.is_empty() {
+                self.actors.retain(|a| !d.removals.contains(&a.id));
+                self.wizards.retain(|w| !d.removals.contains(&w.id));
+                self.npcs.retain(|n| !d.removals.contains(&n.id));
+            }
+            // Updates
+            for u in d.updates {
+                if let Some(&i) = idx.get(&u.id) {
+                    let a = &mut self.actors[i];
+                    let mut changed = false;
+                    if u.flags & 1 != 0 {
+                        a.pos.x = net_core::snapshot::dqpos(u.qpos[0]);
+                        a.pos.y = net_core::snapshot::dqpos(u.qpos[1]);
+                        a.pos.z = net_core::snapshot::dqpos(u.qpos[2]);
+                        changed = true;
+                    }
+                    if u.flags & 2 != 0 { a.yaw = net_core::snapshot::dqyaw(u.qyaw); changed = true; }
+                    if u.flags & 4 != 0 { a.hp = u.hp; changed = true; }
+                    if u.flags & 8 != 0 { a.alive = u.alive != 0; changed = true; }
+                    if changed {
+                        // Update derived views if present
+                        for w in &mut self.wizards { if w.id == a.id { w.pos = a.pos; w.yaw = a.yaw; w.hp = a.hp; w.max = a.max; } }
+                        for n in &mut self.npcs { if n.id == a.id { n.pos = a.pos; n.yaw = a.yaw; n.hp = a.hp; n.max = a.max; n.alive = a.alive; } }
+                    }
+                }
+            }
+            // Spawns
+            for a in d.spawns {
+                let av = ActorView {
+                    id: a.id, kind: a.kind, team: a.team,
+                    pos: glam::vec3(a.pos[0], a.pos[1], a.pos[2]),
+                    yaw: a.yaw, radius: a.radius, hp: a.hp, max: a.max, alive: a.alive,
+                };
+                self.actors.push(av.clone());
+                match a.kind { 0 => self.wizards.push(WizardView { id: a.id, kind: 0, pos: av.pos, yaw: av.yaw, hp: av.hp, max: av.max }),
+                               1 | 2 => self.npcs.push(NpcView { id: a.id, hp: av.hp, max: av.max, pos: av.pos, radius: av.radius, alive: av.alive, attack_anim: 0.0, yaw: av.yaw }),
+                               _ => {} }
+            }
+            // Projectiles (full list)
+            self.projectiles.clear();
+            for p in d.projectiles {
+                self.projectiles.push(ProjectileView { id: p.id, kind: p.kind, pos: glam::vec3(p.pos[0], p.pos[1], p.pos[2]), vel: glam::vec3(p.vel[0], p.vel[1], p.vel[2]) });
+            }
+            return true;
+        }
         // Prefer actor-centric snapshot (v2) if present
         let mut slice_actor: &[u8] = payload;
         if let Ok(asnap) = net_core::snapshot::ActorSnapshot::decode(&mut slice_actor) {

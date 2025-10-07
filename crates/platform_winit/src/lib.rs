@@ -14,7 +14,6 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
-#[derive(Default)]
 struct App {
     window: Option<Window>,
     state: Option<Renderer>,
@@ -27,6 +26,35 @@ struct App {
     #[cfg(target_arch = "wasm32")]
     last_time: Option<web_time::Instant>,
     tick: u32,
+    // Delta baseline for interest/deltas (per local client)
+    baseline_tick: u64,
+    baseline: std::collections::HashMap<u32, net_core::snapshot::ActorRep>,
+    interest_radius_m: f32,
+    // Simple server-side rate limiter for client commands
+    last_sec_start: std::time::Instant,
+    cmds_this_sec: u32,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            window: None,
+            state: None,
+            transport_srv: None,
+            #[cfg(feature = "demo_server")]
+            demo_server: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            last_time: None,
+            #[cfg(target_arch = "wasm32")]
+            last_time: None,
+            tick: 0,
+            baseline_tick: 0,
+            baseline: std::collections::HashMap::new(),
+            interest_radius_m: 40.0,
+            last_sec_start: std::time::Instant::now(),
+            cmds_this_sec: 0,
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -89,6 +117,11 @@ impl ApplicationHandler for App {
                 }
                 self.last_time = Some(std::time::Instant::now());
                 self.tick = 0;
+                self.baseline_tick = 0;
+                self.baseline = std::collections::HashMap::new();
+                self.interest_radius_m = 40.0;
+                self.last_sec_start = std::time::Instant::now();
+                self.cmds_this_sec = 0;
             }
 
             #[cfg(target_arch = "wasm32")]
@@ -190,6 +223,17 @@ impl ApplicationHandler for App {
                     };
                     let mut slice: &[u8] = payload;
                     if let Ok(cmd) = net_core::command::ClientCmd::decode(&mut slice) {
+                        // rate limit: 20 cmds/sec
+                        let now = std::time::Instant::now();
+                        if now.duration_since(self.last_sec_start).as_secs_f32() >= 1.0 {
+                            self.last_sec_start = now;
+                            self.cmds_this_sec = 0;
+                        }
+                        if self.cmds_this_sec >= 20 {
+                            log::debug!("rate-limit: dropping client cmd");
+                            continue;
+                        }
+                        self.cmds_this_sec += 1;
                         match cmd {
                             net_core::command::ClientCmd::FireBolt { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
@@ -292,13 +336,74 @@ impl ApplicationHandler for App {
                     );
                 }
                 // Send actor-centric snapshot v2 (authoritative snapshot)
-                let asnap = srv.tick_snapshot_actors(self.tick as u64);
+                let tick64 = self.tick as u64;
+                let asnap = srv.tick_snapshot_actors(tick64);
+                // Build interest-limited view and delta vs baseline
+                let center = s
+                    .wizard_positions()
+                    .first()
+                    .copied()
+                    .unwrap_or(glam::vec3(0.0, 0.0, 0.0));
+                let r2 = self.interest_radius_m * self.interest_radius_m;
+                let mut cur: std::collections::HashMap<u32, net_core::snapshot::ActorRep> = std::collections::HashMap::new();
+                for a in asnap.actors {
+                    let dx = a.pos[0] - center.x;
+                    let dz = a.pos[2] - center.z;
+                    if dx * dx + dz * dz <= r2 { cur.insert(a.id, a); }
+                }
+                // spawns/removals/updates
+                let mut spawns = Vec::new();
+                let mut removals = Vec::new();
+                let mut updates = Vec::new();
+                // spawns/updates
+                for (id, a) in &cur {
+                    if let Some(b) = self.baseline.get(id) {
+                        let mut flags = 0u8;
+                        let mut rec = net_core::snapshot::ActorDeltaRec { id: *id, flags: 0, qpos: [0;3], qyaw: 0, hp: 0, alive: 0 };
+                        // pos
+                        let qpx = net_core::snapshot::qpos(a.pos[0]);
+                        let qpy = net_core::snapshot::qpos(a.pos[1]);
+                        let qpz = net_core::snapshot::qpos(a.pos[2]);
+                        if net_core::snapshot::qpos(b.pos[0]) != qpx || net_core::snapshot::qpos(b.pos[1]) != qpy || net_core::snapshot::qpos(b.pos[2]) != qpz {
+                            flags |= 1; rec.qpos = [qpx, qpy, qpz];
+                        }
+                        // yaw
+                        let qy = net_core::snapshot::qyaw(a.yaw);
+                        if net_core::snapshot::qyaw(b.yaw) != qy { flags |= 2; rec.qyaw = qy; }
+                        // hp
+                        if b.hp != a.hp { flags |= 4; rec.hp = a.hp; }
+                        // alive
+                        if b.alive != a.alive { flags |= 8; rec.alive = u8::from(a.alive); }
+                        if flags != 0 { rec.flags = flags; updates.push(rec); }
+                    } else {
+                        spawns.push(a.clone());
+                    }
+                }
+                // removals
+                for id in self.baseline.keys() {
+                    if !cur.contains_key(id) { removals.push(*id); }
+                }
+                // projectiles (full)
+                let mut projectiles = Vec::new();
+                for p in srv.projectiles.iter() {
+                    projectiles.push(net_core::snapshot::ProjectileRep {
+                        id: p.id,
+                        kind: match p.kind { server_core::ProjKind::Firebolt => 0, server_core::ProjKind::Fireball => 1, server_core::ProjKind::MagicMissile => 2 },
+                        pos: [p.pos.x, p.pos.y, p.pos.z],
+                        vel: [p.vel.x, p.vel.y, p.vel.z],
+                    });
+                }
+                let delta = net_core::snapshot::ActorSnapshotDelta { v: 3, tick: tick64, baseline: self.baseline_tick, spawns, updates, removals, projectiles };
+                // encode + send
                 let mut p4 = Vec::new();
-                asnap.encode(&mut p4);
+                delta.encode(&mut p4);
                 let mut f4 = Vec::with_capacity(p4.len() + 8);
                 net_core::frame::write_msg(&mut f4, &p4);
                 metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f4.len() as u64);
                 let _ = srv_xport.try_send(f4);
+                // update baseline
+                self.baseline = cur;
+                self.baseline_tick = tick64;
                 self.tick = self.tick.wrapping_add(1);
                 // Now step authoritative systems (projectiles integrate, AI, etc.)
                 srv.step_authoritative(dt, &wiz_pos);

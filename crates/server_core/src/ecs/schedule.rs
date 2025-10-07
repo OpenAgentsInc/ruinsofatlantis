@@ -337,6 +337,7 @@ impl SpatialGrid {
         let cz = (z / self.cell).floor() as i32;
         (cx, cz)
     }
+    #[allow(dead_code)]
     pub fn query_circle(&self, center: Vec2, r: f32) -> impl Iterator<Item = ActorId> + '_ {
         let cr = (r / self.cell).ceil() as i32;
         let (cx, cz) = ((center.x / self.cell).floor() as i32, (center.y / self.cell).floor() as i32);
