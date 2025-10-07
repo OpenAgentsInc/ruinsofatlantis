@@ -68,8 +68,14 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
         .map(|a| a.id)
         .collect();
     for uid in undead_ids {
-        let (pos_u, rad_u) = if let Some(a) = srv.ecs.get(uid) {
-            (a.tr.pos, a.tr.radius)
+        let (pos_u, rad_u, speed, extra, aggro_m) = if let Some(a) = srv.ecs.get(uid) {
+            (
+                a.tr.pos,
+                a.tr.radius,
+                a.move_speed.map(|s| s.mps).unwrap_or(2.0),
+                a.attack.map(|r| r.m).unwrap_or(0.35),
+                a.aggro.map(|ag| ag.m),
+            )
         } else {
             continue;
         };
@@ -79,6 +85,7 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
             let dx = p.x - pos_u.x;
             let dz = p.z - pos_u.z;
             let d2 = dx * dx + dz * dz;
+            if let Some(a) = aggro_m && d2 > a * a { continue; }
             if best.as_ref().map(|(b, _, _)| d2 < *b).unwrap_or(true) {
                 best = Some((d2, *p, *r));
             }
@@ -86,9 +93,8 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
         if let Some((_d2, tp, tr)) = best {
             let to = Vec3::new(tp.x - pos_u.x, 0.0, tp.z - pos_u.z);
             let dist = to.length();
-            let contact = rad_u + tr + 0.35f32;
+            let contact = rad_u + tr + extra;
             if dist > contact + 0.02 {
-                let speed = 2.0f32; // default until componentized
                 let step = (speed * ctx.dt).min(dist - contact);
                 if step > 1e-4
                     && let Some(a) = srv.ecs.get_mut(uid)
@@ -109,8 +115,15 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
         .map(|a| a.id)
         .collect();
     for uid in undead_ids {
-        let (pos_u, rad_u) = if let Some(a) = srv.ecs.get(uid) {
-            (a.tr.pos, a.tr.radius)
+        let (pos_u, rad_u, extra, mut cd_ready, cd_total, dmg) = if let Some(a) = srv.ecs.get(uid) {
+            (
+                a.tr.pos,
+                a.tr.radius,
+                a.attack.map(|r| r.m).unwrap_or(0.35),
+                a.melee.map(|m| m.ready_in_s).unwrap_or(0.0),
+                a.melee.map(|m| m.cooldown_s).unwrap_or(0.6),
+                a.melee.map(|m| m.damage).unwrap_or(5),
+            )
         } else {
             continue;
         };
@@ -126,13 +139,24 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
         if let Some((tid, _d2, tp, tr)) = best {
             let to = Vec3::new(tp.x - pos_u.x, 0.0, tp.z - pos_u.z);
             let dist = to.length();
-            let reach = rad_u + tr + 0.35;
-            if dist <= reach {
-                ctx.dmg.push(DamageEvent {
-                    src: Some(uid),
-                    dst: tid,
-                    amount: 5, // default until componentized
-                });
+            let reach = rad_u + tr + extra;
+            // Cooldown update
+            cd_ready = (cd_ready - ctx.dt).max(0.0);
+            if dist <= reach && cd_ready <= 0.0 {
+                ctx.dmg.push(DamageEvent { src: Some(uid), dst: tid, amount: dmg });
+                // write back cooldown
+                if let Some(u) = srv.ecs.get_mut(uid)
+                    && let Some(m) = &mut u.melee
+                {
+                    m.ready_in_s = cd_total.max(0.05);
+                }
+            } else {
+                // write back cd after decrement
+                if let Some(u) = srv.ecs.get_mut(uid)
+                    && let Some(m) = &mut u.melee
+                {
+                    m.ready_in_s = cd_ready;
+                }
             }
         }
     }

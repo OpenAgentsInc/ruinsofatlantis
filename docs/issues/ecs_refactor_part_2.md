@@ -226,6 +226,17 @@ Addendum — Implementation log (2025-10-07)
   - Kept snapshot building via `tick_snapshot_actors()`; snapshot system can be added later if needed.
   - Workspace clippy/tests green.
 
+- PR‑3 (Phase 3) done on main:
+  - Componentized server data in ECS world: `MoveSpeed`, `AggroRadius`, `AttackRadius`, and `Melee { damage, cooldown_s, ready_in_s }`.
+  - Spawn defaults:
+    - Undead → `MoveSpeed(2.0)`, `AggroRadius(25.0)`, `AttackRadius(0.35)`, `Melee { damage:5, cooldown:0.6 }`.
+    - Boss → `MoveSpeed(2.6)`, `AggroRadius(35.0)`, `AttackRadius(0.35)`, `Melee { damage:12, cooldown:0.8 }`.
+  - Systems now read these components:
+    - AI move uses `MoveSpeed`; aggro filter uses `AggroRadius`; contact uses `AttackRadius`.
+    - Melee system enforces cooldown (`ready_in_s`), applies damage events only when ready, and updates cooldown timers per tick.
+  - Kept wizard actors without melee/speed by default; unchanged behavior.
+  - Clippy/tests green.
+
 
 ## What I recommend you do **immediately**
 

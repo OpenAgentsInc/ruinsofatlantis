@@ -364,7 +364,7 @@ impl ServerState {
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
-        self.ecs.spawn(
+        let id = self.ecs.spawn(
             ActorKind::Zombie,
             Team::Undead,
             Transform {
@@ -373,7 +373,19 @@ impl ServerState {
                 radius,
             },
             Health { hp, max: hp },
-        )
+        );
+        // Defaults for undead
+        if let Some(a) = self.ecs.get_mut(id) {
+            a.move_speed = Some(ecs::MoveSpeed { mps: 2.0 });
+            a.aggro = Some(ecs::AggroRadius { m: 25.0 });
+            a.attack = Some(ecs::AttackRadius { m: 0.35 });
+            a.melee = Some(ecs::Melee {
+                damage: 5,
+                cooldown_s: 0.6,
+                ready_in_s: 0.0,
+            });
+        }
+        id
     }
     /// Spawn the unique boss "Nivita of the Undertide" if not present.
     /// Returns the NPC id if spawned or already present.
@@ -403,6 +415,16 @@ impl ServerState {
                 max: hp_mid,
             },
         );
+        if let Some(a) = self.ecs.get_mut(id) {
+            a.move_speed = Some(ecs::MoveSpeed { mps: 2.6 });
+            a.aggro = Some(ecs::AggroRadius { m: 35.0 });
+            a.attack = Some(ecs::AttackRadius { m: 0.35 });
+            a.melee = Some(ecs::Melee {
+                damage: 12,
+                cooldown_s: 0.8,
+                ready_in_s: 0.0,
+            });
+        }
         // Build and store boss stats snapshot for replication/logging
         let ab = ec::Abilities {
             str: cfg.abilities.str,

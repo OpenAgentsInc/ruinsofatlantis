@@ -2,6 +2,28 @@ use glam::Vec3;
 
 use crate::actor::{ActorId, ActorKind, Health, Team, Transform};
 
+#[derive(Copy, Clone, Debug)]
+pub struct MoveSpeed {
+    pub mps: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AggroRadius {
+    pub m: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AttackRadius {
+    pub m: f32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Melee {
+    pub damage: i32,
+    pub cooldown_s: f32,
+    pub ready_in_s: f32,
+}
+
 /// Entity handle local to this world (opaque index).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entity(u32);
@@ -13,6 +35,10 @@ pub struct Components {
     pub team: Team,
     pub tr: Transform,
     pub hp: Health,
+    pub move_speed: Option<MoveSpeed>,
+    pub aggro: Option<AggroRadius>,
+    pub attack: Option<AttackRadius>,
+    pub melee: Option<Melee>,
 }
 
 #[derive(Default, Debug)]
@@ -33,7 +59,17 @@ impl WorldEcs {
         self.next_id = self.next_id.wrapping_add(1);
         let _e = Entity(self.next_ent);
         self.next_ent = self.next_ent.wrapping_add(1);
-        self.ents.push(Components { id, kind, team, tr, hp });
+        self.ents.push(Components {
+            id,
+            kind,
+            team,
+            tr,
+            hp,
+            move_speed: None,
+            aggro: None,
+            attack: None,
+            melee: None,
+        });
         id
     }
 
