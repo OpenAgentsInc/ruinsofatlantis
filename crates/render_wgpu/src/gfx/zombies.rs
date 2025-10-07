@@ -63,51 +63,6 @@ pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
     })
 }
 
-#[cfg(feature = "legacy_client_ai")]
-pub fn build_instances(
-    device: &wgpu::Device,
-    terrain_cpu: &crate::gfx::terrain::TerrainCPU,
-    server: &server_core::ServerState,
-    zombie_joints: u32,
-) -> (
-    wgpu::Buffer,
-    Vec<InstanceSkin>,
-    Vec<glam::Mat4>,
-    Vec<u32>,
-    u32,
-) {
-    let mut instances_cpu: Vec<InstanceSkin> = Vec::new();
-    let mut models: Vec<glam::Mat4> = Vec::new();
-    let mut ids: Vec<u32> = Vec::new();
-    for (idx, npc) in server.npcs.iter().enumerate() {
-        // Snap initial zombie spawn to terrain height
-        let (h, _n) = crate::gfx::terrain::height_at(terrain_cpu, npc.pos.x, npc.pos.z);
-        let pos = glam::vec3(npc.pos.x, h, npc.pos.z);
-        let m = glam::Mat4::from_scale_rotation_translation(
-            glam::Vec3::splat(1.0),
-            glam::Quat::IDENTITY,
-            pos,
-        );
-        models.push(m);
-        ids.push(npc.id.0);
-        instances_cpu.push(InstanceSkin {
-            model: m.to_cols_array_2d(),
-            color: [1.0, 1.0, 1.0],
-            selected: 0.0,
-            palette_base: (idx as u32) * zombie_joints,
-            _pad_inst: [0; 3],
-        });
-    }
-    let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("zombie-instances"),
-        contents: bytemuck::cast_slice(&instances_cpu),
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-    });
-    let count = instances_cpu.len() as u32;
-    (instances, instances_cpu, models, ids, count)
-}
-
-#[cfg(not(feature = "legacy_client_ai"))]
 pub fn build_instances(
     device: &wgpu::Device,
     _terrain_cpu: &crate::gfx::terrain::TerrainCPU,

@@ -10,7 +10,7 @@ use rand_chacha::ChaCha8Rng;
 use crate::gfx::terrain::TerrainCPU;
 use crate::gfx::types::{Instance, InstanceSkin};
 use ecs_core::{RenderKind, Transform, World};
-#[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+#[cfg(feature = "vox_onepath_demo")]
 use ra_assets::gltf::load_gltf_mesh;
 use ra_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
@@ -239,11 +239,11 @@ pub fn build_demo_scene(
         pc_index: 0,
         // Seed destructible registry on client only in legacy/demo builds.
         destruct_meshes_cpu: {
-            #[cfg(not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")))]
+            #[cfg(not(feature = "vox_onepath_demo"))]
             {
                 Vec::new()
             }
-            #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+            #[cfg(feature = "vox_onepath_demo")]
             {
                 // Load ruins mesh CPU once
                 let path = crate::gfx::asset_path("assets/models/ruins.gltf");
@@ -270,11 +270,11 @@ pub fn build_demo_scene(
             }
         },
         destruct_instances: {
-            #[cfg(not(any(feature = "legacy_client_carve", feature = "vox_onepath_demo")))]
+            #[cfg(not(feature = "vox_onepath_demo"))]
             {
                 Vec::new()
             }
-            #[cfg(any(feature = "legacy_client_carve", feature = "vox_onepath_demo"))]
+            #[cfg(feature = "vox_onepath_demo")]
             {
                 let mut insts = Vec::new();
                 if !ruin_instances.clone().is_empty() {

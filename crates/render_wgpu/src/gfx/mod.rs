@@ -66,7 +66,7 @@ use wgpu::{SurfaceError, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 // input handling moved to renderer/input.rs
 use collision_static::chunks::{self as chunkcol, StaticChunk};
-#[cfg(feature = "legacy_client_carve")]
+#[cfg(feature = "vox_onepath_demo")]
 use server_core::destructible::{config::DestructibleConfig, queue::ChunkQueue};
 use std::collections::{HashMap, HashSet};
 #[allow(unused_imports)]
@@ -366,7 +366,6 @@ pub struct Renderer {
     // Controller facade (client_core-owned logic)
     controller_state: client_core::facade::controller::ControllerState,
     // Optional command transmitter to server (client->server commands)
-    #[cfg_attr(not(feature = "legacy_client_combat"), allow(dead_code))]
     cmd_tx: Option<net_core::channel::Tx>,
     // Pending pointer-lock request emitted by controller systems; applied by platform
     pointer_lock_request: Option<bool>,
@@ -379,14 +378,11 @@ pub struct Renderer {
     controller_alt_hold: bool,
 
     // --- Destructible (voxel) state ---
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     destruct_cfg: DestructibleConfig,
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     voxel_grid: Option<VoxelGrid>,
-    #[cfg(feature = "legacy_client_carve")]
+    #[cfg(feature = "vox_onepath_demo")]
     chunk_queue: ChunkQueue,
     chunk_colliders: Vec<StaticChunk>,
     // Multi‑proxy: one voxel proxy per destructible instance
@@ -401,18 +397,12 @@ pub struct Renderer {
     // One-path demo status (optional): (ray, carve, mesh)
     vox_onepath_ui: Option<(bool, bool, bool)>,
     // Deterministic debris seeding counter
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     impact_id: u64,
 
     // Voxel chunk GPU meshes (keyed by destructible id + chunk coord)
     voxel_meshes: HashMap<(DestructibleId, u32, u32, u32), VoxelChunkMesh>,
-    #[cfg_attr(
-        not(any(feature = "vox_onepath_demo", feature = "legacy_client_carve")),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     voxel_hashes: HashMap<(DestructibleId, u32, u32, u32), u64>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
@@ -442,7 +432,7 @@ pub struct Renderer {
     // --- Replication (local loop) ---
     repl_rx: Option<net_core::channel::Rx>,
     repl_buf: client_core::replication::ReplicationBuffer,
-    #[cfg_attr(not(feature = "legacy_client_ai"), allow(dead_code))]
+    #[allow(dead_code)]
     boss_status_next_emit: f32,
 
     // Demo helpers
@@ -492,9 +482,7 @@ pub struct Renderer {
 
     // No interactive death UI — we show text only.
 
-    // Server state (NPCs/health)
-    #[cfg(feature = "legacy_client_ai")]
-    server: server_core::ServerState,
+    // Server state removed; renderer is presentation-only
 
     // Wizard health (including PC at pc_index)
     wizard_hp: Vec<i32>,
@@ -602,19 +590,7 @@ impl Renderer {
     }
     // moved: wrap_angle -> renderer/update.rs
     fn any_zombies_alive(&self) -> bool {
-        // Prefer replication buffer (default build path)
-        if !self.repl_buf.npcs.is_empty() {
-            return self.repl_buf.npcs.iter().any(|n| n.alive);
-        }
-        // Fallback to local server only when legacy client AI is enabled
-        #[cfg(feature = "legacy_client_ai")]
-        {
-            return self.server.npcs.iter().any(|n| n.alive);
-        }
-        #[cfg(not(feature = "legacy_client_ai"))]
-        {
-            false
-        }
+        self.repl_buf.npcs.iter().any(|n| n.alive)
     }
     /// Pop a pending pointer-lock request emitted by controller systems.
     pub fn take_pointer_lock_request(&mut self) -> Option<bool> {
@@ -764,18 +740,6 @@ impl Renderer {
         self.npc_index_count = npcs.index_count;
         self.npc_instances = npcs.instances;
         self.npc_models = npcs.models;
-        #[cfg(feature = "legacy_client_ai")]
-        {
-            self.server = npcs.server;
-        }
-        #[cfg(feature = "legacy_client_ai")]
-        let (zinst, zcpu, zmodels, zids, zcount) = zombies::build_instances(
-            &self.device,
-            &self.terrain_cpu,
-            &self.server,
-            self.zombie_joints,
-        );
-        #[cfg(not(feature = "legacy_client_ai"))]
         let (zinst, zcpu, zmodels, zids, zcount) =
             zombies::build_instances(&self.device, &self.terrain_cpu, self.zombie_joints);
         self.zombie_instances = zinst;
@@ -2015,11 +1979,7 @@ impl Renderer {
 
         // Update player transform from input (WASD) then camera follow
         self.update_player_and_camera(dt, aspect);
-        // Simple AI: rotate non-PC wizards to face nearest alive zombie so firebolts aim correctly
-        #[cfg(feature = "legacy_client_ai")]
-        {
-            self.update_wizard_ai(dt);
-        }
+        // Client-side wizard facing for demo is handled in renderer path (replication-driven)
         // Compute local orbit offsets (relative to PC orientation)
         // Adapt lift and look height as we zoom in so the close view
         // sits just behind and slightly above the wizard's head.
@@ -2919,99 +2879,7 @@ impl Renderer {
         f32::atan2(f.x, f.z)
     }
 
-    // moved: turn_towards -> renderer/update.rs
-    #[cfg(feature = "legacy_client_ai")]
-    fn turn_towards(current: f32, target: f32, max_delta: f32) -> f32 {
-        let mut delta = target - current;
-        while delta > std::f32::consts::PI {
-            delta -= std::f32::consts::TAU;
-        }
-        while delta < -std::f32::consts::PI {
-            delta += std::f32::consts::TAU;
-        }
-        if delta.abs() <= max_delta {
-            target
-        } else if delta > 0.0 {
-            current + max_delta
-        } else {
-            current - max_delta
-        }
-    }
-
-    // moved: update_wizard_ai -> renderer/update.rs
-    #[cfg(feature = "legacy_client_ai")]
-    fn update_wizard_ai(&mut self, dt: f32) {
-        if self.wizard_count == 0 {
-            return;
-        }
-        // Collect alive zombie positions once (used when not hostile to the player)
-        let mut targets: Vec<glam::Vec3> = Vec::new();
-        if !self.wizards_hostile_to_pc {
-            for n in &self.server.npcs {
-                if n.alive {
-                    targets.push(n.pos);
-                }
-            }
-            if targets.is_empty() && !self.wizards_hostile_to_pc {
-                return;
-            }
-        }
-        let yaw_rate = 2.5 * dt; // rad per frame
-        for i in 0..(self.wizard_count as usize) {
-            if i == self.pc_index {
-                continue;
-            }
-            // Wizard position
-            let m = self.wizard_models[i];
-            let pos = glam::vec3(
-                m.to_cols_array()[12],
-                m.to_cols_array()[13],
-                m.to_cols_array()[14],
-            );
-            // Choose target: player if hostile, otherwise nearest zombie
-            let tgt = if self.wizards_hostile_to_pc && self.pc_alive {
-                // Player world position from model matrix
-                let pm = self
-                    .wizard_models
-                    .get(self.pc_index)
-                    .copied()
-                    .unwrap_or(glam::Mat4::IDENTITY)
-                    .to_cols_array();
-                glam::vec3(pm[12], pm[13], pm[14])
-            } else {
-                // Find nearest target among zombies
-                let mut best_d2 = f32::INFINITY;
-                let mut best = None;
-                for t in &targets {
-                    let d2 = (t.x - pos.x) * (t.x - pos.x) + (t.z - pos.z) * (t.z - pos.z);
-                    if d2 < best_d2 {
-                        best_d2 = d2;
-                        best = Some(*t);
-                    }
-                }
-                let Some(t) = best else { continue };
-                t
-            };
-            let desired_yaw = (tgt.x - pos.x).atan2(tgt.z - pos.z);
-            let cur_yaw = Self::yaw_from_model(&m);
-            let new_yaw = Self::turn_towards(cur_yaw, desired_yaw, yaw_rate);
-            if (new_yaw - cur_yaw).abs() > 1e-4 {
-                let new_m = glam::Mat4::from_scale_rotation_translation(
-                    glam::Vec3::splat(1.0),
-                    glam::Quat::from_rotation_y(new_yaw),
-                    pos,
-                );
-                self.wizard_models[i] = new_m;
-                // Update instance CPU + upload one slot
-                let mut inst = self.wizard_instances_cpu[i];
-                inst.model = new_m.to_cols_array_2d();
-                self.wizard_instances_cpu[i] = inst;
-                let offset = (i * std::mem::size_of::<InstanceSkin>()) as u64;
-                self.queue
-                    .write_buffer(&self.wizard_instances, offset, bytemuck::bytes_of(&inst));
-            }
-        }
-    }
+    // legacy client AI helpers removed; default build uses replication-only paths
     #[allow(dead_code)]
     fn select_zombie_clip(&self) -> Option<&AnimClip> {
         // Prefer common idle names, then walk/run, otherwise any
@@ -3138,13 +3006,7 @@ impl Renderer {
             attack_map.insert(n.id, attacking);
             radius_map.insert(n.id, n.radius);
         }
-        #[cfg(feature = "legacy_client_ai")]
-        if attack_map.is_empty() {
-            for n in &self.server.npcs {
-                attack_map.insert(n.id.0, n.attack_anim > 0.0);
-                radius_map.insert(n.id.0, n.radius);
-            }
-        }
+        // Legacy client AI fallback removed; replication provides attack state when needed
         // wiz_pos prepared above from replication/models
         // Helper: fuzzy find clip by case-insensitive substring(s)
         let find_clip = |subs: &[&str],
@@ -3392,22 +3254,7 @@ impl Renderer {
             glam::Vec3::ZERO
         };
         let moving = (current_pos - self.dk_prev_pos).length_squared() > 1e-4;
-        let attack_now = {
-            #[cfg(feature = "legacy_client_ai")]
-            {
-                if let Some(id) = self.dk_id
-                    && let Some(n) = self.server.npcs.iter().find(|n| n.id.0 == id)
-                {
-                    n.attack_anim > 0.0
-                } else {
-                    false
-                }
-            }
-            #[cfg(not(feature = "legacy_client_ai"))]
-            {
-                false
-            }
-        };
+        let attack_now = false;
         for i in 0..(self.dk_count as usize) {
             let lookup = if attack_now {
                 find_clip(

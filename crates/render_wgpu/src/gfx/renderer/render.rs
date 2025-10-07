@@ -8,8 +8,7 @@ use wgpu::util::DeviceExt;
 #[cfg(target_arch = "wasm32")]
 use crate::gfx::types::Globals;
 use crate::gfx::{camera_sys, terrain, types::Model};
-#[cfg(feature = "legacy_client_ai")]
-use net_core::snapshot::SnapshotEncode;
+// legacy client AI paths removed; renderer is replication-driven only
 
 /// Full render implementation (moved from gfx/mod.rs).
 pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
@@ -504,7 +503,6 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     // Update wizard skinning palettes on CPU then upload
     r.update_wizard_palettes(t);
     // Default build: rotate NPC wizards to face targets (player or nearest replicated NPC)
-    #[cfg(not(feature = "legacy_client_ai"))]
     {
         let yaw_rate = 2.5 * dt;
         let mut targets: Vec<glam::Vec3> = Vec::new();
@@ -613,20 +611,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 }
             }
         }
-        #[cfg(feature = "legacy_client_ai")]
-        {
-            r.update_zombies_from_server();
-        }
-        #[cfg(not(feature = "legacy_client_ai"))]
-        {
-            r.update_zombies_from_replication();
-            r.apply_zombie_melee_demo(dt);
-        }
+        r.update_zombies_from_replication();
+        r.apply_zombie_melee_demo(dt);
         r.update_zombie_palettes(t);
-        #[cfg(feature = "legacy_client_ai")]
-        {
-            r.update_deathknight_from_server();
-        }
         // Move sorceress client-side toward the wizards (slow walk)
         r.update_sorceress_motion(dt);
     }
@@ -893,45 +880,17 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Skinned: wizards (PC always visible even if hide_wizards)
         if r.is_vox_onepath() {
             // skip wizard visuals entirely in one‑path demo
-        } else {
-            #[cfg(feature = "legacy_client_carve")]
-            if r.destruct_cfg.hide_wizards {
+        } else if std::env::var("RA_DRAW_WIZARDS").map(|v| v != "0").unwrap_or(true) {
+            log::debug!("draw: wizards x{}", r.wizard_count);
+            r.draw_wizards(&mut rp);
+            r.draw_calls += 1;
+            // If PC uses a separate rig, draw it explicitly in addition to NPC wizards
+            if r.pc_vb.is_some() {
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
-            } else {
-                if std::env::var("RA_DRAW_WIZARDS")
-                    .map(|v| v != "0")
-                    .unwrap_or(true)
-                {
-                    log::debug!("draw: wizards x{}", r.wizard_count);
-                    r.draw_wizards(&mut rp);
-                    r.draw_calls += 1;
-                    // If PC uses a separate rig, draw it explicitly in addition to NPC wizards
-                    if r.pc_vb.is_some() {
-                        r.draw_pc_only(&mut rp);
-                        r.draw_calls += 1;
-                    }
-                } else {
-                    log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
-                }
             }
-            #[cfg(not(feature = "legacy_client_carve"))]
-            {
-                if std::env::var("RA_DRAW_WIZARDS")
-                    .map(|v| v != "0")
-                    .unwrap_or(true)
-                {
-                    log::debug!("draw: wizards x{}", r.wizard_count);
-                    r.draw_wizards(&mut rp);
-                    r.draw_calls += 1;
-                    if r.pc_vb.is_some() {
-                        r.draw_pc_only(&mut rp);
-                        r.draw_calls += 1;
-                    }
-                } else {
-                    log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
-                }
-            }
+        } else {
+            log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
         // Skinned: Death Knight (boss)
         if r.dk_count > 0 && !r.is_vox_onepath() {
@@ -1010,25 +969,14 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 / (r.wizard_hp_max as f32);
             bar_entries.push((head.truncate(), frac));
         }
-        // Bars for alive zombies
-        // Prefer replicated NPC view if present; fallback to server (legacy)
+        // Bars for alive zombies (replication only)
         {
             use std::collections::HashMap;
             let mut npc_map: HashMap<u32, (i32, i32, bool)> = HashMap::new();
             for n in &r.repl_buf.npcs {
                 npc_map.insert(n.id, (n.hp, n.max, n.alive));
             }
-            #[cfg(feature = "legacy_client_ai")]
-            if npc_map.is_empty() {
-                for n in &r.server.npcs {
-                    npc_map.insert(n.id.0, (n.hp, n.max_hp, n.alive));
-                }
-            }
             for (i, id) in r.zombie_ids.iter().enumerate() {
-                #[cfg(feature = "legacy_client_carve")]
-                if r.destruct_cfg.vox_sandbox {
-                    continue;
-                }
                 if let Some((hp, max_hp, alive)) = npc_map.get(id).copied()
                     && alive
                 {
@@ -1043,42 +991,14 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 }
             }
         }
-        #[cfg(not(feature = "legacy_client_ai"))]
-        for _ in &r.zombie_ids {
-            #[cfg(feature = "legacy_client_carve")]
-            if r.destruct_cfg.vox_sandbox {
-                continue;
-            }
-            // No server data; skip zombie bars in non-legacy mode
-        }
         // Death Knight health bar (use server HP; lower vertical offset)
-        if r.dk_count > 0
-            && {
-                #[cfg(feature = "legacy_client_carve")]
-                {
-                    !r.destruct_cfg.vox_sandbox
-                }
-                #[cfg(not(feature = "legacy_client_carve"))]
-                {
-                    true
-                }
-            }
-            && let Some(m) = r.dk_models.first().copied()
+        if r.dk_count > 0 && let Some(m) = r.dk_models.first().copied()
         {
             // Prefer replication; if not present, only fallback under legacy feature.
             if let Some(bs) = r.repl_buf.boss_status.as_ref() {
                 let frac = (bs.hp.max(0) as f32) / (bs.max.max(1) as f32);
                 let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
                 bar_entries.push((head.truncate(), frac));
-            } else {
-                #[cfg(feature = "legacy_client_ai")]
-                if let Some(id) = r.dk_id
-                    && let Some(n) = r.server.npcs.iter().find(|n| n.id.0 == id)
-                {
-                    let frac = (n.hp.max(0) as f32) / (n.max_hp.max(1) as f32);
-                    let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
-                    bar_entries.push((head.truncate(), frac));
-                }
             }
         }
         // Queue bars vertices and draw to the active target
@@ -1151,14 +1071,6 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         for n in &r.repl_buf.npcs {
             if n.alive {
                 alive.insert(n.id);
-            }
-        }
-        #[cfg(feature = "legacy_client_ai")]
-        if alive.is_empty() {
-            for n in &r.server.npcs {
-                if n.alive {
-                    alive.insert(n.id.0);
-                }
             }
         }
         for (idx, id) in r.zombie_ids.iter().enumerate() {
@@ -1378,23 +1290,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     log::debug!("submit: normal path");
-    // Periodically publish BossStatus into the local replication buffer (simulated channel)
-    #[cfg(feature = "legacy_client_ai")]
-    if r.last_time >= r.boss_status_next_emit
-        && let Some(st) = r.server.nivita_status()
-    {
-        let msg = net_core::snapshot::BossStatusMsg {
-            name: st.name,
-            ac: st.ac,
-            hp: st.hp,
-            max: st.max,
-            pos: [st.pos.x, st.pos.y, st.pos.z],
-        };
-        let mut buf = Vec::new();
-        msg.encode(&mut buf);
-        let _ = r.repl_buf.apply_message(&buf);
-        r.boss_status_next_emit = r.last_time + 1.0;
-    }
+    // legacy BossStatus emission removed; HUD is replication-driven
     // HUD
     let pc_hp = r
         .wizard_hp
