@@ -19,11 +19,15 @@ fn firebolt_hits_wizard_reliably() {
     let npc_id = s
         .ecs
         .iter()
-        .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Wizards)
+        .filter(|a| {
+            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Wizards
+        })
         .map(|a| a.id)
         .next()
         .expect("npc wizard present");
     let npc = s.ecs.get(npc_id).unwrap();
-    assert!(npc.hp.hp < npc.hp.max, "wizard should take damage from Firebolt");
+    assert!(
+        npc.hp.hp < npc.hp.max,
+        "wizard should take damage from Firebolt"
+    );
 }
-
