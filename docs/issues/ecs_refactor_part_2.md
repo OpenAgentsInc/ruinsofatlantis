@@ -247,7 +247,21 @@ Addendum — Implementation log (2025-10-07)
     - platform_winit limits replication to a 40m radius around the PC; maintains a per-client baseline and sends `ActorSnapshotDelta` (v3) each tick with spawns/updates/removals and a full projectile list.
     - net_core adds `ActorSnapshotDelta` and quantization helpers (`qpos/dqpos`, `qyaw/dqyaw`).
     - client_core `ReplicationBuffer` applies v3 deltas (then falls back to v2 full snapshot if needed).
-    - Simple server-side rate limiter (20 cmds/sec) drops excess client commands for safety.
+     - Simple server-side rate limiter (20 cmds/sec) drops excess client commands for safety.
+
+- PR‑5 (Phase 5) complete — Projectiles moved into ECS
+  - Why: Unify all authority under ECS; remove the last vec-based gameplay state and avoid borrow pitfalls with a simple command buffer.
+  - What changed:
+    - Added ECS components: `Projectile { kind, ttl_s, age_s }`, `Velocity { v }`, `Owner { id }`, and scaffold `Homing { target, turn_rate }`.
+    - Introduced a lightweight `CmdBuf { spawns, despawns }` and `WorldEcs::apply_cmds()` to perform entity creation/removal at safe points in the schedule.
+    - New schedule system `ingest_projectile_spawns` consumes `ServerState::pending_projectiles` (fed by platform/client commands) and enqueues ECS spawns using authoritative specs.
+    - Replaced vec-based projectile integration/collision with ECS systems:
+      - `projectile_integrate_ecs`: integrates position/TTL; pushes `ExplodeEvent` for Fireball on TTL.
+      - `projectile_collision_ecs`: segment-vs-circle over actors (grid-assisted proximity for Fireball); pushes `DamageEvent`/`ExplodeEvent`; despawns via `CmdBuf`.
+    - Cleanup applies despawns and prunes dead actors; no vec-based projectiles remain.
+    - `tick_snapshot_actors()` and platform delta builder now emit projectiles from ECS components.
+  - Acceptance:
+    - Casting Fireball/Firebolt/MagicMissile still works; projectiles integrate/collide/TTL via ECS; snapshots reflect removals; tests cover speed scaling and e2e removal.
 
 - PR‑6 (Phase 6) complete (interest + deltas; acceptance):
   - Per-tick deltas replace full snapshots by default (v2 kept as decoder fallback on client).

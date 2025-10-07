@@ -48,6 +48,7 @@ impl Schedule {
         srv.ecs.apply_cmds(&mut ctx.cmd);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
         melee_apply_when_contact(srv, ctx);
+        homing_update(srv, ctx);
         projectile_integrate_ecs(srv, ctx);
         projectile_collision_ecs(srv, ctx);
         aoe_apply_explosions(srv, ctx);
@@ -70,10 +71,41 @@ fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
 fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
     if srv.pending_projectiles.is_empty() { return; }
     let pending: Vec<_> = srv.pending_projectiles.drain(..).collect();
+    use std::collections::HashMap;
+    // For MagicMissile, pick distinct targets per owner within range
+    let mut mm_pools: HashMap<Option<ActorId>, Vec<ActorId>> = HashMap::new();
     for cmd in pending {
         let spec = srv.projectile_spec(cmd.kind);
         let v = cmd.dir.normalize_or_zero() * spec.speed_mps;
         let yaw = cmd.dir.x.atan2(cmd.dir.z);
+        let mut homing = None;
+        if matches!(cmd.kind, crate::ProjKind::MagicMissile) {
+            let owner_team = cmd
+                .owner
+                .and_then(|id| srv.ecs.get(id).map(|a| a.team))
+                .unwrap_or(crate::actor::Team::Pc);
+            let entry = mm_pools.entry(cmd.owner).or_insert_with(|| {
+                // Build candidate list sorted nearest-first
+                let mut cands: Vec<(f32, ActorId)> = srv
+                    .ecs
+                    .iter()
+                    .filter(|a| a.hp.alive() && a.id != cmd.owner.unwrap_or(ActorId(u32::MAX)))
+                    .filter(|a| srv.factions.effective_hostile(owner_team, a.team))
+                    .map(|a| {
+                        let dx = a.tr.pos.x - cmd.pos.x;
+                        let dz = a.tr.pos.z - cmd.pos.z;
+                        (dx * dx + dz * dz, a.id)
+                    })
+                    .filter(|(d2, _)| *d2 <= 30.0 * 30.0)
+                    .collect();
+                cands.sort_by(|l, r| l.0.partial_cmp(&r.0).unwrap_or(std::cmp::Ordering::Equal));
+                // store reversed so pop() yields nearest
+                cands.into_iter().rev().map(|(_, id)| id).collect()
+            });
+            if let Some(tid) = entry.pop() {
+                homing = Some(crate::ecs::world::Homing { target: tid, turn_rate: 9.0 });
+            }
+        }
         let comps = crate::ecs::world::Components {
             id: crate::actor::ActorId(0),
             kind: crate::actor::ActorKind::Wizard, // unused for projectile
@@ -87,9 +119,40 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
             projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
             velocity: Some(crate::ecs::world::Velocity { v }),
             owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
-            homing: None,
+            homing,
         };
         ctx.cmd.spawns.push(comps);
+    }
+}
+
+fn homing_update(srv: &mut ServerState, ctx: &mut Ctx) {
+    // Pre-fetch MagicMissile speed to avoid borrow conflicts
+    let mm_speed = srv.projectile_spec(crate::ProjKind::MagicMissile).speed_mps.max(0.1);
+    let dt = ctx.dt;
+    use std::collections::HashMap;
+    let pos_map: HashMap<ActorId, Vec3> = srv.ecs.iter().map(|a| (a.id, a.tr.pos)).collect();
+    for c in srv.ecs.iter_mut() {
+        if let (Some(_proj), Some(vel), Some(hm)) = (c.projectile.as_ref(), c.velocity.as_mut(), c.homing.as_ref()) {
+            let Some(tpos) = pos_map.get(&hm.target).copied() else { continue; };
+            let to = glam::vec3(tpos.x - c.tr.pos.x, 0.0, tpos.z - c.tr.pos.z);
+            let dist2 = to.length_squared();
+            if dist2 < 1e-6 { continue; }
+            let cur = if vel.v.length_squared() > 1e-6 { vel.v.normalize() } else { glam::vec3(0.0, 0.0, 1.0) };
+            let cur_yaw = cur.x.atan2(cur.z);
+            let want = to.normalize();
+            let want_yaw = want.x.atan2(want.z);
+            let two_pi = std::f32::consts::TAU;
+            let mut delta = want_yaw - cur_yaw;
+            // Wrap to [-PI, PI]
+            if delta > std::f32::consts::PI { delta -= two_pi; }
+            if delta < -std::f32::consts::PI { delta += two_pi; }
+            let max_step = hm.turn_rate * dt;
+            let step = delta.clamp(-max_step, max_step);
+            let new_yaw = cur_yaw + step;
+            let new_dir = glam::vec3(new_yaw.sin(), 0.0, new_yaw.cos());
+            let speed = vel.v.length().max(mm_speed);
+            vel.v = new_dir * speed;
+        }
     }
 }
 

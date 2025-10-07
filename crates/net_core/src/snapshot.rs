@@ -800,13 +800,11 @@ mod tests {
     #[test]
     fn actor_delta_rejects_bad_tag_and_version() {
         // bad tag
-        let mut buf = vec![0xEE];
+        let buf = vec![0xEE];
         let mut slice: &[u8] = &buf;
         assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
         // good tag, bad version
-        let mut buf = Vec::new();
-        buf.push(TAG_ACTOR_SNAPSHOT_DELTA);
-        buf.push(99); // bad version
+        let buf = vec![TAG_ACTOR_SNAPSHOT_DELTA, 99];
         let mut slice: &[u8] = &buf;
         assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
     }
