@@ -16,4 +16,3 @@ pub fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> 
     let closest = a + ab * t;
     (closest - c).length_squared() <= radius * radius
 }
-

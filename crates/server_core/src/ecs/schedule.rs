@@ -6,8 +6,8 @@
 
 use glam::{Vec2, Vec3};
 
-use crate::actor::{ActorId, ActorKind, Team};
 use crate::ServerState;
+use crate::actor::{ActorId, ActorKind, Team};
 use crate::ecs::geom::segment_hits_circle_xz;
 
 #[derive(Copy, Clone, Debug)]
@@ -60,8 +60,7 @@ impl Schedule {
 }
 
 fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
-    srv
-        .ecs
+    srv.ecs
         .iter()
         .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
         .map(|a| (a.id, a.tr.pos, a.tr.radius))
@@ -69,7 +68,9 @@ fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
 }
 
 fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
-    if srv.pending_projectiles.is_empty() { return; }
+    if srv.pending_projectiles.is_empty() {
+        return;
+    }
     let pending: Vec<_> = srv.pending_projectiles.drain(..).collect();
     use std::collections::HashMap;
     // For MagicMissile, pick distinct targets per owner within range
@@ -103,20 +104,31 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 cands.into_iter().rev().map(|(_, id)| id).collect()
             });
             if let Some(tid) = entry.pop() {
-                homing = Some(crate::ecs::world::Homing { target: tid, turn_rate: 9.0 });
+                homing = Some(crate::ecs::world::Homing {
+                    target: tid,
+                    turn_rate: 9.0,
+                });
             }
         }
         let comps = crate::ecs::world::Components {
             id: crate::actor::ActorId(0),
             kind: crate::actor::ActorKind::Wizard, // unused for projectile
             team: crate::actor::Team::Neutral,
-            tr: crate::actor::Transform { pos: cmd.pos, yaw, radius: 0.1 },
+            tr: crate::actor::Transform {
+                pos: cmd.pos,
+                yaw,
+                radius: 0.1,
+            },
             hp: crate::actor::Health { hp: 1, max: 1 },
             move_speed: None,
             aggro: None,
             attack: None,
             melee: None,
-            projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
+            projectile: Some(crate::ecs::world::Projectile {
+                kind: cmd.kind,
+                ttl_s: spec.life_s,
+                age_s: 0.0,
+            }),
             velocity: Some(crate::ecs::world::Velocity { v }),
             owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
             homing,
@@ -127,25 +139,44 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
 
 fn homing_update(srv: &mut ServerState, ctx: &mut Ctx) {
     // Pre-fetch MagicMissile speed to avoid borrow conflicts
-    let mm_speed = srv.projectile_spec(crate::ProjKind::MagicMissile).speed_mps.max(0.1);
+    let mm_speed = srv
+        .projectile_spec(crate::ProjKind::MagicMissile)
+        .speed_mps
+        .max(0.1);
     let dt = ctx.dt;
     use std::collections::HashMap;
     let pos_map: HashMap<ActorId, Vec3> = srv.ecs.iter().map(|a| (a.id, a.tr.pos)).collect();
     for c in srv.ecs.iter_mut() {
-        if let (Some(_proj), Some(vel), Some(hm)) = (c.projectile.as_ref(), c.velocity.as_mut(), c.homing.as_ref()) {
-            let Some(tpos) = pos_map.get(&hm.target).copied() else { continue; };
+        if let (Some(_proj), Some(vel), Some(hm)) = (
+            c.projectile.as_ref(),
+            c.velocity.as_mut(),
+            c.homing.as_ref(),
+        ) {
+            let Some(tpos) = pos_map.get(&hm.target).copied() else {
+                continue;
+            };
             let to = glam::vec3(tpos.x - c.tr.pos.x, 0.0, tpos.z - c.tr.pos.z);
             let dist2 = to.length_squared();
-            if dist2 < 1e-6 { continue; }
-            let cur = if vel.v.length_squared() > 1e-6 { vel.v.normalize() } else { glam::vec3(0.0, 0.0, 1.0) };
+            if dist2 < 1e-6 {
+                continue;
+            }
+            let cur = if vel.v.length_squared() > 1e-6 {
+                vel.v.normalize()
+            } else {
+                glam::vec3(0.0, 0.0, 1.0)
+            };
             let cur_yaw = cur.x.atan2(cur.z);
             let want = to.normalize();
             let want_yaw = want.x.atan2(want.z);
             let two_pi = std::f32::consts::TAU;
             let mut delta = want_yaw - cur_yaw;
             // Wrap to [-PI, PI]
-            if delta > std::f32::consts::PI { delta -= two_pi; }
-            if delta < -std::f32::consts::PI { delta += two_pi; }
+            if delta > std::f32::consts::PI {
+                delta -= two_pi;
+            }
+            if delta < -std::f32::consts::PI {
+                delta += two_pi;
+            }
             let max_step = hm.turn_rate * dt;
             let step = delta.clamp(-max_step, max_step);
             let new_yaw = cur_yaw + step;
@@ -182,7 +213,11 @@ fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[V
             let dx = p.x - pos_u.x;
             let dz = p.z - pos_u.z;
             let d2 = dx * dx + dz * dz;
-            if let Some(a) = aggro_m && d2 > a * a { continue; }
+            if let Some(a) = aggro_m
+                && d2 > a * a
+            {
+                continue;
+            }
             if best.as_ref().map(|(b, _, _)| d2 < *b).unwrap_or(true) {
                 best = Some((d2, *p, *r));
             }
@@ -240,7 +275,11 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
             // Cooldown update
             cd_ready = (cd_ready - ctx.dt).max(0.0);
             if dist <= reach && cd_ready <= 0.0 {
-                ctx.dmg.push(DamageEvent { src: Some(uid), dst: tid, amount: dmg });
+                ctx.dmg.push(DamageEvent {
+                    src: Some(uid),
+                    dst: tid,
+                    amount: dmg,
+                });
                 // write back cooldown
                 if let Some(u) = srv.ecs.get_mut(uid)
                     && let Some(m) = &mut u.melee
@@ -260,14 +299,21 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
 }
 
 fn projectile_integrate_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
-    let fb_aoe_r2 = { let s = srv.projectile_spec(crate::ProjKind::Fireball); (s.aoe_radius_m * s.aoe_radius_m).max(0.0) };
+    let fb_aoe_r2 = {
+        let s = srv.projectile_spec(crate::ProjKind::Fireball);
+        (s.aoe_radius_m * s.aoe_radius_m).max(0.0)
+    };
     for c in srv.ecs.iter_mut() {
         if let (Some(proj), Some(vel)) = (c.projectile.as_mut(), c.velocity.as_ref()) {
             c.tr.pos += vel.v * ctx.dt;
             proj.age_s += ctx.dt;
             if proj.age_s >= proj.ttl_s {
                 if matches!(proj.kind, crate::ProjKind::Fireball) {
-                    ctx.boom.push(ExplodeEvent { center_xz: Vec2::new(c.tr.pos.x, c.tr.pos.z), r2: fb_aoe_r2, src: c.owner.map(|o| o.id) });
+                    ctx.boom.push(ExplodeEvent {
+                        center_xz: Vec2::new(c.tr.pos.x, c.tr.pos.z),
+                        r2: fb_aoe_r2,
+                        src: c.owner.map(|o| o.id),
+                    });
                 }
                 ctx.cmd.despawns.push(c.id);
             }
@@ -293,15 +339,29 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         // test against actors
         let mut hit_any = false;
         for a in srv.ecs.iter() {
-            if !a.hp.alive() { continue; }
-            if let Some(owner_id) = owner && owner_id == a.id { continue; }
+            if !a.hp.alive() {
+                continue;
+            }
+            if let Some(owner_id) = owner
+                && owner_id == a.id
+            {
+                continue;
+            }
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
                 match kind {
                     crate::ProjKind::Fireball => {
-                        ctx.boom.push(ExplodeEvent { center_xz: Vec2::new(p1.x, p1.z), r2: fireball_r2, src: owner });
+                        ctx.boom.push(ExplodeEvent {
+                            center_xz: Vec2::new(p1.x, p1.z),
+                            r2: fireball_r2,
+                            src: owner,
+                        });
                     }
                     _ => {
-                        ctx.dmg.push(DamageEvent { src: owner, dst: a.id, amount: projectile_damage(srv, kind) });
+                        ctx.dmg.push(DamageEvent {
+                            src: owner,
+                            dst: a.id,
+                            amount: projectile_damage(srv, kind),
+                        });
                     }
                 }
                 hit_any = true;
@@ -323,16 +383,31 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             let seg_half = (seg_b - seg_a).length() * 0.5;
             let query_r = seg_half + r2.sqrt() + 1.0;
             for aid in ctx.spatial.query_circle(mid, query_r) {
-                let Some(act) = srv.ecs.get(aid) else { continue; };
-                if !act.hp.alive() { continue; }
+                let Some(act) = srv.ecs.get(aid) else {
+                    continue;
+                };
+                if !act.hp.alive() {
+                    continue;
+                }
                 let c = Vec2::new(act.tr.pos.x, act.tr.pos.z);
-                let t = if len2 <= 1e-12 { 0.0 } else { ((c - seg_a).dot(ab) / len2).clamp(0.0, 1.0) };
+                let t = if len2 <= 1e-12 {
+                    0.0
+                } else {
+                    ((c - seg_a).dot(ab) / len2).clamp(0.0, 1.0)
+                };
                 let closest = seg_a + ab * t;
                 let d2 = (closest - c).length_squared();
-                if d2 < best_d2 { best_d2 = d2; best_center = closest; }
+                if d2 < best_d2 {
+                    best_d2 = d2;
+                    best_center = closest;
+                }
             }
             if best_d2 <= r2 {
-                ctx.boom.push(ExplodeEvent { center_xz: best_center, r2, src: owner });
+                ctx.boom.push(ExplodeEvent {
+                    center_xz: best_center,
+                    r2,
+                    src: owner,
+                });
                 ctx.cmd.despawns.push(pid);
             }
         }
@@ -342,11 +417,17 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
 fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
     for e in ctx.boom.drain(..) {
         for a in srv.ecs.iter() {
-            if !a.hp.alive() { continue; }
+            if !a.hp.alive() {
+                continue;
+            }
             let dx = a.tr.pos.x - e.center_xz.x;
             let dz = a.tr.pos.z - e.center_xz.y;
             if dx * dx + dz * dz <= e.r2 {
-                ctx.dmg.push(DamageEvent { src: e.src, dst: a.id, amount: projectile_damage_aoe(srv) });
+                ctx.dmg.push(DamageEvent {
+                    src: e.src,
+                    dst: a.id,
+                    amount: projectile_damage_aoe(srv),
+                });
             }
         }
     }
@@ -356,7 +437,8 @@ fn faction_flip_on_pc_hits_wizards(srv: &mut ServerState, ctx: &mut Ctx) {
     for d in &ctx.dmg {
         if let Some(src) = d.src
             && let (Some(sa), Some(v)) = (srv.ecs.get(src), srv.ecs.get(d.dst))
-            && sa.team == Team::Pc && v.team == Team::Wizards
+            && sa.team == Team::Pc
+            && v.team == Team::Wizards
         {
             srv.factions.pc_vs_wizards_hostile = true;
         }
@@ -371,7 +453,9 @@ fn apply_damage_to_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     }
 }
 
-fn cleanup(srv: &mut ServerState, _ctx: &mut Ctx) { srv.ecs.remove_dead(); }
+fn cleanup(srv: &mut ServerState, _ctx: &mut Ctx) {
+    srv.ecs.remove_dead();
+}
 
 #[inline]
 fn projectile_damage(srv: &ServerState, kind: crate::ProjKind) -> i32 {
@@ -414,7 +498,10 @@ impl SpatialGrid {
     #[allow(dead_code)]
     pub fn query_circle(&self, center: Vec2, r: f32) -> impl Iterator<Item = ActorId> + '_ {
         let cr = (r / self.cell).ceil() as i32;
-        let (cx, cz) = ((center.x / self.cell).floor() as i32, (center.y / self.cell).floor() as i32);
+        let (cx, cz) = (
+            (center.x / self.cell).floor() as i32,
+            (center.y / self.cell).floor() as i32,
+        );
         let mut out: Vec<ActorId> = Vec::new();
         for dx in -cr..=cr {
             for dz in -cr..=cr {

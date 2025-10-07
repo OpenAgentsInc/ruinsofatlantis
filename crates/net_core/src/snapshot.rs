@@ -335,7 +335,9 @@ impl SnapshotEncode for ActorSnapshotDelta {
             out.extend_from_slice(&a.id.to_le_bytes());
             out.push(a.kind);
             out.push(a.team);
-            for c in &a.pos { out.extend_from_slice(&c.to_le_bytes()); }
+            for c in &a.pos {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
             out.extend_from_slice(&a.yaw.to_le_bytes());
             out.extend_from_slice(&a.radius.to_le_bytes());
             out.extend_from_slice(&a.hp.to_le_bytes());
@@ -349,39 +351,72 @@ impl SnapshotEncode for ActorSnapshotDelta {
             out.extend_from_slice(&u.id.to_le_bytes());
             out.push(u.flags);
             if u.flags & 1 != 0 {
-                for c in &u.qpos { out.extend_from_slice(&c.to_le_bytes()); }
+                for c in &u.qpos {
+                    out.extend_from_slice(&c.to_le_bytes());
+                }
             }
-            if u.flags & 2 != 0 { out.extend_from_slice(&u.qyaw.to_le_bytes()); }
-            if u.flags & 4 != 0 { out.extend_from_slice(&u.hp.to_le_bytes()); }
-            if u.flags & 8 != 0 { out.push(u.alive); }
+            if u.flags & 2 != 0 {
+                out.extend_from_slice(&u.qyaw.to_le_bytes());
+            }
+            if u.flags & 4 != 0 {
+                out.extend_from_slice(&u.hp.to_le_bytes());
+            }
+            if u.flags & 8 != 0 {
+                out.push(u.alive);
+            }
         }
         // removals
         let nr = u32::try_from(self.removals.len()).unwrap_or(0);
         out.extend_from_slice(&nr.to_le_bytes());
-        for id in &self.removals { out.extend_from_slice(&id.to_le_bytes()); }
+        for id in &self.removals {
+            out.extend_from_slice(&id.to_le_bytes());
+        }
         // projectiles (full)
         let np = u32::try_from(self.projectiles.len()).unwrap_or(0);
         out.extend_from_slice(&np.to_le_bytes());
         for p in &self.projectiles {
             out.extend_from_slice(&p.id.to_le_bytes());
             out.push(p.kind);
-            for c in &p.pos { out.extend_from_slice(&c.to_le_bytes()); }
-            for c in &p.vel { out.extend_from_slice(&c.to_le_bytes()); }
+            for c in &p.pos {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
+            for c in &p.vel {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
         }
     }
 }
 
 impl SnapshotDecode for ActorSnapshotDelta {
+    #[allow(clippy::too_many_lines)]
     fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
         use anyhow::bail;
         fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
-            if inp.len() < N { anyhow::bail!("short read"); }
-            let (a, b) = inp.split_at(N); *inp = b; let mut buf = [0u8; N]; buf.copy_from_slice(a); Ok(buf)
+            if inp.len() < N {
+                anyhow::bail!("short read");
+            }
+            let (a, b) = inp.split_at(N);
+            *inp = b;
+            let mut buf = [0u8; N];
+            buf.copy_from_slice(a);
+            Ok(buf)
         }
-        let tag = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-        if tag != TAG_ACTOR_SNAPSHOT_DELTA { bail!("not an ActorSnapshotDelta tag"); }
-        let v = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-        if v != ACTOR_SNAP_DELTA_VERSION { bail!("unsupported version: {v}"); }
+        let tag = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if tag != TAG_ACTOR_SNAPSHOT_DELTA {
+            bail!("not an ActorSnapshotDelta tag");
+        }
+        let v = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if v != ACTOR_SNAP_DELTA_VERSION {
+            bail!("unsupported version: {v}");
+        }
         let tick = u64::from_le_bytes(take::<8>(inp)?);
         let baseline = u64::from_le_bytes(take::<8>(inp)?);
         // spawns
@@ -389,66 +424,159 @@ impl SnapshotDecode for ActorSnapshotDelta {
         let mut spawns = Vec::with_capacity(ns);
         for _ in 0..ns {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = { let b = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; b };
-            let team = { let b = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; b };
-            let mut pos = [0.0f32; 3]; for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
+            let kind = {
+                let b = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                b
+            };
+            let team = {
+                let b = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                b
+            };
+            let mut pos = [0.0f32; 3];
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
             let yaw = f32::from_le_bytes(take::<4>(inp)?);
             let radius = f32::from_le_bytes(take::<4>(inp)?);
             let hp = i32::from_le_bytes(take::<4>(inp)?);
             let max = i32::from_le_bytes(take::<4>(inp)?);
-            let alive = match inp.first().copied() { Some(0) => false, Some(_) => true, None => anyhow::bail!("short read") }; *inp = &inp[1..];
-            spawns.push(ActorRep { id, kind, team, pos, yaw, radius, hp, max, alive });
+            let alive = match inp.first().copied() {
+                Some(0) => false,
+                Some(_) => true,
+                None => anyhow::bail!("short read"),
+            };
+            *inp = &inp[1..];
+            spawns.push(ActorRep {
+                id,
+                kind,
+                team,
+                pos,
+                yaw,
+                radius,
+                hp,
+                max,
+                alive,
+            });
         }
         // updates
         let nu = u32::from_le_bytes(take::<4>(inp)?) as usize;
         let mut updates = Vec::with_capacity(nu);
         for _ in 0..nu {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let flags = { let b = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; b };
+            let flags = {
+                let b = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                b
+            };
             let mut qpos = [0i32; 3];
-            if flags & 1 != 0 { for v in &mut qpos { *v = i32::from_le_bytes(take::<4>(inp)?); } }
+            if flags & 1 != 0 {
+                for v in &mut qpos {
+                    *v = i32::from_le_bytes(take::<4>(inp)?);
+                }
+            }
             let mut qyaw = 0u16;
-            if flags & 2 != 0 { qyaw = u16::from_le_bytes(take::<2>(inp)?); }
+            if flags & 2 != 0 {
+                qyaw = u16::from_le_bytes(take::<2>(inp)?);
+            }
             let mut hp = 0i32;
-            if flags & 4 != 0 { hp = i32::from_le_bytes(take::<4>(inp)?); }
+            if flags & 4 != 0 {
+                hp = i32::from_le_bytes(take::<4>(inp)?);
+            }
             let mut alive = 0u8;
-            if flags & 8 != 0 { alive = { let b = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; b }; }
-            updates.push(ActorDeltaRec { id, flags, qpos, qyaw, hp, alive });
+            if flags & 8 != 0 {
+                alive = {
+                    let b = inp
+                        .first()
+                        .copied()
+                        .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                    *inp = &inp[1..];
+                    b
+                };
+            }
+            updates.push(ActorDeltaRec {
+                id,
+                flags,
+                qpos,
+                qyaw,
+                hp,
+                alive,
+            });
         }
         // removals
         let nr = u32::from_le_bytes(take::<4>(inp)?) as usize;
         let mut removals = Vec::with_capacity(nr);
-        for _ in 0..nr { removals.push(u32::from_le_bytes(take::<4>(inp)?)); }
+        for _ in 0..nr {
+            removals.push(u32::from_le_bytes(take::<4>(inp)?));
+        }
         // projectiles
         let np = u32::from_le_bytes(take::<4>(inp)?) as usize;
         let mut projectiles = Vec::with_capacity(np);
         for _ in 0..np {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = { let b = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; b };
-            let mut pos = [0.0f32; 3]; for v in &mut pos { *v = f32::from_le_bytes(take::<4>(inp)?); }
-            let mut vel = [0.0f32; 3]; for v in &mut vel { *v = f32::from_le_bytes(take::<4>(inp)?); }
+            let kind = {
+                let b = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                b
+            };
+            let mut pos = [0.0f32; 3];
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
+            let mut vel = [0.0f32; 3];
+            for v in &mut vel {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
             projectiles.push(ProjectileRep { id, kind, pos, vel });
         }
-        Ok(Self { v, tick, baseline, spawns, updates, removals, projectiles })
+        Ok(Self {
+            v,
+            tick,
+            baseline,
+            spawns,
+            updates,
+            removals,
+            projectiles,
+        })
     }
 }
 
 // Quantization helpers for snapshot deltas
 #[must_use]
 #[allow(clippy::cast_possible_truncation)]
-pub fn qpos(x: f32) -> i32 { (x * 64.0).round() as i32 }
+pub fn qpos(x: f32) -> i32 {
+    (x * 64.0).round() as i32
+}
 #[must_use]
 #[allow(clippy::cast_precision_loss)]
-pub fn dqpos(x: i32) -> f32 { (x as f32) / 64.0 }
+pub fn dqpos(x: i32) -> f32 {
+    (x as f32) / 64.0
+}
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn qyaw(y: f32) -> u16 {
     let two_pi = std::f32::consts::TAU;
-    let r = y % two_pi; let r = if r < 0.0 { r + two_pi } else { r };
+    let r = y % two_pi;
+    let r = if r < 0.0 { r + two_pi } else { r };
     ((r * (65535.0 / two_pi)).round() as u32 & 0xFFFF) as u16
 }
 #[must_use]
-pub fn dqyaw(y: u16) -> f32 { f32::from(y) * (std::f32::consts::TAU / 65535.0) }
+pub fn dqyaw(y: u16) -> f32 {
+    f32::from(y) * (std::f32::consts::TAU / 65535.0)
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardRep {
@@ -780,9 +908,21 @@ mod tests {
                 max: 100,
                 alive: true,
             }],
-            updates: vec![ActorDeltaRec { id: 1, flags: 1 | 2 | 4 | 8, qpos: [qpos(1.0), qpos(2.0), qpos(3.0)], qyaw: qyaw(0.5), hp: 98, alive: 1 }],
+            updates: vec![ActorDeltaRec {
+                id: 1,
+                flags: 1 | 2 | 4 | 8,
+                qpos: [qpos(1.0), qpos(2.0), qpos(3.0)],
+                qyaw: qyaw(0.5),
+                hp: 98,
+                alive: 1,
+            }],
             removals: vec![2, 3],
-            projectiles: vec![ProjectileRep { id: 9, kind: 0, pos: [0.0, 1.0, 2.0], vel: [3.0, 4.0, 5.0] }],
+            projectiles: vec![ProjectileRep {
+                id: 9,
+                kind: 0,
+                pos: [0.0, 1.0, 2.0],
+                vel: [3.0, 4.0, 5.0],
+            }],
         };
         let mut buf = Vec::new();
         delta.encode(&mut buf);

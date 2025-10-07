@@ -10,8 +10,8 @@ mod combat;
 pub use actor::*;
 pub use combat::*;
 use glam::Vec3;
-mod ecs;
 pub mod destructible;
+mod ecs;
 pub mod jobs;
 pub mod scene_build;
 pub mod systems;
@@ -214,7 +214,12 @@ impl ServerState {
     /// Convenience enqueue for PC-owned projectile input; schedule consumes.
     pub fn spawn_projectile_from_pc(&mut self, pos: Vec3, dir: Vec3, kind: ProjKind) {
         let owner = self.pc_actor;
-        self.pending_projectiles.push(PendingProjectile { pos, dir, kind, owner });
+        self.pending_projectiles.push(PendingProjectile {
+            pos,
+            dir,
+            kind,
+            owner,
+        });
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
@@ -283,7 +288,11 @@ impl ServerState {
         // Ensure we mirror wizard positions first
         self.sync_wizards(wizard_positions);
         // Run ECS schedule
-        let mut ctx = crate::ecs::schedule::Ctx { dt, time_s: 0.0, ..Default::default() };
+        let mut ctx = crate::ecs::schedule::Ctx {
+            dt,
+            time_s: 0.0,
+            ..Default::default()
+        };
         let mut sched = crate::ecs::schedule::Schedule;
         sched.run(self, &mut ctx, wizard_positions);
     }
@@ -488,7 +497,11 @@ impl ServerState {
             if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
                 projectiles.push(net_core::snapshot::ProjectileRep {
                     id: c.id.0,
-                    kind: match proj.kind { ProjKind::Firebolt => 0, ProjKind::Fireball => 1, ProjKind::MagicMissile => 2 },
+                    kind: match proj.kind {
+                        ProjKind::Firebolt => 0,
+                        ProjKind::Fireball => 1,
+                        ProjKind::MagicMissile => 2,
+                    },
                     pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
                     vel: [vel.v.x, vel.v.y, vel.v.z],
                 });
@@ -647,14 +660,24 @@ mod tests_actor {
     fn spawn_from_dir_scales_speed() {
         let mut srv = ServerState::new();
         // enqueue one projectile and run ingest
-        srv.pending_projectiles.push(PendingProjectile { pos: Vec3::ZERO, dir: Vec3::new(0.0, 0.0, 1.0), kind: ProjKind::Firebolt, owner: None });
+        srv.pending_projectiles.push(PendingProjectile {
+            pos: Vec3::ZERO,
+            dir: Vec3::new(0.0, 0.0, 1.0),
+            kind: ProjKind::Firebolt,
+            owner: None,
+        });
         let mut ctx = crate::ecs::schedule::Ctx::default();
         let mut sched = crate::ecs::schedule::Schedule;
         sched.run(&mut srv, &mut ctx, &[]);
         // ensure a projectile entity exists with velocity > 20 m/s
         let mut found = false;
         for c in srv.ecs.iter() {
-            if let Some(v) = c.velocity.as_ref() && v.v.z > 20.0 { found = true; break; }
+            if let Some(v) = c.velocity.as_ref()
+                && v.v.z > 20.0
+            {
+                found = true;
+                break;
+            }
         }
         assert!(found, "no projectile with expected speed found");
     }

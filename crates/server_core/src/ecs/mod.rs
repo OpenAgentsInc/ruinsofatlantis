@@ -14,5 +14,5 @@
 
 mod world;
 pub use world::*;
-pub mod schedule;
 pub mod geom;
+pub mod schedule;
