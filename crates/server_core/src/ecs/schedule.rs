@@ -568,7 +568,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             crate::ProjKind::Fireball => age_s >= 0.10,
             _ => age_s >= 0.08,
         };
-        if !arm_ok { continue; }
+        if !arm_ok {
+            continue;
+        }
         let _owner_team = owner
             .and_then(|id| srv.ecs.get(id).map(|a| a.team))
             .unwrap_or(Team::Pc);

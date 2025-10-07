@@ -2757,12 +2757,16 @@ impl Renderer {
             let r2 = radius * radius;
             // NPCs (replicated)
             for n in &self.repl_buf.npcs {
-                if !n.alive { continue; }
+                if !n.alive {
+                    continue;
+                }
                 let dx = n.pos.x - center.x;
                 let dz = n.pos.z - center.z;
                 if dx * dx + dz * dz <= r2 {
-                    let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
-                    self.damage.spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+                    let (hgt, _n) =
+                        crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    self.damage
+                        .spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
                 }
             }
             // Wizards (visuals): use model heads
