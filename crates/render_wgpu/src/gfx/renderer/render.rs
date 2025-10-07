@@ -259,7 +259,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         }
         // Projectiles: renderer is presentation-only. Mirror replicated projectiles exactly.
         // Also detect fireballs that disappeared this frame and spawn an explosion VFX at their last position.
-        let mut next_map: std::collections::HashMap<u32, (u8, glam::Vec3)> = std::collections::HashMap::new();
+        let mut next_map: std::collections::HashMap<u32, (u8, glam::Vec3)> =
+            std::collections::HashMap::new();
         r.projectiles.clear();
         for p in &r.repl_buf.projectiles {
             r.projectiles.push(crate::gfx::fx::Projectile {
@@ -273,7 +274,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     _ => [2.6, 0.7, 0.18],
                 },
                 kind: match p.kind {
-                    1 => crate::gfx::fx::ProjectileKind::Fireball { radius: 6.0, damage: 28 },
+                    1 => crate::gfx::fx::ProjectileKind::Fireball {
+                        radius: 6.0,
+                        damage: 28,
+                    },
                     2 => crate::gfx::fx::ProjectileKind::MagicMissile,
                     _ => crate::gfx::fx::ProjectileKind::Normal,
                 },
@@ -289,7 +293,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     to_explode.push(*pos);
                 }
             }
-            for pos in to_explode { r.explode_fireball_at(None, pos, 6.0, 28); }
+            for pos in to_explode {
+                r.explode_fireball_at(None, pos, 6.0, 28);
+            }
         }
         r.last_repl_projectiles = next_map;
         // Fallback: if we already have a non-empty replicated NPC cache but haven't

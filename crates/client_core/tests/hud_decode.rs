@@ -2,7 +2,7 @@ use net_core::snapshot::SnapshotEncode;
 
 #[test]
 fn client_parses_hud_status() {
-    use net_core::snapshot::{HudStatusMsg, HUD_STATUS_VERSION};
+    use net_core::snapshot::{HUD_STATUS_VERSION, HudStatusMsg};
     let hud = HudStatusMsg {
         v: HUD_STATUS_VERSION,
         mana: 11,

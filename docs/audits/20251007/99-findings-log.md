@@ -10,18 +10,18 @@
 
 ### F-ECS-002 — Wizard position mirroring bridge (sync_wizards)
 **Severity:** P2  **Confidence:** High  **Area:** Server Systems
-**Context:** Renderer wizard positions are mirrored into server ECS.
-**Evidence:** crates/server_core/src/lib.rs:168
+**Context:** Renderer wizard positions are mirrored into server ECS; PC is also respawned and casting resources reattached if missing.
+**Evidence:** crates/server_core/src/lib.rs:200-270
 **Why it matters (MMO best practice):**
 - Violates pure server authority for player transforms.
-- Delays prediction/reconciliation rollout.
-**Recommendation:** Introduce input intent components and server-side movement; deprecate and remove `sync_wizards`.
-**Effort:** M  **Deps:** client command plumbing  **Owner:** server_core/platform
+- Respawn should be a server policy system, not tied to renderer positions.
+**Recommendation:** Introduce movement intents and a `RespawnSystem`; deprecate then remove `sync_wizards`.
+**Effort:** M  **Deps:** client movement plumbing  **Owner:** server_core/platform
 
 ### F-ECS-003 — Spatial grid rebuilt each tick
 **Severity:** P2  **Confidence:** High  **Area:** Performance
-**Context:** Grid rebuild O(N) per tick; projectile broad‑phase still scans all actors.
-**Evidence:** crates/server_core/src/ecs/schedule.rs:41-53, 171-213, 323-364
+**Context:** Grid rebuild O(N) per tick; projectile segment broad‑phase still scans actors; homing uses grid.
+**Evidence:** crates/server_core/src/ecs/schedule.rs:70-83, 1040-1180
 **Why it matters (MMO best practice):**
 - Wastes CPU at scale; grid should be incremental and used for broad‑phase.
 **Recommendation:** Move grid into ECS world and update on movement; provide segment/circle queries.
@@ -36,6 +36,15 @@
 - Encourages accidental local testing divergence.
 **Recommendation:** Delete features and code now that server authority is stable.
 **Effort:** S-M  **Deps:** confirm all visuals/HUD from replication  **Owner:** graphics/client
+
+### F-NET-007 — v3 deltas behind env flag
+**Severity:** P3  **Confidence:** High  **Area:** Network/Replication
+**Context:** Platform chooses v2 vs v3 via `RA_SEND_V3`. v3 has tests and interest mgmt.
+**Evidence:** crates/platform_winit/src/lib.rs:330-420
+**Why it matters (MMO best practice):**
+- Two paths complicate testing and drift; prefer a single, tested default.
+**Recommendation:** Default to v3 always; keep v2 encoder only for tooling until removed.
+**Effort:** S  **Deps:** none  **Owner:** platform/net
 
 ### F-NET-005 — Client decodes legacy replication messages
 **Severity:** P2  **Confidence:** High  **Area:** Network/Replication
@@ -54,4 +63,3 @@
 - Inconsistent observability; harder to aggregate and filter.
 **Recommendation:** Migrate to `tracing` with per-system spans and metrics.
 **Effort:** S  **Deps:** metrics/tracing crates  **Owner:** server_core
-

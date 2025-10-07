@@ -11,6 +11,8 @@ fn boss_spawn_respects_pc_bubble() {
     let bpos = s.ecs.get(id).unwrap().tr.pos;
     let dx = bpos.x - pcpos.x;
     let dz = bpos.z - pcpos.z;
-    assert!(dx * dx + dz * dz >= 10.0 * 10.0, "boss not pushed out of PC bubble");
+    assert!(
+        dx * dx + dz * dz >= 10.0 * 10.0,
+        "boss not pushed out of PC bubble"
+    );
 }
-

@@ -11,29 +11,28 @@ What the doc specifies vs what’s implemented now
 
 2) System schedule with events
 - Doc: Ordered systems (Input, AISelectTarget, AIMove, Melee, ProjectileIntegrate, ProjectileCollision, AoE, Faction, ApplyDamage, Cleanup, Snapshot).
-- Code: `server_core::ecs::schedule::Schedule::run` executes: boss seek, undead move, melee apply (with cooldown), projectile integrate, projectile collision, AoE apply, faction flip on PC→Wizards, apply damage, cleanup (crates/server_core/src/ecs/schedule.rs:39-53). Damage and explosions flow through `DamageEvent`/`ExplodeEvent` (crates/server_core/src/ecs/schedule.rs:12-24, 26-35).
-- Deviation: Input system is hosted in the platform loop (command drain + server projectile spawns) rather than an in‑ECS input system. Acceptable short‑term; still aligns with “server applies commands”.
+- Code: Schedule now includes cooldown/mana tick, cast pipeline, projectile spawn ingestion, effects, AI move, melee, homing acquire/update, projectile integrate/collide, AoE, faction, apply‑damage, cleanup with despawn timers (crates/server_core/src/ecs/schedule.rs:60-83). Damage/explosions/deaths flow via events (`DamageEvent`, `ExplodeEvent`, `DeathEvent`).
+- Deviation: Player movement is still mirrored via `sync_wizards` rather than intents; casting is authoritative via queued `CastCmd` consumed in schedule.
 
 3) Components for data (not constants)
 - Doc: MoveSpeed, Melee, AggroRadius, AttackRadius (and optional Homing).
-- Code: Present as optional fields on Components; used by AI/move/melee systems (crates/server_core/src/ecs/world.rs:35-43; schedule.rs:73-81, 96-107, 116-139).
-- Deviation: No Homing yet; fine for MVP.
+- Code: Present and used. Homing is implemented for MagicMissile with reacquire (crates/server_core/src/ecs/world.rs:220-252; schedule.rs:820-880). Casting resources (Spellbook, ResourcePool, Cooldowns) added to actors.
+- Deviation: None for MVP; consider a `Target` component later for explicit PC targeting.
 
 4) Spatial index
 - Doc: 2D XZ uniform grid; use for proximity/collision/AoE.
-- Code: `SpatialGrid` present and rebuilt once per tick; used by systems but projectile broad‑phase still linearly scans actors for now, then uses proximity explode (crates/server_core/src/ecs/schedule.rs:323-364, 171-213, 215-238).
-- Deviation: Incremental updates and broad‑phase usage for segments are not fully exploited yet.
+- Code: `SpatialGrid` present and rebuilt each tick; used for AoE and homing reacquire. Projectile segment collision still scans all actors; next step is segment→cells pruning (crates/server_core/src/ecs/schedule.rs:1040-1180).
+- Deviation: Incremental updates and segment cell‑based broad‑phase still pending.
 
-5) Replication: actor snapshots and deltas with interest
+5) Replication: actor snapshots, deltas with interest, HUD
 - Doc: ActorSnapshot v2, per‑client interest, and v3 deltas with baseline.
-- Code: Present. Platform drains commands, steps server, builds interest‑limited view and v3 deltas against a baseline; sends framed bytes over loopback (crates/platform_winit/src/lib.rs:240-620). Net layer provides encode/decode and caps (crates/net_core/src/snapshot.rs).
-- Deviation: Client still includes compatibility decoders for `NpcListMsg` and `BossStatusMsg` (crates/client_core/src/replication.rs:162-180).
+- Code: v2 full snapshots and opt‑in v3 deltas (env `RA_SEND_V3`) with interest radius; new `HudStatusMsg` encodes mana/GCD/spell CDs/effects, platform sends per‑tick, client stores `HudState` (platform: crates/platform_winit/src/lib.rs:300-540, 516-540; net_core: crates/net_core/src/snapshot.rs:560-740; client_core: crates/client_core/src/replication.rs:311-329).
+- Deviation: Client still includes compatibility decoders for `NpcListMsg`/`BossStatusMsg` (crates/client_core/src/replication.rs:218-241). Make v3 default and remove legacy decoders when safe.
 
 6) Renderer boundaries
 - Doc: Renderer never mutates game state; uses replication only.
-- Code: Default builds meet this. Legacy paths for client‑side AI/combat are feature‑gated and off by default (crates/render_wgpu/Cargo.toml: features). `wizard_positions()` is provided for server demo AI only (crates/render_wgpu/src/gfx/mod.rs:562-580).
-- Deviation: Legacy code remains in tree (behind features) and some renderer modules import server types under those features (e.g., npcs.rs:14, vox_onepath.rs). Safe by default, but should be deleted once migration stabilizes.
+- Code: Default builds meet this; renderer provides `wizard_positions()` for platform demo AI (crates/render_wgpu/src/gfx/mod.rs:562-580). Legacy client AI/combat code remains behind features.
+- Deviation: Remove legacy features once HUD/UI are fully replication‑driven (now mostly true with `HudStatusMsg`).
 
 Summary
 - Alignment with the refactor doc is strong on the server’s ECS, systems, and replication. Remaining work is chiefly removing legacy code and finishing the last mile (input intents for wizard movement, incremental spatial grid, remove compatibility decoders).
-

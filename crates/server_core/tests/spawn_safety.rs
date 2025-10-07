@@ -12,6 +12,8 @@ fn undead_never_spawns_inside_pc_bubble() {
     let dx = upos.x - pcpos.x;
     let dz = upos.z - pcpos.z;
     // SAFE_SPAWN_RADIUS_M is 10.0 in server_core; match that expectation here
-    assert!(dx * dx + dz * dz >= 10.0 * 10.0, "spawn not pushed out of PC bubble");
+    assert!(
+        dx * dx + dz * dz >= 10.0 * 10.0,
+        "spawn not pushed out of PC bubble"
+    );
 }
-

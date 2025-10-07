@@ -1,4 +1,6 @@
-use net_core::snapshot::{ActorRep, ActorSnapshot, ProjectileRep, SnapshotEncode, TAG_ACTOR_SNAPSHOT};
+use net_core::snapshot::{
+    ActorRep, ActorSnapshot, ProjectileRep, SnapshotEncode, TAG_ACTOR_SNAPSHOT,
+};
 
 #[test]
 fn v2_snapshot_with_projectile_populates_replication() {
@@ -33,4 +35,3 @@ fn v2_snapshot_with_projectile_populates_replication() {
     assert_eq!(repl.projectiles[0].id, 42);
     assert_eq!(repl.projectiles[0].kind, 0);
 }
-

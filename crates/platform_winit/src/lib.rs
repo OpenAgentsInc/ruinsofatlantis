@@ -334,7 +334,9 @@ impl ApplicationHandler for App {
                 }
                 let tick64 = self.tick as u64;
                 // Choose replication mode: full v2 every frame by default; enable v3 with RA_SEND_V3=1
-                let send_v3 = std::env::var("RA_SEND_V3").map(|v| v == "1").unwrap_or(false);
+                let send_v3 = std::env::var("RA_SEND_V3")
+                    .map(|v| v == "1")
+                    .unwrap_or(false);
                 if !send_v3 {
                     // Full v2 snapshot (includes actors + projectiles)
                     let asnap = srv.tick_snapshot_actors(tick64);
@@ -422,7 +424,9 @@ impl ApplicationHandler for App {
                     // projectiles (full from ECS)
                     let mut projectiles = Vec::new();
                     for c in srv.ecs.iter() {
-                        if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+                        if let (Some(proj), Some(vel)) =
+                            (c.projectile.as_ref(), c.velocity.as_ref())
+                        {
                             projectiles.push(net_core::snapshot::ProjectileRep {
                                 id: c.id.0,
                                 kind: match proj.kind {
@@ -448,7 +452,8 @@ impl ApplicationHandler for App {
                     delta.encode(&mut p4);
                     let mut f4 = Vec::with_capacity(p4.len() + 8);
                     net_core::frame::write_msg(&mut f4, &p4);
-                    metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f4.len() as u64);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                        .increment(f4.len() as u64);
                     let _ = srv_xport.try_send(f4);
                     // update baseline
                     self.baseline = cur;

@@ -21,7 +21,11 @@ pub mod systems;
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
-pub struct SpellSpec { pub cost: i32, pub cd_s: f32, pub gcd_s: f32 }
+pub struct SpellSpec {
+    pub cost: i32,
+    pub cd_s: f32,
+    pub gcd_s: f32,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct SpellsSpec {
@@ -56,9 +60,21 @@ impl Default for Specs {
     fn default() -> Self {
         Self {
             spells: SpellsSpec {
-                firebolt: SpellSpec { cost: 0, cd_s: 0.30, gcd_s: 0.30 },
-                fireball: SpellSpec { cost: 5, cd_s: 4.00, gcd_s: 0.50 },
-                magic_missile: SpellSpec { cost: 2, cd_s: 1.50, gcd_s: 0.30 },
+                firebolt: SpellSpec {
+                    cost: 0,
+                    cd_s: 0.30,
+                    gcd_s: 0.30,
+                },
+                fireball: SpellSpec {
+                    cost: 5,
+                    cd_s: 4.00,
+                    gcd_s: 0.50,
+                },
+                magic_missile: SpellSpec {
+                    cost: 2,
+                    cd_s: 1.50,
+                    gcd_s: 0.30,
+                },
             },
             effects: EffectsSpec {
                 fireball_burn_dps: 6,
@@ -430,7 +446,7 @@ impl ServerState {
         sched.run(self, &mut ctx, wizard_positions);
     }
     /// Spawn an Undead actor (legacy NPC replacement)
-pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
+    pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
         let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Zombie,

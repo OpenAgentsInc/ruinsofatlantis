@@ -72,6 +72,31 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
+#[cfg(test)]
+mod tests_explosion {
+    #[test]
+    fn count_positions_inside_explosion() {
+        let center = glam::vec3(0.0, 0.0, 0.0);
+        let r = 5.0;
+        let r2 = r * r;
+        let npcs = [
+            (glam::vec3(1.0, 0.0, 1.0), true),
+            (glam::vec3(10.0, 0.0, 0.0), true),
+            (glam::vec3(3.0, 0.0, 4.0), false),
+        ];
+        let inside = npcs
+            .iter()
+            .filter(|(_p, alive)| *alive)
+            .filter(|(p, _)| {
+                let dx = p.x - center.x;
+                let dz = p.z - center.z;
+                dx * dx + dz * dz <= r2
+            })
+            .count();
+        assert_eq!(inside, 1);
+    }
+}
+
 impl Renderer {
     // Approx ruin local-space AABB for fast world AABB expansion
     const RUIN_LOCAL_MIN_X: f32 = -3.0;
@@ -1630,7 +1655,10 @@ impl Renderer {
 
     /// Update and render-side state for projectiles/particles
     pub(crate) fn update_fx(&mut self, t: f32, dt: f32) {
-        log::info!("renderer: projectiles this frame = {}", self.projectiles.len());
+        log::info!(
+            "renderer: projectiles this frame = {}",
+            self.projectiles.len()
+        );
         // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
         if self.wizard_count > 0 {
             let zombies_alive = self.any_zombies_alive();
@@ -2711,6 +2739,27 @@ impl Renderer {
                         self.damage
                             .spawn(glam::vec3(pos.x, hgt + radius_z + 0.9, pos.z), damage);
                     }
+                }
+            }
+        }
+        // Always show damage floaters for replicated NPCs inside AoE (visual-only)
+        #[cfg(not(feature = "legacy_client_combat"))]
+        {
+            let r2 = radius * radius;
+            // snapshot to avoid borrow conflicts
+            let npcs: Vec<(u32, glam::Vec3, f32, bool)> = self
+                .repl_buf
+                .npcs
+                .iter()
+                .map(|n| (n.id, n.pos, n.radius, n.alive))
+                .collect();
+            for (_nid, pos, r_npc, alive) in npcs {
+                if !alive { continue; }
+                let dx = pos.x - center.x;
+                let dz = pos.z - center.z;
+                if dx * dx + dz * dz <= r2 {
+                    let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, pos.x, pos.z);
+                    self.damage.spawn(glam::vec3(pos.x, hgt + r_npc + 0.9, pos.z), damage);
                 }
             }
         }

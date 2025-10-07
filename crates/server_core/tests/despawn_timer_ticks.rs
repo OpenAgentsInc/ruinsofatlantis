@@ -16,7 +16,9 @@ fn corpse_with_despawn_after_is_removed_when_timer_elapses() {
     let wiz0: Vec<Vec3> = s
         .ecs
         .iter()
-        .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+        .filter(|a| {
+            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+        })
         .map(|a| a.tr.pos)
         .collect();
     s.step_authoritative(0.1, &wiz0);
@@ -27,7 +29,9 @@ fn corpse_with_despawn_after_is_removed_when_timer_elapses() {
         let wiz: Vec<Vec3> = s
             .ecs
             .iter()
-            .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+            .filter(|a| {
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            })
             .map(|a| a.tr.pos)
             .collect();
         s.step_authoritative(0.1, &wiz);
@@ -39,7 +43,9 @@ fn corpse_with_despawn_after_is_removed_when_timer_elapses() {
         let wiz: Vec<Vec3> = s
             .ecs
             .iter()
-            .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+            .filter(|a| {
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            })
             .map(|a| a.tr.pos)
             .collect();
         s.step_authoritative(0.1, &wiz);

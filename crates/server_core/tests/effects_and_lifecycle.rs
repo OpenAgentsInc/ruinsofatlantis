@@ -15,13 +15,19 @@ fn burning_ticks_damage_and_expires() {
         let wiz: Vec<Vec3> = s
             .ecs
             .iter()
-            .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+            .filter(|a| {
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            })
             .map(|a| a.tr.pos)
             .collect();
         s.step_authoritative(0.1, &wiz);
     }
     let a = s.ecs.get(z).expect("still present");
-    assert!(a.hp.hp <= 41 && a.hp.hp >= 40, "expected ~10 damage, hp={}", a.hp.hp);
+    assert!(
+        a.hp.hp <= 41 && a.hp.hp >= 40,
+        "expected ~10 damage, hp={}",
+        a.hp.hp
+    );
     let rem = a.burning.map(|b| b.remaining_s).unwrap_or(0.0);
     assert!(rem <= 1.0e-3, "burning should expire, remaining={}", rem);
 }
@@ -36,7 +42,9 @@ fn slow_scales_effective_speed() {
         let wiz: Vec<Vec3> = s_no_slow
             .ecs
             .iter()
-            .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+            .filter(|a| {
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            })
             .map(|a| a.tr.pos)
             .collect();
         s_no_slow.step_authoritative(0.1, &wiz);
@@ -56,14 +64,21 @@ fn slow_scales_effective_speed() {
         let wiz: Vec<Vec3> = s_slow
             .ecs
             .iter()
-            .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+            .filter(|a| {
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            })
             .map(|a| a.tr.pos)
             .collect();
         s_slow.step_authoritative(0.1, &wiz);
     }
     let end1 = s_slow.ecs.get(z1).unwrap().tr.pos;
     let dist_slow = (end1 - start1).length();
-    assert!(dist_slow < dist_no_slow * 0.8, "slow ineffective: {:.3} vs {:.3}", dist_slow, dist_no_slow);
+    assert!(
+        dist_slow < dist_no_slow * 0.8,
+        "slow ineffective: {:.3} vs {:.3}",
+        dist_slow,
+        dist_no_slow
+    );
 }
 
 #[test]
@@ -76,11 +91,17 @@ fn stun_blocks_cast() {
     {
         a.apply_stun(1.0);
     }
-    s.enqueue_cast(Vec3::new(0.0, 0.6, 0.0), Vec3::new(0.0, 0.0, 1.0), SpellId::Firebolt);
+    s.enqueue_cast(
+        Vec3::new(0.0, 0.6, 0.0),
+        Vec3::new(0.0, 0.0, 1.0),
+        SpellId::Firebolt,
+    );
     let wiz: Vec<Vec3> = s
         .ecs
         .iter()
-        .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+        .filter(|a| {
+            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+        })
         .map(|a| a.tr.pos)
         .collect();
     s.step_authoritative(0.1, &wiz);
@@ -100,7 +121,9 @@ fn death_sets_despawn_or_removes_entity() {
     let wiz: Vec<Vec3> = s
         .ecs
         .iter()
-        .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+        .filter(|a| {
+            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+        })
         .map(|a| a.tr.pos)
         .collect();
     s.step_authoritative(0.1, &wiz);

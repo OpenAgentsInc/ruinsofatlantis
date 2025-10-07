@@ -16,7 +16,9 @@ fn stunned_undead_neither_moves_nor_melees() {
     let wiz_id = s
         .ecs
         .iter()
-        .find(|c| matches!(c.kind, server_core::ActorKind::Wizard) && c.team == server_core::Team::Pc)
+        .find(|c| {
+            matches!(c.kind, server_core::ActorKind::Wizard) && c.team == server_core::Team::Pc
+        })
         .unwrap()
         .id;
     let hp0 = s.ecs.get(wiz_id).unwrap().hp.hp;
@@ -27,7 +29,9 @@ fn stunned_undead_neither_moves_nor_melees() {
         let wiz: Vec<Vec3> = s
             .ecs
             .iter()
-            .filter(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc)
+            .filter(|a| {
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            })
             .map(|a| a.tr.pos)
             .collect();
         s.step_authoritative(0.1, &wiz);

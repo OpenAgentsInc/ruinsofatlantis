@@ -559,7 +559,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     for (pid, p0, p1, kind, owner, age_s) in list {
         // Arming delay: skip collisions for the first few milliseconds to prevent
         // immediate detonation on spawn and ensure at least one snapshot includes the projectile.
-        if age_s < 0.05 { continue; }
+        if age_s < 0.05 {
+            continue;
+        }
         let owner_team = owner
             .and_then(|id| srv.ecs.get(id).map(|a| a.team))
             .unwrap_or(Team::Pc);
@@ -569,7 +571,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             if !a.hp.alive() {
                 continue;
             }
-            if let Some(owner_id) = owner && owner_id == a.id {
+            if let Some(owner_id) = owner
+                && owner_id == a.id
+            {
                 continue;
             }
             // Only hit hostiles relative to owner team
@@ -635,7 +639,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                 if !hostile && owner_team == Team::Pc && act.team == Team::Wizards {
                     hostile = true;
                 }
-                if !hostile { continue; }
+                if !hostile {
+                    continue;
+                }
                 let c = Vec2::new(act.tr.pos.x, act.tr.pos.z);
                 let t = if len2 <= 1e-12 {
                     0.0
@@ -840,8 +846,12 @@ fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
         } else {
             continue;
         };
-        let Some(hm) = homing else { continue; };
-        if !hm.reacquire { continue; }
+        let Some(hm) = homing else {
+            continue;
+        };
+        if !hm.reacquire {
+            continue;
+        }
 
         let need_reacquire = match alive.get(&hm.target) {
             None => true,
@@ -852,18 +862,25 @@ fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
                 d2 > hm.max_range_m * hm.max_range_m
             }
         };
-        if !need_reacquire { continue; }
+        if !need_reacquire {
+            continue;
+        }
 
         // Query spatial grid within range and pick nearest hostile
         let center = glam::Vec2::new(p_pos.x, p_pos.z);
         let mut best: Option<(f32, ActorId)> = None;
         for aid in ctx.spatial.query_circle(center, hm.max_range_m) {
             if let Some((apos, ateam)) = alive.get(&aid) {
-                if !srv.factions.effective_hostile(owner_team, *ateam) { continue; }
+                if !srv.factions.effective_hostile(owner_team, *ateam) {
+                    continue;
+                }
                 let dx = apos.x - p_pos.x;
                 let dz = apos.z - p_pos.z;
                 let d2 = dx * dx + dz * dz;
-                if best.map(|(bd2, bid)| (d2, aid.0) < (bd2, bid.0)).unwrap_or(true) {
+                if best
+                    .map(|(bd2, bid)| (d2, aid.0) < (bd2, bid.0))
+                    .unwrap_or(true)
+                {
                     best = Some((d2, aid));
                 }
             }

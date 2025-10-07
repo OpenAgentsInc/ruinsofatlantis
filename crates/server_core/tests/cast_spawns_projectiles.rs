@@ -6,7 +6,11 @@ fn enqueue_cast_spawns_projectiles_in_ecs() {
     // Mirror PC position so we have a caster
     s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);
     // Enqueue a simple Firebolt cast
-    s.enqueue_cast(Vec3::new(0.0, 0.6, 0.0), Vec3::new(0.0, 0.0, 1.0), server_core::SpellId::Firebolt);
+    s.enqueue_cast(
+        Vec3::new(0.0, 0.6, 0.0),
+        Vec3::new(0.0, 0.0, 1.0),
+        server_core::SpellId::Firebolt,
+    );
     // Step once; schedule should translate casts to ECS projectiles
     s.step_authoritative(0.016, &[Vec3::new(0.0, 0.6, 0.0)]);
     // Assert at least one ECS entity with projectile+velocity exists
@@ -19,4 +23,3 @@ fn enqueue_cast_spawns_projectiles_in_ecs() {
     }
     assert!(found, "no ECS projectile spawned from cast");
 }
-

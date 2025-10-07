@@ -7,11 +7,11 @@ Server ECS world and schedule
 - crates/server_core/src/ecs/mod.rs:15:mod world;
 - crates/server_core/src/ecs/mod.rs:16:pub use world::*;
 - crates/server_core/src/ecs/mod.rs:17:pub mod schedule;
-- crates/server_core/src/ecs/schedule.rs:39:impl Schedule {
+- crates/server_core/src/ecs/schedule.rs:60:Schedule::run includes cooldown/mana tick, cast, ingest spawns, effects, AI, melee, homing, projectile integrate/collide, AoE, faction, apply, cleanup
 
-ServerState + sync_wizards bridge
-- crates/server_core/src/lib.rs:104:pub struct ServerState {
-- crates/server_core/src/lib.rs:168:pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) {
+ServerState + sync_wizards bridge (with PC respawn/casting resources)
+- crates/server_core/src/lib.rs:120:pub struct ServerState { … pending_casts, ecs, specs }
+- crates/server_core/src/lib.rs:200:pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) { … respawn }
 
 Spatial grid + projectile broad‑phase
 - crates/server_core/src/ecs/schedule.rs:41-53 (grid rebuild)
@@ -22,6 +22,10 @@ Renderer legacy features
 - crates/render_wgpu/Cargo.toml: legacy_client_ai, legacy_client_combat, legacy_client_carve
 - crates/render_wgpu/src/gfx/renderer/update.rs:2035-2040 (legacy collide)
 
-Client legacy decoders
-- crates/client_core/src/replication.rs:162-180 (NpcListMsg/BossStatusMsg)
+Client decoders/hud
+- crates/client_core/src/replication.rs:218-241 (NpcListMsg/BossStatusMsg)
+- crates/client_core/src/replication.rs:311-329 (HudState)
 
+HUD status channel
+- crates/net_core/src/snapshot.rs:560-740 (HudStatusMsg)
+- crates/platform_winit/src/lib.rs:516-540 (encode/send HUD)

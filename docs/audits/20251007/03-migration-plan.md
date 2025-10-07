@@ -11,12 +11,12 @@ Phase A — Delete legacy and pre‑ECS scaffolding (low risk)
 
 Phase B — Server‑side input intents and authoritative movement
 - Add `IntentMove { dir: Vec2, run: bool }` and `IntentAim { yaw: f32 }` components.
-- Platform loop continues draining `ClientCmd` but writes intents into ECS via a small input system at the start of `Schedule::run`.
-- Implement `InputSystem` to compute wizard movement (camera‑relative or world‑relative) and write to `Transform`. Remove `sync_wizards` usage and delete it after a transition period.
-- Derive `yaw` on server for wizards (e.g., face reticle or target).
+- Platform continues draining `ClientCmd`; extend to send movement intents. In schedule, add an InputSystem before AI to apply intents.
+- Remove `sync_wizards` position mirroring and move PC respawn into a server policy system (e.g., `RespawnSystem`).
+- Derive `yaw` for wizards server‑side (face reticle/target).
 
 Phase C — Spatial grid incrementalization + projectile broad‑phase
-- Move `SpatialGrid` into `WorldEcs` and update buckets on actor `Transform` writes (dirty flag on move).
+- Move `SpatialGrid` into `WorldEcs` and update buckets on actor `Transform` writes (dirty on move).
 - Provide queries: `query_circle(center, r)` and `query_segment(p0, p1, pad)` (iterate overlapping cells, return candidate actors).
 - Rewrite projectile collision to use grid candidates only; keep proximity explode using grid.
 
@@ -30,10 +30,10 @@ Phase E — Observability and guardrails
 - Ensure `cargo xtask ci` validates no legacy features exist and clippy is clean.
 
 Phase F — Finalize replication
-- Keep only `ActorSnapshot` v2 and `ActorSnapshotDelta` v3 in `net_core`; delete older list/status types from tree.
-- Confirm v3 deltas cover all fields client needs; keep interest management in platform default build.
+- Make v3 deltas default; keep v2 encode only for tooling/backcompat during a short window.
+- Delete `NpcListMsg`/`BossStatusMsg` decoders in client; ensure HUD derives only from `HudStatusMsg` and actor snapshots.
+- Confirm v3 deltas cover all fields client needs; keep interest management enabled by default.
 
 Outcomes
 - No legacy paths in renderer or client; server ECS is the only authority.
 - Docs and README reflect the true architecture; easier onboarding and maintenance.
-
