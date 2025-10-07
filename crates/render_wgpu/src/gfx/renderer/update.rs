@@ -2751,6 +2751,33 @@ impl Renderer {
                 }
             }
         }
+        // In default builds, still show damage floaters for any replicated NPCs + Wizards inside AoE
+        #[cfg(not(feature = "legacy_client_combat"))]
+        {
+            let r2 = radius * radius;
+            // NPCs (replicated)
+            for n in &self.repl_buf.npcs {
+                if !n.alive { continue; }
+                let dx = n.pos.x - center.x;
+                let dz = n.pos.z - center.z;
+                if dx * dx + dz * dz <= r2 {
+                    let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, n.pos.x, n.pos.z);
+                    self.damage.spawn(glam::vec3(n.pos.x, hgt + n.radius + 0.9, n.pos.z), damage);
+                }
+            }
+            // Wizards (visuals): use model heads
+            let wcount = self.wizard_count as usize;
+            for j in 0..wcount {
+                let m = self.wizard_models[j].to_cols_array();
+                let pos = glam::vec3(m[12], m[13], m[14]);
+                let dx = pos.x - center.x;
+                let dz = pos.z - center.z;
+                if dx * dx + dz * dz <= r2 {
+                    let head = pos + glam::vec3(0.0, 1.7, 0.0);
+                    self.damage.spawn(head, damage);
+                }
+            }
+        }
         // Always show damage floaters for replicated NPCs inside AoE (visual-only)
         #[cfg(not(feature = "legacy_client_combat"))]
         {

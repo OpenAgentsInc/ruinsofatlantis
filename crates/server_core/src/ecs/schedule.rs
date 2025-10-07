@@ -562,11 +562,13 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     }
     let mut to_apply_slow: Vec<ActorId> = Vec::new();
     for (pid, p0, p1, kind, owner, age_s) in list {
-        // Arming delay: skip collisions for the first few milliseconds to prevent
-        // immediate detonation on spawn and ensure at least one snapshot includes the projectile.
-        if age_s < 0.05 {
-            continue;
-        }
+        // Arming delay: skip collisions briefly to prevent immediate detonation on spawn and
+        // ensure at least one snapshot includes the projectile for visuals.
+        let arm_ok = match kind {
+            crate::ProjKind::Fireball => age_s >= 0.10,
+            _ => age_s >= 0.08,
+        };
+        if !arm_ok { continue; }
         let _owner_team = owner
             .and_then(|id| srv.ecs.get(id).map(|a| a.team))
             .unwrap_or(Team::Pc);
