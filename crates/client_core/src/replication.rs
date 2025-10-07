@@ -237,7 +237,13 @@ impl ReplicationBuffer {
                 // Legacy BossStatusMsg used without wizard list; leave wizards unchanged.
                 let mut bs_slice: &[u8] = payload; // reset for boss status
                 if let Ok(bs) = net_core::snapshot::BossStatusMsg::decode(&mut bs_slice) {
-                    self.boss_status = Some(BossStatus { name: bs.name, ac: bs.ac, hp: bs.hp, max: bs.max, pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]) });
+                    self.boss_status = Some(BossStatus {
+                        name: bs.name,
+                        ac: bs.ac,
+                        hp: bs.hp,
+                        max: bs.max,
+                        pos: glam::vec3(bs.pos[0], bs.pos[1], bs.pos[2]),
+                    });
                     true
                 } else {
                     // HUD status message
@@ -249,7 +255,9 @@ impl ReplicationBuffer {
                         // map spell ids 0,1,2
                         self.hud.spell_cds = [0, 0, 0];
                         for (id, ms) in hud.spell_cds {
-                            if (id as usize) < self.hud.spell_cds.len() { self.hud.spell_cds[id as usize] = ms; }
+                            if (id as usize) < self.hud.spell_cds.len() {
+                                self.hud.spell_cds[id as usize] = ms;
+                            }
                         }
                         self.hud.burning_ms = hud.burning_ms;
                         self.hud.slow_ms = hud.slow_ms;

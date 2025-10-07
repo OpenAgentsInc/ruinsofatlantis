@@ -168,19 +168,31 @@ impl Components {
                 remaining_s: b.remaining_s.max(dur),
                 src: src.or(b.src),
             },
-            None => Burning { dps, remaining_s: dur, src },
+            None => Burning {
+                dps,
+                remaining_s: dur,
+                src,
+            },
         });
     }
     pub fn apply_slow(&mut self, mul: f32, dur: f32) {
         let m = mul.clamp(0.0, 1.0);
         self.slow = Some(match self.slow {
-            Some(s) => Slow { mul: s.mul.min(m), remaining_s: s.remaining_s.max(dur) },
-            None => Slow { mul: m, remaining_s: dur },
+            Some(s) => Slow {
+                mul: s.mul.min(m),
+                remaining_s: s.remaining_s.max(dur),
+            },
+            None => Slow {
+                mul: m,
+                remaining_s: dur,
+            },
         });
     }
     pub fn apply_stun(&mut self, dur: f32) {
         self.stunned = Some(match self.stunned {
-            Some(s) => Stunned { remaining_s: s.remaining_s.max(dur) },
+            Some(s) => Stunned {
+                remaining_s: s.remaining_s.max(dur),
+            },
             None => Stunned { remaining_s: dur },
         });
     }

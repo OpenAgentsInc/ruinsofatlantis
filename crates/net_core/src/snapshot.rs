@@ -620,23 +620,62 @@ impl SnapshotDecode for HudStatusMsg {
     fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
         use anyhow::bail;
         fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
-            if inp.len() < N { anyhow::bail!("short read"); }
-            let (a, b) = inp.split_at(N); *inp = b; let mut buf = [0u8; N]; buf.copy_from_slice(a); Ok(buf)
+            if inp.len() < N {
+                anyhow::bail!("short read");
+            }
+            let (a, b) = inp.split_at(N);
+            *inp = b;
+            let mut buf = [0u8; N];
+            buf.copy_from_slice(a);
+            Ok(buf)
         }
-        let tag = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-        if tag != TAG_HUD_STATUS { bail!("not a HudStatus tag"); }
-        let v = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-        if v != HUD_STATUS_VERSION { bail!("unsupported version: {v}"); }
+        let tag = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if tag != TAG_HUD_STATUS {
+            bail!("not a HudStatus tag");
+        }
+        let v = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if v != HUD_STATUS_VERSION {
+            bail!("unsupported version: {v}");
+        }
         let mana = u16::from_le_bytes(take::<2>(inp)?);
         let mana_max = u16::from_le_bytes(take::<2>(inp)?);
         let gcd_ms = u16::from_le_bytes(take::<2>(inp)?);
-        let n = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))? as usize; *inp = &inp[1..];
+        let n = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))? as usize;
+        *inp = &inp[1..];
         let mut spell_cds = Vec::with_capacity(n);
-        for _ in 0..n { let id = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..]; let ms = u16::from_le_bytes(take::<2>(inp)?); spell_cds.push((id, ms)); }
+        for _ in 0..n {
+            let id = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let ms = u16::from_le_bytes(take::<2>(inp)?);
+            spell_cds.push((id, ms));
+        }
         let burning_ms = u16::from_le_bytes(take::<2>(inp)?);
         let slow_ms = u16::from_le_bytes(take::<2>(inp)?);
         let stunned_ms = u16::from_le_bytes(take::<2>(inp)?);
-        Ok(HudStatusMsg { v, mana, mana_max, gcd_ms, spell_cds, burning_ms, slow_ms, stunned_ms })
+        Ok(HudStatusMsg {
+            v,
+            mana,
+            mana_max,
+            gcd_ms,
+            spell_cds,
+            burning_ms,
+            slow_ms,
+            stunned_ms,
+        })
     }
 }
 

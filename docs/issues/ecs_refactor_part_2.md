@@ -300,6 +300,30 @@ Addendum — Implementation log (2025-10-07)
     - Expose metrics for cast rejections/accepts, mana usage, and per‑spell cast counts.
     - Data‑drive spell specs in `data_runtime` and wire server to use schema instead of inline table.
 
+- PR‑8 (Phase 8) complete — Effects, Death/Despawn, and HUD replication
+  - Why: Make combat feel complete and authoritative by adding status effects, a robust death/cleanup flow, and HUD data that mirrors the server’s true state.
+  - What changed:
+    - ECS effects components: `Burning{dps, remaining_s, src}`, `Slow{mul, remaining_s}`, `Stunned{remaining_s}` with deterministic stacking (Burning=max dps/max dur, Slow=min mul/max dur, Stun=max dur).
+    - `effects_tick` system applies Burning DoT as DamageEvents and decays effect timers each frame.
+    - Spell hooks:
+      - Fireball AoE now applies Burning (6 dps for 3s) to affected actors in `aoe_apply_explosions`.
+      - MagicMissile direct hits apply Slow (0.7x mul for 2s) after collision resolution.
+    - Stun gating: Stunned entities do not move, melee, or cast.
+    - Death pipeline: `apply_damage_to_ecs` emits DeathEvent on HP→0 and sets `DespawnAfter{2.0}`; `cleanup` removes entities whose timer expired (via command buffer) and prunes dead.
+    - HUD replication:
+      - Added `HudStatusMsg` (TAG=0xB1, v=1) carrying PC mana/max, GCD remaining, per‑spell cooldowns, and effect timers (Burning/Slow/Stun).
+      - Platform sends HUD each tick after actor delta; client stores it in `ReplicationBuffer.hud` for UI consumption.
+  - Acceptance:
+    - Fireball explosions deal AoE and apply Burning; periodic damage lands in subsequent frames.
+    - MagicMissile hits apply Slow; slowed actors move with reduced effective speed; Stunned actors do not act while stunned.
+    - Entities reaching 0 HP despawn after ~2s; projectiles no longer target despawned entities.
+    - Client receives HUD status each tick; values match server state (mana, GCD, cooldowns, status timers).
+  - Tests & quality gates:
+    - New and existing tests pass; clippy `-D warnings` clean.
+  - Next polish (optional):
+    - Add reacquire logic to homing when a target dies/leaves range (currently drops target; can reacquire next frame via an acquire system).
+    - Data‑drive effect specs via `data_runtime` and make HUD piggyback on v3 delta if desired.
+
 
 ## What I recommend you do **immediately**
 
