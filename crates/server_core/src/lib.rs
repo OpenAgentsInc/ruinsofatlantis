@@ -345,7 +345,10 @@ impl ServerState {
     /// Enqueue a cast; cast system will validate and translate to projectiles.
     pub fn enqueue_cast(&mut self, pos: Vec3, dir: Vec3, spell: SpellId) {
         let caster = self.pc_actor; // local demo assumes one PC caster
-        if std::env::var("RA_LOG_CASTS").map(|v| v == "1").unwrap_or(false) {
+        if std::env::var("RA_LOG_CASTS")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
             log::info!("srv: enqueue_cast {:?} (caster={:?})", spell, caster);
         }
         self.pending_casts.push(CastCmd {
@@ -666,7 +669,10 @@ impl ServerState {
                 });
             }
         }
-        if std::env::var("RA_LOG_SNAPSHOTS").map(|v| v == "1").unwrap_or(false) {
+        if std::env::var("RA_LOG_SNAPSHOTS")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
             log::info!(
                 "snapshot_v2: tick={} actors={} projectiles={}",
                 tick,

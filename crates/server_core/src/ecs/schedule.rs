@@ -389,7 +389,10 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
                 srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
             }
         }
-        if std::env::var("RA_LOG_CASTS").map(|v| v == "1").unwrap_or(false) {
+        if std::env::var("RA_LOG_CASTS")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
             log::info!("srv: cast accepted {:?}", cmd.spell);
         }
     }

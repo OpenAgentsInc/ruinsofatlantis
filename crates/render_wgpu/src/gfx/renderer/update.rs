@@ -1659,7 +1659,10 @@ impl Renderer {
             "renderer: projectiles this frame = {}",
             self.projectiles.len()
         );
-        if std::env::var("RA_LOG_PROJECTILES").map(|v| v == "1").unwrap_or(false) {
+        if std::env::var("RA_LOG_PROJECTILES")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
             log::info!(
                 "renderer: projectiles this frame = {}",
                 self.projectiles.len()
