@@ -60,7 +60,7 @@ impl WorldEcs {
             let dx = c.tr.pos.x - pos.x;
             let dz = c.tr.pos.z - pos.z;
             let d2 = dx * dx + dz * dz;
-            if let Some(cap) = max_r2 { if d2 > cap { continue; } }
+            if let Some(cap) = max_r2 && d2 > cap { continue; }
             if best.map(|(b, _)| d2 < b).unwrap_or(true) { best = Some((d2, c.id)); }
         }
         best.map(|(_, id)| id)
@@ -72,4 +72,3 @@ fn hostile_default(a: Team, b: Team) -> bool {
     use Team::*;
     matches!((a, b), (Pc, Undead) | (Undead, Pc) | (Wizards, Undead) | (Undead, Wizards))
 }
-
