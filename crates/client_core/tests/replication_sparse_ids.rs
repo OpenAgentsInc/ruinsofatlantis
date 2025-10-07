@@ -1,11 +1,12 @@
-use net_core::snapshot::{ActorRep, ActorSnapshot, SnapshotEncode, TAG_ACTOR_SNAPSHOT};
+use net_core::snapshot::{ActorRep, ActorSnapshotDelta, SnapshotEncode};
 
 #[test]
-fn apply_actor_snapshot_with_sparse_id_does_not_panic() {
-    let snap = ActorSnapshot {
-        v: 2,
+fn apply_actor_delta_with_sparse_id_does_not_panic() {
+    let delta = ActorSnapshotDelta {
+        v: 3,
         tick: 1,
-        actors: vec![ActorRep {
+        baseline: 0,
+        spawns: vec![ActorRep {
             id: 100,
             kind: 1,
             team: 2,
@@ -16,15 +17,17 @@ fn apply_actor_snapshot_with_sparse_id_does_not_panic() {
             max: 30,
             alive: true,
         }],
+        updates: vec![],
+        removals: vec![],
         projectiles: vec![],
     };
-    // Encode to bytes
     let mut buf = Vec::new();
-    snap.encode(&mut buf);
-    assert_eq!(buf.first().copied(), Some(TAG_ACTOR_SNAPSHOT));
+    delta.encode(&mut buf);
+    let mut framed = Vec::new();
+    net_core::frame::write_msg(&mut framed, &buf);
 
     let mut repl = client_core::replication::ReplicationBuffer::default();
-    assert!(repl.apply_message(&buf));
+    assert!(repl.apply_message(&framed));
     // At least one actor present, with matching id, no panic occurred
     assert!(repl.actors.iter().any(|a| a.id == 100));
 }

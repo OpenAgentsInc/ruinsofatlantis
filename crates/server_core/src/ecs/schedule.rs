@@ -580,6 +580,10 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             if !a.hp.alive() {
                 continue;
             }
+            // Never collide projectiles against other projectiles (including itself)
+            if a.projectile.is_some() {
+                continue;
+            }
             if let Some(owner_id) = owner
                 && owner_id == a.id
             {

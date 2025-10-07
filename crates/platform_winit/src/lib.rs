@@ -333,133 +333,109 @@ impl ApplicationHandler for App {
                     );
                 }
                 let tick64 = self.tick as u64;
-                // Choose replication mode: full v2 every frame by default; enable v3 with RA_SEND_V3=1
-                let send_v3 = std::env::var("RA_SEND_V3")
-                    .map(|v| v == "1")
-                    .unwrap_or(false);
-                if !send_v3 {
-                    // Full v2 snapshot (includes actors + projectiles)
-                    let asnap = srv.tick_snapshot_actors(tick64);
-                    let mut buf = Vec::new();
-                    asnap.encode(&mut buf);
-                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
-                        .increment(buf.len() as u64);
-                    let _ = srv_xport.try_send(buf);
-                    // Update local baseline for optional later v3 use
-                    self.baseline.clear();
-                    for a in asnap.actors {
-                        self.baseline.insert(a.id, a);
+                // Always build v3 deltas with interest limiting and send after stepping
+                let asnap = srv.tick_snapshot_actors(tick64);
+                // Interest center: PC
+                let center = s
+                    .wizard_positions()
+                    .first()
+                    .copied()
+                    .unwrap_or(glam::vec3(0.0, 0.0, 0.0));
+                let r2 = self.interest_radius_m * self.interest_radius_m;
+                let mut cur: std::collections::HashMap<u32, net_core::snapshot::ActorRep> =
+                    std::collections::HashMap::new();
+                for a in asnap.actors {
+                    let dx = a.pos[0] - center.x;
+                    let dz = a.pos[2] - center.z;
+                    if dx * dx + dz * dz <= r2 {
+                        cur.insert(a.id, a);
                     }
-                    self.baseline_tick = tick64;
-                } else {
-                    // Build interest-limited view and delta vs baseline
-                    let asnap = srv.tick_snapshot_actors(tick64);
-                    // Interest center: PC
-                    let center = s
-                        .wizard_positions()
-                        .first()
-                        .copied()
-                        .unwrap_or(glam::vec3(0.0, 0.0, 0.0));
-                    let r2 = self.interest_radius_m * self.interest_radius_m;
-                    let mut cur: std::collections::HashMap<u32, net_core::snapshot::ActorRep> =
-                        std::collections::HashMap::new();
-                    for a in asnap.actors {
-                        let dx = a.pos[0] - center.x;
-                        let dz = a.pos[2] - center.z;
-                        if dx * dx + dz * dz <= r2 {
-                            cur.insert(a.id, a);
-                        }
-                    }
-                    // spawns/removals/updates
-                    let mut spawns = Vec::new();
-                    let mut removals = Vec::new();
-                    let mut updates = Vec::new();
-                    for (id, a) in &cur {
-                        if let Some(b) = self.baseline.get(id) {
-                            let mut flags = 0u8;
-                            let mut rec = net_core::snapshot::ActorDeltaRec {
-                                id: *id,
-                                flags: 0,
-                                qpos: [0; 3],
-                                qyaw: 0,
-                                hp: 0,
-                                alive: 0,
-                            };
-                            let qpx = net_core::snapshot::qpos(a.pos[0]);
-                            let qpy = net_core::snapshot::qpos(a.pos[1]);
-                            let qpz = net_core::snapshot::qpos(a.pos[2]);
-                            if net_core::snapshot::qpos(b.pos[0]) != qpx
-                                || net_core::snapshot::qpos(b.pos[1]) != qpy
-                                || net_core::snapshot::qpos(b.pos[2]) != qpz
-                            {
-                                flags |= 1;
-                                rec.qpos = [qpx, qpy, qpz];
-                            }
-                            let qy = net_core::snapshot::qyaw(a.yaw);
-                            if net_core::snapshot::qyaw(b.yaw) != qy {
-                                flags |= 2;
-                                rec.qyaw = qy;
-                            }
-                            if b.hp != a.hp {
-                                flags |= 4;
-                                rec.hp = a.hp;
-                            }
-                            if b.alive != a.alive {
-                                flags |= 8;
-                                rec.alive = u8::from(a.alive);
-                            }
-                            if flags != 0 {
-                                rec.flags = flags;
-                                updates.push(rec);
-                            }
-                        } else {
-                            spawns.push(a.clone());
-                        }
-                    }
-                    for id in self.baseline.keys() {
-                        if !cur.contains_key(id) {
-                            removals.push(*id);
-                        }
-                    }
-                    // projectiles (full from ECS)
-                    let mut projectiles = Vec::new();
-                    for c in srv.ecs.iter() {
-                        if let (Some(proj), Some(vel)) =
-                            (c.projectile.as_ref(), c.velocity.as_ref())
-                        {
-                            projectiles.push(net_core::snapshot::ProjectileRep {
-                                id: c.id.0,
-                                kind: match proj.kind {
-                                    server_core::ProjKind::Firebolt => 0,
-                                    server_core::ProjKind::Fireball => 1,
-                                    server_core::ProjKind::MagicMissile => 2,
-                                },
-                                pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
-                                vel: [vel.v.x, vel.v.y, vel.v.z],
-                            });
-                        }
-                    }
-                    let delta = net_core::snapshot::ActorSnapshotDelta {
-                        v: 3,
-                        tick: tick64,
-                        baseline: self.baseline_tick,
-                        spawns,
-                        updates,
-                        removals,
-                        projectiles,
-                    };
-                    let mut p4 = Vec::new();
-                    delta.encode(&mut p4);
-                    let mut f4 = Vec::with_capacity(p4.len() + 8);
-                    net_core::frame::write_msg(&mut f4, &p4);
-                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
-                        .increment(f4.len() as u64);
-                    let _ = srv_xport.try_send(f4);
-                    // update baseline
-                    self.baseline = cur;
-                    self.baseline_tick = tick64;
                 }
-                // delta path handled above when RA_SEND_V3=1
+                // spawns/removals/updates
+                let mut spawns = Vec::new();
+                let mut removals = Vec::new();
+                let mut updates = Vec::new();
+                for (id, a) in &cur {
+                    if let Some(b) = self.baseline.get(id) {
+                        let mut flags = 0u8;
+                        let mut rec = net_core::snapshot::ActorDeltaRec {
+                            id: *id,
+                            flags: 0,
+                            qpos: [0; 3],
+                            qyaw: 0,
+                            hp: 0,
+                            alive: 0,
+                        };
+                        let qpx = net_core::snapshot::qpos(a.pos[0]);
+                        let qpy = net_core::snapshot::qpos(a.pos[1]);
+                        let qpz = net_core::snapshot::qpos(a.pos[2]);
+                        if net_core::snapshot::qpos(b.pos[0]) != qpx
+                            || net_core::snapshot::qpos(b.pos[1]) != qpy
+                            || net_core::snapshot::qpos(b.pos[2]) != qpz
+                        {
+                            flags |= 1;
+                            rec.qpos = [qpx, qpy, qpz];
+                        }
+                        let qy = net_core::snapshot::qyaw(a.yaw);
+                        if net_core::snapshot::qyaw(b.yaw) != qy {
+                            flags |= 2;
+                            rec.qyaw = qy;
+                        }
+                        if b.hp != a.hp {
+                            flags |= 4;
+                            rec.hp = a.hp;
+                        }
+                        if b.alive != a.alive {
+                            flags |= 8;
+                            rec.alive = u8::from(a.alive);
+                        }
+                        if flags != 0 {
+                            rec.flags = flags;
+                            updates.push(rec);
+                        }
+                    } else {
+                        spawns.push(a.clone());
+                    }
+                }
+                for id in self.baseline.keys() {
+                    if !cur.contains_key(id) {
+                        removals.push(*id);
+                    }
+                }
+                // projectiles (full from ECS)
+                let mut projectiles = Vec::new();
+                for c in srv.ecs.iter() {
+                    if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+                        projectiles.push(net_core::snapshot::ProjectileRep {
+                            id: c.id.0,
+                            kind: match proj.kind {
+                                server_core::ProjKind::Firebolt => 0,
+                                server_core::ProjKind::Fireball => 1,
+                                server_core::ProjKind::MagicMissile => 2,
+                            },
+                            pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
+                            vel: [vel.v.x, vel.v.y, vel.v.z],
+                        });
+                    }
+                }
+                let delta = net_core::snapshot::ActorSnapshotDelta {
+                    v: 3,
+                    tick: tick64,
+                    baseline: self.baseline_tick,
+                    spawns,
+                    updates,
+                    removals,
+                    projectiles,
+                };
+                let mut p4 = Vec::new();
+                delta.encode(&mut p4);
+                let mut f4 = Vec::with_capacity(p4.len() + 8);
+                net_core::frame::write_msg(&mut f4, &p4);
+                metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(f4.len() as u64);
+                let _ = srv_xport.try_send(f4);
+                // update baseline
+                self.baseline = cur;
+                self.baseline_tick = tick64;
                 // Send HUD status for local PC
                 if let Some(pc_id) = srv.pc_actor
                     && let Some(pc) = srv.ecs.get(pc_id)

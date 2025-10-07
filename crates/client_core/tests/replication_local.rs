@@ -1,9 +1,6 @@
 use client_core::replication::ReplicationBuffer;
 use client_core::upload::{ChunkMeshEntry, MeshUpload};
-use net_core::{
-    channel,
-    snapshot::{BossStatusMsg, ChunkMeshDelta, SnapshotEncode},
-};
+use net_core::{channel, snapshot::{ChunkMeshDelta, SnapshotEncode, ActorSnapshotDelta, ActorRep, ProjectileRep}};
 
 struct DummyUploader {
     uploads: usize,
@@ -53,16 +50,27 @@ fn local_loop_sends_and_applies_chunk_mesh() {
     assert_eq!(last.1, (1, 2, 3));
     assert_eq!(last.2.indices, vec![0, 1, 2]);
 
-    // BossStatus message round-trip
-    let bs = BossStatusMsg {
-        name: "Nivita".into(),
-        ac: 18,
-        hp: 220,
-        max: 250,
-        pos: [0.0, 0.6, 35.0],
+}
+
+#[test]
+fn v3_delta_populates_projectiles() {
+    let mut repl = ReplicationBuffer::default();
+    // Build a minimal v3 delta with one projectile
+    let delta = ActorSnapshotDelta {
+        v: 3,
+        tick: 1,
+        baseline: 0,
+        spawns: vec![ActorRep { id: 1, kind: 0, team: 0, pos: [0.0, 0.0, 0.0], yaw: 0.0, radius: 0.7, hp: 100, max: 100, alive: true }],
+        updates: vec![],
+        removals: vec![],
+        projectiles: vec![ProjectileRep { id: 99, kind: 1, pos: [1.0, 0.5, 2.0], vel: [0.0, 0.0, 1.0] }],
     };
-    let mut b2 = Vec::new();
-    bs.encode(&mut b2);
-    let _ = repl.apply_message(&b2);
-    assert!(repl.boss_status.is_some());
+    let mut buf = Vec::new();
+    delta.encode(&mut buf);
+    // Frame and apply
+    let mut framed = Vec::new();
+    net_core::frame::write_msg(&mut framed, &buf);
+    assert!(repl.apply_message(&framed));
+    assert_eq!(repl.projectiles.len(), 1);
+    assert_eq!(repl.projectiles[0].id, 99);
 }
