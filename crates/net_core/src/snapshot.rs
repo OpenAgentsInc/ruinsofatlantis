@@ -762,4 +762,52 @@ mod tests {
         }
     }
     // Legacy TickSnapshot roundtrip removed.
+
+    #[test]
+    fn actor_delta_roundtrip_minimal() {
+        let delta = ActorSnapshotDelta {
+            v: ACTOR_SNAP_DELTA_VERSION,
+            tick: 42,
+            baseline: 40,
+            spawns: vec![ActorRep {
+                id: 1,
+                kind: 0,
+                team: 0,
+                pos: [1.0, 2.0, 3.0],
+                yaw: 0.5,
+                radius: 0.6,
+                hp: 99,
+                max: 100,
+                alive: true,
+            }],
+            updates: vec![ActorDeltaRec { id: 1, flags: 1 | 2 | 4 | 8, qpos: [qpos(1.0), qpos(2.0), qpos(3.0)], qyaw: qyaw(0.5), hp: 98, alive: 1 }],
+            removals: vec![2, 3],
+            projectiles: vec![ProjectileRep { id: 9, kind: 0, pos: [0.0, 1.0, 2.0], vel: [3.0, 4.0, 5.0] }],
+        };
+        let mut buf = Vec::new();
+        delta.encode(&mut buf);
+        let mut slice: &[u8] = &buf;
+        let dec = ActorSnapshotDelta::decode(&mut slice).expect("decode");
+        assert_eq!(dec.v, ACTOR_SNAP_DELTA_VERSION);
+        assert_eq!(dec.tick, 42);
+        assert_eq!(dec.baseline, 40);
+        assert_eq!(dec.spawns.len(), 1);
+        assert_eq!(dec.updates.len(), 1);
+        assert_eq!(dec.removals, vec![2, 3]);
+        assert_eq!(dec.projectiles.len(), 1);
+    }
+
+    #[test]
+    fn actor_delta_rejects_bad_tag_and_version() {
+        // bad tag
+        let mut buf = vec![0xEE];
+        let mut slice: &[u8] = &buf;
+        assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
+        // good tag, bad version
+        let mut buf = Vec::new();
+        buf.push(TAG_ACTOR_SNAPSHOT_DELTA);
+        buf.push(99); // bad version
+        let mut slice: &[u8] = &buf;
+        assert!(ActorSnapshotDelta::decode(&mut slice).is_err());
+    }
 }

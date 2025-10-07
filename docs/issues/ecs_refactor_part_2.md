@@ -249,6 +249,13 @@ Addendum — Implementation log (2025-10-07)
     - client_core `ReplicationBuffer` applies v3 deltas (then falls back to v2 full snapshot if needed).
     - Simple server-side rate limiter (20 cmds/sec) drops excess client commands for safety.
 
+- PR‑6 (Phase 6) complete (interest + deltas; acceptance):
+  - Per-tick deltas replace full snapshots by default (v2 kept as decoder fallback on client).
+  - Interest radius currently 40m (platform), with per-client baseline map; spawns/removals/updates computed reliably.
+  - Quantization: pos at 1/64 m; yaw at 16-bit turn. Tests pass for roundtrip encode/decode.
+  - Platform logs include tx byte count; simple rate limiting prevents command spam.
+  - Next polish (optional): feature flag/env to toggle v2 full vs v3 delta in platform; add metrics for actors replicated per tick and update counts.
+
 
 ## What I recommend you do **immediately**
 

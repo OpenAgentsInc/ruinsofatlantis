@@ -44,6 +44,8 @@ impl Schedule {
         // Boss movement (keep behavior parity for now)
         crate::systems::boss::boss_seek_and_integrate(srv, ctx.dt, wizard_positions);
         ingest_projectile_spawns(srv, ctx);
+        // Apply spawns immediately so integration/collision see them this tick
+        srv.ecs.apply_cmds(&mut ctx.cmd);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
         melee_apply_when_contact(srv, ctx);
         projectile_integrate_ecs(srv, ctx);
