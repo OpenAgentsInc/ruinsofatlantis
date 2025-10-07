@@ -7,14 +7,32 @@ fn npc_wizard_chooses_fireball_when_clustered_targets() {
     let wid = s.ecs.spawn(
         server_core::ActorKind::Wizard,
         server_core::Team::Wizards,
-        server_core::Transform { pos: vec3(0.0, 0.6, 0.0), yaw: 0.0, radius: 0.7 },
+        server_core::Transform {
+            pos: vec3(0.0, 0.6, 0.0),
+            yaw: 0.0,
+            radius: 0.7,
+        },
         server_core::Health { hp: 100, max: 100 },
     );
     if let Some(w) = s.ecs.get_mut(wid) {
         use std::collections::HashMap;
-        w.pool = Some(server_core::ecs::ResourcePool { mana: 50, max: 50, regen_per_s: 0.0 });
-        w.cooldowns = Some(server_core::ecs::Cooldowns { gcd_s: 0.0, gcd_ready: 0.0, per_spell: HashMap::new() });
-        w.spellbook = Some(server_core::ecs::Spellbook { known: vec![server_core::SpellId::Firebolt, server_core::SpellId::Fireball, server_core::SpellId::MagicMissile] });
+        w.pool = Some(server_core::ecs::ResourcePool {
+            mana: 50,
+            max: 50,
+            regen_per_s: 0.0,
+        });
+        w.cooldowns = Some(server_core::ecs::Cooldowns {
+            gcd_s: 0.0,
+            gcd_ready: 0.0,
+            per_spell: HashMap::new(),
+        });
+        w.spellbook = Some(server_core::ecs::Spellbook {
+            known: vec![
+                server_core::SpellId::Firebolt,
+                server_core::SpellId::Fireball,
+                server_core::SpellId::MagicMissile,
+            ],
+        });
     }
     // Spawn two undead clustered around z=14..15m
     let _u1 = s.spawn_undead(vec3(0.2, 0.6, 14.5), 0.9, 30);
@@ -31,6 +49,8 @@ fn npc_wizard_chooses_fireball_when_clustered_targets() {
             }
         }
     }
-    assert!(saw_fb, "expected a Fireball projectile when clustered targets present");
+    assert!(
+        saw_fb,
+        "expected a Fireball projectile when clustered targets present"
+    );
 }
-
