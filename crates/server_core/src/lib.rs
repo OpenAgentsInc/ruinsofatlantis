@@ -10,6 +10,7 @@ mod combat;
 pub use actor::*;
 pub use combat::*;
 use glam::Vec3;
+mod ecs;
 pub mod destructible;
 pub mod jobs;
 pub mod scene_build;
@@ -358,15 +359,13 @@ impl ServerState {
         {
             // Snapshot candidates to avoid borrow conflicts
             let wizard_targets: Vec<(ActorId, Vec3, f32)> = self
-                .actors
-                .actors
+                .ecs
                 .iter()
                 .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
                 .map(|a| (a.id, a.tr.pos, a.tr.radius))
                 .collect();
             let undead_ids: Vec<ActorId> = self
-                .actors
-                .actors
+                .ecs
                 .iter()
                 .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Zombie))
                 .map(|a| a.id)
@@ -375,7 +374,7 @@ impl ServerState {
                 // Defaults until components carry these
                 let speed = 2.0f32;
                 let damage = 5i32;
-                let (pos_u, rad_u) = if let Some(a) = self.actors.get(uid) {
+                let (pos_u, rad_u) = if let Some(a) = self.ecs.get(uid) {
                     (a.tr.pos, a.tr.radius)
                 } else {
                     continue;
@@ -398,13 +397,13 @@ impl ServerState {
                     if dist > contact + 0.02 {
                         let step = (speed * dt).min(dist - contact);
                         if step > 1e-4
-                            && let Some(a) = self.actors.get_mut(uid)
+                            && let Some(a) = self.ecs.get_mut(uid)
                         {
                             a.tr.pos += to.normalize_or_zero() * step;
                         }
                     } else {
                         // Apply melee damage when in range
-                        if let Some(t) = self.actors.get_mut(tid) {
+                        if let Some(t) = self.ecs.get_mut(tid) {
                             t.hp.hp = (t.hp.hp - damage).max(0);
                         }
                     }
@@ -686,7 +685,7 @@ impl ServerState {
     /// Lightweight status for UI/replication.
     pub fn nivita_status(&self) -> Option<BossStatus> {
         let id = self.nivita_actor_id?;
-        let n = self.actors.get(id)?;
+        let n = self.ecs.get(id)?;
         let stats = self.nivita_stats.as_ref()?;
         Some(BossStatus {
             name: stats.name.clone(),

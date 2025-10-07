@@ -10,7 +10,7 @@ pub fn boss_seek_and_integrate(state: &mut ServerState, dt: f32, wizards: &[Vec3
     let Some(id) = state.nivita_actor_id else {
         return;
     };
-    let Some(n) = state.actors.get_mut(id) else {
+    let Some(n) = state.ecs.get_mut(id) else {
         return;
     };
     if wizards.is_empty() {
@@ -48,10 +48,10 @@ mod tests {
         let id = s
             .spawn_nivita_unique(Vec3::new(0.0, 0.6, 0.0))
             .expect("spawn");
-        let start = s.actors.get(id).unwrap().tr.pos;
+        let start = s.ecs.get(id).unwrap().tr.pos;
         let wizards = [Vec3::new(5.0, 0.6, 0.0)];
         boss_seek_and_integrate(&mut s, 0.5, &wizards);
-        let now = s.actors.get(id).unwrap().tr.pos;
+        let now = s.ecs.get(id).unwrap().tr.pos;
         assert!(now.x > start.x);
         let max_step = 1.2 * 0.5 + 1e-4;
         assert!((now.x - start.x) <= max_step, "exceeded step");

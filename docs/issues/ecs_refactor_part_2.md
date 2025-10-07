@@ -204,6 +204,21 @@ Use a simple Vec per tick; drain in systems 8–9 above.
 
 ---
 
+Addendum — Implementation log (2025-10-07)
+
+- PR‑1 (Phase 1) done on main:
+  - Introduced `server_core::ecs::{WorldEcs, Components}` wrapping actor data with ECS‑like accessors (spawn/get/iter/remove_dead).
+  - Switched `ServerState` from `actors: ActorStore` to `ecs: WorldEcs` while preserving public spawn/sync methods.
+  - Updated authoritative paths to iterate/mutate ECS world (NPC seek/melee, projectile collisions, AoE application, boss helpers).
+  - ActorSnapshot v2 now builds from ECS queries (`ecs.iter()`), not the legacy store.
+  - Platform demo logging updated to use `srv.ecs.len()`.
+  - `cargo check` green after swap.
+
+- Notes:
+  - This is a minimal ECS wrapper to keep behavior identical and unblock PR‑2. Systems/schedule and richer components (MoveSpeed/Melee/etc.) will land next.
+  - ID stability retained via `ActorId` inside `Components`; net mapping remains 1:1.
+
+
 ## What I recommend you do **immediately**
 
 1. **PR‑1:** Introduce ECS components/world + ID mapping; port the current `ActorStore` data into ECS; build `ActorSnapshot` from ECS.
