@@ -1,6 +1,7 @@
 use glam::Vec3;
 
 use crate::actor::{ActorId, ActorKind, Health, Team, Transform};
+use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug)]
 pub struct MoveSpeed {
@@ -28,7 +29,7 @@ pub struct Melee {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entity(u32);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Components {
     pub id: ActorId,
     pub kind: ActorKind,
@@ -43,6 +44,9 @@ pub struct Components {
     pub velocity: Option<Velocity>,
     pub owner: Option<Owner>,
     pub homing: Option<Homing>,
+    pub spellbook: Option<Spellbook>,
+    pub pool: Option<ResourcePool>,
+    pub cooldowns: Option<Cooldowns>,
 }
 
 #[derive(Default, Debug)]
@@ -81,6 +85,9 @@ impl WorldEcs {
             velocity: None,
             owner: None,
             homing: None,
+            spellbook: None,
+            pool: None,
+            cooldowns: None,
         });
         id
     }
@@ -93,8 +100,9 @@ impl WorldEcs {
         }
         let _e = Entity(self.next_ent);
         self.next_ent = self.next_ent.wrapping_add(1);
+        let id = c.id;
         self.ents.push(c);
-        c.id
+        id
     }
 
     pub fn get(&self, id: ActorId) -> Option<&Components> {
@@ -177,6 +185,29 @@ pub struct Owner {
 pub struct Homing {
     pub target: ActorId,
     pub turn_rate: f32,
+}
+
+// ----------------------------------------------------------------------------
+// Casting-related components
+// ----------------------------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Spellbook {
+    pub known: Vec<crate::SpellId>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ResourcePool {
+    pub mana: i32,
+    pub max: i32,
+    pub regen_per_s: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct Cooldowns {
+    pub gcd_s: f32,
+    pub gcd_ready: f32,
+    pub per_spell: HashMap<crate::SpellId, f32>,
 }
 
 #[derive(Default)]

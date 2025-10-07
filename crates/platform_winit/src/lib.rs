@@ -247,8 +247,7 @@ impl ApplicationHandler for App {
                                     d.y,
                                     d.z
                                 );
-                                // Owner wizard id 1 = PC in server_core
-                                srv.spawn_projectile_from_pc(p, d, server_core::ProjKind::Firebolt);
+                                srv.enqueue_cast(p, d, server_core::SpellId::Firebolt);
                             }
                             net_core::command::ClientCmd::Fireball { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
@@ -262,8 +261,7 @@ impl ApplicationHandler for App {
                                     d.y,
                                     d.z
                                 );
-                                // Owner wizard id 1 = PC in server_core
-                                srv.spawn_projectile_from_pc(p, d, server_core::ProjKind::Fireball);
+                                srv.enqueue_cast(p, d, server_core::SpellId::Fireball);
                             }
                             net_core::command::ClientCmd::MagicMissile { pos, dir } => {
                                 let p = glam::vec3(pos[0], pos[1], pos[2]);
@@ -277,18 +275,7 @@ impl ApplicationHandler for App {
                                     d.y,
                                     d.z
                                 );
-                                // Spawn a small volley (3) with slight spread
-                                let spreads = [-0.06f32, 0.0, 0.06];
-                                for sgn in spreads {
-                                    let yaw = sgn;
-                                    let ry = glam::Quat::from_rotation_y(yaw);
-                                    let dir2 = (ry * d).normalize_or_zero();
-                                    srv.spawn_projectile_from_pc(
-                                        p,
-                                        dir2,
-                                        server_core::ProjKind::MagicMissile,
-                                    );
-                                }
+                                srv.enqueue_cast(p, d, server_core::SpellId::MagicMissile);
                             }
                         }
                     }

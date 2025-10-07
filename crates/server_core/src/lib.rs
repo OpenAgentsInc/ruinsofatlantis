@@ -67,6 +67,21 @@ pub struct PendingProjectile {
     pub owner: Option<ActorId>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SpellId {
+    Firebolt,
+    Fireball,
+    MagicMissile,
+}
+
+#[derive(Debug, Clone)]
+pub struct CastCmd {
+    pub pos: Vec3,
+    pub dir: Vec3,
+    pub spell: SpellId,
+    pub caster: Option<ActorId>,
+}
+
 /// Server-side resolved projectile parameters used for spawning and collision.
 #[derive(Debug, Clone, Copy)]
 struct ProjectileSpec {
@@ -104,6 +119,8 @@ pub struct ServerState {
     pub nivita_stats: Option<NivitaStats>,
     /// Pending projectile spawns from input (consumed by schedule)
     pub pending_projectiles: Vec<PendingProjectile>,
+    /// Pending casts (server-authoritative gating)
+    pub pending_casts: Vec<CastCmd>,
     /// New authoritative ECS world (phase 1)
     pub ecs: ecs::WorldEcs,
     pub factions: FactionState,
@@ -118,6 +135,7 @@ impl ServerState {
             nivita_actor_id: None,
             nivita_stats: None,
             pending_projectiles: Vec::new(),
+            pending_casts: Vec::new(),
             ecs: ecs::WorldEcs::default(),
             factions: FactionState::default(),
             pc_actor: None,
@@ -174,6 +192,13 @@ impl ServerState {
                     Health { hp: 100, max: 100 },
                 );
                 self.pc_actor = Some(id);
+                // Attach basic casting resources to PC
+                if let Some(pc) = self.ecs.get_mut(id) {
+                    pc.pool = Some(ecs::ResourcePool { mana: 20, max: 20, regen_per_s: 1.0 });
+                    use std::collections::HashMap;
+                    pc.cooldowns = Some(ecs::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+                    pc.spellbook = Some(ecs::Spellbook { known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile] });
+                }
             }
             if let Some(id) = self.pc_actor
                 && let Some(a) = self.ecs.get_mut(id)
@@ -220,6 +245,12 @@ impl ServerState {
             kind,
             owner,
         });
+    }
+
+    /// Enqueue a cast; cast system will validate and translate to projectiles.
+    pub fn enqueue_cast(&mut self, pos: Vec3, dir: Vec3, spell: SpellId) {
+        let caster = self.pc_actor; // local demo assumes one PC caster
+        self.pending_casts.push(CastCmd { pos, dir, spell, caster });
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
@@ -280,6 +311,14 @@ impl ServerState {
                     damage: s.damage.max(0),
                 }
             }
+        }
+    }
+
+    fn spell_cost_cooldown(&self, spell: SpellId) -> (i32, f32, f32) {
+        match spell {
+            SpellId::Firebolt => (0, 0.30, 0.30),
+            SpellId::Fireball => (5, 4.00, 0.50),
+            SpellId::MagicMissile => (2, 1.50, 0.30),
         }
     }
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile

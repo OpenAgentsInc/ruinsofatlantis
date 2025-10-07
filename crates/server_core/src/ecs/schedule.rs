@@ -39,13 +39,15 @@ pub struct Schedule;
 
 impl Schedule {
     pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx, wizard_positions: &[Vec3]) {
-        // Rebuild spatial grid once
-        ctx.spatial.rebuild(srv);
+        cooldown_and_mana_tick(srv, ctx);
         // Boss movement (keep behavior parity for now)
         crate::systems::boss::boss_seek_and_integrate(srv, ctx.dt, wizard_positions);
+        cast_system(srv, ctx);
         ingest_projectile_spawns(srv, ctx);
         // Apply spawns immediately so integration/collision see them this tick
         srv.ecs.apply_cmds(&mut ctx.cmd);
+        // Rebuild spatial grid once per frame after spawns
+        ctx.spatial.rebuild(srv);
         ai_move_undead_toward_wizards(srv, ctx, wizard_positions);
         melee_apply_when_contact(srv, ctx);
         homing_update(srv, ctx);
@@ -72,69 +74,86 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
         return;
     }
     let pending: Vec<_> = srv.pending_projectiles.drain(..).collect();
-    use std::collections::HashMap;
-    // For MagicMissile, pick distinct targets per owner within range
-    let mut mm_pools: HashMap<Option<ActorId>, Vec<ActorId>> = HashMap::new();
     for cmd in pending {
         let spec = srv.projectile_spec(cmd.kind);
-        let v = cmd.dir.normalize_or_zero() * spec.speed_mps;
         let yaw = cmd.dir.x.atan2(cmd.dir.z);
-        let mut homing = None;
         if matches!(cmd.kind, crate::ProjKind::MagicMissile) {
+            // Acquire up to 3 distinct targets nearest-first within 30m
             let owner_team = cmd
                 .owner
                 .and_then(|id| srv.ecs.get(id).map(|a| a.team))
                 .unwrap_or(crate::actor::Team::Pc);
-            let entry = mm_pools.entry(cmd.owner).or_insert_with(|| {
-                // Build candidate list sorted nearest-first
-                let mut cands: Vec<(f32, ActorId)> = srv
-                    .ecs
-                    .iter()
-                    .filter(|a| a.hp.alive() && a.id != cmd.owner.unwrap_or(ActorId(u32::MAX)))
-                    .filter(|a| srv.factions.effective_hostile(owner_team, a.team))
-                    .map(|a| {
-                        let dx = a.tr.pos.x - cmd.pos.x;
-                        let dz = a.tr.pos.z - cmd.pos.z;
-                        (dx * dx + dz * dz, a.id)
-                    })
-                    .filter(|(d2, _)| *d2 <= 30.0 * 30.0)
-                    .collect();
-                cands.sort_by(|l, r| l.0.partial_cmp(&r.0).unwrap_or(std::cmp::Ordering::Equal));
-                // store reversed so pop() yields nearest
-                cands.into_iter().rev().map(|(_, id)| id).collect()
-            });
-            if let Some(tid) = entry.pop() {
-                homing = Some(crate::ecs::world::Homing {
-                    target: tid,
-                    turn_rate: 9.0,
-                });
+            let mut cands: Vec<(f32, ActorId)> = srv
+                .ecs
+                .iter()
+                .filter(|a| a.hp.alive() && a.id != cmd.owner.unwrap_or(ActorId(u32::MAX)))
+                .filter(|a| srv.factions.effective_hostile(owner_team, a.team))
+                .map(|a| {
+                    let dx = a.tr.pos.x - cmd.pos.x;
+                    let dz = a.tr.pos.z - cmd.pos.z;
+                    (dx * dx + dz * dz, a.id)
+                })
+                .filter(|(d2, _)| *d2 <= 30.0 * 30.0)
+                .collect();
+            cands.sort_by(|l, r| l.0.partial_cmp(&r.0).unwrap_or(std::cmp::Ordering::Equal));
+            let picks: Vec<ActorId> = cands.into_iter().take(3).map(|(_, id)| id).collect();
+            // slight fan for readability; homing will correct course
+            let off = 8.0_f32.to_radians();
+            let offs = [-off, 0.0, off];
+            for (i, yaw_off) in offs.iter().enumerate() {
+                let dir = rotate_y(cmd.dir, *yaw_off).normalize_or_zero();
+                let v = dir * spec.speed_mps;
+                let target = picks.get(i).copied();
+                let homing = target.map(|tid| crate::ecs::world::Homing { target: tid, turn_rate: 3.5 });
+                let comps = crate::ecs::world::Components {
+                    id: crate::actor::ActorId(0),
+                    kind: crate::actor::ActorKind::Wizard,
+                    team: crate::actor::Team::Neutral,
+                    tr: crate::actor::Transform { pos: cmd.pos, yaw: yaw + *yaw_off, radius: 0.1 },
+                    hp: crate::actor::Health { hp: 1, max: 1 },
+                    move_speed: None,
+                    aggro: None,
+                    attack: None,
+                    melee: None,
+                    projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
+                    velocity: Some(crate::ecs::world::Velocity { v }),
+                    owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
+                    homing,
+                    spellbook: None,
+                    pool: None,
+                    cooldowns: None,
+                };
+                ctx.cmd.spawns.push(comps);
             }
+        } else {
+            let v = cmd.dir.normalize_or_zero() * spec.speed_mps;
+            let comps = crate::ecs::world::Components {
+                id: crate::actor::ActorId(0),
+                kind: crate::actor::ActorKind::Wizard, // unused for projectile
+                team: crate::actor::Team::Neutral,
+                tr: crate::actor::Transform { pos: cmd.pos, yaw, radius: 0.1 },
+                hp: crate::actor::Health { hp: 1, max: 1 },
+                move_speed: None,
+                aggro: None,
+                attack: None,
+                melee: None,
+                projectile: Some(crate::ecs::world::Projectile { kind: cmd.kind, ttl_s: spec.life_s, age_s: 0.0 }),
+                velocity: Some(crate::ecs::world::Velocity { v }),
+                owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
+                homing: None,
+                spellbook: None,
+                pool: None,
+                cooldowns: None,
+            };
+            ctx.cmd.spawns.push(comps);
         }
-        let comps = crate::ecs::world::Components {
-            id: crate::actor::ActorId(0),
-            kind: crate::actor::ActorKind::Wizard, // unused for projectile
-            team: crate::actor::Team::Neutral,
-            tr: crate::actor::Transform {
-                pos: cmd.pos,
-                yaw,
-                radius: 0.1,
-            },
-            hp: crate::actor::Health { hp: 1, max: 1 },
-            move_speed: None,
-            aggro: None,
-            attack: None,
-            melee: None,
-            projectile: Some(crate::ecs::world::Projectile {
-                kind: cmd.kind,
-                ttl_s: spec.life_s,
-                age_s: 0.0,
-            }),
-            velocity: Some(crate::ecs::world::Velocity { v }),
-            owner: cmd.owner.map(|id| crate::ecs::world::Owner { id }),
-            homing,
-        };
-        ctx.cmd.spawns.push(comps);
     }
+}
+
+#[inline]
+fn rotate_y(v: Vec3, yaw_off: f32) -> Vec3 {
+    let (s, c) = yaw_off.sin_cos();
+    Vec3::new(v.x * c + v.z * s, v.y, v.z * c - v.x * s)
 }
 
 fn homing_update(srv: &mut ServerState, ctx: &mut Ctx) {
@@ -186,6 +205,64 @@ fn homing_update(srv: &mut ServerState, ctx: &mut Ctx) {
         }
     }
 }
+
+fn cooldown_and_mana_tick(srv: &mut ServerState, ctx: &Ctx) {
+    let dt = ctx.dt;
+    for c in srv.ecs.iter_mut() {
+        if let Some(cd) = c.cooldowns.as_mut() {
+            cd.gcd_ready = (cd.gcd_ready - dt).max(0.0);
+            for v in cd.per_spell.values_mut() {
+                *v = (*v - dt).max(0.0);
+            }
+        }
+        if let Some(pool) = c.pool.as_mut() {
+            let m = (pool.mana as f32 + pool.regen_per_s * dt).min(pool.max as f32);
+            pool.mana = m as i32;
+        }
+    }
+}
+
+fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
+    if srv.pending_casts.is_empty() { return; }
+    let casts: Vec<_> = srv.pending_casts.drain(..).collect();
+    for cmd in casts {
+        let Some(caster) = cmd.caster else { continue; };
+        let (cost, cd_s, _gcd) = srv.spell_cost_cooldown(cmd.spell);
+        let Some(c) = srv.ecs.get_mut(caster) else { continue; };
+        // Spellbook check (optional in demo)
+        if let Some(book) = c.spellbook.as_ref()
+            && !book.known.contains(&spell_id_map(cmd.spell))
+            && !book.known.contains(&cmd.spell)
+        {
+            // Back-compat: if enum types mismatch, allow cast
+        }
+        // Cooldown & mana checks
+        let mut ok = true;
+        if let Some(cd) = c.cooldowns.as_mut() {
+            if cd.gcd_ready > 0.0 { ok = false; }
+            if let Some(rem) = cd.per_spell.get(&cmd.spell) && *rem > 0.0 { ok = false; }
+            if ok {
+                cd.gcd_ready = cd.gcd_s.max(0.0);
+                cd.per_spell.insert(cmd.spell, cd_s.max(0.0));
+            }
+        }
+        if ok
+            && let Some(pool) = c.pool.as_mut()
+        {
+            if pool.mana < cost { ok = false; } else { pool.mana -= cost; }
+        }
+        if !ok { continue; }
+        // Translate spell to projectiles
+        match cmd.spell {
+            crate::SpellId::Firebolt => srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Firebolt),
+            crate::SpellId::Fireball => srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::Fireball),
+            crate::SpellId::MagicMissile => srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile),
+        }
+    }
+}
+
+#[inline]
+fn spell_id_map(s: crate::SpellId) -> crate::SpellId { s }
 
 fn ai_move_undead_toward_wizards(srv: &mut ServerState, ctx: &Ctx, _wizards: &[Vec3]) {
     let wiz = wizard_targets(srv);
