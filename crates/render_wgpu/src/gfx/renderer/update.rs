@@ -2754,12 +2754,15 @@ impl Renderer {
                 .map(|n| (n.id, n.pos, n.radius, n.alive))
                 .collect();
             for (_nid, pos, r_npc, alive) in npcs {
-                if !alive { continue; }
+                if !alive {
+                    continue;
+                }
                 let dx = pos.x - center.x;
                 let dz = pos.z - center.z;
                 if dx * dx + dz * dz <= r2 {
                     let (hgt, _n) = crate::gfx::terrain::height_at(&self.terrain_cpu, pos.x, pos.z);
-                    self.damage.spawn(glam::vec3(pos.x, hgt + r_npc + 0.9, pos.z), damage);
+                    self.damage
+                        .spawn(glam::vec3(pos.x, hgt + r_npc + 0.9, pos.z), damage);
                 }
             }
         }
