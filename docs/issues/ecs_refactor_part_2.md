@@ -243,6 +243,11 @@ Addendum — Implementation log (2025-10-07)
     - AoE candidate gathering (circle query instead of full scan).
     - Fireball proximity explode broad‑phase (bounding circle around segment).
   - Interest management and snapshot deltas are not yet implemented; can be added next as separate follow‑ups.
+  - Added interest management and snapshot deltas (v3):
+    - platform_winit limits replication to a 40m radius around the PC; maintains a per-client baseline and sends `ActorSnapshotDelta` (v3) each tick with spawns/updates/removals and a full projectile list.
+    - net_core adds `ActorSnapshotDelta` and quantization helpers (`qpos/dqpos`, `qyaw/dqyaw`).
+    - client_core `ReplicationBuffer` applies v3 deltas (then falls back to v2 full snapshot if needed).
+    - Simple server-side rate limiter (20 cmds/sec) drops excess client commands for safety.
 
 
 ## What I recommend you do **immediately**
