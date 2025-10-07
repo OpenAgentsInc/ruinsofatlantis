@@ -595,8 +595,7 @@ impl Renderer {
         };
         self.pointer_lock_request = None;
     }
-    /// Handle player character death: legacy path removed (server-authoritative).
-
+    // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs
     fn respawn(&mut self) {
         // Rebuild scene and server similar to initial construction.
