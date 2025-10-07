@@ -389,7 +389,9 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
                 srv.spawn_projectile_from_pc(cmd.pos, cmd.dir, crate::ProjKind::MagicMissile)
             }
         }
-        log::info!("srv: cast accepted {:?}", cmd.spell);
+        if std::env::var("RA_LOG_CASTS").map(|v| v == "1").unwrap_or(false) {
+            log::info!("srv: cast accepted {:?}", cmd.spell);
+        }
     }
 }
 
@@ -562,7 +564,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         if age_s < 0.05 {
             continue;
         }
-        let owner_team = owner
+        let _owner_team = owner
             .and_then(|id| srv.ecs.get(id).map(|a| a.team))
             .unwrap_or(Team::Pc);
         // test against actors
@@ -576,14 +578,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             {
                 continue;
             }
-            // Only hit hostiles relative to owner team
-            let mut hostile = srv.factions.effective_hostile(owner_team, a.team);
-            if !hostile && owner_team == Team::Pc && a.team == Team::Wizards {
-                hostile = true;
-            }
-            if !hostile {
-                continue;
-            }
+            // Hit any character regardless of faction (skip only the owner)
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
                 match kind {
                     crate::ProjKind::Fireball => {
@@ -633,13 +628,6 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                     continue;
                 };
                 if !act.hp.alive() {
-                    continue;
-                }
-                let mut hostile = srv.factions.effective_hostile(owner_team, act.team);
-                if !hostile && owner_team == Team::Pc && act.team == Team::Wizards {
-                    hostile = true;
-                }
-                if !hostile {
                     continue;
                 }
                 let c = Vec2::new(act.tr.pos.x, act.tr.pos.z);

@@ -1659,6 +1659,12 @@ impl Renderer {
             "renderer: projectiles this frame = {}",
             self.projectiles.len()
         );
+        if std::env::var("RA_LOG_PROJECTILES").map(|v| v == "1").unwrap_or(false) {
+            log::info!(
+                "renderer: projectiles this frame = {}",
+                self.projectiles.len()
+            );
+        }
         // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
         if self.wizard_count > 0 {
             let zombies_alive = self.any_zombies_alive();
