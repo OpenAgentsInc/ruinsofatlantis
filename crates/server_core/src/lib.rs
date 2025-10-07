@@ -203,6 +203,8 @@ pub struct ServerState {
     pub pc_actor: Option<ActorId>,
     /// Tuning tables for spells, effects, and homing.
     pub specs: Specs,
+    /// Frame-local hit effects emitted by projectile collisions (drained by platform).
+    pub fx_hits: Vec<net_core::snapshot::HitFx>,
 }
 
 impl ServerState {
@@ -217,6 +219,7 @@ impl ServerState {
             factions: FactionState::default(),
             pc_actor: None,
             specs: Specs::default(),
+            fx_hits: Vec::new(),
         }
     }
     // Legacy actor rebuild removed. Actors are authoritative.
@@ -526,7 +529,7 @@ impl ServerState {
     /// Step server-authoritative systems: NPC AI/melee, wizard casts, projectile
     /// integration/collision. Collisions reduce HP for both NPCs and wizards.
     /// Wizard positions are no longer mirrored here; movement/aim are applied via intents.
-    pub fn step_authoritative(&mut self, dt: f32, _wizard_positions: &[Vec3]) {
+    pub fn step_authoritative(&mut self, dt: f32) {
         // Run ECS schedule
         let mut ctx = crate::ecs::schedule::Ctx {
             dt,
@@ -534,7 +537,7 @@ impl ServerState {
             ..Default::default()
         };
         let mut sched = crate::ecs::schedule::Schedule;
-        sched.run(self, &mut ctx, _wizard_positions);
+        sched.run(self, &mut ctx);
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {

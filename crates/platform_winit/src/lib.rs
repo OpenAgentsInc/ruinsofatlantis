@@ -339,7 +339,7 @@ impl ApplicationHandler for App {
                 // wizard positions from renderer
                 let wiz_pos: Vec<glam::Vec3> = s.wizard_positions();
                 // Step authoritative server first so replication reflects the latest state
-                srv.step_authoritative(dt, &wiz_pos);
+                srv.step_authoritative(dt);
                 // Build and send replication messages AFTER stepping
                 if std::env::var("RA_LOG_DEMO")
                     .map(|v| v == "1")
@@ -455,6 +455,12 @@ impl ApplicationHandler for App {
                     updates,
                     removals,
                     projectiles,
+                    hits: {
+                        let mut v = Vec::new();
+                        // drain server-side hitfx for this frame
+                        std::mem::swap(&mut v, &mut srv.fx_hits);
+                        v
+                    },
                 };
                 let mut p4 = Vec::new();
                 delta.encode(&mut p4);

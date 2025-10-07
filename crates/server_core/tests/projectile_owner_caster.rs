@@ -15,7 +15,7 @@ fn projectile_owner_is_caster() {
         caster: Some(wid),
     });
     // Step once to run cast_system and ingest projectiles
-    s.step_authoritative(0.016, &[]);
+    s.step_authoritative(0.016);
     // Find projectile in ECS and verify owner
     let mut found = false;
     for c in s.ecs.iter() {

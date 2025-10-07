@@ -21,7 +21,7 @@ fn e2e_pc_fireball_damages_wizard_and_removes_projectile() {
         vec3(1.0, 0.0, 0.0),
         ProjKind::Fireball,
     );
-    s.step_authoritative(0.1, &wiz_pos);
+    s.step_authoritative(0.1);
 
     // Fireball should detonate and be removed
     let no_proj = s.ecs.iter().all(|c| c.projectile.is_none());

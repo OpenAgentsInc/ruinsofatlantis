@@ -12,7 +12,7 @@ fn enqueue_cast_spawns_projectiles_in_ecs() {
         server_core::SpellId::Firebolt,
     );
     // Step once; schedule should translate casts to ECS projectiles
-    s.step_authoritative(0.016, &[Vec3::new(0.0, 0.6, 0.0)]);
+    s.step_authoritative(0.016);
     // Assert at least one ECS entity with projectile+velocity exists
     let mut found = false;
     for c in s.ecs.iter() {

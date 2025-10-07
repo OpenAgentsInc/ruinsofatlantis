@@ -81,6 +81,7 @@ fn v3_delta_populates_projectiles() {
             pos: [1.0, 0.5, 2.0],
             vel: [0.0, 0.0, 1.0],
         }],
+        hits: vec![],
     };
     let mut buf = Vec::new();
     delta.encode(&mut buf);

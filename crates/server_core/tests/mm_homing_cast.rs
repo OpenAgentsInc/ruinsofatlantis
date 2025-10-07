@@ -17,7 +17,7 @@ fn magic_missile_spawns_three_and_distinct_targets() {
     let _z3 = s.spawn_undead(vec3(0.0, 0.6, 6.0), 0.9, 20);
     // Cast MM toward +Z
     s.enqueue_cast(pc, vec3(0.0, 0.0, 1.0), SpellId::MagicMissile);
-    s.step_authoritative(0.01, &[pc]);
+    s.step_authoritative(0.01);
 
     // Ensure 3 projectiles spawned and each has a homing target; distinct if available
     let homing_targets: Vec<_> = s
@@ -45,7 +45,7 @@ fn homing_steers_toward_target_over_time() {
     let _z = s.spawn_undead(vec3(12.0, 0.6, 0.0), 0.9, 20);
     // Cast MM initially aimed away (-Z)
     s.enqueue_cast(pc, vec3(0.0, 0.0, -1.0), SpellId::MagicMissile);
-    s.step_authoritative(0.01, &[pc]);
+    s.step_authoritative(0.01);
     // Read one projectile with homing
     let mut found = None;
     for c in s.ecs.iter() {
@@ -60,7 +60,7 @@ fn homing_steers_toward_target_over_time() {
     let angle0 = v0.normalize_or_zero().angle_between(desired);
     // Step a few frames, then measure angle again
     for _ in 0..5 {
-        s.step_authoritative(0.02, &[pc]);
+        s.step_authoritative(0.02);
     }
     let mut v1 = None;
     for c in s.ecs.iter() {
@@ -93,7 +93,7 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
         .unwrap_or(0);
     // Cast Fireball (cost=5)
     s.enqueue_cast(pc, vec3(0.0, 0.0, 1.0), SpellId::Fireball);
-    s.step_authoritative(0.01, &[pc]);
+    s.step_authoritative(0.01);
     // Ensure gcd set and per-spell cooldown started, mana reduced
     let (gcd_ready, cd_rem, mana1) = {
         let c = s
@@ -116,7 +116,7 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
     // Attempt immediate re-cast; should be gated by GCD
     let before = count_projectiles(&s);
     s.enqueue_cast(pc, vec3(0.0, 0.0, 1.0), SpellId::Fireball);
-    s.step_authoritative(0.01, &[pc]);
+    s.step_authoritative(0.01);
     let after = count_projectiles(&s);
     assert_eq!(before, after, "projectile count changed while on GCD");
 }

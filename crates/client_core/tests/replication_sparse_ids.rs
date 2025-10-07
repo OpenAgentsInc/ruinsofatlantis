@@ -20,6 +20,7 @@ fn apply_actor_delta_with_sparse_id_does_not_panic() {
         updates: vec![],
         removals: vec![],
         projectiles: vec![],
+        hits: vec![],
     };
     let mut buf = Vec::new();
     delta.encode(&mut buf);

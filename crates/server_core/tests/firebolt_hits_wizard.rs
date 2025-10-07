@@ -20,14 +20,14 @@ fn firebolt_hits_wizard_reliably() {
         server_core::ProjKind::Firebolt,
     );
     // Step once to ingest spawns
-    s.step_authoritative(0.02, &[pc, wiz]);
+    s.step_authoritative(0.02);
     // Ensure at least one projectile exists after ingestion
     let proj_after_ingest = s.ecs.iter().filter(|a| a.projectile.is_some()).count();
     eprintln!("projectiles after ingest={}", proj_after_ingest);
     assert!(proj_after_ingest > 0, "no projectile spawned after ingest");
     // Step a few more frames to allow travel + collision
     for _ in 0..4 {
-        s.step_authoritative(0.02, &[pc, wiz]);
+        s.step_authoritative(0.02);
     }
 
     // Inspect state after stepping

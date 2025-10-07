@@ -63,7 +63,7 @@ pub struct Ctx {
 pub struct Schedule;
 
 impl Schedule {
-    pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx, _wizard_positions: &[Vec3]) {
+    pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx) {
         input_apply_intents(srv, ctx);
         cooldown_and_mana_tick(srv, ctx);
         ai_wizard_cast_and_face(srv, ctx);
@@ -881,11 +881,15 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                             dst: a.id,
                             amount: projectile_damage(srv, kind),
                         });
-                        ctx.hits.push(HitEvent {
-                            src: owner,
-                            dst: a.id,
-                            world_xz: Vec2::new(p1.x, p1.z),
-                            kind: HitKind::Direct,
+                        // Record a small replicated hit effect for client visuals
+                        let kind_byte = match kind {
+                            crate::ProjKind::Firebolt => 0u8,
+                            crate::ProjKind::Fireball => 1u8,
+                            crate::ProjKind::MagicMissile => 2u8,
+                        };
+                        srv.fx_hits.push(net_core::snapshot::HitFx {
+                            kind: kind_byte,
+                            pos: [p1.x, p1.y, p1.z],
                         });
                         if matches!(kind, crate::ProjKind::MagicMissile) {
                             to_apply_slow.push(a.id);

@@ -25,6 +25,7 @@ fn v3_updates_drive_wizard_view() {
         updates: vec![],
         removals: vec![],
         projectiles: vec![],
+        hits: vec![],
     };
     let mut buf = Vec::new();
     delta0.encode(&mut buf);
@@ -50,6 +51,7 @@ fn v3_updates_drive_wizard_view() {
         updates: vec![upd],
         removals: vec![],
         projectiles: vec![],
+        hits: vec![],
     };
     let mut buf2 = Vec::new();
     delta1.encode(&mut buf2);
@@ -69,6 +71,7 @@ fn v3_updates_drive_wizard_view() {
         updates: vec![],
         removals: vec![10],
         projectiles: vec![],
+        hits: vec![],
     };
     let mut buf3 = Vec::new();
     delta2.encode(&mut buf3);

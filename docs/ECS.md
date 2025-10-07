@@ -68,7 +68,7 @@ ServerState entry points (demo & helpers)
   - `enqueue_cast(pos, dir, spell)` → schedule drains and spawns projectiles
   - `pending_projectiles` queue → `ingest_projectile_spawns`
 - Ticking
-  - `step_authoritative(dt, _wizard_positions)` → runs schedule (ignore mirror param)
+  - `step_authoritative(dt)` → runs schedule (server-authoritative; no mirroring)
 
 Renderer (presentation-only)
 - Replication-driven visuals; no gameplay logic in default build.
@@ -85,4 +85,3 @@ Notes & Next
 - Boss/Navita: no bespoke logic; behavior driven by components + shared systems.
 - Suggested net_core extensions: add `archetype_id/name_id/unique` to ActorRep to decouple HUD/model selection from bespoke messages.
 - Spatial grid is currently rebuilt per frame; consider incremental updates tied to Transform writes and expose `query_segment` for projectile broad-phase.
-

@@ -20,7 +20,7 @@ fn burning_ticks_damage_and_expires() {
             })
             .map(|a| a.tr.pos)
             .collect();
-        s.step_authoritative(0.1, &wiz);
+        s.step_authoritative(0.1);
     }
     let a = s.ecs.get(z).expect("still present");
     assert!(
@@ -47,7 +47,7 @@ fn slow_scales_effective_speed() {
             })
             .map(|a| a.tr.pos)
             .collect();
-        s_no_slow.step_authoritative(0.1, &wiz);
+        s_no_slow.step_authoritative(0.1);
     }
     let end0 = s_no_slow.ecs.get(z0).unwrap().tr.pos;
     let dist_no_slow = (end0 - start0).length();
@@ -69,7 +69,7 @@ fn slow_scales_effective_speed() {
             })
             .map(|a| a.tr.pos)
             .collect();
-        s_slow.step_authoritative(0.1, &wiz);
+        s_slow.step_authoritative(0.1);
     }
     let end1 = s_slow.ecs.get(z1).unwrap().tr.pos;
     let dist_slow = (end1 - start1).length();
@@ -104,7 +104,7 @@ fn stun_blocks_cast() {
         })
         .map(|a| a.tr.pos)
         .collect();
-    s.step_authoritative(0.1, &wiz);
+    s.step_authoritative(0.1);
     let any_proj = s.ecs.iter().any(|c| c.projectile.is_some());
     assert!(!any_proj, "stunned caster should not spawn projectiles");
 }
@@ -126,7 +126,7 @@ fn death_sets_despawn_or_removes_entity() {
         })
         .map(|a| a.tr.pos)
         .collect();
-    s.step_authoritative(0.1, &wiz);
+    s.step_authoritative(0.1);
     match s.ecs.get(z) {
         None => {}
         Some(c) => {

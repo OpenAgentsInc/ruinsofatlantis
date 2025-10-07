@@ -20,7 +20,7 @@ fn magic_missile_applies_slow_on_hit() {
             })
             .map(|a| a.tr.pos)
             .collect();
-        s.step_authoritative(0.1, &wiz);
+        s.step_authoritative(0.1);
     }
     if let Some(a) = s.ecs.get(z)
         && a.hp.alive()

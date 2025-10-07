@@ -22,13 +22,13 @@ fn arming_delay_prevents_early_hit() {
         server_core::ProjKind::Firebolt,
     );
     // Step less than minimal arming time total (< 0.08s)
-    s.step_authoritative(0.02, &[]);
-    s.step_authoritative(0.02, &[]);
-    s.step_authoritative(0.02, &[]);
+    s.step_authoritative(0.02);
+    s.step_authoritative(0.02);
+    s.step_authoritative(0.02);
     let hp_mid = s.ecs.get(uid).unwrap().hp.hp;
     assert_eq!(hp_mid, hp0, "arming delay should prevent early damage");
     // Now step past arming
-    s.step_authoritative(0.1, &[]);
+    s.step_authoritative(0.1);
     let hp1 = s.ecs.get(uid).unwrap().hp.hp;
     assert!(hp1 < hp0, "after arming, damage should apply");
 }

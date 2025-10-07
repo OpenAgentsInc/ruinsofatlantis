@@ -13,42 +13,18 @@ fn corpse_with_despawn_after_is_removed_when_timer_elapses() {
     }
 
     // First step should apply damage and set despawn timer
-    let wiz0: Vec<Vec3> = s
-        .ecs
-        .iter()
-        .filter(|a| {
-            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
-        })
-        .map(|a| a.tr.pos)
-        .collect();
-    s.step_authoritative(0.1, &wiz0);
+    s.step_authoritative(0.1);
     assert!(s.ecs.get(z).is_some(), "present during despawn delay");
 
     // Step until just before 2.0s
     for _ in 0..18 {
-        let wiz: Vec<Vec3> = s
-            .ecs
-            .iter()
-            .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
-            })
-            .map(|a| a.tr.pos)
-            .collect();
-        s.step_authoritative(0.1, &wiz);
+        s.step_authoritative(0.1);
     }
     assert!(s.ecs.get(z).is_some(), "still present before timer elapses");
 
     // Step past the timer
     for _ in 0..3 {
-        let wiz: Vec<Vec3> = s
-            .ecs
-            .iter()
-            .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
-            })
-            .map(|a| a.tr.pos)
-            .collect();
-        s.step_authoritative(0.1, &wiz);
+        s.step_authoritative(0.1);
     }
     assert!(s.ecs.get(z).is_none(), "removed after timer elapses");
 }

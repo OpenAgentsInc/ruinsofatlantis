@@ -8,7 +8,7 @@ fn undead_separation_applies() {
     let u2 = s.spawn_undead(vec3(0.05, 0.6, 0.0), 0.9, 20);
     // Step a few frames to allow separation pass
     for _ in 0..5 {
-        s.step_authoritative(0.05, &[]);
+        s.step_authoritative(0.05);
     }
     let p1 = s.ecs.get(u1).unwrap().tr.pos;
     let p2 = s.ecs.get(u2).unwrap().tr.pos;

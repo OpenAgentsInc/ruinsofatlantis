@@ -13,7 +13,7 @@ fn magic_missile_from_wizard_damages_undead() {
         caster: Some(wid),
     });
     for _ in 0..8 {
-        s.step_authoritative(0.05, &[]);
+        s.step_authoritative(0.05);
     }
     let hp1 = s.ecs.get(uid).unwrap().hp.hp;
     assert!(

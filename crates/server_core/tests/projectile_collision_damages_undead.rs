@@ -26,7 +26,7 @@ fn firebolt_from_wizard_damages_undead() {
     );
     // Step a few ticks to travel and arm (>= 0.08s)
     for _ in 0..4 {
-        s.step_authoritative(0.05, &[]);
+        s.step_authoritative(0.05);
     }
     let hp_after = s.ecs.get(uid).unwrap().hp.hp;
     assert!(

@@ -75,7 +75,7 @@ fn integration_combat_loop_pc_and_wizards_vs_undead() {
     // 4) Run authoritative ECS for ~5s (100 * 50ms)
     let dt = 0.05f32;
     for _ in 0..100 {
-        s.step_authoritative(dt, &[]); // no mirroring; intents/AI drive motion
+        s.step_authoritative(dt); // no mirroring; intents/AI drive motion
     }
 
     // Post-conditions

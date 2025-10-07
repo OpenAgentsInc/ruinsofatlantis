@@ -320,6 +320,14 @@ pub struct ActorSnapshotDelta {
     pub updates: Vec<ActorDeltaRec>,
     pub removals: Vec<u32>,
     pub projectiles: Vec<ProjectileRep>,
+    pub hits: Vec<HitFx>,
+}
+
+/// Lightweight hit effect for client VFX without client-side gameplay.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HitFx {
+    pub kind: u8,       // 0=Firebolt, 1=Fireball (optional), 2=MagicMissile, etc.
+    pub pos: [f32; 3],  // world-space position
 }
 
 impl SnapshotEncode for ActorSnapshotDelta {
@@ -381,6 +389,15 @@ impl SnapshotEncode for ActorSnapshotDelta {
                 out.extend_from_slice(&c.to_le_bytes());
             }
             for c in &p.vel {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
+        }
+        // hitfx (effects only)
+        let nh = u32::try_from(self.hits.len()).unwrap_or(0);
+        out.extend_from_slice(&nh.to_le_bytes());
+        for h in &self.hits {
+            out.push(h.kind);
+            for c in &h.pos {
                 out.extend_from_slice(&c.to_le_bytes());
             }
         }
@@ -542,6 +559,24 @@ impl SnapshotDecode for ActorSnapshotDelta {
             }
             projectiles.push(ProjectileRep { id, kind, pos, vel });
         }
+        // hits
+        let nh = u32::from_le_bytes(take::<4>(inp)?) as usize;
+        let mut hits = Vec::with_capacity(nh);
+        for _ in 0..nh {
+            let kind = {
+                let b = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                b
+            };
+            let mut pos = [0.0f32; 3];
+            for v in &mut pos {
+                *v = f32::from_le_bytes(take::<4>(inp)?);
+            }
+            hits.push(HitFx { kind, pos });
+        }
         Ok(Self {
             v,
             tick,
@@ -550,6 +585,7 @@ impl SnapshotDecode for ActorSnapshotDelta {
             updates,
             removals,
             projectiles,
+            hits,
         })
     }
 }
@@ -1024,6 +1060,7 @@ mod tests {
                 pos: [0.0, 1.0, 2.0],
                 vel: [3.0, 4.0, 5.0],
             }],
+            hits: vec![HitFx { kind: 0, pos: [1.0, 0.6, 2.0] }],
         };
         let mut buf = Vec::new();
         delta.encode(&mut buf);
@@ -1036,6 +1073,7 @@ mod tests {
         assert_eq!(dec.updates.len(), 1);
         assert_eq!(dec.removals, vec![2, 3]);
         assert_eq!(dec.projectiles.len(), 1);
+        assert_eq!(dec.hits.len(), 1);
     }
 
     #[test]

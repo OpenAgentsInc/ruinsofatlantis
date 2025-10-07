@@ -23,7 +23,7 @@ fn pc_firebolt_hits_wizard() {
     );
     // Step to arm and collide
     for _ in 0..6 {
-        s.step_authoritative(0.05, &[]);
+        s.step_authoritative(0.05);
     }
     let hp_after = s.ecs.get(wiz).unwrap().hp.hp;
     assert!(

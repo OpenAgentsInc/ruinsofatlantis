@@ -34,7 +34,7 @@ fn stunned_undead_neither_moves_nor_melees() {
             })
             .map(|a| a.tr.pos)
             .collect();
-        s.step_authoritative(0.1, &wiz);
+        s.step_authoritative(0.1);
     }
 
     let hp1 = s.ecs.get(wiz_id).unwrap().hp.hp;

@@ -19,7 +19,7 @@ fn melee_zombie_hits_wizard() {
     let hp0 = s.ecs.get(wiz).unwrap().hp.hp;
     // Step several frames to allow melee contact and cooldown
     for _ in 0..20 {
-        s.step_authoritative(0.05, &[]);
+        s.step_authoritative(0.05);
     }
     let hp1 = s.ecs.get(wiz).unwrap().hp.hp;
     assert!(

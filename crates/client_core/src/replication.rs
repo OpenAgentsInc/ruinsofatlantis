@@ -21,6 +21,7 @@ pub struct ReplicationBuffer {
     pub wizards: Vec<WizardView>,
     pub npcs: Vec<NpcView>,
     pub projectiles: Vec<ProjectileView>,
+    pub hits: Vec<net_core::snapshot::HitFx>,
     pub hud: HudState,
 }
 
@@ -176,6 +177,8 @@ impl ReplicationBuffer {
                     vel: glam::vec3(p.vel[0], p.vel[1], p.vel[2]),
                 });
             }
+            // HitFX for this frame
+            self.hits = d.hits;
             return true;
         }
         // Chunk mesh deltas (tools/dev): accept and stash

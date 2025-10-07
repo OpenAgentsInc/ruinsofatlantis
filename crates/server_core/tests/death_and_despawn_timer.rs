@@ -24,14 +24,14 @@ fn death_sets_despawn_and_removes_after_timer() {
     );
     // Step enough to arm and apply damage, then linger for despawn (timer ~2s)
     for _ in 0..5 {
-        s.step_authoritative(0.1, &[]);
+        s.step_authoritative(0.1);
     }
     // Should be dead and have a despawn timer set (cleanup later)
     let dead_now = s.ecs.get(uid).map(|a| a.hp.hp).unwrap_or(0) == 0;
     assert!(dead_now, "undead should be dead after hit");
     // Run cleanup; ensure entity removed after timer
     for _ in 0..30 {
-        s.step_authoritative(0.1, &[]);
+        s.step_authoritative(0.1);
     }
     assert!(
         s.ecs.get(uid).is_none(),

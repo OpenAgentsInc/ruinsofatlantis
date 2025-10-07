@@ -76,3 +76,14 @@ Next (optional follow-up)
 - Warnings cleanup
   - Fixed unused parameter (`wizard_positions` → `_wizard_positions`) in `Schedule::run`.
   - Silenced dead-code warnings by removing legacy calls and stubbing legacy-only methods under cfg.
+
+Follow-up (afternoon updates)
+- Removed the `wizard_positions` parameter entirely from `Schedule::run` and `ServerState::step_authoritative`.
+- Added detailed cast accept/reject logs (guarded by `RA_LOG_CASTS=1`).
+- Implemented server-auth HitFX replication for impact VFX:
+  - `server_core`: collision system records per-hit `fx_hits` each frame.
+  - `platform_winit`: drains `fx_hits` into ActorSnapshotDelta v3.
+  - `net_core`: extended v3 schema with `hits: Vec<HitFx>` and tests for roundtrip.
+  - `client_core`: replication buffer stores `hits` for renderer VFX.
+- Tests added/updated to enforce behavior:
+  - Cooldowns/mana and cast queue drain; AI deterministic projectile; HitFX roundtrip; logic-only anim state.

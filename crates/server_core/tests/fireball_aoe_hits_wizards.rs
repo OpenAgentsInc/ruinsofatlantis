@@ -24,7 +24,7 @@ fn fireball_aoe_hits_wizards() {
     );
     // Step forward until collision triggers explosion
     for _ in 0..60 {
-        s.step_authoritative(0.016, &[]);
+        s.step_authoritative(0.016);
     }
     let hp_after = s.ecs.get(w1).map(|a| a.hp.hp).unwrap_or(0);
     assert!(hp_after < 100, "wizard did not take AoE damage");
