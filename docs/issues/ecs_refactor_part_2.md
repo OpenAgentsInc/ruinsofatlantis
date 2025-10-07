@@ -218,6 +218,14 @@ Addendum — Implementation log (2025-10-07)
   - This is a minimal ECS wrapper to keep behavior identical and unblock PR‑2. Systems/schedule and richer components (MoveSpeed/Melee/etc.) will land next.
   - ID stability retained via `ActorId` inside `Components`; net mapping remains 1:1.
 
+- PR‑2 (Phase 2) done on main:
+  - Added `ecs::schedule::{Schedule, Ctx}` with event buses (`DamageEvent`, `ExplodeEvent`).
+  - Moved Undead seek/move, melee, projectile integrate/collision, AoE, faction flip, damage apply, and cleanup into ordered systems.
+  - `ServerState::step_authoritative` now delegates to the schedule after mirroring wizard positions.
+  - Removed platform’s direct boss step; boss movement occurs within schedule for parity.
+  - Kept snapshot building via `tick_snapshot_actors()`; snapshot system can be added later if needed.
+  - Workspace clippy/tests green.
+
 
 ## What I recommend you do **immediately**
 
