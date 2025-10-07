@@ -137,6 +137,35 @@ impl ReplicationBuffer {
                     _ => {}
                 }
             }
+            // After applying updates/spawns/removals, rebuild derived views from actors to ensure
+            // that HP/pos/yaw/alive changes are reflected even when only updates occurred.
+            {
+                self.wizards.clear();
+                self.npcs.clear();
+                for a in &self.actors {
+                    match a.kind {
+                        0 => self.wizards.push(WizardView {
+                            id: a.id,
+                            kind: 0,
+                            pos: a.pos,
+                            yaw: a.yaw,
+                            hp: a.hp,
+                            max: a.max,
+                        }),
+                        1 | 2 => self.npcs.push(NpcView {
+                            id: a.id,
+                            hp: a.hp,
+                            max: a.max,
+                            pos: a.pos,
+                            radius: a.radius,
+                            alive: a.alive,
+                            attack_anim: 0.0,
+                            yaw: a.yaw,
+                        }),
+                        _ => {}
+                    }
+                }
+            }
             // Projectiles (full list)
             self.projectiles.clear();
             for p in d.projectiles {
