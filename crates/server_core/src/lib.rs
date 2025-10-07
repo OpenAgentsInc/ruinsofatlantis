@@ -107,8 +107,8 @@ pub struct ServerState {
     /// Live projectiles spawned by wizards.
     pub projectiles: Vec<Projectile>,
     next_proj_id: u32,
-    /// New authoritative actor store (bridge toward ECS)
-    pub actors: ActorStore,
+    /// New authoritative ECS world (phase 1)
+    pub ecs: ecs::WorldEcs,
     pub factions: FactionState,
     /// Cached PC actor id (spawned during sync)
     pub pc_actor: Option<ActorId>,
@@ -122,7 +122,7 @@ impl ServerState {
             nivita_stats: None,
             projectiles: Vec::new(),
             next_proj_id: 1,
-            actors: ActorStore::default(),
+            ecs: ecs::WorldEcs::default(),
             factions: FactionState::default(),
             pc_actor: None,
         }
@@ -138,9 +138,9 @@ impl ServerState {
         damage: i32,
         source: Option<ActorId>,
     ) -> usize {
-        let src_team = source.and_then(|id| self.actors.get(id).map(|a| a.team));
+        let src_team = source.and_then(|id| self.ecs.get(id).map(|a| a.team));
         let mut hits = 0usize;
-        for a in self.actors.iter_mut() {
+        for a in self.ecs.iter_mut() {
             // Skip self-damage for PC-owned AoE
             if let (Some(Team::Pc), Some(src)) = (src_team, source)
                 && a.id == src
@@ -166,7 +166,7 @@ impl ServerState {
         // PC (index 0)
         if let Some(p0) = wiz_pos.first().copied() {
             if self.pc_actor.is_none() {
-                let id = self.actors.spawn(
+                let id = self.ecs.spawn(
                     ActorKind::Wizard,
                     Team::Pc,
                     Transform {
@@ -179,7 +179,7 @@ impl ServerState {
                 self.pc_actor = Some(id);
             }
             if let Some(id) = self.pc_actor
-                && let Some(a) = self.actors.get_mut(id)
+                && let Some(a) = self.ecs.get_mut(id)
             {
                 a.tr.pos = p0;
             }
@@ -187,14 +187,13 @@ impl ServerState {
         // Extra wizard positions correspond to NPC wizards (Team::Wizards)
         let need = wiz_pos.len().saturating_sub(1);
         let mut npc_ids: Vec<ActorId> = self
-            .actors
-            .actors
+            .ecs
             .iter()
             .filter(|a| a.kind == ActorKind::Wizard && a.team == Team::Wizards)
             .map(|a| a.id)
             .collect();
         while npc_ids.len() < need {
-            let id = self.actors.spawn(
+            let id = self.ecs.spawn(
                 ActorKind::Wizard,
                 Team::Wizards,
                 Transform {
@@ -208,7 +207,7 @@ impl ServerState {
         }
         for (i, id) in npc_ids.into_iter().enumerate() {
             if let Some(p) = wiz_pos.get(i + 1).copied()
-                && let Some(a) = self.actors.get_mut(id)
+                && let Some(a) = self.ecs.get_mut(id)
             {
                 a.tr.pos = p;
             }
@@ -429,7 +428,7 @@ impl ServerState {
             if !removed {
                 let mut pending_aoe: Option<(f32, f32, i32)> = None;
                 let mut hit_any = false;
-                for a in self.actors.iter_mut() {
+                for a in self.ecs.iter_mut() {
                     if !a.hp.alive() {
                         continue;
                     }
@@ -485,7 +484,7 @@ impl ServerState {
                 let len2 = ab.length_squared();
                 let mut best_d2 = f32::INFINITY;
                 let mut best_center = seg_b;
-                for act in &self.actors.actors {
+                for act in self.ecs.iter() {
                     if !act.hp.alive() {
                         continue;
                     }
@@ -561,7 +560,7 @@ impl ServerState {
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
-        self.actors.spawn(
+        self.ecs.spawn(
             ActorKind::Zombie,
             Team::Undead,
             Transform {
@@ -587,7 +586,7 @@ impl ServerState {
         };
         let hp_mid = (cfg.hp_range.0 + cfg.hp_range.1) / 2;
         let radius = cfg.radius_m.unwrap_or(0.9);
-        let id = self.actors.spawn(
+        let id = self.ecs.spawn(
             ActorKind::Boss,
             Team::Undead,
             Transform {
@@ -710,7 +709,7 @@ impl ServerState {
     // Legacy TickSnapshot removed; actor-centric snapshot is canonical.
     pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
         let actors = self
-            .actors
+            .ecs
             .iter()
             .map(|a| net_core::snapshot::ActorRep {
                 id: a.id.0,

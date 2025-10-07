@@ -276,7 +276,7 @@ impl ApplicationHandler for App {
                     .map(|v| v == "1")
                     .unwrap_or(false)
                 {
-                    let actors = srv.actors.actors.len();
+                    let actors = srv.ecs.len();
                     log::info!(
                         "demo_server: stepping dt={:.3}s; actors={} wizards={}",
                         dt,
@@ -284,7 +284,7 @@ impl ApplicationHandler for App {
                         wiz_pos.len()
                     );
                 } else {
-                    let actors = srv.actors.actors.len();
+                    let actors = srv.ecs.len();
                     log::debug!(
                         "demo_server: stepping dt={:.3}s; actors={} wizards={} ",
                         dt,
