@@ -633,7 +633,7 @@ fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
                 near_count += 1;
             }
         }
-        let want_spell = if near_count >= 2 && dist >= 12.0 && dist <= 25.0 {
+        let want_spell = if near_count >= 2 && (12.0..=25.0).contains(&dist) {
             Some(SpellId::Fireball)
         } else if dist <= 10.0 {
             Some(SpellId::MagicMissile)
@@ -653,18 +653,18 @@ fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
                 if cd.gcd_ready > 0.0 {
                     ok = false;
                 }
-                if let Some(sp) = want_spell {
-                    if cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0 {
-                        ok = false;
-                    }
+                if let Some(sp) = want_spell
+                    && cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0
+                {
+                    ok = false;
                 }
             }
-            if let Some(pool) = w.pool.as_ref() {
-                if let Some(sp) = want_spell {
-                    let (cost, _cd, _gcd) = srv.spell_cost_cooldown(sp);
-                    if pool.mana < cost {
-                        ok = false;
-                    }
+            if let Some(pool) = w.pool.as_ref()
+                && let Some(sp) = want_spell
+            {
+                let (cost, _cd, _gcd) = srv.spell_cost_cooldown(sp);
+                if pool.mana < cost {
+                    ok = false;
                 }
             }
         }
