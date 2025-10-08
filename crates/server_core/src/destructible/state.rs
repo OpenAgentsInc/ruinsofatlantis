@@ -55,20 +55,11 @@ impl DestructibleProxy {
 }
 
 /// Server-owned registry for destructible proxies and per-tick mesh deltas.
+#[derive(Default)]
 pub struct DestructibleRegistry {
     pub proxies: HashMap<DestructibleId, DestructibleProxy>,
     pub pending_mesh_deltas: Vec<ChunkMeshDelta>,
     pub cfg: DestructibleConfig,
-}
-
-impl Default for DestructibleRegistry {
-    fn default() -> Self {
-        Self {
-            proxies: HashMap::new(),
-            pending_mesh_deltas: Vec::new(),
-            cfg: DestructibleConfig::default(),
-        }
-    }
 }
 
 impl std::fmt::Debug for DestructibleRegistry {

@@ -311,9 +311,9 @@ pub mod config {
                 }
                 cfg.chunk = UVec3::new(file.chunk[0], file.chunk[1], file.chunk[2]);
                 // material remains default stone
-                cfg.max_debris = file.max_debris.max(0) as usize;
-                cfg.max_chunk_remesh = file.max_remesh_per_tick.max(0) as usize;
-                cfg.collider_budget_per_tick = file.collider_budget_per_tick.max(0) as usize;
+                cfg.max_debris = file.max_debris.max(0);
+                cfg.max_chunk_remesh = file.max_remesh_per_tick.max(0);
+                cfg.collider_budget_per_tick = file.collider_budget_per_tick.max(0);
                 cfg.close_surfaces = file.close_surfaces;
                 cfg.seed = file.seed;
                 cfg.max_carve_chunks = Some(file.max_carve_chunks);
