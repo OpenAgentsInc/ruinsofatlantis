@@ -7,6 +7,7 @@
 //!
 //! Filled in later when net_core types are finalized.
 
+use glam::Vec3;
 /// Client-side replication buffer that accumulates incoming deltas (chunks,
 /// entity snapshots) and exposes a coherent view for presentation layers.
 use net_core::snapshot::SnapshotDecode;
@@ -19,6 +20,8 @@ pub struct ReplicationBuffer {
     // Deltas for unknown instances are held until corresponding instance arrives
     deferred_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
     known_dids: std::collections::HashSet<u64>,
+    // Track destructible instances' world AABBs for delta validation
+    destr_instances: HashMap<u64, (Vec3, Vec3)>,
     pub boss_status: Option<BossStatus>,
     pub actors: Vec<ActorView>,
     pub wizards: Vec<WizardView>,
@@ -205,26 +208,14 @@ impl ReplicationBuffer {
             self.hits = d.hits;
             return true;
         }
-        // Chunk mesh deltas: accept and stash iff instance is known
-        let mut slice_delta: &[u8] = payload;
-        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
-            let entry = crate::upload::ChunkMeshEntry {
-                positions: delta.positions,
-                normals: delta.normals,
-                indices: delta.indices,
-            };
-            if self.known_dids.contains(&delta.did) {
-                self.pending_mesh.push((delta.did, delta.chunk, entry));
-                self.updated_chunks += 1;
-            } else {
-                self.deferred_mesh.push((delta.did, delta.chunk, entry));
-            }
-            return true;
-        }
         // Destructible instance (register DID)
         let mut slice_inst: &[u8] = payload;
         if let Ok(inst) = net_core::snapshot::DestructibleInstance::decode(&mut slice_inst) {
             self.known_dids.insert(inst.did);
+            // Track AABB for validation of future deltas
+            let min = Vec3::new(inst.world_min[0], inst.world_min[1], inst.world_min[2]);
+            let max = Vec3::new(inst.world_max[0], inst.world_max[1], inst.world_max[2]);
+            self.destr_instances.insert(inst.did, (min, max));
             // Move any deferred deltas for this DID into pending
             let mut rest = Vec::new();
             for (did, chunk, entry) in self.deferred_mesh.drain(..) {
@@ -236,6 +227,57 @@ impl ReplicationBuffer {
                 }
             }
             self.deferred_mesh = rest;
+            return true;
+        }
+        // Chunk mesh deltas: accept and stash iff instance is known, with validation
+        let mut slice_delta: &[u8] = payload;
+        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
+            // Basic shape checks
+            if delta.positions.len() != delta.normals.len() {
+                return false;
+            }
+            if delta.indices.len() % 3 != 0 {
+                return false;
+            }
+            if delta.positions.len() > 200_000 {
+                return false;
+            }
+            // If we know the DID, ensure the delta bbox lies near the instance AABB
+            if let Some((min, max)) = self.destr_instances.get(&delta.did).copied() {
+                let mut bb_min = Vec3::splat(f32::INFINITY);
+                let mut bb_max = Vec3::splat(f32::NEG_INFINITY);
+                for p in &delta.positions {
+                    let v = Vec3::new(p[0], p[1], p[2]);
+                    bb_min = bb_min.min(v);
+                    bb_max = bb_max.max(v);
+                }
+                // Expand by epsilon to tolerate greedy-mesh edges
+                let eps = 0.5f32;
+                if bb_max.x < min.x - eps
+                    || bb_min.x > max.x + eps
+                    || bb_max.y < min.y - eps
+                    || bb_min.y > max.y + eps
+                    || bb_max.z < min.z - eps
+                    || bb_min.z > max.z + eps
+                {
+                    log::warn!(
+                        "replication: drop destructible delta outside instance AABB (did={})",
+                        delta.did
+                    );
+                    return false;
+                }
+            }
+            let entry = crate::upload::ChunkMeshEntry {
+                positions: delta.positions,
+                normals: delta.normals,
+                indices: delta.indices,
+            };
+            if self.known_dids.contains(&delta.did) {
+                self.pending_mesh.push((delta.did, delta.chunk, entry));
+                self.updated_chunks += 1;
+            } else {
+                self.deferred_mesh.push((delta.did, delta.chunk, entry));
+            }
             return true;
         }
         // HUD status message
