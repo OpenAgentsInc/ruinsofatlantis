@@ -100,14 +100,23 @@ pub fn destructible_apply_carves(srv: &mut ServerState, ctx: &mut Ctx) {
     for mut req in ctx.carves.drain(..) {
         let did = crate::destructible::state::DestructibleId(req.did);
         if let Some(proxy) = srv.destruct_registry.proxies.get_mut(&did) {
-            // Convert world-space center to object-space if a transform is present
+            // Convert world-space center to object-space if a transform is present,
+            // and scale carve radius defensively by (assumed-uniform) object_from_world scale.
             let ws = glam::Vec3::new(
                 req.center_m.x as f32,
                 req.center_m.y as f32,
                 req.center_m.z as f32,
             );
             let os = (proxy.object_from_world * ws.extend(1.0)).truncate();
+            let sx = proxy.object_from_world.x_axis.truncate().length();
+            let sy = proxy.object_from_world.y_axis.truncate().length();
+            let sz = proxy.object_from_world.z_axis.truncate().length();
+            debug_assert!(
+                (sx - sy).abs() < 1e-3 && (sx - sz).abs() < 1e-3,
+                "non-uniform scale not supported for carve radius"
+            );
             req.center_m = os.as_dvec3();
+            req.radius_m *= sx as f64;
             let _ = voxel_carve(
                 &mut proxy.grid,
                 &req,

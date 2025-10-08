@@ -166,6 +166,8 @@ struct ProjectileSpec {
     aoe_radius_m: f32,
     damage: i32,
     arming_delay_s: f32,
+    carves_destructibles: bool,
+    carve_radius_m: f32,
 }
 
 #[inline]
@@ -511,6 +513,8 @@ impl ServerState {
                         damage: 10,
                         life_s: 1.5,
                         arming_delay_s: 0.08,
+                        carves_destructibles: false,
+                        carve_radius_m: 0.0,
                     });
                 ProjectileSpec {
                     speed_mps: s.speed_mps,
@@ -518,6 +522,8 @@ impl ServerState {
                     aoe_radius_m: 0.0,
                     damage: s.damage,
                     arming_delay_s: s.arming_delay_s,
+                    carves_destructibles: false,
+                    carve_radius_m: 0.0,
                 }
             }
             ProjKind::Fireball => {
@@ -531,6 +537,8 @@ impl ServerState {
                         damage: 28,
                         life_s: 1.5,
                         arming_delay_s: 0.10,
+                        carves_destructibles: true,
+                        carve_radius_m: 2.0,
                     });
                 ProjectileSpec {
                     speed_mps: s.speed_mps,
@@ -538,6 +546,8 @@ impl ServerState {
                     aoe_radius_m: s.radius_m.max(0.0),
                     damage: s.damage.max(0),
                     arming_delay_s: s.arming_delay_s,
+                    carves_destructibles: s.carves_destructibles,
+                    carve_radius_m: if s.carves_destructibles { s.carve_radius_m.max(0.0) } else { 0.0 },
                 }
             }
             ProjKind::MagicMissile => {
@@ -553,6 +563,8 @@ impl ServerState {
                         damage: 7,
                         life_s: 1.0,
                         arming_delay_s: 0.08,
+                        carves_destructibles: false,
+                        carve_radius_m: 0.0,
                     });
                 ProjectileSpec {
                     speed_mps: s.speed_mps,
@@ -560,6 +572,8 @@ impl ServerState {
                     aoe_radius_m: s.radius_m.max(0.0),
                     damage: s.damage.max(0),
                     arming_delay_s: s.arming_delay_s,
+                    carves_destructibles: s.carves_destructibles,
+                    carve_radius_m: if s.carves_destructibles { s.carve_radius_m.max(0.0) } else { 0.0 },
                 }
             }
         }

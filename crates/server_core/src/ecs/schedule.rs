@@ -1020,10 +1020,12 @@ fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
     let mut segs: Vec<(glam::Vec3, glam::Vec3, f32)> = Vec::new();
     for c in srv.ecs.iter() {
         if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+            let spec = srv.projectile_spec(proj.kind);
+            if !spec.carves_destructibles { continue; }
             let p1 = c.tr.pos;
             let p0 = p1 - vel.v * ctx.dt;
             // Radius used as carve radius
-            let r = srv.projectile_spec(proj.kind).aoe_radius_m.max(0.0);
+            let r = spec.carve_radius_m.max(0.0);
             segs.push((p0, p1, r));
         }
     }
@@ -1091,6 +1093,7 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
         for inst in &srv.destruct_instances {
             let min = glam::Vec3::from(inst.world_min);
             let max = glam::Vec3::from(inst.world_max);
+            // Planar XZ AoE; pick a reasonable Y within AABB so carving happens inside volume
             let center = glam::vec3(e.center_xz.x, (min.y + max.y) * 0.5, e.center_xz.y);
             let closest = glam::vec3(
                 center.x.clamp(min.x, max.x),

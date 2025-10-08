@@ -12,6 +12,12 @@ pub struct ProjectileSpec {
     pub life_s: f32,
     #[serde(default = "default_arming_delay_s")]
     pub arming_delay_s: f32,
+    /// Whether this projectile should carve destructible proxies (server authority).
+    #[serde(default)]
+    pub carves_destructibles: bool,
+    /// Carve radius in meters (object-space after transform); separate from AoE radius.
+    #[serde(default)]
+    pub carve_radius_m: f32,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -45,6 +51,8 @@ impl ProjectileSpecDb {
                     damage: 10,
                     life_s: 1.5,
                     arming_delay_s: 0.08,
+                    carves_destructibles: false,
+                    carve_radius_m: 0.0,
                 },
             );
             db.actions.insert(
@@ -55,6 +63,8 @@ impl ProjectileSpecDb {
                     damage: 8,
                     life_s: 1.5,
                     arming_delay_s: 0.08,
+                    carves_destructibles: false,
+                    carve_radius_m: 0.0,
                 },
             );
             db.actions.insert(
@@ -65,6 +75,8 @@ impl ProjectileSpecDb {
                     damage: 28,    // avg 8d6
                     life_s: 1.5,
                     arming_delay_s: 0.10,
+                    carves_destructibles: true,
+                    carve_radius_m: 2.0, // default carve radius distinct from AoE; tuned at runtime
                 },
             );
             db.actions.insert(
@@ -75,6 +87,8 @@ impl ProjectileSpecDb {
                     damage: 18,
                     life_s: 1.5,
                     arming_delay_s: 0.08,
+                    carves_destructibles: false,
+                    carve_radius_m: 0.0,
                 },
             );
             db.actions.insert(
@@ -85,6 +99,8 @@ impl ProjectileSpecDb {
                     damage: 16,
                     life_s: 1.5,
                     arming_delay_s: 0.08,
+                    carves_destructibles: false,
+                    carve_radius_m: 0.0,
                 },
             );
             db.actions.insert(
@@ -95,6 +111,8 @@ impl ProjectileSpecDb {
                     damage: 7,
                     life_s: 1.0,
                     arming_delay_s: 0.08,
+                    carves_destructibles: false,
+                    carve_radius_m: 0.0,
                 },
             );
             Ok(db)
