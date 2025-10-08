@@ -1,0 +1,7 @@
+crates/server_core/src/ecs/schedule.rs:97:        .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
+crates/server_core/src/ecs/schedule.rs:147:                    kind: crate::actor::ActorKind::Wizard,
+crates/server_core/src/ecs/schedule.rs:184:                kind: crate::actor::ActorKind::Wizard, // unused for projectile
+crates/server_core/src/ecs/schedule.rs:658:                && matches!(a.kind, ActorKind::Wizard)
+crates/server_core/src/lib.rs:787:                    ActorKind::Wizard => 0,
+crates/server_core/src/lib.rs:788:                    ActorKind::Zombie => 1,
+crates/server_core/src/lib.rs:789:                    ActorKind::Boss => 2,

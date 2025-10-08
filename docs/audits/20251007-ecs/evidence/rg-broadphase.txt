@@ -1,0 +1,13 @@
+Notes: projectile_collision_ecs scans all actors per projectile; grid is not used for broad-phase.
+
+File: crates/server_core/src/ecs/schedule.rs (excerpt)
+
+    // for each projectile, iterates all actors:
+    for a in srv.ecs.iter() {
+        if !a.hp.alive() { continue; }
+        if a.projectile.is_some() { continue; }
+        if let Some(owner_id) = owner && owner_id == a.id { continue; }
+        if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) { ... }
+    }
+
+SpatialGrid implemented but used only for AoE proximity; no query_segment.

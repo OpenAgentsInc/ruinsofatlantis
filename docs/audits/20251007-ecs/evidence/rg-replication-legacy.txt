@@ -1,0 +1,9 @@
+Legacy replication types still present (should not be used in runtime)
+
+crates/net_core/src/snapshot.rs:818 — BossStatusMsg { name: String, … }
+crates/net_core/src/snapshot.rs:888 — NpcListMsg { … }
+
+ActorRep schema lacks archetype/name IDs:
+
+crates/net_core/src/snapshot.rs: — ActorRep { id, kind, team, pos, yaw, radius, hp, max, alive }
+

@@ -1,0 +1,13 @@
+Non-test unwrap/expect in server_core (grep excerpt)
+
+crates/server_core/src/tick.rs:68:            material: core_materials::find_material_id("stone").unwrap(),
+crates/server_core/src/systems/projectiles.rs:220:        let db = data_runtime::specs::projectiles::ProjectileSpecDb::load_default().unwrap();
+crates/server_core/src/systems/projectiles.rs:231:        .expect("spawn");
+crates/server_core/src/destructible.rs:593:            material: find_material_id("stone").unwrap(),
+crates/server_core/src/destructible.rs:604:        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+crates/server_core/src/destructible.rs:614:        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+crates/server_core/src/destructible.rs:626:        let hit = raycast_voxels(&g, o, dir, Length::meters(100.0)).unwrap();
+crates/server_core/src/destructible.rs:653:        let wood = find_material_id("wood").unwrap();
+crates/server_core/src/destructible.rs:654:        let stone = find_material_id("stone").unwrap();
+crates/server_core/src/destructible.rs:655:        let mw = core_materials::mass_for_voxel(wood, g.voxel_m()).unwrap();
+crates/server_core/src/destructible.rs:656:        let ms = core_materials::mass_for_voxel(stone, g.voxel_m()).unwrap();
