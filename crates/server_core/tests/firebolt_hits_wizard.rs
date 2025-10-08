@@ -37,7 +37,8 @@ fn firebolt_hits_wizard_reliably() {
         .ecs
         .iter()
         .filter(|a| {
-            matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Wizards
+            matches!(a.kind, server_core::ActorKind::Wizard)
+                && a.faction == server_core::Faction::Wizards
         })
         .map(|a| a.id)
         .next()

@@ -16,7 +16,8 @@ fn magic_missile_applies_slow_on_hit() {
             .ecs
             .iter()
             .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
+                matches!(a.kind, server_core::ActorKind::Wizard)
+                    && a.faction == server_core::Faction::Pc
             })
             .map(|a| a.tr.pos)
             .collect();

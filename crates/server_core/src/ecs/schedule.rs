@@ -459,8 +459,7 @@ fn ai_move_hostiles_toward_wizards(srv: &mut ServerState, ctx: &Ctx) {
         .iter()
         .filter(|a| a.hp.alive() && a.move_speed.is_some() && a.aggro.is_some())
         .filter(|a| {
-            srv
-                .factions
+            srv.factions
                 .effective_hostile(a.faction, crate::actor::Faction::Wizards)
         })
         .map(|a| a.id)
@@ -520,8 +519,7 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
         .iter()
         .filter(|a| a.hp.alive() && a.melee.is_some())
         .filter(|a| {
-            srv
-                .factions
+            srv.factions
                 .effective_hostile(a.faction, crate::actor::Faction::Wizards)
         })
         .map(|a| a.id)

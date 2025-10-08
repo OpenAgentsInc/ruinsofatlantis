@@ -75,7 +75,13 @@ impl WorldEcs {
         self.ents.len()
     }
 
-    pub fn spawn(&mut self, kind: ActorKind, faction: Faction, tr: Transform, hp: Health) -> ActorId {
+    pub fn spawn(
+        &mut self,
+        kind: ActorKind,
+        faction: Faction,
+        tr: Transform,
+        hp: Health,
+    ) -> ActorId {
         let id = ActorId(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
         let _e = Entity(self.next_ent);
@@ -148,7 +154,12 @@ impl WorldEcs {
     }
 
     /// Helper: find nearest hostile actor to `pos` within optional max radius^2.
-    pub fn nearest_hostile(&self, faction: Faction, pos: Vec3, max_r2: Option<f32>) -> Option<ActorId> {
+    pub fn nearest_hostile(
+        &self,
+        faction: Faction,
+        pos: Vec3,
+        max_r2: Option<f32>,
+    ) -> Option<ActorId> {
         let mut best: Option<(f32, ActorId)> = None;
         for c in &self.ents {
             if !c.hp.alive() {
