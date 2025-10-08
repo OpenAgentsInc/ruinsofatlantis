@@ -1040,10 +1040,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         .map(|v| v == "0")
         .unwrap_or(false);
     if !overlays_disabled && !r.is_vox_onepath() {
-        // Bars for casters (Wizards): derive from local instance transforms and
-        // cull by distance so we don't draw a screen-wide "green band" when many
-        // wizards are lined up. Always include the PC; draw NPC bars only if
-        // within a modest radius of the PC.
+        // Bars for wizards from replicated views (positions + HP), with distance cull for NPCs.
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         let pc_pos = {
             let m = r
@@ -1054,28 +1051,24 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             let c = m.to_cols_array();
             glam::vec3(c[12], c[13], c[14])
         };
-        // Radius for showing NPC bars (meters); can override with RA_NPC_BAR_RADIUS
         let npc_bar_radius: f32 = std::env::var("RA_NPC_BAR_RADIUS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(25.0);
-        for (i, m) in r.wizard_models.iter().enumerate() {
-            let hp = r.wizard_hp.get(i).copied().unwrap_or(0);
-            if hp <= 0 {
+        for w in &r.repl_buf.wizards {
+            if w.hp <= 0 {
                 continue;
             }
-            if i != r.pc_index {
-                let c = m.to_cols_array();
-                let pos = glam::vec3(c[12], c[13], c[14]);
-                let d2 = (pos.x - pc_pos.x).powi(2) + (pos.z - pc_pos.z).powi(2);
+            let is_pc = w.kind == 0;
+            if !is_pc {
+                let d2 = (w.pos.x - pc_pos.x).powi(2) + (w.pos.z - pc_pos.z).powi(2);
                 if d2 > npc_bar_radius * npc_bar_radius {
                     continue;
                 }
             }
-            let max_hp = r.wizard_hp_max.max(1);
-            let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
-            let frac = (hp.max(0) as f32) / (max_hp as f32);
-            bar_entries.push((head.truncate(), frac));
+            let head = glam::vec3(w.pos.x, w.pos.y + 1.7, w.pos.z);
+            let frac = (w.hp.max(0) as f32) / (w.max.max(1) as f32);
+            bar_entries.push((head, frac));
         }
         // Bars for alive zombies (replication only)
         {
