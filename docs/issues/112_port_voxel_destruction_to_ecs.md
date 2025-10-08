@@ -53,9 +53,33 @@ Commits
    - Carve bus cap added (soft cap; logs dropped count)
    - Pre-commit hook runs `cargo fmt` and stages formatting changes; pre-push runs `cargo xtask ci` (fmt --check, clippy, tests, WGSL, schema)
    - Configured hooks via `scripts/setup-git-hooks.sh`; verified `core.hooksPath=.githooks`
- - [16] Final validation and push
-   - Ran `cargo xtask ci` locally and via pre-push; all green
-   - Ensured working tree clean after push; no stray fmt diffs
+- [16] Final validation and push
+  - Ran `cargo xtask ci` locally and via pre-push; all green
+  - Ensured working tree clean after push; no stray fmt diffs
+
+- [17] Fix: voxel chunk meshes spawning at origin
+  - Root cause: deltas carried object-space positions; renderer applied identity model → chunks drew at origin
+  - Fix: server now transforms positions/normals to world-space before encoding `ChunkMeshDelta`
+  - Verified visually and with client gating tests
+
+- [18] Explosion → carve robustness
+  - Added surface-pick: require OS voxel ray hit from explosion center toward proxy before enqueueing carve
+  - Added hard distance guard (`~30m`) to prevent far NPC Fireballs carving distant ruins
+  - Tests: `explosion_surface_pick.rs`, `destructible_distance_guard.rs`
+
+- [19] Schedule helpers for structural tests
+  - `system_names_for_test()` and `destructible_from_explosions_for_test()` behind `#[cfg(test)]`
+  - Test: `explosion_vs_actor_damage_order.rs`
+
+- [20] More tests (server_core/client_core/net_core)
+  - Bus cap: `destructible_carve_bus_cap.rs`
+  - Projectile gating: `projectile_gating_carves.rs`
+  - Segment-AABB math: `geom_segment_aabb.rs`
+  - Non-uniform scale (warn + carve apply): `object_space_scale_warn.rs`
+  - Collider queue drain: `collider_refresh_touched_budget.rs`
+  - Client: defer multiple DIDs until instance (`destructible_defer_multiple_dids.rs`)
+  - Client HUD toast decode (`hud_toast_decode.rs`)
+  - Net wire round-trips (`destructible_roundtrips.rs`)
 
 Notes for future
 - Replace demo proxy with baked `data/voxel/ruins.voxgrid`; keep current box as fallback
