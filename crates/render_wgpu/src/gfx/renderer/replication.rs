@@ -53,7 +53,11 @@ mod tests {
         let mut buf_delta = Vec::new();
         delta.encode(&mut buf_delta);
         // Gate: send instance before delta so client accepts the chunk
-        let inst = DestructibleInstance { did: 9, world_min: [-1.0, 0.0, -1.0], world_max: [1.0, 2.0, 1.0] };
+        let inst = DestructibleInstance {
+            did: 9,
+            world_min: [-1.0, 0.0, -1.0],
+            world_max: [1.0, 2.0, 1.0],
+        };
         let mut buf_inst = Vec::new();
         inst.encode(&mut buf_inst);
         let mut repl = ReplicationBuffer::default();
