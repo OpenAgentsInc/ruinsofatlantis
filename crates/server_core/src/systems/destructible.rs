@@ -1,3 +1,4 @@
+#![cfg(any())]
 //! Authoritative destructible systems: VoxelCarve and GreedyMesh (budgeted).
 
 use crate::destructible::config::DestructibleConfig;
