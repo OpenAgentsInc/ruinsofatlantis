@@ -11,13 +11,11 @@ mod combat;
 pub use actor::*;
 pub use combat::*;
 use glam::Vec3;
-#[cfg(any())]
 pub mod destructible;
 mod ecs;
 pub mod jobs;
 pub mod scene_build;
 pub mod systems;
-#[cfg(any())]
 use destructible::state as destr_state;
 
 // ----------------------------------------------------------------------------
@@ -216,9 +214,12 @@ pub struct ServerState {
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
     /// Frame-local HUD toasts emitted by systems (drained by platform).
     pub hud_toasts: Vec<u8>,
-    // Destructible ECS runtime
+    // Destructible ECS runtime (disabled)
+    #[cfg(any())]
     pub destruct_registry: destr_state::DestructibleRegistry,
+    #[cfg(any())]
     pub destruct_instances: Vec<scene_build::DestructibleWorldAabb>,
+    #[cfg(any())]
     pub destruct_bootstrap_instances_outstanding: bool,
 }
 
@@ -242,8 +243,11 @@ impl ServerState {
             specs_proj,
             fx_hits: Vec::new(),
             hud_toasts: Vec::new(),
+            #[cfg(any())]
             destruct_registry: destr_state::DestructibleRegistry::default(),
+            #[cfg(any())]
             destruct_instances: Vec::new(),
+            #[cfg(any())]
             destruct_bootstrap_instances_outstanding: false,
         }
     }
