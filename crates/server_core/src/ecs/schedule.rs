@@ -1021,7 +1021,9 @@ fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
     for c in srv.ecs.iter() {
         if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
             let spec = srv.projectile_spec(proj.kind);
-            if !spec.carves_destructibles { continue; }
+            if !spec.carves_destructibles {
+                continue;
+            }
             let p1 = c.tr.pos;
             let p0 = p1 - vel.v * ctx.dt;
             // Radius used as carve radius

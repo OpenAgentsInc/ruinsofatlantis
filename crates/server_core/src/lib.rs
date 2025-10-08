@@ -547,7 +547,11 @@ impl ServerState {
                     damage: s.damage.max(0),
                     arming_delay_s: s.arming_delay_s,
                     carves_destructibles: s.carves_destructibles,
-                    carve_radius_m: if s.carves_destructibles { s.carve_radius_m.max(0.0) } else { 0.0 },
+                    carve_radius_m: if s.carves_destructibles {
+                        s.carve_radius_m.max(0.0)
+                    } else {
+                        0.0
+                    },
                 }
             }
             ProjKind::MagicMissile => {
@@ -573,7 +577,11 @@ impl ServerState {
                     damage: s.damage.max(0),
                     arming_delay_s: s.arming_delay_s,
                     carves_destructibles: s.carves_destructibles,
-                    carve_radius_m: if s.carves_destructibles { s.carve_radius_m.max(0.0) } else { 0.0 },
+                    carve_radius_m: if s.carves_destructibles {
+                        s.carve_radius_m.max(0.0)
+                    } else {
+                        0.0
+                    },
                 }
             }
         }

@@ -563,9 +563,34 @@ impl ApplicationHandler for App {
                     }
                     srv.destruct_bootstrap_instances_outstanding = false;
                 }
+                // Interest-cull destructible deltas using planar distance to instance AABB
+                // Build a quick DID -> (min,max) map
+                let mut inst_map: std::collections::HashMap<u64, (glam::Vec3, glam::Vec3)> =
+                    std::collections::HashMap::new();
+                for d in &srv.destruct_instances {
+                    inst_map.insert(d.did, (glam::Vec3::from(d.world_min), glam::Vec3::from(d.world_max)));
+                }
+                // Interest center: same as actor interest center (PC)
+                let center = s
+                    .wizard_positions()
+                    .first()
+                    .copied()
+                    .unwrap_or(glam::vec3(0.0, 0.0, 0.0));
+                let r2 = self.interest_radius_m * self.interest_radius_m;
                 for delta in srv.drain_destruct_mesh_deltas() {
                     if !self.sent_destr_instances.contains(&delta.did) {
                         continue; // ensure instance precedes deltas
+                    }
+                    // Planar AABB vs circle test for interest culling
+                    if let Some((min, max)) = inst_map.get(&delta.did).copied() {
+                        // closest XY in XZ-plane
+                        let cx = center.x.clamp(min.x, max.x);
+                        let cz = center.z.clamp(min.z, max.z);
+                        let dx = cx - center.x;
+                        let dz = cz - center.z;
+                        if dx * dx + dz * dz > r2 {
+                            continue;
+                        }
                     }
                     let mut buf = Vec::new();
                     delta.encode(&mut buf);
