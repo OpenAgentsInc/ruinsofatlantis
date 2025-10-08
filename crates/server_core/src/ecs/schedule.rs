@@ -1077,6 +1077,7 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
         return;
     }
     const CARVE_BUS_CAP: usize = 1024;
+    const MAX_CARVE_DISTANCE_M: f32 = 30.0;
     for e in &ctx.boom {
         for inst in &srv.destruct_instances {
             let min = glam::Vec3::from(inst.world_min);
@@ -1090,21 +1091,93 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
             );
             let dx = closest.x - center.x;
             let dz = closest.z - center.z;
-            if dx * dx + dz * dz <= e.r2 {
-                if ctx.carves.len() >= CARVE_BUS_CAP {
-                    metrics::counter!("destruct.carves_dropped").increment(1);
-                    continue;
-                }
-                ctx.carves.push(ecs_core::components::CarveRequest {
-                    did: inst.did,
-                    center_m: closest.as_dvec3(),
-                    radius_m: (e.r2.max(0.0)).sqrt() as f64,
-                    seed: srv.destruct_registry.cfg.seed,
-                    impact_id: e.src.map(|a| a.0).unwrap_or(0),
-                });
+            let planar_d2 = dx * dx + dz * dz;
+            if planar_d2 > e.r2 {
+                continue; // too far in XZ plane to affect this proxy
             }
+            // Hard distance guard to prevent far-away carves (e.g., NPC across arena)
+            if planar_d2.sqrt() > MAX_CARVE_DISTANCE_M {
+                continue;
+            }
+            // Surface pick: require a voxel ray hit when approaching from the explosion center.
+            // Use the registered proxy to transform WS->OS and raycast into the voxel grid.
+            let did = crate::destructible::state::DestructibleId(inst.did);
+            let mut allow = false;
+            if let Some(proxy) = srv.destruct_registry.proxies.get(&did) {
+                let os_c = (proxy.object_from_world * center.extend(1.0)).truncate();
+                // clamp to grid AABB in object space to get a direction pointing inward
+                let gmin = proxy.grid.origin_m();
+                let dims = proxy.grid.dims();
+                let vm = proxy.grid.voxel_m().0;
+                let gmax = gmin
+                    + glam::DVec3::new(dims.x as f64 * vm, dims.y as f64 * vm, dims.z as f64 * vm);
+                let c_os = glam::dvec3(os_c.x as f64, os_c.y as f64, os_c.z as f64);
+                let clamped = glam::dvec3(
+                    c_os.x.clamp(gmin.x, gmax.x),
+                    c_os.y.clamp(gmin.y, gmax.y),
+                    c_os.z.clamp(gmin.z, gmax.z),
+                );
+                let dir = (clamped - c_os).normalize_or_zero();
+                if dir.length_squared() > 0.0 {
+                    let max_dist =
+                        core_units::Length::meters(((clamped - c_os).length() + (2.0 * vm)) as f64);
+                    if let Some(_hit) =
+                        crate::destructible::raycast_voxels(&proxy.grid, c_os, dir, max_dist)
+                    {
+                        allow = true;
+                    }
+                }
+            }
+            if !allow {
+                continue; // no surface hit, skip carving this proxy for this explosion
+            }
+            if ctx.carves.len() >= CARVE_BUS_CAP {
+                metrics::counter!("destruct.carves_dropped").increment(1);
+                continue;
+            }
+            ctx.carves.push(ecs_core::components::CarveRequest {
+                did: inst.did,
+                center_m: closest.as_dvec3(),
+                radius_m: (e.r2.max(0.0)).sqrt() as f64,
+                seed: srv.destruct_registry.cfg.seed,
+                impact_id: e.src.map(|a| a.0).unwrap_or(0),
+            });
         }
     }
+}
+
+#[cfg(test)]
+pub fn destructible_from_explosions_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    destructible_from_explosions(srv, ctx);
+}
+
+#[cfg(test)]
+pub fn system_names_for_test() -> Vec<&'static str> {
+    vec![
+        "input_apply_intents",
+        "cooldown_and_mana_tick",
+        "ai_caster_cast_and_face",
+        "cast_system",
+        "ingest_projectile_spawns",
+        "spatial.rebuild",
+        "effects_tick",
+        "ai_move_hostiles",
+        "separate_undead",
+        "melee_apply_when_contact",
+        "homing_acquire_targets",
+        "homing_update",
+        "projectile_integrate_ecs",
+        "projectile_collision_ecS",
+        "destructible_from_projectiles",
+        "destructible_from_explosions",
+        "destructible_apply_carves",
+        "destructible_remesh_budgeted",
+        "destructible_refresh_colliders",
+        "aoe_apply_explosions",
+        "faction_flip_on_pc_hits_wizards",
+        "apply_damage_to_ecs",
+        "cleanup",
+    ]
 }
 
 fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {

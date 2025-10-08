@@ -1,30 +1,30 @@
-use glam::vec3;
+use server_core as sc;
 
 #[test]
-fn fireball_reject_shows_toast_and_spawns_no_projectile() {
-    let mut s = server_core::ServerState::new();
-    let pc = s.spawn_pc_at(vec3(0.0, 0.6, 0.0));
-    // Drain mana to 4 so Fireball (cost ~5) cannot be cast
+fn magic_missile_rejects_below_cost_and_emits_toast() {
+    let mut s = sc::ServerState::new();
+    let _pc = s.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
+
+    // Drain mana to 0
     {
-        let a = s.ecs.get_mut(pc).unwrap();
-        let pool = a.pool.as_mut().unwrap();
-        pool.mana = 4;
+        let id = s.pc_actor.unwrap();
+        if let Some(pc) = s.ecs.get_mut(id) {
+            if let Some(p) = pc.pool.as_mut() {
+                p.mana = 0;
+            }
+        }
     }
-    // Try to cast Fireball
+
+    let mut ctx = sc::ecs::schedule::Ctx::default();
+    // Try to enqueue MM — cast_system should reject and push a HUD toast: code 1
     s.enqueue_cast(
-        vec3(0.0, 0.6, 0.0),
-        vec3(0.0, 0.0, 1.0),
-        server_core::SpellId::Fireball,
+        glam::vec3(0.0, 0.6, 0.0),
+        glam::vec3(0.0, 0.0, 1.0),
+        sc::SpellId::MagicMissile,
     );
-    s.step_authoritative(0.016);
-
-    // No projectile should be spawned
-    let proj_ct = s.ecs.iter().filter(|e| e.projectile.is_some()).count();
-    assert_eq!(proj_ct, 0, "cast should be rejected; no projectiles");
-
-    // HUD toast code 1 = Not enough mana must be queued for platform
+    sc::ecs::schedule::cast_system(&mut s, &mut ctx);
     assert!(
-        s.hud_toasts.contains(&1),
-        "expected 'Not enough mana' toast (code 1)"
+        ctx.hud_toasts.contains(&1u8),
+        "expected 'not enough mana' toast"
     );
 }

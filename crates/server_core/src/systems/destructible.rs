@@ -187,13 +187,33 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
                         mc.indices.len()
                     );
                 } else {
+                    // Transform object-space positions (and normals) to world-space for clients.
+                    // This avoids requiring a per-DID model matrix on the renderer side.
+                    let xf = proxy.world_from_object;
+                    let nxf = xf.inverse().transpose();
+                    let mut wpos = Vec::with_capacity(mc.positions.len());
+                    let mut wnorm = Vec::with_capacity(mc.normals.len());
+                    for (i, p) in mc.positions.iter().enumerate() {
+                        let wp = (xf * glam::Vec4::new(p[0], p[1], p[2], 1.0)).truncate();
+                        wpos.push([wp.x, wp.y, wp.z]);
+                        if let Some(n) = mc.normals.get(i) {
+                            let wn = (nxf * glam::Vec4::new(n[0], n[1], n[2], 0.0))
+                                .truncate()
+                                .normalize_or_zero();
+                            wnorm.push([wn.x, wn.y, wn.z]);
+                        }
+                    }
+                    // Ensure normals vector matches positions length for decode validators
+                    if wnorm.len() < wpos.len() {
+                        wnorm.resize(wpos.len(), [0.0, 1.0, 0.0]);
+                    }
                     srv.destruct_registry
                         .pending_mesh_deltas
                         .push(ChunkMeshDelta {
                             did: did.0,
                             chunk: key,
-                            positions: mc.positions,
-                            normals: mc.normals,
+                            positions: wpos,
+                            normals: wnorm,
                             indices: mc.indices,
                         });
                 }
