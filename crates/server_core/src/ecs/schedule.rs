@@ -135,12 +135,10 @@ impl Schedule {
     }
 }
 
-fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
-    // Targets for hostile actors: any alive actor whose faction is hostile to Undead or Wizards as needed.
-    // Retained helper name for minimal churn; used by systems that move/attack toward Wizards faction members.
+fn targets_by_faction(srv: &ServerState, f: crate::actor::Faction) -> Vec<(ActorId, Vec3, f32)> {
     srv.ecs
         .iter()
-        .filter(|a| a.hp.alive() && a.faction == crate::actor::Faction::Wizards)
+        .filter(|a| a.hp.alive() && a.faction == f)
         .map(|a| (a.id, a.tr.pos, a.tr.radius))
         .collect()
 }
@@ -493,7 +491,10 @@ fn spell_id_map(s: crate::SpellId) -> crate::SpellId {
 }
 
 fn ai_move_hostiles(srv: &mut ServerState, ctx: &Ctx) {
-    let wiz = wizard_targets(srv);
+    // Build target set: NPC Wizards and the PC (Faction::Pc)
+    let mut wiz = targets_by_faction(srv, crate::actor::Faction::Wizards);
+    let mut pc = targets_by_faction(srv, crate::actor::Faction::Pc);
+    wiz.append(&mut pc);
     if wiz.is_empty() {
         return;
     }
@@ -556,7 +557,7 @@ fn ai_move_hostiles(srv: &mut ServerState, ctx: &Ctx) {
 }
 
 fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
-    let wiz = wizard_targets(srv);
+    let wiz = targets_by_faction(srv, crate::actor::Faction::Wizards);
     // Any hostile actor that has a Melee component
     let attacker_ids: Vec<ActorId> = srv
         .ecs
@@ -1139,21 +1140,64 @@ impl SpatialGrid {
         out.into_iter()
     }
 
-    /// Return candidate actor ids whose cell buckets overlap the segment AABB expanded by `pad`.
-    /// This is a conservative broad-phase; precise collision is done by the caller.
+    /// Return candidate actor ids by traversing grid cells along the segment (2D DDA) and
+    /// including neighboring cells within `pad` meters. Precise collision is done by the caller.
     pub fn query_segment(&self, a: Vec2, b: Vec2, pad: f32) -> Vec<ActorId> {
-        let min_x = a.x.min(b.x) - pad;
-        let max_x = a.x.max(b.x) + pad;
-        let min_z = a.y.min(b.y) - pad;
-        let max_z = a.y.max(b.y) + pad;
-        let (min_cx, min_cz) = (self.key(min_x, min_z).0, self.key(min_x, min_z).1);
-        let (max_cx, max_cz) = (self.key(max_x, max_z).0, self.key(max_x, max_z).1);
-        let mut out: Vec<ActorId> = Vec::new();
-        for cx in min_cx..=max_cx {
-            for cz in min_cz..=max_cz {
-                if let Some(v) = self.buckets.get(&(cx, cz)) {
-                    out.extend_from_slice(v);
+        use std::collections::HashSet;
+        let cell = self.cell.max(0.001);
+        let rpad = (pad / cell).ceil() as i32;
+        let mut visited: HashSet<(i32, i32)> = HashSet::new();
+        let mut add_bucket = |cx: i32, cz: i32| {
+            visited.insert((cx, cz));
+        };
+        // Convert to cell space
+        let a_cell = Vec2::new(a.x / cell, a.y / cell);
+        let b_cell = Vec2::new(b.x / cell, b.y / cell);
+        let mut cx = a_cell.x.floor() as i32;
+        let mut cz = a_cell.y.floor() as i32;
+        let tx = if b_cell.x > a_cell.x { 1 } else { -1 };
+        let tz = if b_cell.y > a_cell.y { 1 } else { -1 };
+        let dx = (b_cell.x - a_cell.x).abs();
+        let dz = (b_cell.y - a_cell.y).abs();
+        let mut t_max_x = if dx.abs() < 1e-6 {
+            f32::INFINITY
+        } else {
+            let next_v = if tx > 0 { (cx + 1) as f32 } else { cx as f32 };
+            ((next_v - a_cell.x) / dx).abs()
+        };
+        let mut t_max_z = if dz.abs() < 1e-6 {
+            f32::INFINITY
+        } else {
+            let next_v = if tz > 0 { (cz + 1) as f32 } else { cz as f32 };
+            ((next_v - a_cell.y) / dz).abs()
+        };
+        let t_delta_x = if dx.abs() < 1e-6 {
+            f32::INFINITY
+        } else {
+            (1.0 / dx).abs()
+        };
+        let t_delta_z = if dz.abs() < 1e-6 { f32::INFINITY } else { (1.0 / dz).abs() };
+        // Steps: number of cells along dominant axis
+        let steps = (dx.max(dz)).ceil() as i32 + 2;
+        for _ in 0..steps {
+            // include cell and neighbors within rpad
+            for nx in (cx - rpad)..=(cx + rpad) {
+                for nz in (cz - rpad)..=(cz + rpad) {
+                    add_bucket(nx, nz);
                 }
+            }
+            if t_max_x < t_max_z {
+                cx += tx;
+                t_max_x += t_delta_x;
+            } else {
+                cz += tz;
+                t_max_z += t_delta_z;
+            }
+        }
+        let mut out: Vec<ActorId> = Vec::new();
+        for (cx, cz) in visited {
+            if let Some(v) = self.buckets.get(&(cx, cz)) {
+                out.extend_from_slice(v);
             }
         }
         out.sort_by_key(|id| id.0);

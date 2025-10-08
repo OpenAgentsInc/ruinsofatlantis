@@ -163,10 +163,10 @@ pub fn build_demo_scene(
     let mut ruin_instances: Vec<Instance> = Vec::new();
     let mut cam_target = glam::Vec3::ZERO;
     let mut has_cam_target = false;
-    for (i, kind) in world.kinds.iter().enumerate() {
+    for (i, rk) in world.kinds.iter().enumerate() {
         let t = world.transforms[i];
         let m = t.matrix().to_cols_array_2d();
-        match kind {
+        match rk {
             RenderKind::Wizard => {
                 if !has_cam_target {
                     cam_target = t.translation + glam::vec3(0.0, 1.2, 0.0);

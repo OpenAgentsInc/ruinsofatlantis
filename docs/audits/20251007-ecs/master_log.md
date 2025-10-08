@@ -25,6 +25,7 @@ Changes
   - Expanded forbidden patterns: block Team (type name) in runtime crates; block legacy msgs; block v:\s*3 in net_core/client_core; keep ActorKind branching guard in server systems.
 - docs
   - Updated docs/ECS.md to reflect v4 schema, system names, and client apply semantics.
+  - Expanded ECS.md with explicit note: renderer selects model/rig solely by archetype_id; added Faction rules box.
 
 Verification
 - rg checks: no srv.fx_hits.push in systems; no BossStatusMsg/NpcListMsg in runtime; no v3 decoder acceptance.
@@ -34,3 +35,4 @@ Verification
 Next
 - Broaden neutral naming in tests (wizard → caster/melee_hostile) across server_core tests (non-functional rename).
 - Optional: docs for archetype_id-driven model mapping in renderer.
+- Implemented neutral helper rename (wizard_targets → targets_by_faction) and strengthened CI guards to prevent regressions.

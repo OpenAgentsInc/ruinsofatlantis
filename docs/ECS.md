@@ -60,7 +60,12 @@ Replication (server → client)
 - Client buffer (crates/client_core/src/replication.rs)
   - Maintains: `actors`, `wizards` (subset), `npcs`, `projectiles`, `hits`, `hud`
   - Applies deltas and rebuilds derived views every v4 apply to ensure HP/pos/yaw sync.
-  - Presentation: model/rig selection is keyed by `archetype_id` (data-driven), not `kind`.
+- Presentation: model/rig selection is keyed by `archetype_id` (data-driven), not `kind`.
+  - Renderer chooses mesh/rig solely by `archetype_id` (data-driven); `kind` is presentation-only and must not drive model selection.
+
+Faction Rules (server authority)
+- Default hostilities: Pc↔Undead and Wizards↔Undead are hostile; Pc↔Wizards are neutral until PC damages a Wizard.
+- On PC→Wizard damage, the server flips `pc_vs_wizards_hostile = true` (see `faction_flip_on_pc_hits_wizards`).
 
 ServerState entry points (demo & helpers)
 - Spawning (crates/server_core/src/lib.rs)
