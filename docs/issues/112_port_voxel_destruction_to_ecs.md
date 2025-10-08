@@ -21,5 +21,9 @@ Notes
 - Honor budgets/config from `destructible::config::DestructibleConfig`.
 
 Commits
-- [1] Scaffold registry types in `server_core`, no behavior change. (this commit)
-
+- [1] Scaffold registry types in `server_core`, no behavior change.
+- [2] Wire ECS schedule: add `destructible_from_projectiles` system to translate projectile segments → `CarveRequest`s against scene AABBs.
+- [3] Add `ServerState` fields for destructible registry/instances + helpers to drain mesh deltas and list instances.
+- [4] Platform demo server: send one-time `DestructibleInstance` and per-change `ChunkMeshDelta` over local loopback.
+- [5] Convert `server_core::destructible` into a proper module (`destructible/mod.rs`) and move new `state.rs` under it to avoid module conflicts; restored required helpers (`raycast_voxels`, `carve_and_spawn_debris`, `queue`, `config`).
+- [6] Build fixed with `cargo check`; next step will run full `xtask ci` on push.
