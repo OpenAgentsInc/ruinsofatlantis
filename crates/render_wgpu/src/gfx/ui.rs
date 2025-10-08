@@ -2085,10 +2085,11 @@ mod bar_tests {
     #[test]
     fn multiple_entries_produce_multiple_bars() {
         let vp = Mat4::IDENTITY;
+        // Use identity view-proj, so treat input as NDC [-1..1]; pick values in range
         let entries = vec![
-            (glam::vec3(0.0, 1.7, 0.0), 1.0),
-            (glam::vec3(5.0, 1.7, 0.0), 0.5),
-            (glam::vec3(-3.0, 1.7, 2.0), 0.25),
+            (glam::vec3(0.0, 0.0, 0.0), 1.0),
+            (glam::vec3(0.1, 0.0, 0.0), 0.5),
+            (glam::vec3(-0.1, 0.0, 0.0), 0.25),
         ];
         let verts = HealthBars::build_vertices(1280, 720, vp, &entries);
         assert_eq!(verts.len(), 6 * entries.len());
