@@ -67,28 +67,65 @@ pub struct Schedule;
 
 impl Schedule {
     pub fn run(&mut self, srv: &mut ServerState, ctx: &mut Ctx) {
+        let _s = tracing::info_span!("system", name = "input_apply_intents").entered();
         input_apply_intents(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "cooldown_and_mana_tick").entered();
         cooldown_and_mana_tick(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "ai_wizard_cast_and_face").entered();
         ai_wizard_cast_and_face(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "cast_system").entered();
         cast_system(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "ingest_projectile_spawns").entered();
         ingest_projectile_spawns(srv, ctx);
+        drop(_s);
         // Apply spawns immediately so integration/collision see them this tick
         srv.ecs.apply_cmds(&mut ctx.cmd);
         // Rebuild spatial grid once per frame after spawns
+        let _s = tracing::info_span!("system", name = "spatial.rebuild").entered();
         ctx.spatial.rebuild(srv);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "effects_tick").entered();
         effects_tick(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "ai_move_hostiles_toward_wizards").entered();
         ai_move_hostiles_toward_wizards(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "separate_undead").entered();
         separate_undead(srv);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "melee_apply_when_contact").entered();
         melee_apply_when_contact(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "homing_acquire_targets").entered();
         homing_acquire_targets(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "homing_update").entered();
         homing_update(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "projectile_integrate_ecs").entered();
         projectile_integrate_ecs(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "projectile_collision_ecs").entered();
         projectile_collision_ecs(srv, ctx);
+        tracing::info!(dmg = ctx.dmg.len(), boom = ctx.boom.len(), fx_hits = ctx.fx_hits.len(), "collision_done");
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "aoe_apply_explosions").entered();
         aoe_apply_explosions(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "faction_flip_on_pc_hits_wizards").entered();
         faction_flip_on_pc_hits_wizards(srv, ctx);
+        drop(_s);
+        let _s = tracing::info_span!("system", name = "apply_damage_to_ecs").entered();
         apply_damage_to_ecs(srv, ctx);
+        drop(_s);
         // death_fx_and_flags(srv, ctx); // hook reserved for SFX/analytics
+        let _s = tracing::info_span!("system", name = "cleanup").entered();
         cleanup(srv, ctx);
+        drop(_s);
         srv.ecs.apply_cmds(&mut ctx.cmd);
     }
 }

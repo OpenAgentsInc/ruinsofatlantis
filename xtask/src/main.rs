@@ -47,6 +47,7 @@ fn ci() -> Result<()> {
     cargo(&["fmt", "--all"])?;
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
     layering_guard()?;
+    forbidden_patterns_guard()?;
     wgsl_validate()?;
     legacy_flags_guard()?;
     cargo_deny()?;
@@ -106,6 +107,48 @@ fn ci() -> Result<()> {
         eprintln!(
             "xtask: skipping render_wgpu feature-combo checks (set RA_CHECK_RENDER_FEATURE_COMBO=1 to enable)"
         );
+    }
+    Ok(())
+}
+
+fn forbidden_patterns_guard() -> Result<()> {
+    // Fail on legacy/runtime anti-patterns outside docs/tests and excluding net_core (which defines schemas)
+    let forbid = vec![
+        ("NpcListMsg|BossStatusMsg", vec!["crates/server_core", "crates/client_core", "crates/platform_winit", "crates/render_wgpu"]),
+        ("ActorStore", vec!["crates/server_core", "crates/client_core", "crates/platform_winit", "crates/render_wgpu"]),
+    ];
+    for (pat, roots) in forbid {
+        for root in roots {
+            let out = std::process::Command::new("rg")
+                .args(["-n", pat, root, "-g", ":!**/tests/**", "-g", ":!docs/**"])
+                .output()
+                .ok();
+            if let Some(o) = out {
+                if !o.stdout.is_empty() {
+                    let s = String::from_utf8_lossy(&o.stdout);
+                    bail!("forbidden pattern '{}' found under {}:\n{}", pat, root, s);
+                }
+            }
+        }
+    }
+    // No ActorKind branching in server systems
+    let out = std::process::Command::new("rg")
+        .args([
+            "-n",
+            "ActorKind::(Wizard|Zombie|Boss)",
+            "crates/server_core/src/ecs",
+            "-g",
+            ":!**/tests/**",
+            "-g",
+            ":!docs/**",
+        ])
+        .output()
+        .ok();
+    if let Some(o) = out {
+        if !o.stdout.is_empty() {
+            let s = String::from_utf8_lossy(&o.stdout);
+            bail!("archetype branching found in server systems:\n{}", s);
+        }
     }
     Ok(())
 }

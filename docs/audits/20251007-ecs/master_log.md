@@ -30,7 +30,16 @@ PR‑5 — Normalize HitFx through Ctx (landed)
 - Platform continues to read `srv.fx_hits` and replicate in v4 deltas (unchanged network contract).
 - Test `hitfx_ctx_bus.rs` ensures server‑auth HitFx flows through Ctx and accumulates in ServerState.
 
+PR‑6 — CI grep guards (landed)
+- xtask: added a workspace guard that fails CI when legacy types/patterns appear in runtime code:
+  - Patterns: `NpcListMsg|BossStatusMsg`, `ActorStore` in server_core/client_core/platform_winit/render_wgpu (docs/tests excluded).
+  - Guard for `ActorKind::Wizard|Zombie|Boss` under `crates/server_core/src/ecs` to prevent archetype branching in systems.
+
+PR‑7 — System spans & counters (landed)
+- server_core: wrapped each system call in `Schedule::run` with `tracing::info_span!("system", name=...)`.
+- Added a small `tracing::info!` after `projectile_collision_ecs` with `dmg/boom/fx_hits` counts for quick debugging.
+- Telemetry bootstrap (`server_core::telemetry`) already configures tracing; spans will appear with appropriate EnvFilter.
+
 Notes
 - Client remains presentation‑only; no gameplay logic. HUD and VFX are driven via replication (v4 + HitFx).
 - All changes landed with tests and green CI.
-
