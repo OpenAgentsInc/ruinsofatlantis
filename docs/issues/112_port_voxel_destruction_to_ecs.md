@@ -38,3 +38,26 @@ Commits
   - Demo scene registers a simple ruins proxy (`scene_build::add_demo_ruins_destructible`)
 - [9] Demo scene: wired `add_demo_ruins_destructible` into platform demo server; platform now sends `DestructibleInstance` before any `ChunkMeshDelta` (tracked via `sent_destr_instances`).
 - [10] Validation: ran `cargo test` and pre-push `xtask ci`; all tests green, clippy/wgsl/schema checks pass.
+ - [11] Bugfix: removed top slab in demo ruins proxy to prevent hovering block artifacts
+   - Updated `scene_build::add_demo_ruins_destructible` to fill only bottom floor + vertical side walls (no ceiling)
+   - Added test `demo_ruins_has_no_top_slab` under `crates/server_core/tests/destructible_integration.rs`
+ - [12] Client gating + tests
+   - Client defers `ChunkMeshDelta` until corresponding `DestructibleInstance` arrives
+   - Test: `crates/client_core/tests/destructible_instance_before_delta.rs`
+ - [13] Collider refresh queue
+   - Registry tracks `touched_this_tick` chunks and refreshes colliders under budget across ticks
+   - Test: `crates/server_core/tests/destructible_colliders_budget.rs`
+ - [14] Geometry helper centralization
+   - Introduced `server_core::ecs::geom::segment_aabb_enter_t`; schedule uses this helper (backfill: dedupe call sites)
+ - [15] Backpressure & hooks
+   - Carve bus cap added (soft cap; logs dropped count)
+   - Pre-commit hook runs `cargo fmt` and stages formatting changes; pre-push runs `cargo xtask ci` (fmt --check, clippy, tests, WGSL, schema)
+   - Configured hooks via `scripts/setup-git-hooks.sh`; verified `core.hooksPath=.githooks`
+ - [16] Final validation and push
+   - Ran `cargo xtask ci` locally and via pre-push; all green
+   - Ensured working tree clean after push; no stray fmt diffs
+
+Notes for future
+- Replace demo proxy with baked `data/voxel/ruins.voxgrid`; keep current box as fallback
+- Renderer: hide static ruins draw after first non-empty delta for a DID; unhide when proxy empties
+- Consider persistence: append op-log on carves and replay on load
