@@ -568,7 +568,10 @@ impl ApplicationHandler for App {
                 let mut inst_map: std::collections::HashMap<u64, (glam::Vec3, glam::Vec3)> =
                     std::collections::HashMap::new();
                 for d in &srv.destruct_instances {
-                    inst_map.insert(d.did, (glam::Vec3::from(d.world_min), glam::Vec3::from(d.world_max)));
+                    inst_map.insert(
+                        d.did,
+                        (glam::Vec3::from(d.world_min), glam::Vec3::from(d.world_max)),
+                    );
                 }
                 // Interest center: same as actor interest center (PC)
                 let center = s

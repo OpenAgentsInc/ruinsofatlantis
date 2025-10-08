@@ -1017,7 +1017,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
 
 fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
     // Collect projectile segments for this tick
-    let mut segs: Vec<(glam::Vec3, glam::Vec3, f32)> = Vec::new();
+    let mut segs: Vec<(ActorId, glam::Vec3, glam::Vec3, f32)> = Vec::new();
     for c in srv.ecs.iter() {
         if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
             let spec = srv.projectile_spec(proj.kind);
@@ -1028,59 +1028,24 @@ fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
             let p0 = p1 - vel.v * ctx.dt;
             // Radius used as carve radius
             let r = spec.carve_radius_m.max(0.0);
-            segs.push((p0, p1, r));
+            segs.push((c.id, p0, p1, r));
         }
     }
     if segs.is_empty() || srv.destruct_instances.is_empty() {
         return;
     }
-    #[inline]
-    fn segment_aabb_enter_t(
-        p0: glam::Vec3,
-        p1: glam::Vec3,
-        min: glam::Vec3,
-        max: glam::Vec3,
-    ) -> Option<f32> {
-        let d = p1 - p0;
-        let mut tmin = 0.0f32;
-        let mut tmax = 1.0f32;
-        for i in 0..3 {
-            let s = p0[i];
-            let dir = d[i];
-            let minb = min[i];
-            let maxb = max[i];
-            if dir.abs() < 1e-6 {
-                if s < minb || s > maxb {
-                    return None;
-                }
-            } else {
-                let inv = 1.0 / dir;
-                let mut t0 = (minb - s) * inv;
-                let mut t1 = (maxb - s) * inv;
-                if t0 > t1 {
-                    core::mem::swap(&mut t0, &mut t1);
-                }
-                tmin = tmin.max(t0);
-                tmax = tmax.min(t1);
-                if tmin > tmax {
-                    return None;
-                }
-            }
-        }
-        Some(tmin)
-    }
-    for (p0, p1, radius) in segs {
+    for (pid, p0, p1, radius) in segs {
         for inst in &srv.destruct_instances {
             let min = glam::Vec3::from(inst.world_min);
             let max = glam::Vec3::from(inst.world_max);
-            if let Some(t) = segment_aabb_enter_t(p0, p1, min, max) {
+            if let Some(t) = crate::ecs::geom::segment_aabb_enter_t(p0, p1, min, max) {
                 let hit = p0 + (p1 - p0) * t.max(0.0);
                 ctx.carves.push(ecs_core::components::CarveRequest {
                     did: inst.did,
                     center_m: hit.as_dvec3(),
                     radius_m: radius as f64,
-                    seed: 0,
-                    impact_id: 0,
+                    seed: srv.destruct_registry.cfg.seed,
+                    impact_id: pid.0,
                 });
             }
         }
@@ -1109,8 +1074,8 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
                     did: inst.did,
                     center_m: closest.as_dvec3(),
                     radius_m: (e.r2.max(0.0)).sqrt() as f64,
-                    seed: 0,
-                    impact_id: 0,
+                    seed: srv.destruct_registry.cfg.seed,
+                    impact_id: e.src.map(|a| a.0).unwrap_or(0),
                 });
             }
         }

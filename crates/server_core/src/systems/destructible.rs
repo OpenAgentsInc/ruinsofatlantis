@@ -161,6 +161,9 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
                         normals: Vec::new(),
                         indices: Vec::new(),
                     });
+                srv.destruct_registry
+                    .touched_this_tick
+                    .push((*did, c));
                 continue;
             }
             let mc = MeshCpu {
@@ -179,6 +182,9 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
                         normals: mc.normals,
                         indices: mc.indices,
                     });
+                srv.destruct_registry
+                    .touched_this_tick
+                    .push((*did, c));
             }
         }
     }
@@ -186,28 +192,26 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
 
 /// Refresh colliders for a budgeted number of chunks per proxy.
 pub fn destructible_refresh_colliders(srv: &mut ServerState) {
-    let budget = srv.destruct_registry.cfg.collider_budget_per_tick.max(0);
+    let mut budget = srv.destruct_registry.cfg.collider_budget_per_tick.max(0);
     if budget == 0 {
         return;
     }
-    for (_did, proxy) in srv.destruct_registry.proxies.iter_mut() {
-        if proxy.meshes.map.is_empty() {
+    let mut rest: Vec<(crate::destructible::state::DestructibleId, UVec3)> = Vec::new();
+    for (did, c) in srv.destruct_registry.touched_this_tick.drain(..) {
+        if budget == 0 {
+            rest.push((did, c));
             continue;
         }
-        let mut keys: Vec<UVec3> = proxy
-            .meshes
-            .map
-            .keys()
-            .copied()
-            .map(|(x, y, z)| UVec3::new(x, y, z))
-            .collect();
-        keys.sort_unstable_by_key(|c| (c.x, c.y, c.z));
-        let _ = collider_rebuild_budget(
-            &proxy.grid,
-            &keys,
-            &mut proxy.colliders,
-            &mut proxy.static_index,
-            budget,
-        );
+        if let Some(proxy) = srv.destruct_registry.proxies.get_mut(&did) {
+            let _ = collider_rebuild_budget(
+                &proxy.grid,
+                std::slice::from_ref(&c),
+                &mut proxy.colliders,
+                &mut proxy.static_index,
+                1,
+            );
+            budget = budget.saturating_sub(1);
+        }
     }
+    srv.destruct_registry.touched_this_tick = rest;
 }

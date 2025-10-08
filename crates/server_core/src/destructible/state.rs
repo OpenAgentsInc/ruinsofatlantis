@@ -60,6 +60,8 @@ pub struct DestructibleRegistry {
     pub proxies: HashMap<DestructibleId, DestructibleProxy>,
     pub pending_mesh_deltas: Vec<ChunkMeshDelta>,
     pub cfg: DestructibleConfig,
+    /// Chunks touched (meshed or removed) this tick; used to prioritize collider refresh.
+    pub touched_this_tick: Vec<(DestructibleId, glam::UVec3)>,
 }
 
 impl std::fmt::Debug for DestructibleRegistry {
