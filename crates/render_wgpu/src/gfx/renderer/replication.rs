@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn bridge_uploads_from_decoded_messages() {
-        use net_core::snapshot::{ChunkMeshDelta, SnapshotEncode};
+        use net_core::snapshot::{ChunkMeshDelta, DestructibleInstance, SnapshotEncode};
         let delta = ChunkMeshDelta {
             did: 9,
             chunk: (4, 5, 6),
@@ -50,14 +50,23 @@ mod tests {
             normals: vec![[0.0, 1.0, 0.0]; 3],
             indices: vec![0, 1, 2],
         };
-        let mut buf = Vec::new();
-        delta.encode(&mut buf);
+        let mut buf_delta = Vec::new();
+        delta.encode(&mut buf_delta);
+        // Gate: send instance before delta so client accepts the chunk
+        let inst = DestructibleInstance { did: 9, world_min: [-1.0, 0.0, -1.0], world_max: [1.0, 2.0, 1.0] };
+        let mut buf_inst = Vec::new();
+        inst.encode(&mut buf_inst);
         let mut repl = ReplicationBuffer::default();
         let mut up = DummyUploader {
             uploads: 0,
             last: None,
         };
-        apply_deltas_and_upload(&mut up, &mut repl, &[buf]);
+        // Frame messages to exercise the framing path as well
+        let mut framed_inst = Vec::with_capacity(buf_inst.len() + 8);
+        net_core::frame::write_msg(&mut framed_inst, &buf_inst);
+        let mut framed_delta = Vec::with_capacity(buf_delta.len() + 8);
+        net_core::frame::write_msg(&mut framed_delta, &buf_delta);
+        apply_deltas_and_upload(&mut up, &mut repl, &[framed_inst, framed_delta]);
         assert_eq!(up.uploads, 1);
         let (did, chunk, entry) = up.last.unwrap();
         assert_eq!(did, 9);

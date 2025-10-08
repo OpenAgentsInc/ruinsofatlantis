@@ -115,7 +115,10 @@ pub fn destructible_apply_carves(srv: &mut ServerState, ctx: &mut Ctx) {
             if (sx - sy).abs() > 1e-2 || (sx - sz).abs() > 1e-2 {
                 log::warn!(
                     "destructible: non-uniform scale detected (sx={:.3},sy={:.3},sz={:.3}); using avg={:.3} for carve radius",
-                    sx, sy, sz, avg
+                    sx,
+                    sy,
+                    sz,
+                    avg
                 );
             }
             req.center_m = os.as_dvec3();
@@ -156,13 +159,15 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
             let key = (c.x, c.y, c.z);
             if mb.indices.is_empty() {
                 proxy.meshes.map.remove(&key);
-                srv.destruct_registry.pending_mesh_deltas.push(ChunkMeshDelta {
-                    did: did.0,
-                    chunk: key,
-                    positions: Vec::new(),
-                    normals: Vec::new(),
-                    indices: Vec::new(),
-                });
+                srv.destruct_registry
+                    .pending_mesh_deltas
+                    .push(ChunkMeshDelta {
+                        did: did.0,
+                        chunk: key,
+                        positions: Vec::new(),
+                        normals: Vec::new(),
+                        indices: Vec::new(),
+                    });
                 srv.destruct_registry.touched_this_tick.push((*did, c));
                 continue;
             }
@@ -182,13 +187,15 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
                         mc.indices.len()
                     );
                 } else {
-                    srv.destruct_registry.pending_mesh_deltas.push(ChunkMeshDelta {
-                        did: did.0,
-                        chunk: key,
-                        positions: mc.positions,
-                        normals: mc.normals,
-                        indices: mc.indices,
-                    });
+                    srv.destruct_registry
+                        .pending_mesh_deltas
+                        .push(ChunkMeshDelta {
+                            did: did.0,
+                            chunk: key,
+                            positions: mc.positions,
+                            normals: mc.normals,
+                            indices: mc.indices,
+                        });
                 }
                 srv.destruct_registry.touched_this_tick.push((*did, c));
             }

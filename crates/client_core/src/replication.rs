@@ -188,6 +188,22 @@ impl ReplicationBuffer {
             self.hits = d.hits;
             return true;
         }
+        // Chunk mesh deltas: accept and stash iff instance is known
+        let mut slice_delta: &[u8] = payload;
+        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
+            let entry = crate::upload::ChunkMeshEntry {
+                positions: delta.positions,
+                normals: delta.normals,
+                indices: delta.indices,
+            };
+            if self.known_dids.contains(&delta.did) {
+                self.pending_mesh.push((delta.did, delta.chunk, entry));
+                self.updated_chunks += 1;
+            } else {
+                self.deferred_mesh.push((delta.did, delta.chunk, entry));
+            }
+            return true;
+        }
         // Destructible instance (register DID)
         let mut slice_inst: &[u8] = payload;
         if let Ok(inst) = net_core::snapshot::DestructibleInstance::decode(&mut slice_inst) {
@@ -203,22 +219,6 @@ impl ReplicationBuffer {
                 }
             }
             self.deferred_mesh = rest;
-            return true;
-        }
-        // Chunk mesh deltas: accept and stash iff instance is known
-        let mut slice_delta: &[u8] = payload;
-        if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
-            let entry = crate::upload::ChunkMeshEntry {
-                positions: delta.positions,
-                normals: delta.normals,
-                indices: delta.indices,
-            };
-            if self.known_dids.contains(&delta.did) {
-                self.pending_mesh.push((delta.did, delta.chunk, entry));
-                self.updated_chunks += 1;
-            } else {
-                self.deferred_mesh.push((delta.did, delta.chunk, entry));
-            }
             return true;
         }
         // HUD status message

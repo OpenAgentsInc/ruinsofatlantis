@@ -1,7 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
 use glam::UVec3;
-use server_core::destructible::state::{DestructibleId, DestructibleProxy, DestructibleRegistry, WorldAabb};
+use server_core::destructible::state::{
+    DestructibleId, DestructibleProxy, DestructibleRegistry, WorldAabb,
+};
 use server_core::systems::destructible::destructible_refresh_colliders;
 use voxel_proxy::{GlobalId, VoxelGrid, VoxelProxyMeta};
 
@@ -23,7 +25,10 @@ fn collider_refresh_respects_budget_and_drains_queue() {
     reg.insert_proxy(DestructibleProxy::new(
         did,
         grid,
-        WorldAabb { min: glam::Vec3::ZERO, max: glam::Vec3::splat(1.0) },
+        WorldAabb {
+            min: glam::Vec3::ZERO,
+            max: glam::Vec3::splat(1.0),
+        },
     ));
     // Simulate two touched chunks this tick
     reg.touched_this_tick.push((did, UVec3::new(0, 0, 0)));
@@ -42,4 +47,3 @@ fn collider_refresh_respects_budget_and_drains_queue() {
         reg = srv.destruct_registry;
     }
 }
-
