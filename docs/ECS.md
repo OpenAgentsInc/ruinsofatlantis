@@ -26,12 +26,12 @@ Systems Schedule (server)
 - `server_core::ecs::schedule::Schedule::run` (crates/server_core/src/ecs/schedule.rs)
   1) `input_apply_intents` — integrates `IntentMove/IntentAim` (server-auth movement/aim)
   2) `cooldown_and_mana_tick` — regen, gcd, per-spell CD decay
-  3) `ai_wizard_cast_and_face` — NPC wizard ranged AI (choose Fireball/MM/Firebolt; gating respected)
+  3) `ai_caster_cast_and_face` — NPC caster ranged AI (choose Fireball/MM/Firebolt; gating respected)
   4) `cast_system` — drains `pending_casts` → spawn projectiles into `pending_projectiles`
   5) `ingest_projectile_spawns` → create ECS projectile entities; applyCmds
   6) `spatial.rebuild` — frame-wide grid rebuild (temporary; future: incremental)
   7) `effects_tick` — DoTs/slow/stun update and queue `DamageEvent`
-  8) `ai_move_hostiles_toward_wizards` — component-driven movement for any hostile with MoveSpeed+AggroRadius
+  8) `ai_move_hostiles` — component-driven movement for any hostile with MoveSpeed+AggroRadius
   9) `melee_apply_when_contact` — generic melee on contact for any hostile with Melee
   10) `homing_acquire_targets` → `homing_update`
   11) `projectile_integrate_ecs` → `projectile_collision_ecs` (arming delay + AoE proximity)
@@ -51,15 +51,16 @@ Authoritative Commands & Intents
   - Encodes Move/Aim every frame based on input + camera yaw; continues to send cast commands on keybinds.
 
 Replication (server → client)
-- ActorSnapshotDelta v3 (crates/net_core/src/snapshot.rs)
-  - spawns: ActorRep { id, kind, faction (as `team` u8 today), pos, yaw, radius, hp, max, alive }
+- ActorSnapshotDelta v4 (crates/net_core/src/snapshot.rs)
+  - spawns: ActorRep { id, kind, faction (u8), archetype_id, name_id, unique, pos, yaw, radius, hp, max, alive }
   - updates: ActorDeltaRec (bitmask: pos/yaw/hp/alive)
   - removals: Vec<u32>
   - projectiles: full ProjectileRep list (id, kind, pos, vel)
   - hits: Vec<HitFx> — tiny impact events for VFX (no gameplay)
 - Client buffer (crates/client_core/src/replication.rs)
   - Maintains: `actors`, `wizards` (subset), `npcs`, `projectiles`, `hits`, `hud`
-  - Applies deltas and rebuilds derived views every v3 apply to ensure HP/pos/yaw sync.
+  - Applies deltas and rebuilds derived views every v4 apply to ensure HP/pos/yaw sync.
+  - Presentation: model/rig selection is keyed by `archetype_id` (data-driven), not `kind`.
 
 ServerState entry points (demo & helpers)
 - Spawning (crates/server_core/src/lib.rs)
@@ -79,7 +80,7 @@ Renderer (presentation-only)
 
 Demo Server (platform)
 - Spawns rings of Undead, a circle of NPC wizards, Nivita (unique), and a DK for variety.
-- Steps authority; sends v3 deltas (including `hits`) + HUD; accepts Move/Aim/Cast commands from the renderer.
+- Steps authority; sends v4 deltas (including `hits`) + HUD; accepts Move/Aim/Cast commands from the renderer.
 - File: crates/platform_winit/src/lib.rs
 
 Notes & Next

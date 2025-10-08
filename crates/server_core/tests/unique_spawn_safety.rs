@@ -1,7 +1,7 @@
 use glam::Vec3;
 
 #[test]
-fn boss_spawn_respects_pc_bubble() {
+fn unique_spawn_respects_pc_bubble() {
     let mut s = server_core::ServerState::new();
     // Place PC at origin
     s.sync_wizards(&[Vec3::new(0.0, 0.6, 0.0)]);

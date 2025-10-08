@@ -1,7 +1,7 @@
 use glam::vec3;
 
 #[test]
-fn npc_wizard_casts_at_clustered_targets() {
+fn npc_caster_casts_at_clustered_targets() {
     let mut s = server_core::ServerState::new();
     // Spawn NPC wizard at origin with casting resources and ensure facing +Z
     let wid = s.spawn_wizard_npc(vec3(0.0, 0.6, 0.0));

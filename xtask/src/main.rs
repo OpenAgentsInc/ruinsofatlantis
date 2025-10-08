@@ -114,8 +114,38 @@ fn ci() -> Result<()> {
 fn forbidden_patterns_guard() -> Result<()> {
     // Fail on legacy/runtime anti-patterns outside docs/tests and excluding net_core (which defines schemas)
     let forbid = vec![
-        ("NpcListMsg|BossStatusMsg", vec!["crates/server_core", "crates/client_core", "crates/platform_winit", "crates/render_wgpu"]),
-        ("ActorStore", vec!["crates/server_core", "crates/client_core", "crates/platform_winit", "crates/render_wgpu"]),
+        (
+            "NpcListMsg|BossStatusMsg",
+            vec![
+                "crates/server_core",
+                "crates/client_core",
+                "crates/platform_winit",
+                "crates/render_wgpu",
+            ],
+        ),
+        (
+            "ActorStore",
+            vec![
+                "crates/server_core",
+                "crates/client_core",
+                "crates/platform_winit",
+                "crates/render_wgpu",
+            ],
+        ),
+        (
+            "\\bv:\\s*3\\b",
+            vec!["crates/net_core", "crates/client_core"],
+        ),
+        (
+            "\\bTeam\\b",
+            vec![
+                "crates/server_core",
+                "crates/client_core",
+                "crates/net_core",
+                "crates/platform_winit",
+                "crates/render_wgpu",
+            ],
+        ),
     ];
     for (pat, roots) in forbid {
         for root in roots {
@@ -123,11 +153,11 @@ fn forbidden_patterns_guard() -> Result<()> {
                 .args(["-n", pat, root, "-g", ":!**/tests/**", "-g", ":!docs/**"])
                 .output()
                 .ok();
-            if let Some(o) = out {
-                if !o.stdout.is_empty() {
-                    let s = String::from_utf8_lossy(&o.stdout);
-                    bail!("forbidden pattern '{}' found under {}:\n{}", pat, root, s);
-                }
+            if let Some(o) = out
+                && !o.stdout.is_empty()
+            {
+                let s = String::from_utf8_lossy(&o.stdout);
+                bail!("forbidden pattern '{}' found under {}:\n{}", pat, root, s);
             }
         }
     }
@@ -144,11 +174,11 @@ fn forbidden_patterns_guard() -> Result<()> {
         ])
         .output()
         .ok();
-    if let Some(o) = out {
-        if !o.stdout.is_empty() {
-            let s = String::from_utf8_lossy(&o.stdout);
-            bail!("archetype branching found in server systems:\n{}", s);
-        }
+    if let Some(o) = out
+        && !o.stdout.is_empty()
+    {
+        let s = String::from_utf8_lossy(&o.stdout);
+        bail!("archetype branching found in server systems:\n{}", s);
     }
     Ok(())
 }

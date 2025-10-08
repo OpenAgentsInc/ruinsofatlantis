@@ -73,8 +73,8 @@ impl Schedule {
         let _s = tracing::info_span!("system", name = "cooldown_and_mana_tick").entered();
         cooldown_and_mana_tick(srv, ctx);
         drop(_s);
-        let _s = tracing::info_span!("system", name = "ai_wizard_cast_and_face").entered();
-        ai_wizard_cast_and_face(srv, ctx);
+        let _s = tracing::info_span!("system", name = "ai_caster_cast_and_face").entered();
+        ai_caster_cast_and_face(srv, ctx);
         drop(_s);
         let _s = tracing::info_span!("system", name = "cast_system").entered();
         cast_system(srv, ctx);
@@ -91,8 +91,8 @@ impl Schedule {
         let _s = tracing::info_span!("system", name = "effects_tick").entered();
         effects_tick(srv, ctx);
         drop(_s);
-        let _s = tracing::info_span!("system", name = "ai_move_hostiles_toward_wizards").entered();
-        ai_move_hostiles_toward_wizards(srv, ctx);
+        let _s = tracing::info_span!("system", name = "ai_move_hostiles").entered();
+        ai_move_hostiles(srv, ctx);
         drop(_s);
         let _s = tracing::info_span!("system", name = "separate_undead").entered();
         separate_undead(srv);
@@ -111,7 +111,12 @@ impl Schedule {
         drop(_s);
         let _s = tracing::info_span!("system", name = "projectile_collision_ecs").entered();
         projectile_collision_ecs(srv, ctx);
-        tracing::info!(dmg = ctx.dmg.len(), boom = ctx.boom.len(), fx_hits = ctx.fx_hits.len(), "collision_done");
+        tracing::info!(
+            dmg = ctx.dmg.len(),
+            boom = ctx.boom.len(),
+            fx_hits = ctx.fx_hits.len(),
+            "collision_done"
+        );
         drop(_s);
         let _s = tracing::info_span!("system", name = "aoe_apply_explosions").entered();
         aoe_apply_explosions(srv, ctx);
@@ -487,7 +492,7 @@ fn spell_id_map(s: crate::SpellId) -> crate::SpellId {
     s
 }
 
-fn ai_move_hostiles_toward_wizards(srv: &mut ServerState, ctx: &Ctx) {
+fn ai_move_hostiles(srv: &mut ServerState, ctx: &Ctx) {
     let wiz = wizard_targets(srv);
     if wiz.is_empty() {
         return;
@@ -674,7 +679,7 @@ fn separate_undead(srv: &mut ServerState) {
     }
 }
 
-fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
+fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
     use crate::{CastCmd, SpellId};
     // Build hostile candidates map (alive, hostile to Wizards)
     let mut hostile: Vec<(ActorId, Vec3, crate::actor::Faction)> = Vec::new();

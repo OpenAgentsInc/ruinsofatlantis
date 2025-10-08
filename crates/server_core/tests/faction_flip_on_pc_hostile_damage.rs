@@ -1,7 +1,7 @@
 use glam::vec3;
 
 #[test]
-fn pc_hitting_wizard_flips_faction_hostility() {
+fn pc_hitting_hostile_flips_faction_hostility() {
     let mut s = server_core::ServerState::new();
     let _pc = s.spawn_pc_at(vec3(0.0, 0.6, 0.0));
     let wiz = s.spawn_wizard_npc(vec3(1.0, 0.6, 0.0));

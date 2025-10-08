@@ -27,7 +27,7 @@ fn stunned_undead_neither_moves_nor_melees() {
 
     // Run 0.2s (movement + melee would otherwise occur)
     for _ in 0..2 {
-        let wiz: Vec<Vec3> = s
+        let _wiz: Vec<Vec3> = s
             .ecs
             .iter()
             .filter(|a| {

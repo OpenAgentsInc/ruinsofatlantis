@@ -12,7 +12,7 @@ fn burning_ticks_damage_and_expires() {
         a.apply_burning(10, 1.0, None);
     }
     for _ in 0..10 {
-        let wiz: Vec<Vec3> = s
+        let _wiz: Vec<Vec3> = s
             .ecs
             .iter()
             .filter(|a| {
@@ -40,7 +40,7 @@ fn slow_scales_effective_speed() {
     let z0 = s_no_slow.spawn_undead(Vec3::new(0.0, 0.6, 5.0), 0.9, 30);
     let start0 = s_no_slow.ecs.get(z0).unwrap().tr.pos;
     for _ in 0..10 {
-        let wiz: Vec<Vec3> = s_no_slow
+        let _wiz: Vec<Vec3> = s_no_slow
             .ecs
             .iter()
             .filter(|a| {
@@ -63,7 +63,7 @@ fn slow_scales_effective_speed() {
     }
     let start1 = s_slow.ecs.get(z1).unwrap().tr.pos;
     for _ in 0..10 {
-        let wiz: Vec<Vec3> = s_slow
+        let _wiz: Vec<Vec3> = s_slow
             .ecs
             .iter()
             .filter(|a| {
@@ -99,7 +99,7 @@ fn stun_blocks_cast() {
         Vec3::new(0.0, 0.0, 1.0),
         SpellId::Firebolt,
     );
-    let wiz: Vec<Vec3> = s
+    let _wiz: Vec<Vec3> = s
         .ecs
         .iter()
         .filter(|a| {
@@ -122,7 +122,7 @@ fn death_sets_despawn_or_removes_entity() {
         let a = s.ecs.get_mut(z).unwrap();
         a.apply_burning(50, 0.2, None);
     }
-    let wiz: Vec<Vec3> = s
+    let _wiz: Vec<Vec3> = s
         .ecs
         .iter()
         .filter(|a| {

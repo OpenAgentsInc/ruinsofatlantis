@@ -2,7 +2,7 @@ use glam::Vec3;
 
 #[test]
 #[ignore]
-fn firebolt_hits_wizard_reliably() {
+fn firebolt_hits_hostile_reliably() {
     unsafe {
         std::env::set_var("RA_SKIP_CAST_GATING", "1");
     }

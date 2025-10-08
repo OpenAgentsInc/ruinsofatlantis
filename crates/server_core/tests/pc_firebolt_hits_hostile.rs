@@ -1,7 +1,7 @@
 use glam::vec3;
 
 #[test]
-fn pc_firebolt_hits_wizard() {
+fn pc_firebolt_hits_hostile() {
     let mut s = server_core::ServerState::new();
     // Spawn PC and a Wizard target
     let _pc = s.spawn_pc_at(vec3(0.0, 0.6, 0.0));

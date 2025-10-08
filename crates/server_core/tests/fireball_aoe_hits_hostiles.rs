@@ -1,7 +1,7 @@
 use glam::vec3;
 
 #[test]
-fn fireball_aoe_hits_wizards() {
+fn fireball_aoe_hits_hostiles() {
     let mut s = server_core::ServerState::new();
     // Spawn PC at origin
     let _pc = s.spawn_pc_at(vec3(0.0, 0.6, 0.0));

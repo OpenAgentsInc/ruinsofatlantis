@@ -344,22 +344,16 @@ impl SnapshotEncode for ActorSnapshotDelta {
         out.push(self.v);
         out.extend_from_slice(&self.tick.to_le_bytes());
         out.extend_from_slice(&self.baseline.to_le_bytes());
-        // spawns
+        // spawns (v4 layout only)
         let ns = u32::try_from(self.spawns.len()).unwrap_or(0);
         out.extend_from_slice(&ns.to_le_bytes());
         for a in &self.spawns {
             out.extend_from_slice(&a.id.to_le_bytes());
-            if self.v >= 4 {
-                out.push(a.kind);
-                out.push(a.faction);
-                out.extend_from_slice(&a.archetype_id.to_le_bytes());
-                out.extend_from_slice(&a.name_id.to_le_bytes());
-                out.push(a.unique);
-            } else {
-                // legacy v3 layout
-                out.push(a.kind);
-                out.push(a.faction);
-            }
+            out.push(a.kind);
+            out.push(a.faction);
+            out.extend_from_slice(&a.archetype_id.to_le_bytes());
+            out.extend_from_slice(&a.name_id.to_le_bytes());
+            out.push(a.unique);
             for c in &a.pos {
                 out.extend_from_slice(&c.to_le_bytes());
             }
@@ -448,7 +442,7 @@ impl SnapshotDecode for ActorSnapshotDelta {
             .copied()
             .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if v != ACTOR_SNAP_DELTA_VERSION && v != 3 {
+        if v != ACTOR_SNAP_DELTA_VERSION {
             bail!("unsupported version: {v}");
         }
         let tick = u64::from_le_bytes(take::<8>(inp)?);
@@ -458,45 +452,24 @@ impl SnapshotDecode for ActorSnapshotDelta {
         let mut spawns = Vec::with_capacity(ns);
         for _ in 0..ns {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind: u8;
-            let faction: u8;
-            let archetype_id: u16;
-            let name_id: u16;
-            let unique: u8;
-            if v >= 4 {
-                kind = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-                faction = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-                archetype_id = u16::from_le_bytes(take::<2>(inp)?);
-                name_id = u16::from_le_bytes(take::<2>(inp)?);
-                unique = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-            } else {
-                // v3 legacy
-                kind = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-                faction = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-                archetype_id = 0;
-                name_id = 0;
-                unique = 0;
-            }
+            // v4 spawns: kind, faction, archetype_id, name_id, unique
+            let kind: u8 = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let faction: u8 = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
+            let archetype_id: u16 = u16::from_le_bytes(take::<2>(inp)?);
+            let name_id: u16 = u16::from_le_bytes(take::<2>(inp)?);
+            let unique: u8 = inp
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("short read"))?;
+            *inp = &inp[1..];
             let mut pos = [0.0f32; 3];
             for v in &mut pos {
                 *v = f32::from_le_bytes(take::<4>(inp)?);
@@ -621,7 +594,7 @@ impl SnapshotDecode for ActorSnapshotDelta {
             hits.push(HitFx { kind, pos });
         }
         Ok(Self {
-            v: if v == 3 { ACTOR_SNAP_DELTA_VERSION } else { v },
+            v,
             tick,
             baseline,
             spawns,
@@ -856,81 +829,8 @@ impl SnapshotDecode for DestructibleInstance {
     }
 }
 
-/// Minimal boss status snapshot for HUD/labels.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BossStatusMsg {
-    pub name: String,
-    pub ac: i32,
-    pub hp: i32,
-    pub max: i32,
-    pub pos: [f32; 3],
-}
-
-impl SnapshotEncode for BossStatusMsg {
-    fn encode(&self, out: &mut Vec<u8>) {
-        out.push(VERSION);
-        let n = u16::try_from(self.name.len()).unwrap_or(0);
-        out.extend_from_slice(&n.to_le_bytes());
-        out.extend_from_slice(self.name.as_bytes());
-        out.extend_from_slice(&self.ac.to_le_bytes());
-        out.extend_from_slice(&self.hp.to_le_bytes());
-        out.extend_from_slice(&self.max.to_le_bytes());
-        for c in &self.pos {
-            out.extend_from_slice(&c.to_le_bytes());
-        }
-    }
-}
-
-impl SnapshotDecode for BossStatusMsg {
-    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
-        use anyhow::bail;
-        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
-            if inp.len() < N {
-                anyhow::bail!("short read");
-            }
-            let (a, b) = inp.split_at(N);
-            *inp = b;
-            let mut buf = [0u8; N];
-            buf.copy_from_slice(a);
-            Ok(buf)
-        }
-        let ver = inp
-            .first()
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("short read"))?;
-        *inp = &inp[1..];
-        if ver != VERSION {
-            bail!("unsupported version: {ver}");
-        }
-        let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
-        if inp.len() < n {
-            bail!("short name");
-        }
-        let (name_bytes, rest) = inp.split_at(n);
-        *inp = rest;
-        let name = String::from_utf8(name_bytes.to_vec()).unwrap_or_default();
-        let ac = i32::from_le_bytes(take::<4>(inp)?);
-        let hp = i32::from_le_bytes(take::<4>(inp)?);
-        let max = i32::from_le_bytes(take::<4>(inp)?);
-        let mut pos = [0.0f32; 3];
-        for v in &mut pos {
-            *v = f32::from_le_bytes(take::<4>(inp)?);
-        }
-        Ok(Self {
-            name,
-            ac,
-            hp,
-            max,
-            pos,
-        })
-    }
-}
-
-/// Compact list of NPC statuses for client UI/presentation.
-#[derive(Debug, Clone, PartialEq)]
-pub struct NpcListMsg {
-    pub items: Vec<NpcItem>,
-}
+// Compact list of NPC statuses for client UI/presentation.
+// Legacy snapshot messages (BossStatusMsg/NpcListMsg) have been removed from runtime.
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NpcItem {
@@ -941,77 +841,6 @@ pub struct NpcItem {
     pub radius: f32,
     pub alive: u8,
     pub attack_anim: f32,
-}
-
-impl SnapshotEncode for NpcListMsg {
-    fn encode(&self, out: &mut Vec<u8>) {
-        out.push(VERSION);
-        let n = u16::try_from(self.items.len()).unwrap_or(0);
-        out.extend_from_slice(&n.to_le_bytes());
-        for it in &self.items {
-            out.extend_from_slice(&it.id.to_le_bytes());
-            out.extend_from_slice(&it.hp.to_le_bytes());
-            out.extend_from_slice(&it.max.to_le_bytes());
-            for c in &it.pos {
-                out.extend_from_slice(&c.to_le_bytes());
-            }
-            out.extend_from_slice(&it.radius.to_le_bytes());
-            out.push(it.alive);
-            out.extend_from_slice(&it.attack_anim.to_le_bytes());
-        }
-    }
-}
-
-impl SnapshotDecode for NpcListMsg {
-    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
-        use anyhow::bail;
-        fn take<const N: usize>(inp: &mut &[u8]) -> anyhow::Result<[u8; N]> {
-            if inp.len() < N {
-                anyhow::bail!("short read");
-            }
-            let (a, b) = inp.split_at(N);
-            *inp = b;
-            let mut buf = [0u8; N];
-            buf.copy_from_slice(a);
-            Ok(buf)
-        }
-        let ver = inp
-            .first()
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("short read"))?;
-        *inp = &inp[1..];
-        if ver != VERSION {
-            bail!("unsupported version: {ver}");
-        }
-        let n = u16::from_le_bytes(take::<2>(inp)?) as usize;
-        let mut items = Vec::with_capacity(n);
-        for _ in 0..n {
-            let id = u32::from_le_bytes(take::<4>(inp)?);
-            let hp = i32::from_le_bytes(take::<4>(inp)?);
-            let max = i32::from_le_bytes(take::<4>(inp)?);
-            let mut pos = [0.0f32; 3];
-            for v in &mut pos {
-                *v = f32::from_le_bytes(take::<4>(inp)?);
-            }
-            let radius = f32::from_le_bytes(take::<4>(inp)?);
-            let alive = inp
-                .first()
-                .copied()
-                .ok_or_else(|| anyhow::anyhow!("short read"))?;
-            *inp = &inp[1..];
-            let attack_anim = f32::from_le_bytes(take::<4>(inp)?);
-            items.push(NpcItem {
-                id,
-                hp,
-                max,
-                pos,
-                radius,
-                alive,
-                attack_anim,
-            });
-        }
-        Ok(Self { items })
-    }
 }
 
 #[cfg(test)]
@@ -1048,27 +877,7 @@ mod tests {
         let d2 = DestructibleInstance::decode(&mut slice).expect("decode");
         assert_eq!(d, d2);
     }
-    #[test]
-    fn boss_status_roundtrip() {
-        let s = BossStatusMsg {
-            name: "Nivita".into(),
-            ac: 18,
-            hp: 220,
-            max: 250,
-            pos: [1.0, 2.0, -3.0],
-        };
-        let mut buf = Vec::new();
-        s.encode(&mut buf);
-        let mut slice: &[u8] = &buf;
-        let s2 = BossStatusMsg::decode(&mut slice).expect("decode");
-        assert_eq!(s.name, s2.name);
-        assert_eq!(s.ac, s2.ac);
-        assert_eq!(s.hp, s2.hp);
-        assert_eq!(s.max, s2.max);
-        for (a, b) in s.pos.iter().zip(s2.pos.iter()) {
-            assert!((a - b).abs() < 1.0e-6);
-        }
-    }
+    // Legacy BossStatusMsg/NpcListMsg removed from runtime.
     // Legacy TickSnapshot roundtrip removed.
 
     #[test]
@@ -1080,7 +889,10 @@ mod tests {
             spawns: vec![ActorRep {
                 id: 1,
                 kind: 0,
-                team: 0,
+                faction: 0,
+                archetype_id: 0,
+                name_id: 0,
+                unique: 0,
                 pos: [1.0, 2.0, 3.0],
                 yaw: 0.5,
                 radius: 0.6,

@@ -1,7 +1,7 @@
 use glam::vec3;
 
 #[test]
-fn melee_zombie_hits_wizard() {
+fn melee_hostile_hits_caster() {
     let mut s = server_core::ServerState::new();
     // Spawn wizard target
     let wiz = s.ecs.spawn(

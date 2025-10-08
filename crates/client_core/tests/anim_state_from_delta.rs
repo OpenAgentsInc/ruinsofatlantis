@@ -1,32 +1,53 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AnimState {
+enum AnimClip {
     Idle,
     Jog,
     Death,
 }
 
-fn pick_anim(prev: [f32; 3], cur: [f32; 3], dt: f32, alive: bool) -> AnimState {
+fn anim_state(prev: glam::Vec3, cur: glam::Vec3, alive: bool, dt: f32) -> AnimClip {
     if !alive {
-        return AnimState::Death;
+        return AnimClip::Death;
     }
-    let dx = cur[0] - prev[0];
-    let dz = cur[2] - prev[2];
-    let dist = (dx * dx + dz * dz).sqrt();
-    let speed = if dt > 1e-6 { dist / dt } else { 0.0 };
-    if speed < 0.2 {
-        AnimState::Idle
+    let v = (cur - prev).length() / dt.max(1e-6);
+    if v > 0.2 {
+        AnimClip::Jog
     } else {
-        AnimState::Jog
+        AnimClip::Idle
     }
 }
 
 #[test]
-fn anim_idle_then_jog_then_death() {
-    let prev = [0.0, 0.6, 0.0];
-    let cur_idle = [0.05, 0.6, 0.0]; // ~0.05m in 1s ⇒ idle
-    let cur_jog = [1.0, 0.6, 0.0]; // 1m in 1s ⇒ jog
-    assert_eq!(pick_anim(prev, cur_idle, 1.0, true), AnimState::Idle);
-    assert_eq!(pick_anim(prev, cur_jog, 1.0, true), AnimState::Jog);
-    // Death overrides movement
-    assert_eq!(pick_anim(prev, cur_jog, 1.0, false), AnimState::Death);
+fn anim_state_from_delta_cases() {
+    let dt = 0.1;
+    // Small delta → Idle
+    assert_eq!(
+        anim_state(
+            glam::vec3(0.0, 0.0, 0.0),
+            glam::vec3(0.01, 0.0, 0.0),
+            true,
+            dt
+        ),
+        AnimClip::Idle
+    );
+    // Larger delta → Jog
+    assert_eq!(
+        anim_state(
+            glam::vec3(0.0, 0.0, 0.0),
+            glam::vec3(0.2, 0.0, 0.0),
+            true,
+            dt
+        ),
+        AnimClip::Jog
+    );
+    // Death overrides
+    assert_eq!(
+        anim_state(
+            glam::vec3(0.0, 0.0, 0.0),
+            glam::vec3(1.0, 0.0, 0.0),
+            false,
+            dt
+        ),
+        AnimClip::Death
+    );
 }

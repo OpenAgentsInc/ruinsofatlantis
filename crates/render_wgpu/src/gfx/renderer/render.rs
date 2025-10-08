@@ -297,6 +297,42 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         r.last_repl_projectiles = next_map;
+        // Direct-hit sparks from replicated HitFx events (server-authoritative). One short burst per hit.
+        if !r.repl_buf.hits.is_empty() {
+            let hits = std::mem::take(&mut r.repl_buf.hits);
+            for h in hits {
+                let pos = glam::vec3(h.pos[0], h.pos[1], h.pos[2]);
+                // Clamp slightly above terrain to ensure visibility
+                let pos = {
+                    let (hgt, _n) = terrain::height_at(&r.terrain_cpu, pos.x, pos.z);
+                    let y = pos.y.max(hgt + 0.05);
+                    glam::vec3(pos.x, y, pos.z)
+                };
+                // Bright core flash
+                r.particles.push(crate::gfx::fx::Particle {
+                    pos,
+                    vel: glam::Vec3::new(0.0, 0.6, 0.0),
+                    age: 0.0,
+                    life: 0.12,
+                    size: 0.06,
+                    color: [1.8, 1.2, 0.4],
+                });
+                // Small radial burst (deterministic, 8 spokes)
+                let spokes = 8;
+                for i in 0..spokes {
+                    let a = (i as f32) / (spokes as f32) * std::f32::consts::TAU;
+                    let rvel = 3.2f32;
+                    r.particles.push(crate::gfx::fx::Particle {
+                        pos,
+                        vel: glam::vec3(a.cos() * rvel, 1.2, a.sin() * rvel),
+                        age: 0.0,
+                        life: 0.12,
+                        size: 0.015,
+                        color: [1.6, 0.9, 0.3],
+                    });
+                }
+            }
+        }
         // Fallback: if we already have a non-empty replicated NPC cache but haven't
         // built visuals yet (e.g., drain happened earlier), build now.
         if r.zombie_count == 0 && !r.repl_buf.npcs.is_empty() {

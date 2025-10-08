@@ -10,16 +10,13 @@ fn projectile_broadphase_uses_grid_candidates() {
         let z = (i as f32 / 20.0).floor() * 3.5 + 5.0;
         let _ = s.spawn_undead(Vec3::new(x, 0.6, z), 0.9, 20);
     }
-    // Build grid
-    let mut ctx = server_core::ecs::schedule::Ctx::default();
-    ctx.spatial.rebuild(&s);
-    // Query a short segment in the center with small pad
+    // Query a short segment in the center with small pad via public helper
     let a = glam::Vec2::new(-2.0, 5.0);
     let b = glam::Vec2::new(2.0, 7.0);
-    let cand = ctx.spatial.query_segment(a, b, 2.0);
+    let cand_len = s.spatial_candidates_for_segment(a, b, 2.0);
     // Should be far fewer than total actors (PC + 200 undead)
     assert!(
-        cand.len() < 80,
+        cand_len < 80,
         "broad-phase candidate set should be much smaller than total actors"
     );
 }

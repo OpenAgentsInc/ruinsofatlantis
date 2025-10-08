@@ -43,7 +43,7 @@ impl ReplicationBuffer {
             Ok(p) => p,
             Err(_) => bytes,
         };
-        // Prefer actor delta snapshot (v3) first
+        // Prefer actor delta snapshot (v4) first
         let mut slice_delta_v3: &[u8] = payload;
         if let Ok(d) = net_core::snapshot::ActorSnapshotDelta::decode(&mut slice_delta_v3) {
             // Removals

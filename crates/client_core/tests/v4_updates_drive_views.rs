@@ -1,10 +1,8 @@
 use client_core::replication::ReplicationBuffer;
-use net_core::snapshot::{
-    ActorDeltaRec, ActorRep, ActorSnapshotDelta, SnapshotDecode, SnapshotEncode,
-};
+use net_core::snapshot::{ActorDeltaRec, ActorRep, ActorSnapshotDelta, SnapshotEncode};
 
 #[test]
-fn v3_updates_drive_wizard_view() {
+fn v4_updates_drive_wizard_view() {
     // Spawn one wizard (id=10, hp=100)
     let spawn = ActorRep {
         id: 10,

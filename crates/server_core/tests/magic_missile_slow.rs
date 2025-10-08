@@ -12,7 +12,7 @@ fn magic_missile_applies_slow_on_hit() {
         SpellId::MagicMissile,
     );
     for _ in 0..15 {
-        let wiz: Vec<Vec3> = s
+        let _wiz: Vec<Vec3> = s
             .ecs
             .iter()
             .filter(|a| {

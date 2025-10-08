@@ -205,6 +205,10 @@ pub struct ServerState {
     pub pc_actor: Option<ActorId>,
     /// Tuning tables for spells, effects, and homing.
     pub specs: Specs,
+    /// Cached archetype specs (loaded once).
+    pub specs_arche: data_runtime::specs::archetypes::ArchetypeSpecDb,
+    /// Cached projectile specs (loaded once).
+    pub specs_proj: data_runtime::specs::projectiles::ProjectileSpecDb,
     /// Frame-local hit effects emitted by projectile collisions (drained by platform).
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
 }
@@ -212,6 +216,10 @@ pub struct ServerState {
 impl ServerState {
     // Legacy AoE removed; production path is in ECS schedule systems.
     pub fn new() -> Self {
+        let specs_arche =
+            data_runtime::specs::archetypes::ArchetypeSpecDb::load_default().unwrap_or_default();
+        let specs_proj =
+            data_runtime::specs::projectiles::ProjectileSpecDb::load_default().unwrap_or_default();
         Self {
             nivita_actor_id: None,
             nivita_stats: None,
@@ -221,6 +229,8 @@ impl ServerState {
             factions: FactionState::default(),
             pc_actor: None,
             specs: Specs::default(),
+            specs_arche,
+            specs_proj,
             fx_hits: Vec::new(),
         }
     }
@@ -258,6 +268,13 @@ impl ServerState {
             }
         }
         hits
+    }
+
+    /// Public helper for tests: return spatial broad-phase candidate count for a segment in XZ.
+    pub fn spatial_candidates_for_segment(&self, a: glam::Vec2, b: glam::Vec2, pad: f32) -> usize {
+        let mut grid = crate::ecs::schedule::SpatialGrid::default();
+        grid.rebuild(self);
+        grid.query_segment(a, b, pad).len()
     }
     /// Mirror wizard positions into ActorStore and ensure PC/NPC wizard actors exist.
     pub fn sync_wizards(&mut self, wiz_pos: &[Vec3]) {
@@ -453,7 +470,7 @@ impl ServerState {
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
     fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
-        let db = data_runtime::specs::projectiles::ProjectileSpecDb::load_default().ok();
+        let db = Some(&self.specs_proj);
         match kind {
             ProjKind::Firebolt => {
                 let s = db
@@ -497,9 +514,11 @@ impl ServerState {
             }
             ProjKind::MagicMissile => {
                 // Close-range, medium speed, short TTL; damage light per hit
-                let s = data_runtime::specs::projectiles::ProjectileSpecDb::load_default()
-                    .ok()
-                    .and_then(|db| db.actions.get("MagicMissile").cloned())
+                let s = self
+                    .specs_proj
+                    .actions
+                    .get("MagicMissile")
+                    .cloned()
                     .unwrap_or(data_runtime::specs::projectiles::ProjectileSpec {
                         speed_mps: 28.0,
                         radius_m: 0.5,
@@ -566,17 +585,16 @@ impl ServerState {
         );
         // Defaults for undead
         if let Some(a) = self.ecs.get_mut(id) {
-            let spec = data_runtime::specs::archetypes::ArchetypeSpecDb::load_default()
-                .ok()
-                .and_then(|db| db.entries.get("Undead").cloned())
-                .unwrap_or(data_runtime::specs::archetypes::ArchetypeSpec {
+            let spec = self.specs_arche.entries.get("Undead").cloned().unwrap_or(
+                data_runtime::specs::archetypes::ArchetypeSpec {
                     radius_m: radius,
                     move_speed_mps: 2.0,
                     aggro_radius_m: 25.0,
                     attack_radius_m: 0.35,
                     melee_damage: 5,
                     melee_cooldown_s: 0.6,
-                });
+                },
+            );
             a.move_speed = Some(ecs::MoveSpeed {
                 mps: spec.move_speed_mps,
             });
@@ -609,9 +627,11 @@ impl ServerState {
         );
         if let Some(a) = self.ecs.get_mut(id) {
             a.name = Some("Death Knight".to_string());
-            let spec = data_runtime::specs::archetypes::ArchetypeSpecDb::load_default()
-                .ok()
-                .and_then(|db| db.entries.get("DeathKnight").cloned())
+            let spec = self
+                .specs_arche
+                .entries
+                .get("DeathKnight")
+                .cloned()
                 .unwrap_or(data_runtime::specs::archetypes::ArchetypeSpec {
                     radius_m: 1.0,
                     move_speed_mps: 2.2,
@@ -667,9 +687,7 @@ impl ServerState {
                 known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
             });
             // Apply archetype radius if present
-            let spec = data_runtime::specs::archetypes::ArchetypeSpecDb::load_default()
-                .ok()
-                .and_then(|db| db.entries.get("WizardNPC").cloned());
+            let spec = self.specs_arche.entries.get("WizardNPC").cloned();
             if let Some(sp) = spec {
                 w.tr.radius = sp.radius_m;
             }
@@ -1090,7 +1108,7 @@ mod tests_actor {
         });
         let mut ctx = crate::ecs::schedule::Ctx::default();
         let mut sched = crate::ecs::schedule::Schedule;
-        sched.run(&mut srv, &mut ctx, &[]);
+        sched.run(&mut srv, &mut ctx);
         // ensure a projectile entity exists with velocity > 20 m/s
         let mut found = false;
         for c in srv.ecs.iter() {

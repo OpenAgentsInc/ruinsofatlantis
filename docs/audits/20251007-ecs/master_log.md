@@ -1,45 +1,36 @@
-2025-10-07 — ECS Refactor Master Log (PR‑0 … PR‑5)
+ECS Refactor — 2025-10-07
 
-PR‑0 — Faction and v4 replication (landed)
-- Renamed Team → Faction across server ECS and docs. Actor has `faction: Faction`.
-- ActorSnapshotDelta v4 (net_core): ActorRep includes `{ faction, archetype_id, name_id, unique }`. Platform sends v4; client decodes and stores.
-- Server encodes v4; client stores fields in ActorView. Kept `kind` only for presentation bucketing.
-- Tests updated to v4 and faction usage.
+Scope
+- Finish v4 replication cutover (remove v3 decoding and legacy messages).
+- Normalize HitFx via Ctx and confirm schedule order.
+- Neutralize archetype nouns in system identifiers.
+- Cache specs in ServerState (no per-call loads).
+- Expand CI guards; update docs.
 
-PR‑1 — Remove archetype branching from systems (landed)
-- Deleted `ActorKind`‑based logic in systems; use `faction` and component predicates.
-- Projectiles are no longer tagged with a “Wizard” kind. Caster AI selects targets by faction/hostility.
-- Tests: caster selection independent of `kind`; PC→Wizard damage flips faction flag.
+Changes
+- net_core
+  - ActorSnapshotDelta is v4-only at runtime. Decoder rejects v!=4. Encoder always writes v4 spawn layout (kind, faction, archetype_id, name_id, unique).
+  - Removed legacy BossStatusMsg/NpcListMsg tests; kept HudStatus.
+  - Fixed delta roundtrip test to use `faction`/archetype fields.
+- client_core
+  - Renamed test to v4_updates_drive_views.rs and function to v4_*; updated replication comment to v4.
+  - Added logic-only tests: archetype_maps_model.rs (archetype_id → model bucket) and anim_state_from_delta.rs (Idle/Jog/Death selection).
+- server_core
+  - Schedule: verified canonical order; wrapped spans without changing behavior.
+  - Renamed systems: ai_wizard_cast_and_face → ai_caster_cast_and_face; ai_move_hostiles_toward_wizards → ai_move_hostiles.
+  - HitFx already flows via Ctx; ServerState drains ctx.fx_hits after tick.
+  - Cached specs: added `specs_arche` and `specs_proj` to ServerState; load in new(); replaced load_default() call sites.
+  - Neutralized archetype nouns in test names; added cast_acceptance.rs covering GCD/per-spell cooldown and mana gating.
+- xtask
+  - Expanded forbidden patterns: block Team (type name) in runtime crates; block legacy msgs; block v:\s*3 in net_core/client_core; keep ActorKind branching guard in server systems.
+- docs
+  - Updated docs/ECS.md to reflect v4 schema, system names, and client apply semantics.
 
-PR‑2 — Projectile broad‑phase via SpatialGrid (landed)
-- Added `SpatialGrid::query_segment(a,b,pad)` and used it in `projectile_collision_ecs`.
-- Precise segment‑vs‑circle check unchanged; owner‑skip retained.
-- Test asserts candidate set ≪ total actors for a typical scene.
+Verification
+- rg checks: no srv.fx_hits.push in systems; no BossStatusMsg/NpcListMsg in runtime; no v3 decoder acceptance.
+- cargo clippy/test pass locally; xtask ci guards enabled for v4 only.
+ - Renderer consumes replicated HitFx and spawns a small spark burst at each impact.
 
-PR‑3 — No‑panic guarantee (landed)
-- Enforced `#![deny(clippy::unwrap_used, clippy::expect_used)]` in server_core. Added `#[allow]` only in test modules where unwraps are acceptable.
-- Verified non‑test code has no unwrap/expect.
-
-PR‑4 — Data‑driven literals (landed)
-- Moved projectile arming delays to data_runtime/specs/projectiles (new `arming_delay_s`). Collision uses spec value.
-- Introduced spawn archetype specs (data_runtime/specs/archetypes) for Undead, WizardNPC, DeathKnight. Spawns now read defaults from the spec db; legacy numbers remain as fallback.
-- Added tests for archetype defaults.
-
-PR‑5 — Normalize HitFx through Ctx (landed)
-- Systems push per‑tick visual hit events to `Ctx.fx_hits`. After the schedule run, `ServerState::step_authoritative` drains `ctx.fx_hits` into `self.fx_hits`.
-- Platform continues to read `srv.fx_hits` and replicate in v4 deltas (unchanged network contract).
-- Test `hitfx_ctx_bus.rs` ensures server‑auth HitFx flows through Ctx and accumulates in ServerState.
-
-PR‑6 — CI grep guards (landed)
-- xtask: added a workspace guard that fails CI when legacy types/patterns appear in runtime code:
-  - Patterns: `NpcListMsg|BossStatusMsg`, `ActorStore` in server_core/client_core/platform_winit/render_wgpu (docs/tests excluded).
-  - Guard for `ActorKind::Wizard|Zombie|Boss` under `crates/server_core/src/ecs` to prevent archetype branching in systems.
-
-PR‑7 — System spans & counters (landed)
-- server_core: wrapped each system call in `Schedule::run` with `tracing::info_span!("system", name=...)`.
-- Added a small `tracing::info!` after `projectile_collision_ecs` with `dmg/boom/fx_hits` counts for quick debugging.
-- Telemetry bootstrap (`server_core::telemetry`) already configures tracing; spans will appear with appropriate EnvFilter.
-
-Notes
-- Client remains presentation‑only; no gameplay logic. HUD and VFX are driven via replication (v4 + HitFx).
-- All changes landed with tests and green CI.
+Next
+- Broaden neutral naming in tests (wizard → caster/melee_hostile) across server_core tests (non-functional rename).
+- Optional: docs for archetype_id-driven model mapping in renderer.

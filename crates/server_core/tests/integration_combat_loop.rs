@@ -21,7 +21,7 @@ fn any_undead_damaged(s: &server_core::ServerState) -> bool {
         .any(|a| a.faction == server_core::Faction::Undead && a.hp.hp < a.hp.max)
 }
 
-fn any_wizard_damaged(s: &server_core::ServerState) -> bool {
+fn any_caster_damaged(s: &server_core::ServerState) -> bool {
     s.ecs
         .iter()
         .any(|a| matches!(a.kind, server_core::ActorKind::Wizard) && a.hp.hp < a.hp.max)
@@ -47,7 +47,7 @@ fn any_actor_moved(s0: &[(u32, Vec3)], s1: &server_core::ServerState) -> bool {
 }
 
 #[test]
-fn integration_combat_loop_pc_and_wizards_vs_undead() {
+fn integration_combat_loop_pc_and_casters_vs_undead() {
     let mut s = server_core::ServerState::new();
 
     // 1) Spawn PC at origin (server-authoritative)
@@ -100,7 +100,7 @@ fn integration_combat_loop_pc_and_wizards_vs_undead() {
 
     // Wizards should also take some damage over the skirmish (not only one-sided)
     assert!(
-        any_wizard_damaged(&s),
-        "no wizard took any damage; combat looks one-sided / targeting bug likely"
+        any_caster_damaged(&s),
+        "no caster took any damage; combat looks one-sided / targeting bug likely"
     );
 }
