@@ -228,23 +228,22 @@ impl ReplicationBuffer {
                 && min.x <= max.x
                 && min.y <= max.y
                 && min.z <= max.z;
-            if !sane {
-                return false;
-            }
-            self.known_dids.insert(inst.did);
-            self.destr_instances.insert(inst.did, (min, max));
-            // Move any deferred deltas for this DID into pending
-            let mut rest = Vec::new();
-            for (did, chunk, entry) in self.deferred_mesh.drain(..) {
-                if did == inst.did {
-                    self.pending_mesh.push((did, chunk, entry));
-                    self.updated_chunks += 1;
-                } else {
-                    rest.push((did, chunk, entry));
+            if sane {
+                self.known_dids.insert(inst.did);
+                self.destr_instances.insert(inst.did, (min, max));
+                // Move any deferred deltas for this DID into pending
+                let mut rest = Vec::new();
+                for (did, chunk, entry) in self.deferred_mesh.drain(..) {
+                    if did == inst.did {
+                        self.pending_mesh.push((did, chunk, entry));
+                        self.updated_chunks += 1;
+                    } else {
+                        rest.push((did, chunk, entry));
+                    }
                 }
+                self.deferred_mesh = rest;
+                return true;
             }
-            self.deferred_mesh = rest;
-            return true;
         }
         // Chunk mesh deltas: accept and stash iff instance is known, with validation
         let mut slice_delta: &[u8] = payload;
