@@ -40,8 +40,20 @@ fn remesh_budget_is_deterministic_over_ticks() {
     let c0 = min + glam::vec3(1.0, 1.0, 1.0);
     let c1 = min + glam::vec3(6.0, 1.0, 1.0);
     let mut ctx = server_core::ecs::schedule::Ctx::default();
-    ctx.carves.push(ecs_core::components::CarveRequest { did: inst.did, center_m: c0.as_dvec3(), radius_m: 0.8, seed: 0, impact_id: 0 });
-    ctx.carves.push(ecs_core::components::CarveRequest { did: inst.did, center_m: c1.as_dvec3(), radius_m: 0.8, seed: 0, impact_id: 1 });
+    ctx.carves.push(ecs_core::components::CarveRequest {
+        did: inst.did,
+        center_m: c0.as_dvec3(),
+        radius_m: 0.8,
+        seed: 0,
+        impact_id: 0,
+    });
+    ctx.carves.push(ecs_core::components::CarveRequest {
+        did: inst.did,
+        center_m: c1.as_dvec3(),
+        radius_m: 0.8,
+        seed: 0,
+        impact_id: 1,
+    });
     server_core::systems::destructible::destructible_apply_carves(&mut srv, &mut ctx);
     // First tick: expect 1 delta
     server_core::systems::destructible::destructible_remesh_budgeted(&mut srv);
@@ -51,4 +63,3 @@ fn remesh_budget_is_deterministic_over_ticks() {
     server_core::systems::destructible::destructible_remesh_budgeted(&mut srv);
     assert_eq!(srv.destruct_registry.pending_mesh_deltas.len(), 1);
 }
-

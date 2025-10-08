@@ -36,3 +36,5 @@ Commits
   - Object-space carve conversion in apply step (future-proof)
   - Platform only sends chunk deltas after instance is sent; tracked per-client set
   - Demo scene registers a simple ruins proxy (`scene_build::add_demo_ruins_destructible`)
+- [9] Demo scene: wired `add_demo_ruins_destructible` into platform demo server; platform now sends `DestructibleInstance` before any `ChunkMeshDelta` (tracked via `sent_destr_instances`).
+- [10] Validation: ran `cargo test` and pre-push `xtask ci`; all tests green, clippy/wgsl/schema checks pass.
