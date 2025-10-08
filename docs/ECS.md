@@ -56,9 +56,10 @@ Replication (server → client)
   - updates: ActorDeltaRec (bitmask: pos/yaw/hp/alive)
   - removals: Vec<u32>
   - projectiles: full ProjectileRep list (id, kind, pos, vel)
+  - hits: Vec<HitFx> — tiny impact events for VFX (no gameplay)
 - Client buffer (crates/client_core/src/replication.rs)
-  - Maintains vectors: `actors`, `wizards` (subset), `npcs`, `projectiles`, `hud`
-  - Applies deltas, updates derived views; used by renderer for visuals/HUD.
+  - Maintains: `actors`, `wizards` (subset), `npcs`, `projectiles`, `hits`, `hud`
+  - Applies deltas and rebuilds derived views every v3 apply to ensure HP/pos/yaw sync.
 
 ServerState entry points (demo & helpers)
 - Spawning (crates/server_core/src/lib.rs)
@@ -73,12 +74,12 @@ ServerState entry points (demo & helpers)
 Renderer (presentation-only)
 - Replication-driven visuals; no gameplay logic in default build.
   - Wizards/zombies/DK/Sorceress palettes update: CPU sample and GPU upload
-  - Projectiles/VFX: updated from replication disappearance/hit events
+  - Projectiles/VFX: updated from replication; `HitFx` events spawn small impact bursts
   - Filepaths: crates/render_wgpu/src/gfx/{mod.rs,renderer/{render.rs,update.rs},deathknight.rs}
 
 Demo Server (platform)
 - Spawns rings of Undead, a circle of NPC wizards, Nivita (unique), and a DK for variety.
-- Steps authority; sends v3 deltas + HUD; accepts Move/Aim/Cast commands from the renderer.
+- Steps authority; sends v3 deltas (including `hits`) + HUD; accepts Move/Aim/Cast commands from the renderer.
 - File: crates/platform_winit/src/lib.rs
 
 Notes & Next
