@@ -28,6 +28,7 @@ pub struct WorldAabb {
 }
 
 /// Per-instance proxy state. Heavy voxel data lives here; ECS entities hold only lightweight refs.
+#[derive(Debug)]
 pub struct DestructibleProxy {
     pub did: DestructibleId,
     pub grid: VoxelGrid,
@@ -62,7 +63,7 @@ impl DestructibleProxy {
 pub struct DestructibleRegistry {
     pub proxies: HashMap<DestructibleId, DestructibleProxy>,
     pub pending_carves: Vec<CarveRequest>,
-    // Accumulated mesh deltas for replication this tick (drained by platform). 
+    // Accumulated mesh deltas for replication this tick (drained by platform).
     pub pending_mesh_deltas: Vec<ChunkMeshDelta>,
     pub cfg: DestructibleConfig,
 }
@@ -127,7 +128,8 @@ impl DestructibleRegistry {
             }
             // Snapshot dirty set; greedy_mesh_budget pops a subset while preserving order
             let before_len = proxy.dirty.0.len();
-            let meshed = greedy_mesh_budget(&proxy.grid, &mut proxy.dirty, &mut proxy.meshes, budget);
+            let meshed =
+                greedy_mesh_budget(&proxy.grid, &mut proxy.dirty, &mut proxy.meshes, budget);
             let after_len = proxy.dirty.0.len();
             let processed = before_len.saturating_sub(after_len).min(meshed);
             // Conservatively scan mesh map for stable ordering; push up to `processed` keys
@@ -229,4 +231,3 @@ fn segment_aabb_enter_t(p0: Vec3, p1: Vec3, min: Vec3, max: Vec3) -> Option<f32>
     }
     Some(tmin)
 }
-

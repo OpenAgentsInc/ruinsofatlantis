@@ -136,6 +136,8 @@ impl ApplicationHandler for App {
                     let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
                     // Spawn a Death Knight a bit further out (demo)
                     let _dk = srv.spawn_death_knight(glam::vec3(25.0, 0.6, -15.0));
+                    // Flag destructible instance bootstrap (if/when instances are populated)
+                    srv.destruct_bootstrap_instances_outstanding = true;
                     self.demo_server = Some(srv);
                 }
                 self.last_time = Some(std::time::Instant::now());
@@ -542,6 +544,29 @@ impl ApplicationHandler for App {
                     metrics::counter!("net.bytes_sent_total", "dir" => "tx")
                         .increment(ft.len() as u64);
                     let _ = srv_xport.try_send(ft);
+                }
+                // Destructible replication (instances once, chunk-mesh deltas per change)
+                if srv.destruct_bootstrap_instances_outstanding {
+                    let insts = srv.all_destructible_instances();
+                    for d in insts {
+                        let mut buf = Vec::new();
+                        d.encode(&mut buf);
+                        let mut framed = Vec::with_capacity(buf.len() + 8);
+                        net_core::frame::write_msg(&mut framed, &buf);
+                        metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                            .increment(framed.len() as u64);
+                        let _ = srv_xport.try_send(framed);
+                    }
+                    srv.destruct_bootstrap_instances_outstanding = false;
+                }
+                for delta in srv.drain_destruct_mesh_deltas() {
+                    let mut buf = Vec::new();
+                    delta.encode(&mut buf);
+                    let mut framed = Vec::with_capacity(buf.len() + 8);
+                    net_core::frame::write_msg(&mut framed, &buf);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                        .increment(framed.len() as u64);
+                    let _ = srv_xport.try_send(framed);
                 }
                 self.tick = self.tick.wrapping_add(1);
             }
