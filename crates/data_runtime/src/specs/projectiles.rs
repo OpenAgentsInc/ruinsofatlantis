@@ -10,6 +10,8 @@ pub struct ProjectileSpec {
     pub radius_m: f32,
     pub damage: i32,
     pub life_s: f32,
+    #[serde(default = "default_arming_delay_s")]
+    pub arming_delay_s: f32,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -42,6 +44,7 @@ impl ProjectileSpecDb {
                     radius_m: 0.2,
                     damage: 10,
                     life_s: 1.5,
+                    arming_delay_s: 0.08,
                 },
             );
             db.actions.insert(
@@ -51,6 +54,7 @@ impl ProjectileSpecDb {
                     radius_m: 0.25,
                     damage: 8,
                     life_s: 1.5,
+                    arming_delay_s: 0.08,
                 },
             );
             db.actions.insert(
@@ -60,6 +64,7 @@ impl ProjectileSpecDb {
                     radius_m: 6.0, // Fireball AoE ~6 meters default
                     damage: 28,    // avg 8d6
                     life_s: 1.5,
+                    arming_delay_s: 0.10,
                 },
             );
             db.actions.insert(
@@ -69,6 +74,7 @@ impl ProjectileSpecDb {
                     radius_m: 0.5,
                     damage: 18,
                     life_s: 1.5,
+                    arming_delay_s: 0.08,
                 },
             );
             db.actions.insert(
@@ -78,12 +84,25 @@ impl ProjectileSpecDb {
                     radius_m: 0.45,
                     damage: 16,
                     life_s: 1.5,
+                    arming_delay_s: 0.08,
+                },
+            );
+            db.actions.insert(
+                "MagicMissile".to_string(),
+                ProjectileSpec {
+                    speed_mps: 28.0,
+                    radius_m: 0.5,
+                    damage: 7,
+                    life_s: 1.0,
+                    arming_delay_s: 0.08,
                 },
             );
             Ok(db)
         }
     }
 }
+
+fn default_arming_delay_s() -> f32 { 0.08 }
 
 #[cfg(test)]
 mod tests {

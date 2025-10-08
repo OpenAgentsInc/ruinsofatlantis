@@ -14,6 +14,7 @@ pub mod spell;
 pub mod zone;
 pub mod specs {
     pub mod projectiles;
+    pub mod archetypes;
 }
 pub mod scene;
 pub mod configs {

@@ -839,10 +839,8 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     for (pid, p0, p1, kind, owner, age_s) in list {
         // Arming delay: skip collisions briefly to prevent immediate detonation on spawn and
         // ensure at least one snapshot includes the projectile for visuals.
-        let arm_ok = match kind {
-            crate::ProjKind::Fireball => age_s >= 0.10,
-            _ => age_s >= 0.08,
-        };
+        let arm_delay = srv.projectile_spec(kind).arming_delay_s.max(0.0);
+        let arm_ok = age_s >= arm_delay;
         if !arm_ok {
             continue;
         }

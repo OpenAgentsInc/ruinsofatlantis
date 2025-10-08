@@ -165,6 +165,7 @@ struct ProjectileSpec {
     life_s: f32,
     aoe_radius_m: f32,
     damage: i32,
+    arming_delay_s: f32,
 }
 
 #[inline]
@@ -464,12 +465,14 @@ impl ServerState {
                         radius_m: 0.2,
                         damage: 10,
                         life_s: 1.5,
+                        arming_delay_s: 0.08,
                     });
                 ProjectileSpec {
                     speed_mps: s.speed_mps,
                     life_s: s.life_s,
                     aoe_radius_m: 0.0,
                     damage: s.damage,
+                    arming_delay_s: s.arming_delay_s,
                 }
             }
             ProjKind::Fireball => {
@@ -482,12 +485,14 @@ impl ServerState {
                         radius_m: 6.0,
                         damage: 28,
                         life_s: 1.5,
+                        arming_delay_s: 0.10,
                     });
                 ProjectileSpec {
                     speed_mps: s.speed_mps,
                     life_s: s.life_s,
                     aoe_radius_m: s.radius_m.max(0.0),
                     damage: s.damage.max(0),
+                    arming_delay_s: s.arming_delay_s,
                 }
             }
             ProjKind::MagicMissile => {
@@ -500,12 +505,14 @@ impl ServerState {
                         radius_m: 0.5,
                         damage: 7,
                         life_s: 1.0,
+                        arming_delay_s: 0.08,
                     });
                 ProjectileSpec {
                     speed_mps: s.speed_mps,
                     life_s: s.life_s,
                     aoe_radius_m: s.radius_m.max(0.0),
                     damage: s.damage.max(0),
+                    arming_delay_s: s.arming_delay_s,
                 }
             }
         }
@@ -555,14 +562,21 @@ impl ServerState {
         );
         // Defaults for undead
         if let Some(a) = self.ecs.get_mut(id) {
-            a.move_speed = Some(ecs::MoveSpeed { mps: 2.0 });
-            a.aggro = Some(ecs::AggroRadius { m: 25.0 });
-            a.attack = Some(ecs::AttackRadius { m: 0.35 });
-            a.melee = Some(ecs::Melee {
-                damage: 5,
-                cooldown_s: 0.6,
-                ready_in_s: 0.0,
-            });
+            let spec = data_runtime::specs::archetypes::ArchetypeSpecDb::load_default()
+                .ok()
+                .and_then(|db| db.entries.get("Undead").cloned())
+                .unwrap_or(data_runtime::specs::archetypes::ArchetypeSpec {
+                    radius_m: radius,
+                    move_speed_mps: 2.0,
+                    aggro_radius_m: 25.0,
+                    attack_radius_m: 0.35,
+                    melee_damage: 5,
+                    melee_cooldown_s: 0.6,
+                });
+            a.move_speed = Some(ecs::MoveSpeed { mps: spec.move_speed_mps });
+            a.aggro = Some(ecs::AggroRadius { m: spec.aggro_radius_m });
+            a.attack = Some(ecs::AttackRadius { m: spec.attack_radius_m });
+            a.melee = Some(ecs::Melee { damage: spec.melee_damage, cooldown_s: spec.melee_cooldown_s, ready_in_s: 0.0 });
         }
         id
     }
@@ -581,14 +595,21 @@ impl ServerState {
         );
         if let Some(a) = self.ecs.get_mut(id) {
             a.name = Some("Death Knight".to_string());
-            a.move_speed = Some(ecs::MoveSpeed { mps: 2.2 });
-            a.aggro = Some(ecs::AggroRadius { m: 40.0 });
-            a.attack = Some(ecs::AttackRadius { m: 0.45 });
-            a.melee = Some(ecs::Melee {
-                damage: 18,
-                cooldown_s: 0.9,
-                ready_in_s: 0.0,
-            });
+            let spec = data_runtime::specs::archetypes::ArchetypeSpecDb::load_default()
+                .ok()
+                .and_then(|db| db.entries.get("DeathKnight").cloned())
+                .unwrap_or(data_runtime::specs::archetypes::ArchetypeSpec {
+                    radius_m: 1.0,
+                    move_speed_mps: 2.2,
+                    aggro_radius_m: 40.0,
+                    attack_radius_m: 0.45,
+                    melee_damage: 18,
+                    melee_cooldown_s: 0.9,
+                });
+            a.move_speed = Some(ecs::MoveSpeed { mps: spec.move_speed_mps });
+            a.aggro = Some(ecs::AggroRadius { m: spec.aggro_radius_m });
+            a.attack = Some(ecs::AttackRadius { m: spec.attack_radius_m });
+            a.melee = Some(ecs::Melee { damage: spec.melee_damage, cooldown_s: spec.melee_cooldown_s, ready_in_s: 0.0 });
         }
         id
     }
@@ -621,6 +642,13 @@ impl ServerState {
             w.spellbook = Some(ecs::Spellbook {
                 known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
             });
+            // Apply archetype radius if present
+            let spec = data_runtime::specs::archetypes::ArchetypeSpecDb::load_default()
+                .ok()
+                .and_then(|db| db.entries.get("WizardNPC").cloned());
+            if let Some(sp) = spec {
+                w.tr.radius = sp.radius_m;
+            }
         }
         id
     }
