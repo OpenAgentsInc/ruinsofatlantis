@@ -722,11 +722,12 @@ fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
     if alive.is_empty() {
         return;
     }
-    // Iterate any caster (has Spellbook and ResourcePool)
+    // Iterate any caster (has Spellbook and ResourcePool), excluding the player-controlled PC
     let caster_ids: Vec<ActorId> = srv
         .ecs
         .iter()
         .filter(|a| a.hp.alive() && a.spellbook.is_some() && a.pool.is_some())
+        .filter(|a| a.faction != crate::actor::Faction::Pc)
         .map(|a| a.id)
         .collect();
     for cid in caster_ids {
