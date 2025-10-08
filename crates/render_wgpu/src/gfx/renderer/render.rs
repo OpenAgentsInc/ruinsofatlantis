@@ -1040,15 +1040,19 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         .map(|v| v == "0")
         .unwrap_or(false);
     if !overlays_disabled && !r.is_vox_onepath() {
-        // Bars for casters (Wizards): use replicated HP/pos (authoritative)
+        // Bars for casters (Wizards): derive directly from local instance transforms
+        // to avoid dependency on replication sparsity. This keeps overlays stable even
+        // when NPC wizards are client‑only and not present in the actor delta.
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
-        for w in &r.repl_buf.wizards {
-            if w.hp <= 0 {
+        for (i, m) in r.wizard_models.iter().enumerate() {
+            let hp = r.wizard_hp.get(i).copied().unwrap_or(0);
+            if hp <= 0 {
                 continue;
             }
-            let head = glam::vec3(w.pos.x, w.pos.y + 1.7, w.pos.z);
-            let frac = (w.hp.max(0) as f32) / (w.max.max(1) as f32);
-            bar_entries.push((head, frac));
+            let max_hp = r.wizard_hp_max.max(1);
+            let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
+            let frac = (hp.max(0) as f32) / (max_hp as f32);
+            bar_entries.push((head.truncate(), frac));
         }
         // Bars for alive zombies (replication only)
         {
@@ -1116,6 +1120,19 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             &r.attachments.scene_view
         };
         r.damage.draw(&mut encoder, damage_target);
+    }
+
+    #[cfg(test)]
+    {
+        // Sanity: wizard positions used for overlays should be distinct for different instances
+        // (guards against accidental collapse to a single transform)
+        if r.wizard_models.len() >= 2 {
+            let a = r.wizard_models[0].to_cols_array();
+            let b = r.wizard_models[1].to_cols_array();
+            let pa = glam::vec3(a[12], a[13], a[14]);
+            let pb = glam::vec3(b[12], b[13], b[14]);
+            debug_assert!((pa - pb).length_squared() > 1e-6);
+        }
     }
 
     // Nameplates disabled by default. Set RA_NAMEPLATES=1 to enable.

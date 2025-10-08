@@ -2081,4 +2081,16 @@ mod bar_tests {
         let v_zero = HealthBars::build_vertices(1920, 1080, vp, &[(glam::Vec3::ZERO, 0.0)]);
         assert_eq!(v_zero.len(), 0);
     }
+
+    #[test]
+    fn multiple_entries_produce_multiple_bars() {
+        let vp = Mat4::IDENTITY;
+        let entries = vec![
+            (glam::vec3(0.0, 1.7, 0.0), 1.0),
+            (glam::vec3(5.0, 1.7, 0.0), 0.5),
+            (glam::vec3(-3.0, 1.7, 2.0), 0.25),
+        ];
+        let verts = HealthBars::build_vertices(1280, 720, vp, &entries);
+        assert_eq!(verts.len(), 6 * entries.len());
+    }
 }
