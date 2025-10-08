@@ -33,6 +33,8 @@ struct App {
     // Simple server-side rate limiter for client commands
     last_sec_start: std::time::Instant,
     cmds_this_sec: u32,
+    // Track which destructible instances have been sent to the client
+    sent_destr_instances: std::collections::HashSet<u64>,
 }
 
 impl Default for App {
@@ -53,6 +55,7 @@ impl Default for App {
             interest_radius_m: 40.0,
             last_sec_start: std::time::Instant::now(),
             cmds_this_sec: 0,
+            sent_destr_instances: std::collections::HashSet::new(),
         }
     }
 }
@@ -136,7 +139,8 @@ impl ApplicationHandler for App {
                     let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
                     // Spawn a Death Knight a bit further out (demo)
                     let _dk = srv.spawn_death_knight(glam::vec3(25.0, 0.6, -15.0));
-                    // Destructible instance bootstrap disabled
+                    // Add a demo destructible ruins proxy so impacts carve
+                    server_core::scene_build::add_demo_ruins_destructible(&mut srv);
                     self.demo_server = Some(srv);
                 }
                 self.last_time = Some(std::time::Instant::now());
@@ -544,7 +548,31 @@ impl ApplicationHandler for App {
                         .increment(ft.len() as u64);
                     let _ = srv_xport.try_send(ft);
                 }
-                // Destructible replication disabled
+                // Destructible replication: send instances once, deltas per change
+                if srv.destruct_bootstrap_instances_outstanding {
+                    let insts = srv.all_destructible_instances();
+                    for d in insts {
+                        let mut buf = Vec::new();
+                        d.encode(&mut buf);
+                        let mut framed = Vec::with_capacity(buf.len() + 8);
+                        net_core::frame::write_msg(&mut framed, &buf);
+                        metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+                        let _ = srv_xport.try_send(framed);
+                        self.sent_destr_instances.insert(d.did);
+                    }
+                    srv.destruct_bootstrap_instances_outstanding = false;
+                }
+                for delta in srv.drain_destruct_mesh_deltas() {
+                    if !self.sent_destr_instances.contains(&delta.did) {
+                        continue; // ensure instance precedes deltas
+                    }
+                    let mut buf = Vec::new();
+                    delta.encode(&mut buf);
+                    let mut framed = Vec::with_capacity(buf.len() + 8);
+                    net_core::frame::write_msg(&mut framed, &buf);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+                    let _ = srv_xport.try_send(framed);
+                }
                 self.tick = self.tick.wrapping_add(1);
             }
         }

@@ -7,7 +7,7 @@
 use core_units::Length;
 use glam::{DVec3, UVec3};
 use server_core::destructible;
-use voxel_proxy::{GlobalId, VoxelProxyMeta, VoxelGrid};
+use voxel_proxy::{GlobalId, VoxelGrid, VoxelProxyMeta};
 
 fn mk_grid(d: UVec3, c: UVec3, vox_m: f64) -> VoxelGrid {
     let meta = VoxelProxyMeta {
@@ -88,7 +88,10 @@ fn carve_spawns_capped_debris_with_mass() {
         50, // cap
     );
 
-    assert!(out.positions_m.len() <= 50, "debris output must respect cap");
+    assert!(
+        out.positions_m.len() <= 50,
+        "debris output must respect cap"
+    );
     assert_eq!(out.positions_m.len(), out.velocities_mps.len());
     assert_eq!(out.positions_m.len(), out.masses.len());
 
@@ -105,7 +108,11 @@ fn queue_budget_yields_sorted_chunks() {
     use destructible::queue::ChunkQueue;
 
     let mut q = ChunkQueue::new();
-    q.enqueue_many([UVec3::new(2, 0, 0), UVec3::new(1, 0, 0), UVec3::new(1, 0, 1)]);
+    q.enqueue_many([
+        UVec3::new(2, 0, 0),
+        UVec3::new(1, 0, 0),
+        UVec3::new(1, 0, 1),
+    ]);
 
     let a = q.pop_budget(2);
     assert_eq!(a, vec![UVec3::new(1, 0, 0), UVec3::new(1, 0, 1)]);
@@ -113,4 +120,3 @@ fn queue_budget_yields_sorted_chunks() {
     let b = q.pop_budget(2);
     assert_eq!(b, vec![UVec3::new(2, 0, 0)]);
 }
-

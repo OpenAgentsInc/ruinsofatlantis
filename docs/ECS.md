@@ -35,9 +35,11 @@ Systems Schedule (server)
   9) `melee_apply_when_contact` — generic melee on contact for any hostile with Melee
   10) `homing_acquire_targets` → `homing_update`
   11) `projectile_integrate_ecs` → `projectile_collision_ecs` (arming delay + AoE proximity)
-  12) `aoe_apply_explosions` — translate ExplodeEvent to DamageEvent
-  13) `apply_damage_to_ecs` — apply to HP, enqueue DeathEvent, set DespawnAfter
-  14) `cleanup` — despawn per timers or dead without timers
+  12) `destructible_from_projectiles` → `destructible_from_explosions` (produce CarveRequest)
+  13) `destructible_apply_carves` → `destructible_remesh_budgeted` → `destructible_refresh_colliders` (budgeted)
+  14) `aoe_apply_explosions` — translate ExplodeEvent to DamageEvent
+  15) `apply_damage_to_ecs` — apply to HP, enqueue DeathEvent, set DespawnAfter
+  16) `cleanup` — despawn per timers or dead without timers
 
 Authoritative Commands & Intents
 - net_core command wire (crates/net_core/src/command.rs)

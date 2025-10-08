@@ -11,6 +11,7 @@ mod combat;
 pub use actor::*;
 pub use combat::*;
 use glam::Vec3;
+pub mod destructible;
 mod ecs;
 pub mod jobs;
 pub mod scene_build;
@@ -212,7 +213,10 @@ pub struct ServerState {
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
     /// Frame-local HUD toasts emitted by systems (drained by platform).
     pub hud_toasts: Vec<u8>,
-    // Destructible ECS runtime (temporarily removed)
+    // Destructible ECS runtime
+    pub destruct_registry: crate::destructible::state::DestructibleRegistry,
+    pub destruct_instances: Vec<scene_build::DestructibleWorldAabb>,
+    pub destruct_bootstrap_instances_outstanding: bool,
 }
 
 impl ServerState {
@@ -235,6 +239,9 @@ impl ServerState {
             specs_proj,
             fx_hits: Vec::new(),
             hud_toasts: Vec::new(),
+            destruct_registry: crate::destructible::state::DestructibleRegistry::default(),
+            destruct_instances: Vec::new(),
+            destruct_bootstrap_instances_outstanding: false,
         }
     }
     // Legacy actor rebuild removed. Actors are authoritative.

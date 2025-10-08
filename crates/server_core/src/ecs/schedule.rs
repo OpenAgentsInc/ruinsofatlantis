@@ -60,6 +60,8 @@ pub struct Ctx {
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
     // HUD toast codes (transient per-tick; platform drains and sends messages)
     pub hud_toasts: Vec<u8>,
+    // Per-tick destructible carve requests (from projectiles/explosions)
+    pub carves: Vec<ecs_core::components::CarveRequest>,
     pub deaths: Vec<DeathEvent>,
     pub spatial: SpatialGrid,
     pub cmd: crate::ecs::world::CmdBuf,
@@ -120,8 +122,12 @@ impl Schedule {
             "collision_done"
         );
         drop(_s);
-        // Destructibles: derive carve requests from projectile segment vs instance AABBs
-        // destructible_from_projectiles disabled in this build
+        // Destructibles: derive carves, then apply budgeted mesh+colliders before AoE
+        destructible_from_projectiles(srv, ctx);
+        destructible_from_explosions(srv, ctx);
+        crate::systems::destructible::destructible_apply_carves(srv, ctx);
+        crate::systems::destructible::destructible_remesh_budgeted(srv);
+        crate::systems::destructible::destructible_refresh_colliders(srv);
         let _s = tracing::info_span!("system", name = "aoe_apply_explosions").entered();
         aoe_apply_explosions(srv, ctx);
         drop(_s);
@@ -1009,7 +1015,6 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
     }
 }
 
-#[cfg(any())]
 fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
     // Collect projectile segments for this tick
     let mut segs: Vec<(glam::Vec3, glam::Vec3, f32)> = Vec::new();
@@ -1066,15 +1071,42 @@ fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
             let max = glam::Vec3::from(inst.world_max);
             if let Some(t) = segment_aabb_enter_t(p0, p1, min, max) {
                 let hit = p0 + (p1 - p0) * t.max(0.0);
-                srv.destruct_registry
-                    .pending_carves
-                    .push(ecs_core::components::CarveRequest {
-                        did: inst.did,
-                        center_m: hit.as_dvec3(),
-                        radius_m: radius as f64,
-                        seed: 0,
-                        impact_id: 0,
-                    });
+                ctx.carves.push(ecs_core::components::CarveRequest {
+                    did: inst.did,
+                    center_m: hit.as_dvec3(),
+                    radius_m: radius as f64,
+                    seed: 0,
+                    impact_id: 0,
+                });
+            }
+        }
+    }
+}
+
+fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
+    if ctx.boom.is_empty() || srv.destruct_instances.is_empty() {
+        return;
+    }
+    for e in &ctx.boom {
+        for inst in &srv.destruct_instances {
+            let min = glam::Vec3::from(inst.world_min);
+            let max = glam::Vec3::from(inst.world_max);
+            let center = glam::vec3(e.center_xz.x, (min.y + max.y) * 0.5, e.center_xz.y);
+            let closest = glam::vec3(
+                center.x.clamp(min.x, max.x),
+                center.y.clamp(min.y, max.y),
+                center.z.clamp(min.z, max.z),
+            );
+            let dx = closest.x - center.x;
+            let dz = closest.z - center.z;
+            if dx * dx + dz * dz <= e.r2 {
+                ctx.carves.push(ecs_core::components::CarveRequest {
+                    did: inst.did,
+                    center_m: closest.as_dvec3(),
+                    radius_m: (e.r2.max(0.0)).sqrt() as f64,
+                    seed: 0,
+                    impact_id: 0,
+                });
             }
         }
     }

@@ -63,6 +63,51 @@ pub fn build_destructible_instances(
     out
 }
 
+/// Demo helper: register a simple voxel proxy for the wizard ruins, so impacts carve.
+/// This synthesizes a box-like volume; replace with real baked proxy when available.
+pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
+    use crate::destructible::state::{DestructibleId, DestructibleProxy, WorldAabb};
+    use core_units::Length;
+    use voxel_proxy::{GlobalId, VoxelGrid, VoxelProxyMeta};
+
+    // Rough bounds near center; tune to your scene placement
+    let world_min = glam::vec3(-8.0, 0.0, -8.0);
+    let world_max = glam::vec3(8.0, 6.0, 8.0);
+
+    // Build a small grid and fill a thick shell
+    let meta = VoxelProxyMeta {
+        object_id: GlobalId(1),
+        origin_m: glam::DVec3::new(world_min.x as f64, world_min.y as f64, world_min.z as f64),
+        voxel_m: Length::meters(0.5),
+        dims: glam::UVec3::new(32, 16, 32),
+        chunk: glam::UVec3::new(8, 8, 8),
+        material: core_materials::find_material_id("stone").unwrap_or(core_materials::MaterialId(0)),
+    };
+    let mut grid = VoxelGrid::new(meta);
+    let d = grid.dims();
+    for z in 0..d.z {
+        for y in 0..d.y {
+            for x in 0..d.x {
+                let edge = x == 0 || y == 0 || z == 0 || x == d.x - 1 || y == d.y - 1 || z == d.z - 1;
+                let wall = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
+                if edge || wall {
+                    grid.set(x, y, z, true);
+                }
+            }
+        }
+    }
+    let did = DestructibleId(1);
+    let aabb = WorldAabb { min: world_min, max: world_max };
+    let proxy = DestructibleProxy::new(did, grid, aabb);
+    srv.destruct_registry.insert_proxy(proxy);
+    srv.destruct_instances.push(DestructibleWorldAabb {
+        did: did.0,
+        world_min: [world_min.x, world_min.y, world_min.z],
+        world_max: [world_max.x, world_max.y, world_max.z],
+    });
+    srv.destruct_bootstrap_instances_outstanding = true;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

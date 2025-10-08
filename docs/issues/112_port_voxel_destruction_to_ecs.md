@@ -30,3 +30,9 @@ Commits
 - [7] Tests: added CPU-only coverage for destructible primitives & registry broad-phase
   - `crates/server_core/tests/destructible_primitives.rs`
   - `crates/server_core/tests/destructible_registry_broadphase.rs`
+- [8] ECS compliance fixes
+  - Added `Ctx.carves` bus; producers now push `CarveRequest`s
+  - Split registry work into schedule systems: apply → mesh → colliders
+  - Object-space carve conversion in apply step (future-proof)
+  - Platform only sends chunk deltas after instance is sent; tracked per-client set
+  - Demo scene registers a simple ruins proxy (`scene_build::add_demo_ruins_destructible`)

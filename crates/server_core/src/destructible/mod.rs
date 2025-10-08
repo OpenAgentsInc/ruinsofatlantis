@@ -304,12 +304,13 @@ pub mod config {
                     cfg.voxel_size_m = Length::meters(file.voxel_size_m);
                 }
                 cfg.chunk = UVec3::new(file.chunk[0], file.chunk[1], file.chunk[2]);
-                if let Some(id) = core_materials::find_material_id(&file.material) {
-                    cfg.material = id;
-                }
+                // material remains default stone
                 cfg.max_debris = file.max_debris.max(0) as usize;
-                cfg.max_chunk_remesh = file.chunk_remesh_budget_per_tick.max(0) as usize;
+                cfg.max_chunk_remesh = file.max_remesh_per_tick.max(0) as usize;
                 cfg.collider_budget_per_tick = file.collider_budget_per_tick.max(0) as usize;
+                cfg.close_surfaces = file.close_surfaces;
+                cfg.seed = file.seed;
+                cfg.max_carve_chunks = Some(file.max_carve_chunks);
             }
             cfg
         }
@@ -318,4 +319,3 @@ pub mod config {
 
 // Submodule with ECS registry/state
 pub mod state;
-
