@@ -8,6 +8,7 @@
 //! Filled in later when net_core types are finalized.
 
 use glam::Vec3;
+use log::warn;
 /// Client-side replication buffer that accumulates incoming deltas (chunks,
 /// entity snapshots) and exposes a coherent view for presentation layers.
 use net_core::snapshot::SnapshotDecode;
@@ -260,7 +261,7 @@ impl ReplicationBuffer {
                     || bb_max.z < min.z - eps
                     || bb_min.z > max.z + eps
                 {
-                    log::warn!(
+                    warn!(
                         "replication: drop destructible delta outside instance AABB (did={})",
                         delta.did
                     );
