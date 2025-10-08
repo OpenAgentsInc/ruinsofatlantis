@@ -1,4 +1,3 @@
-#![cfg(any())]
 //! Destructible registry: multi-proxy voxel state owned by the server ECS.
 //!
 //! Scope

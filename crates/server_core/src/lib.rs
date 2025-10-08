@@ -11,11 +11,13 @@ mod combat;
 pub use actor::*;
 pub use combat::*;
 use glam::Vec3;
+#[cfg(any())]
 pub mod destructible;
 mod ecs;
 pub mod jobs;
 pub mod scene_build;
 pub mod systems;
+#[cfg(any())]
 use destructible::state as destr_state;
 
 // ----------------------------------------------------------------------------
