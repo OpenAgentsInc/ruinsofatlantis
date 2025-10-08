@@ -17,7 +17,7 @@ pub mod jobs;
 pub mod scene_build;
 pub mod systems;
 #[cfg(any())]
-use destructible::state as destr_state;
+// bring destructible registry types via explicit paths to avoid cfg confusion
 
 // ----------------------------------------------------------------------------
 // Specs (tuning tables)
@@ -215,9 +215,12 @@ pub struct ServerState {
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
     /// Frame-local HUD toasts emitted by systems (drained by platform).
     pub hud_toasts: Vec<u8>,
-    // Destructible ECS runtime
-    pub destruct_registry: destr_state::DestructibleRegistry,
+    // Destructible ECS runtime (disabled)
+    #[cfg(any())]
+    pub destruct_registry: crate::destructible::state::DestructibleRegistry,
+    #[cfg(any())]
     pub destruct_instances: Vec<scene_build::DestructibleWorldAabb>,
+    #[cfg(any())]
     pub destruct_bootstrap_instances_outstanding: bool,
 }
 
@@ -241,8 +244,11 @@ impl ServerState {
             specs_proj,
             fx_hits: Vec::new(),
             hud_toasts: Vec::new(),
-            destruct_registry: destr_state::DestructibleRegistry::default(),
+            #[cfg(any())]
+            destruct_registry: crate::destructible::state::DestructibleRegistry::default(),
+            #[cfg(any())]
             destruct_instances: Vec::new(),
+            #[cfg(any())]
             destruct_bootstrap_instances_outstanding: false,
         }
     }
@@ -677,7 +683,6 @@ impl ServerState {
     }
 
     /// Provide world AABBs for all known destructible instances as net records.
-    #[cfg(any())]
     pub fn all_destructible_instances(&self) -> Vec<net_core::snapshot::DestructibleInstance> {
         self.destruct_instances
             .iter()
@@ -690,7 +695,6 @@ impl ServerState {
     }
 
     /// Drain queued chunk mesh deltas accumulated during the last tick.
-    #[cfg(any())]
     pub fn drain_destruct_mesh_deltas(&mut self) -> Vec<net_core::snapshot::ChunkMeshDelta> {
         let mut v = Vec::new();
         std::mem::swap(&mut v, &mut self.destruct_registry.pending_mesh_deltas);
