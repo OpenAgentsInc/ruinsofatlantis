@@ -1017,6 +1017,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
 
 fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
     // Collect projectile segments for this tick
+    const CARVE_BUS_CAP: usize = 1024;
     let mut segs: Vec<(ActorId, glam::Vec3, glam::Vec3, f32)> = Vec::new();
     for c in srv.ecs.iter() {
         if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
@@ -1040,6 +1041,10 @@ fn destructible_from_projectiles(srv: &mut ServerState, ctx: &mut Ctx) {
             let max = glam::Vec3::from(inst.world_max);
             if let Some(t) = crate::ecs::geom::segment_aabb_enter_t(p0, p1, min, max) {
                 let hit = p0 + (p1 - p0) * t.max(0.0);
+                if ctx.carves.len() >= CARVE_BUS_CAP {
+                    metrics::counter!("destruct.carves_dropped").increment(1);
+                    continue;
+                }
                 ctx.carves.push(ecs_core::components::CarveRequest {
                     did: inst.did,
                     center_m: hit.as_dvec3(),
@@ -1056,6 +1061,7 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
     if ctx.boom.is_empty() || srv.destruct_instances.is_empty() {
         return;
     }
+    const CARVE_BUS_CAP: usize = 1024;
     for e in &ctx.boom {
         for inst in &srv.destruct_instances {
             let min = glam::Vec3::from(inst.world_min);
@@ -1070,6 +1076,10 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
             let dx = closest.x - center.x;
             let dz = closest.z - center.z;
             if dx * dx + dz * dz <= e.r2 {
+                if ctx.carves.len() >= CARVE_BUS_CAP {
+                    metrics::counter!("destruct.carves_dropped").increment(1);
+                    continue;
+                }
                 ctx.carves.push(ecs_core::components::CarveRequest {
                     did: inst.did,
                     center_m: closest.as_dvec3(),

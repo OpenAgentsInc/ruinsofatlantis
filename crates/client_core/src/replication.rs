@@ -16,6 +16,9 @@ use std::collections::HashMap;
 pub struct ReplicationBuffer {
     pub updated_chunks: usize,
     pending_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
+    // Deltas for unknown instances are held until corresponding instance arrives
+    deferred_mesh: Vec<(u64, (u32, u32, u32), crate::upload::ChunkMeshEntry)>,
+    known_dids: std::collections::HashSet<u64>,
     pub boss_status: Option<BossStatus>,
     pub actors: Vec<ActorView>,
     pub wizards: Vec<WizardView>,
@@ -185,7 +188,24 @@ impl ReplicationBuffer {
             self.hits = d.hits;
             return true;
         }
-        // Chunk mesh deltas (tools/dev): accept and stash
+        // Destructible instance (register DID)
+        let mut slice_inst: &[u8] = payload;
+        if let Ok(inst) = net_core::snapshot::DestructibleInstance::decode(&mut slice_inst) {
+            self.known_dids.insert(inst.did);
+            // Move any deferred deltas for this DID into pending
+            let mut rest = Vec::new();
+            for (did, chunk, entry) in self.deferred_mesh.drain(..) {
+                if did == inst.did {
+                    self.pending_mesh.push((did, chunk, entry));
+                    self.updated_chunks += 1;
+                } else {
+                    rest.push((did, chunk, entry));
+                }
+            }
+            self.deferred_mesh = rest;
+            return true;
+        }
+        // Chunk mesh deltas: accept and stash iff instance is known
         let mut slice_delta: &[u8] = payload;
         if let Ok(delta) = net_core::snapshot::ChunkMeshDelta::decode(&mut slice_delta) {
             let entry = crate::upload::ChunkMeshEntry {
@@ -193,8 +213,12 @@ impl ReplicationBuffer {
                 normals: delta.normals,
                 indices: delta.indices,
             };
-            self.pending_mesh.push((delta.did, delta.chunk, entry));
-            self.updated_chunks += 1;
+            if self.known_dids.contains(&delta.did) {
+                self.pending_mesh.push((delta.did, delta.chunk, entry));
+                self.updated_chunks += 1;
+            } else {
+                self.deferred_mesh.push((delta.did, delta.chunk, entry));
+            }
             return true;
         }
         // HUD status message

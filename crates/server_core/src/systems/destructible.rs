@@ -101,7 +101,7 @@ pub fn destructible_apply_carves(srv: &mut ServerState, ctx: &mut Ctx) {
         let did = crate::destructible::state::DestructibleId(req.did);
         if let Some(proxy) = srv.destruct_registry.proxies.get_mut(&did) {
             // Convert world-space center to object-space if a transform is present,
-            // and scale carve radius defensively by (assumed-uniform) object_from_world scale.
+            // and scale carve radius defensively by object_from_world scale (average if non-uniform).
             let ws = glam::Vec3::new(
                 req.center_m.x as f32,
                 req.center_m.y as f32,
@@ -111,18 +111,22 @@ pub fn destructible_apply_carves(srv: &mut ServerState, ctx: &mut Ctx) {
             let sx = proxy.object_from_world.x_axis.truncate().length();
             let sy = proxy.object_from_world.y_axis.truncate().length();
             let sz = proxy.object_from_world.z_axis.truncate().length();
-            debug_assert!(
-                (sx - sy).abs() < 1e-3 && (sx - sz).abs() < 1e-3,
-                "non-uniform scale not supported for carve radius"
-            );
+            let avg = (sx + sy + sz) / 3.0;
+            if (sx - sy).abs() > 1e-2 || (sx - sz).abs() > 1e-2 {
+                log::warn!(
+                    "destructible: non-uniform scale detected (sx={:.3},sy={:.3},sz={:.3}); using avg={:.3} for carve radius",
+                    sx, sy, sz, avg
+                );
+            }
             req.center_m = os.as_dvec3();
-            req.radius_m *= sx as f64;
+            req.radius_m *= avg as f64;
             let _ = voxel_carve(
                 &mut proxy.grid,
                 &req,
                 &srv.destruct_registry.cfg,
                 &mut proxy.dirty,
             );
+            metrics::counter!("destruct.carves_applied_total").increment(1);
         } else {
             keep.push(req);
         }
@@ -152,15 +156,13 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
             let key = (c.x, c.y, c.z);
             if mb.indices.is_empty() {
                 proxy.meshes.map.remove(&key);
-                srv.destruct_registry
-                    .pending_mesh_deltas
-                    .push(ChunkMeshDelta {
-                        did: did.0,
-                        chunk: key,
-                        positions: Vec::new(),
-                        normals: Vec::new(),
-                        indices: Vec::new(),
-                    });
+                srv.destruct_registry.pending_mesh_deltas.push(ChunkMeshDelta {
+                    did: did.0,
+                    chunk: key,
+                    positions: Vec::new(),
+                    normals: Vec::new(),
+                    indices: Vec::new(),
+                });
                 srv.destruct_registry.touched_this_tick.push((*did, c));
                 continue;
             }
@@ -171,15 +173,23 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
             };
             if mc.validate().is_ok() {
                 proxy.meshes.map.insert(key, mc.clone());
-                srv.destruct_registry
-                    .pending_mesh_deltas
-                    .push(ChunkMeshDelta {
+                // Clamp overly large meshes for safety
+                let too_large = mc.positions.len() > 200_000 || mc.indices.len() > 600_000;
+                if too_large {
+                    log::warn!(
+                        "destructible: skipping oversize chunk mesh (pos={}, idx={})",
+                        mc.positions.len(),
+                        mc.indices.len()
+                    );
+                } else {
+                    srv.destruct_registry.pending_mesh_deltas.push(ChunkMeshDelta {
                         did: did.0,
                         chunk: key,
                         positions: mc.positions,
                         normals: mc.normals,
                         indices: mc.indices,
                     });
+                }
                 srv.destruct_registry.touched_this_tick.push((*did, c));
             }
         }
