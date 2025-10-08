@@ -27,7 +27,7 @@
 ```
 World (ECS)
  ├── Entities (PC, NPCs, projectiles, destructibles…)
- ├── Components (Transform, Health, Team, MoveSpeed, Melee, Projectile, Homing, Effects…)
+ ├── Components (Transform, Health, Faction, MoveSpeed, Melee, Projectile, Homing, Effects…)
  ├── Systems (fixed order: input → cooldowns → cast → ingest → AI → move → melee → homing → integrate → collide → AoE → faction → apply damage → cleanup)
  ├── Event buses (DamageEvent, ExplodeEvent, DeathEvent, HitFx[VFX])
  └── Services (SpatialGrid, FactionMatrix, Specs)
@@ -39,7 +39,7 @@ World (ECS)
 
 ## 3) Core Entity Kinds (by *role*, not class)
 
-* **Actor**: any combat unit (PC or NPC). Must have: `Transform`, `Health`, `Radius`, `Team`. Adds optional: `MoveSpeed`, `AggroRadius`, `AttackRadius`, `Melee`, `Spellbook`, `ResourcePool`, `Cooldowns`, `Stunned`, `Slow`, `Burning`, etc.
+* **Actor**: any combat unit (PC or NPC). Must have: `Transform`, `Health`, `Radius`, `Faction`. Adds optional: `MoveSpeed`, `AggroRadius`, `AttackRadius`, `Melee`, `Spellbook`, `ResourcePool`, `Cooldowns`, `Stunned`, `Slow`, `Burning`, etc.
 * **Projectile**: ephemeral entity with `Transform`, `Projectile{kind, ttl, owner}`, `Velocity`, optional `Homing`.
 * **Destructible**: entity representing destructible world pieces (`Destructible`, `VoxelProxy`, etc.).
 * **VFX/UI only**: purely visual handles spawned from replication (`HitFx`); **never** affect gameplay.
@@ -57,7 +57,7 @@ World (ECS)
 * `Transform { pos: Vec3, yaw: f32 }`
 * `Radius(f32)` — collision cylinder on XZ
 * `Health { hp: i32, max: i32 }`
-* `Team(TeamId)` — **integer** or compact enum; *no logic keyed on specific team names*
+* `Faction(FactionId)` — **integer** or compact enum; *no logic keyed on specific faction names*
 * `ArchetypeId(u16)` — data key for visuals/VO/UI; **no gameplay logic may branch on this**
 
 **Frequently used**

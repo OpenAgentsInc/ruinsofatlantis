@@ -6,7 +6,7 @@ Scope
 
 Entities (Actor model)
 - `server_core::ecs::world::Components` (crates/server_core/src/ecs/world.rs)
-  - Identity: `id: ActorId`, `kind: ActorKind` (Wizard | Zombie | Boss [label only]), `team: Team` (Pc | Wizards | Undead | Neutral)
+  - Identity: `id: ActorId`, `kind: ActorKind` (Wizard | Zombie | Boss [label only]), `faction: Faction` (Pc | Wizards | Undead | Neutral)
   - Optional: `name: Option<String>` (presentation-only; set for “Nivita”, “Death Knight”)
   - Transform/Health: `tr: Transform { pos, yaw, radius }`, `hp: Health { hp, max }`
   - Movement/Targeting: `move_speed: MoveSpeed { mps }`, `aggro: AggroRadius { m }`, `attack: AttackRadius { m }`
@@ -52,7 +52,7 @@ Authoritative Commands & Intents
 
 Replication (server → client)
 - ActorSnapshotDelta v3 (crates/net_core/src/snapshot.rs)
-  - spawns: ActorRep { id, kind, team, pos, yaw, radius, hp, max, alive }
+  - spawns: ActorRep { id, kind, faction (as `team` u8 today), pos, yaw, radius, hp, max, alive }
   - updates: ActorDeltaRec (bitmask: pos/yaw/hp/alive)
   - removals: Vec<u32>
   - projectiles: full ProjectileRep list (id, kind, pos, vel)

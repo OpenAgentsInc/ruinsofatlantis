@@ -2,7 +2,7 @@ Remediation Plan (ordered, with acceptance criteria)
 
 1) Remove archetype branching from systems (P0)
 - Actions
-  - Replace `wizard_targets()` with a Team‑based or component predicate (e.g., Team::Wizards).
+  - Replace `wizard_targets()` with a Faction‑based or component predicate (e.g., Faction::Wizards).
   - Remove `ActorKind::Wizard` assignment from projectile spawns (projectiles do not carry ActorKind semantics).
 - Files
   - crates/server_core/src/ecs/schedule.rs:97, 147, 184, 658
@@ -72,4 +72,3 @@ Remediation Plan (ordered, with acceptance criteria)
   - xtask/src/main.rs; .githooks/pre-push
 - Acceptance
   - Intentional reintroduction of any of the strings causes CI failure.
-

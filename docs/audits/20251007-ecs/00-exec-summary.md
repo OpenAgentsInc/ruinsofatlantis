@@ -5,7 +5,7 @@ Scope
 - Produced concrete remediation tasks with acceptance criteria, file refs, and owners.
 
 Top Findings (summary)
-- Archetype branches in server systems (uses `ActorKind::Wizard`/`Zombie`/`Boss` in logic) — replace with component/Team predicates.
+- Archetype branches in server systems (uses `ActorKind::Wizard`/`Zombie`/`Boss` in logic) — replace with component/Faction predicates.
 - Projectile collision uses O(N) scan over actors — add SpatialGrid `query_segment` and use it; keep full scan out of hot path.
 - Hard‑coded gameplay literals in systems/spawns (arming delays, default melee/move/aggro) — move to Specs/data.
 - Replication schema gaps vs guide — `ActorRep` missing `archetype_id`/`name_id`; legacy `BossStatusMsg`/`NpcListMsg` still exist.
@@ -19,7 +19,7 @@ Risk & Priority
 - P2: spans/counters, incremental grid, remove legacy snapshot types from runtime.
 
 High‑level Plan
-1) Cut archetype naming from logic (component/Team only).
+1) Cut archetype naming from logic (use Faction component or other component predicates).
 2) Add grid `query_segment` and use for projectile broad‑phase.
 3) Extend `ActorRep` with `{ archetype_id, name_id, unique }`; remove `BossStatusMsg` from runtime path.
 4) Move literals to Specs (arming delay, default melee/move/aggro) and data_runtime.
@@ -29,4 +29,3 @@ High‑level Plan
 8) Enforce CI grep guards for legacy types/flags.
 
 See 01‑violations.md for details, evidence, and 02‑remediation‑plan.md for tasks.
-

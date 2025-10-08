@@ -56,4 +56,3 @@ Legend
 - Guide: CI gates for `legacy_client_`, `NpcListMsg`, `BossStatusMsg`, `ActorStore`.
 - Evidence: Types still exist and README references legacy flags; no explicit grep step failing PRs.
 - Impact: Risk of regressions sneaking back.
-

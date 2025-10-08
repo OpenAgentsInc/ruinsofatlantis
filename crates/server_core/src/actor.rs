@@ -20,6 +20,12 @@ pub enum Team {
     Neutral,
 }
 
+/// Preferred terminology in docs and new code paths.
+/// Alias `Team` to `Faction` to clarify that this is a component-level
+/// allegiance marker, not a separate entity or system. Code may gradually
+/// migrate to `Faction` while keeping `Team` for compatibility.
+pub use Team as Faction;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Health {
     pub hp: i32,
