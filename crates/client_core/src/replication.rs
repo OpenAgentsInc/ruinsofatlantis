@@ -212,10 +212,26 @@ impl ReplicationBuffer {
         // Destructible instance (register DID)
         let mut slice_inst: &[u8] = payload;
         if let Ok(inst) = net_core::snapshot::DestructibleInstance::decode(&mut slice_inst) {
-            self.known_dids.insert(inst.did);
-            // Track AABB for validation of future deltas
+            // Validate instance AABB to avoid mis-decoding other frames as instances
             let min = Vec3::new(inst.world_min[0], inst.world_min[1], inst.world_min[2]);
             let max = Vec3::new(inst.world_max[0], inst.world_max[1], inst.world_max[2]);
+            let ext = max - min;
+            let sane = ext.x.is_finite()
+                && ext.y.is_finite()
+                && ext.z.is_finite()
+                && ext.x >= 0.001
+                && ext.y >= 0.001
+                && ext.z >= 0.001
+                && ext.x <= 10000.0
+                && ext.y <= 10000.0
+                && ext.z <= 10000.0
+                && min.x <= max.x
+                && min.y <= max.y
+                && min.z <= max.z;
+            if !sane {
+                return false;
+            }
+            self.known_dids.insert(inst.did);
             self.destr_instances.insert(inst.did, (min, max));
             // Move any deferred deltas for this DID into pending
             let mut rest = Vec::new();
