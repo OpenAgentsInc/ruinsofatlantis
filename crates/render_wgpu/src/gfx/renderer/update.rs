@@ -3017,7 +3017,7 @@ mod tests {
         // As a compromise, create a minimal struct via macro that shares the projectiles vec.
         struct Mini {
             projectiles: Vec<crate::gfx::fx::Projectile>,
-            terrain_cpu: crate::gfx::terrain::CpuTerrain,
+            terrain_cpu: crate::gfx::terrain::TerrainCPU,
         }
         impl Mini {
             fn spawn_fireball(
@@ -3048,7 +3048,7 @@ mod tests {
         }
         let mut mini = Mini {
             projectiles: Vec::new(),
-            terrain_cpu: crate::gfx::terrain::CpuTerrain::new(),
+            terrain_cpu: crate::gfx::terrain::TerrainCPU::new(),
         };
         mini.spawn_fireball(
             glam::vec3(0.0, 1.0, 0.0),
