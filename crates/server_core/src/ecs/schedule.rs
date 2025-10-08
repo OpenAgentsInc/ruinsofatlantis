@@ -849,22 +849,17 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         let _owner_team = owner
             .and_then(|id| srv.ecs.get(id).map(|a| a.faction))
             .unwrap_or(Faction::Pc);
-        // test against actors
+        // test against actors (broad-phase via spatial grid)
         let mut hit_any = false;
-        for a in srv.ecs.iter() {
-            if !a.hp.alive() {
-                continue;
-            }
-            // Never collide projectiles against other projectiles (including itself)
-            if a.projectile.is_some() {
-                continue;
-            }
-            if let Some(owner_id) = owner
-                && owner_id == a.id
-            {
-                continue;
-            }
-            // Hit any character regardless of faction (skip only the owner)
+        let seg_a = Vec2::new(p0.x, p0.z);
+        let seg_b = Vec2::new(p1.x, p1.z);
+        // Conservative pad to include typical radii; precise test follows.
+        let cand_ids = ctx.spatial.query_segment(seg_a, seg_b, 2.0);
+        for aid in cand_ids {
+            let Some(a) = srv.ecs.get(aid) else { continue };
+            if !a.hp.alive() { continue; }
+            if a.projectile.is_some() { continue; }
+            if let Some(owner_id) = owner && owner_id == a.id { continue; }
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
                 match kind {
                     crate::ProjKind::Fireball => {
@@ -880,19 +875,13 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                             dst: a.id,
                             amount: projectile_damage(srv, kind),
                         });
-                        // Record a small replicated hit effect for client visuals
                         let kind_byte = match kind {
                             crate::ProjKind::Firebolt => 0u8,
                             crate::ProjKind::Fireball => 1u8,
                             crate::ProjKind::MagicMissile => 2u8,
                         };
-                        srv.fx_hits.push(net_core::snapshot::HitFx {
-                            kind: kind_byte,
-                            pos: [p1.x, p1.y, p1.z],
-                        });
-                        if matches!(kind, crate::ProjKind::MagicMissile) {
-                            to_apply_slow.push(a.id);
-                        }
+                        srv.fx_hits.push(net_core::snapshot::HitFx { kind: kind_byte, pos: [p1.x, p1.y, p1.z] });
+                        if matches!(kind, crate::ProjKind::MagicMissile) { to_apply_slow.push(a.id); }
                     }
                 }
                 hit_any = true;
@@ -1093,6 +1082,28 @@ impl SpatialGrid {
         }
         out.sort_by_key(|id| id.0);
         out.into_iter()
+    }
+
+    /// Return candidate actor ids whose cell buckets overlap the segment AABB expanded by `pad`.
+    /// This is a conservative broad-phase; precise collision is done by the caller.
+    pub fn query_segment(&self, a: Vec2, b: Vec2, pad: f32) -> Vec<ActorId> {
+        let min_x = a.x.min(b.x) - pad;
+        let max_x = a.x.max(b.x) + pad;
+        let min_z = a.y.min(b.y) - pad;
+        let max_z = a.y.max(b.y) + pad;
+        let (min_cx, min_cz) = (self.key(min_x, min_z).0, self.key(min_x, min_z).1);
+        let (max_cx, max_cz) = (self.key(max_x, max_z).0, self.key(max_x, max_z).1);
+        let mut out: Vec<ActorId> = Vec::new();
+        for cx in min_cx..=max_cx {
+            for cz in min_cz..=max_cz {
+                if let Some(v) = self.buckets.get(&(cx, cz)) {
+                    out.extend_from_slice(v);
+                }
+            }
+        }
+        out.sort_by_key(|id| id.0);
+        out.dedup_by_key(|id| id.0);
+        out
     }
 }
 fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
