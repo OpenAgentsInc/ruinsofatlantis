@@ -1,8 +1,8 @@
 //! Destructible systems: core voxel carve/mesh/collider helpers and ECS glue.
 
+use crate::ServerState;
 use crate::destructible::{config::DestructibleConfig, queue::ChunkQueue};
 use crate::ecs::schedule::Ctx;
-use crate::ServerState;
 use ecs_core::components::{CarveRequest, ChunkDirty, ChunkMesh, MeshCpu};
 use glam::UVec3;
 use net_core::snapshot::ChunkMeshDelta;
@@ -101,10 +101,19 @@ pub fn destructible_apply_carves(srv: &mut ServerState, ctx: &mut Ctx) {
         let did = crate::destructible::state::DestructibleId(req.did);
         if let Some(proxy) = srv.destruct_registry.proxies.get_mut(&did) {
             // Convert world-space center to object-space if a transform is present
-            let ws = glam::Vec3::new(req.center_m.x as f32, req.center_m.y as f32, req.center_m.z as f32);
+            let ws = glam::Vec3::new(
+                req.center_m.x as f32,
+                req.center_m.y as f32,
+                req.center_m.z as f32,
+            );
             let os = (proxy.object_from_world * ws.extend(1.0)).truncate();
             req.center_m = os.as_dvec3();
-            let _ = voxel_carve(&mut proxy.grid, &req, &srv.destruct_registry.cfg, &mut proxy.dirty);
+            let _ = voxel_carve(
+                &mut proxy.grid,
+                &req,
+                &srv.destruct_registry.cfg,
+                &mut proxy.dirty,
+            );
         } else {
             keep.push(req);
         }
@@ -134,13 +143,15 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
             let key = (c.x, c.y, c.z);
             if mb.indices.is_empty() {
                 proxy.meshes.map.remove(&key);
-                srv.destruct_registry.pending_mesh_deltas.push(ChunkMeshDelta {
-                    did: did.0,
-                    chunk: key,
-                    positions: Vec::new(),
-                    normals: Vec::new(),
-                    indices: Vec::new(),
-                });
+                srv.destruct_registry
+                    .pending_mesh_deltas
+                    .push(ChunkMeshDelta {
+                        did: did.0,
+                        chunk: key,
+                        positions: Vec::new(),
+                        normals: Vec::new(),
+                        indices: Vec::new(),
+                    });
                 continue;
             }
             let mc = MeshCpu {
@@ -150,13 +161,15 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
             };
             if mc.validate().is_ok() {
                 proxy.meshes.map.insert(key, mc.clone());
-                srv.destruct_registry.pending_mesh_deltas.push(ChunkMeshDelta {
-                    did: did.0,
-                    chunk: key,
-                    positions: mc.positions,
-                    normals: mc.normals,
-                    indices: mc.indices,
-                });
+                srv.destruct_registry
+                    .pending_mesh_deltas
+                    .push(ChunkMeshDelta {
+                        did: did.0,
+                        chunk: key,
+                        positions: mc.positions,
+                        normals: mc.normals,
+                        indices: mc.indices,
+                    });
             }
         }
     }

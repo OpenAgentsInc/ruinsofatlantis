@@ -556,7 +556,8 @@ impl ApplicationHandler for App {
                         d.encode(&mut buf);
                         let mut framed = Vec::with_capacity(buf.len() + 8);
                         net_core::frame::write_msg(&mut framed, &buf);
-                        metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+                        metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                            .increment(framed.len() as u64);
                         let _ = srv_xport.try_send(framed);
                         self.sent_destr_instances.insert(d.did);
                     }
@@ -570,7 +571,8 @@ impl ApplicationHandler for App {
                     delta.encode(&mut buf);
                     let mut framed = Vec::with_capacity(buf.len() + 8);
                     net_core::frame::write_msg(&mut framed, &buf);
-                    metrics::counter!("net.bytes_sent_total", "dir" => "tx").increment(framed.len() as u64);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                        .increment(framed.len() as u64);
                     let _ = srv_xport.try_send(framed);
                 }
                 self.tick = self.tick.wrapping_add(1);

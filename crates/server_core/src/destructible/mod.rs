@@ -6,7 +6,7 @@
 
 use core_units::{Length, Mass};
 use glam::{DVec3, UVec3, Vec3};
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 use voxel_proxy::{RemovedVoxels, VoxelGrid};
 
 /// Result of a raycast into a voxel grid.
@@ -210,10 +210,16 @@ pub mod queue {
 
     impl ChunkQueue {
         pub fn new() -> Self {
-            Self { set: BTreeSet::new() }
+            Self {
+                set: BTreeSet::new(),
+            }
         }
-        pub fn len(&self) -> usize { self.set.len() }
-        pub fn is_empty(&self) -> bool { self.set.is_empty() }
+        pub fn len(&self) -> usize {
+            self.set.len()
+        }
+        pub fn is_empty(&self) -> bool {
+            self.set.is_empty()
+        }
         pub fn enqueue_many<I: IntoIterator<Item = UVec3>>(&mut self, it: I) {
             for c in it.into_iter() {
                 self.set.insert((c.x, c.y, c.z));
@@ -236,7 +242,7 @@ pub mod queue {
 
 pub mod config {
     //! Minimal config for destructible budgets and voxelization.
-    use core_materials::{find_material_id, MaterialId};
+    use core_materials::{MaterialId, find_material_id};
     use core_units::Length;
     use glam::{DVec3, UVec3};
 

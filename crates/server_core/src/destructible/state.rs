@@ -24,7 +24,6 @@ pub struct WorldAabb {
 }
 
 /// Per-instance proxy state. Heavy voxel data lives here; ECS entities hold only lightweight refs.
-#[derive(Debug)]
 pub struct DestructibleProxy {
     pub did: DestructibleId,
     pub grid: VoxelGrid,

@@ -81,14 +81,16 @@ pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
         voxel_m: Length::meters(0.5),
         dims: glam::UVec3::new(32, 16, 32),
         chunk: glam::UVec3::new(8, 8, 8),
-        material: core_materials::find_material_id("stone").unwrap_or(core_materials::MaterialId(0)),
+        material: core_materials::find_material_id("stone")
+            .unwrap_or(core_materials::MaterialId(0)),
     };
     let mut grid = VoxelGrid::new(meta);
     let d = grid.dims();
     for z in 0..d.z {
         for y in 0..d.y {
             for x in 0..d.x {
-                let edge = x == 0 || y == 0 || z == 0 || x == d.x - 1 || y == d.y - 1 || z == d.z - 1;
+                let edge =
+                    x == 0 || y == 0 || z == 0 || x == d.x - 1 || y == d.y - 1 || z == d.z - 1;
                 let wall = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
                 if edge || wall {
                     grid.set(x, y, z, true);
@@ -97,7 +99,10 @@ pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
         }
     }
     let did = DestructibleId(1);
-    let aabb = WorldAabb { min: world_min, max: world_max };
+    let aabb = WorldAabb {
+        min: world_min,
+        max: world_max,
+    };
     let proxy = DestructibleProxy::new(did, grid, aabb);
     srv.destruct_registry.insert_proxy(proxy);
     srv.destruct_instances.push(DestructibleWorldAabb {
