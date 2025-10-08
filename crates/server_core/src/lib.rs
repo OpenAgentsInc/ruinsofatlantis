@@ -800,7 +800,11 @@ impl ServerState {
                     ActorKind::Boss => 3,
                 },
                 name_id: if a.name.is_some() { 1 } else { 0 },
-                unique: if Some(a.id) == self.nivita_actor_id { 1 } else { 0 },
+                unique: if Some(a.id) == self.nivita_actor_id {
+                    1
+                } else {
+                    0
+                },
                 pos: [a.tr.pos.x, a.tr.pos.y, a.tr.pos.z],
                 yaw: a.tr.yaw,
                 radius: a.tr.radius,

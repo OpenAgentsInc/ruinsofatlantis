@@ -7,7 +7,7 @@
 use glam::{Vec2, Vec3};
 
 use crate::ServerState;
-use crate::actor::{ActorId, ActorKind, Team};
+use crate::actor::{ActorId, Team};
 use crate::ecs::geom::segment_hits_circle_xz;
 
 #[derive(Copy, Clone, Debug)]
@@ -92,9 +92,11 @@ impl Schedule {
 }
 
 fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
+    // Targets for hostile actors: any alive actor whose faction is hostile to Undead or Wizards as needed.
+    // Retained helper name for minimal churn; used by systems that move/attack toward Wizards faction members.
     srv.ecs
         .iter()
-        .filter(|a| a.hp.alive() && matches!(a.kind, ActorKind::Wizard))
+        .filter(|a| a.hp.alive() && a.team == crate::actor::Team::Wizards)
         .map(|a| (a.id, a.tr.pos, a.tr.radius))
         .collect()
 }
@@ -144,7 +146,7 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 });
                 let comps = crate::ecs::world::Components {
                     id: crate::actor::ActorId(0),
-                    kind: crate::actor::ActorKind::Wizard,
+                    kind: crate::actor::ActorKind::Zombie, // placeholder; projectiles are ephemeral, kind unused
                     team: crate::actor::Team::Neutral,
                     name: None,
                     tr: crate::actor::Transform {
@@ -181,7 +183,7 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
             let v = dir_n * spec.speed_mps;
             let comps = crate::ecs::world::Components {
                 id: crate::actor::ActorId(0),
-                kind: crate::actor::ActorKind::Wizard, // unused for projectile
+                kind: crate::actor::ActorKind::Zombie, // unused for projectile
                 team: crate::actor::Team::Neutral,
                 name: None,
                 tr: crate::actor::Transform {
@@ -649,15 +651,11 @@ fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
     if hostile.is_empty() {
         return;
     }
-    // Iterate NPC wizards and pick a target
+    // Iterate faction Wizards and pick a target
     let wiz_ids: Vec<ActorId> = srv
         .ecs
         .iter()
-        .filter(|a| {
-            a.hp.alive()
-                && matches!(a.kind, ActorKind::Wizard)
-                && a.team == crate::actor::Team::Wizards
-        })
+        .filter(|a| a.hp.alive() && a.team == crate::actor::Team::Wizards)
         .map(|a| a.id)
         .collect();
     for wid in wiz_ids {

@@ -148,11 +148,11 @@ impl SnapshotDecode for ChunkMeshDelta {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActorRep {
     pub id: u32,
-    pub kind: u8,          // presentation-only bucket; clients should prefer archetype_id
-    pub faction: u8,       // formerly `team`
+    pub kind: u8,    // presentation-only bucket; clients should prefer archetype_id
+    pub faction: u8, // formerly `team`
     pub archetype_id: u16, // data id for model/UI mapping
-    pub name_id: u16,      // data id for display name
-    pub unique: u8,        // 0/1 unique flag for bosses/etc.
+    pub name_id: u16, // data id for display name
+    pub unique: u8,  // 0/1 unique flag for bosses/etc.
     pub pos: [f32; 3],
     pub yaw: f32,
     pub radius: f32,
@@ -464,15 +464,35 @@ impl SnapshotDecode for ActorSnapshotDelta {
             let name_id: u16;
             let unique: u8;
             if v >= 4 {
-                kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-                faction = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                kind = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                faction = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
                 archetype_id = u16::from_le_bytes(take::<2>(inp)?);
                 name_id = u16::from_le_bytes(take::<2>(inp)?);
-                unique = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                unique = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
             } else {
                 // v3 legacy
-                kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
-                faction = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                kind = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
+                faction = inp
+                    .first()
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
+                *inp = &inp[1..];
                 archetype_id = 0;
                 name_id = 0;
                 unique = 0;
