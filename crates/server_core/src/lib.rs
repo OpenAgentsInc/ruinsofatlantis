@@ -336,6 +336,7 @@ impl ServerState {
                         mana: 20,
                         max: 20,
                         regen_per_s: 1.0,
+                        mana_frac: 0.0,
                     });
                     use std::collections::HashMap;
                     pc.cooldowns = Some(ecs::Cooldowns {
@@ -379,6 +380,7 @@ impl ServerState {
                         mana: 20,
                         max: 20,
                         regen_per_s: 0.5,
+                        mana_frac: 0.0,
                     });
                 }
                 if w.cooldowns.is_none() {
@@ -466,6 +468,7 @@ impl ServerState {
                 mana: 20,
                 max: 20,
                 regen_per_s: 1.0,
+                mana_frac: 0.0,
             });
             use std::collections::HashMap;
             pc.cooldowns = Some(ecs::Cooldowns {
@@ -716,6 +719,7 @@ impl ServerState {
                 mana: 40,
                 max: 40,
                 regen_per_s: 0.3,
+                mana_frac: 0.0,
             });
             use std::collections::HashMap;
             a.cooldowns = Some(ecs::Cooldowns {
@@ -750,6 +754,7 @@ impl ServerState {
                 mana: 30,
                 max: 30,
                 regen_per_s: 0.5,
+                mana_frac: 0.0,
             });
             w.cooldowns = Some(ecs::Cooldowns {
                 gcd_s: 0.30,
@@ -1252,5 +1257,23 @@ mod tests_actor {
         if let Some(pc) = s.pc_actor {
             assert_eq!(s.ecs.get(pc).unwrap().hp.hp, 0);
         }
+    }
+
+    #[test]
+    fn mana_regen_accumulates_fraction_and_ticks() {
+        let mut s = ServerState::new();
+        let pc = s.spawn_pc_at(Vec3::new(0.0, 0.6, 0.0));
+        {
+            let a = s.ecs.get_mut(pc).unwrap();
+            let p = a.pool.as_mut().unwrap();
+            p.mana = 10;
+            p.mana_frac = 0.0;
+            p.regen_per_s = 1.0;
+        }
+        for _ in 0..60 {
+            s.step_authoritative(1.0 / 60.0);
+        }
+        let mana = s.ecs.get(pc).unwrap().pool.as_ref().unwrap().mana;
+        assert_eq!(mana, 11, "PC mana should regen by ~1 over one second");
     }
 }

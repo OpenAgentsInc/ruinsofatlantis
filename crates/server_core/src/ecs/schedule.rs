@@ -375,8 +375,21 @@ fn cooldown_and_mana_tick(srv: &mut ServerState, ctx: &Ctx) {
             }
         }
         if let Some(pool) = c.pool.as_mut() {
-            let m = (pool.mana as f32 + pool.regen_per_s * dt).min(pool.max as f32);
-            pool.mana = m as i32;
+            if pool.regen_per_s > 0.0 && pool.mana < pool.max {
+                pool.mana_frac += pool.regen_per_s * dt;
+                // Account for float error around exact 1.0 boundaries
+                if pool.mana_frac + 1e-6 >= 1.0 {
+                    let whole = ((pool.mana_frac + 1e-6).floor()) as i32;
+                    if whole > 0 {
+                        pool.mana = (pool.mana + whole).min(pool.max);
+                        pool.mana_frac -= whole as f32;
+                    }
+                }
+                if pool.mana >= pool.max {
+                    pool.mana = pool.max;
+                    pool.mana_frac = 0.0;
+                }
+            }
         }
     }
 }

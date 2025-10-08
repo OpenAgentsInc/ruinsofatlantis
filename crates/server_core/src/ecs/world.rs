@@ -318,6 +318,8 @@ pub struct ResourcePool {
     pub mana: i32,
     pub max: i32,
     pub regen_per_s: f32,
+    /// Fractional accumulator for mana regeneration to avoid truncation per tick
+    pub mana_frac: f32,
 }
 
 #[derive(Clone, Debug)]
