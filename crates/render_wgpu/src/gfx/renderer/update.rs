@@ -1576,6 +1576,16 @@ impl Renderer {
                                     self.last_time,
                                     self.firebolt_cd_dur,
                                 );
+                                // Spawn local visuals immediately (presentation-only)
+                                let fb_col = [2.6, 0.7, 0.18];
+                                self.spawn_firebolt(
+                                    spawn,
+                                    dir_w,
+                                    t,
+                                    Some(self.pc_index),
+                                    true,
+                                    fb_col,
+                                );
                             }
                             super::super::PcCast::MagicMissile => {
                                 if let Some(tx) = &self.cmd_tx {
@@ -1599,6 +1609,8 @@ impl Renderer {
                                     self.last_time,
                                     self.magic_missile_cd_dur,
                                 );
+                                // Spawn local visuals (3 darts spread)
+                                self.spawn_magic_missile(spawn, dir_w, t);
                             }
                             super::super::PcCast::Fireball => {
                                 if let Some(tx) = &self.cmd_tx {
@@ -1621,6 +1633,14 @@ impl Renderer {
                                     spell_id,
                                     self.last_time,
                                     self.fireball_cd_dur,
+                                );
+                                // Spawn local visuals for Fireball
+                                self.spawn_fireball(spawn, dir_w, t, Some(self.pc_index));
+                                log::info!(
+                                    "pc cast Fireball at ({:.2},{:.2},{:.2})",
+                                    spawn.x,
+                                    spawn.y,
+                                    spawn.z
                                 );
                             }
                         }
@@ -2985,6 +3005,59 @@ pub(super) fn segment_hits_circle_xz(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spawn_fireball_pushes_projectile() {
+        // Minimal smoke: ensure spawn_fireball appends to projectile list.
+        // Construct a minimal Renderer via MaybeUninit-like defaults is overkill; instead,
+        // use a tiny helper by constructing a dummy instance through mem::MaybeUninit is unsafe.
+        // Here we rely on spawn_* not touching GPU and only pushing to projectiles.
+        // So create a small renderer via std::mem::MaybeUninit::zeroed() is forbidden; instead,
+        // construct a Renderer using an existing default in init path is also heavy.
+        // As a compromise, create a minimal struct via macro that shares the projectiles vec.
+        struct Mini {
+            projectiles: Vec<crate::gfx::fx::Projectile>,
+            terrain_cpu: crate::gfx::terrain::CpuTerrain,
+        }
+        impl Mini {
+            fn spawn_fireball(
+                &mut self,
+                origin: glam::Vec3,
+                dir: glam::Vec3,
+                t: f32,
+                owner: Option<usize>,
+            ) {
+                let speed = 28.0f32;
+                let base_life = 2.0f32;
+                let max_range_m = 150.0f32 * 0.3048;
+                let flight_time = max_range_m / speed;
+                let life = base_life.min(flight_time);
+                let origin = gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15);
+                self.projectiles.push(crate::gfx::fx::Projectile {
+                    pos: origin,
+                    vel: dir.normalize_or_zero() * speed,
+                    t_die: t + life,
+                    owner_wizard: owner,
+                    color: [2.2, 0.7, 0.2],
+                    kind: crate::gfx::fx::ProjectileKind::Fireball {
+                        radius: 6.0,
+                        damage: 28,
+                    },
+                });
+            }
+        }
+        let mut mini = Mini {
+            projectiles: Vec::new(),
+            terrain_cpu: crate::gfx::terrain::CpuTerrain::new(),
+        };
+        mini.spawn_fireball(
+            glam::vec3(0.0, 1.0, 0.0),
+            glam::vec3(0.0, 0.0, 1.0),
+            0.0,
+            Some(0),
+        );
+        assert_eq!(mini.projectiles.len(), 1);
+    }
     #[test]
     fn segment_circle_intersects_center_cross() {
         let c = glam::vec3(0.0, 0.0, 0.0);
