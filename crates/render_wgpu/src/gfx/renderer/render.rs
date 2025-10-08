@@ -300,7 +300,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Direct-hit sparks from replicated HitFx events (server-authoritative). One short burst per hit.
         if !r.repl_buf.hits.is_empty() {
             let mut hits = std::mem::take(&mut r.repl_buf.hits);
-            if hits.len() > 32 { hits.truncate(32); }
+            if hits.len() > 32 {
+                hits.truncate(32);
+            }
             for h in hits {
                 let pos = glam::vec3(h.pos[0], h.pos[1], h.pos[2]);
                 // Clamp slightly above terrain to ensure visibility

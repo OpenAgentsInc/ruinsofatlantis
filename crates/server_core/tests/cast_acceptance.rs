@@ -97,7 +97,11 @@ fn pc_fireball_cd_and_mana() {
     );
     s.step_authoritative(0.016);
     let mana_after = s.ecs.get(s.pc_actor.unwrap()).unwrap().pool.unwrap().mana;
-    assert!(mana_after <= 15, "Fireball should cost ~5 mana (<=15), got {}", mana_after);
+    assert!(
+        mana_after <= 15,
+        "Fireball should cost ~5 mana (<=15), got {}",
+        mana_after
+    );
     // Immediate retry should be rejected by per-spell CD (~4s)
     s.enqueue_cast(
         glam::vec3(0.0, 0.6, 0.0),
@@ -106,9 +110,14 @@ fn pc_fireball_cd_and_mana() {
     );
     s.step_authoritative(0.016);
     let mana_blocked = s.ecs.get(s.pc_actor.unwrap()).unwrap().pool.unwrap().mana;
-    assert_eq!(mana_blocked, mana_after, "per-spell Fireball CD should block immediate re-cast");
+    assert_eq!(
+        mana_blocked, mana_after,
+        "per-spell Fireball CD should block immediate re-cast"
+    );
     // Advance ~4.1s to clear CD; mana should also regen ~4.1
-    for _ in 0..260 { s.step_authoritative(0.016); }
+    for _ in 0..260 {
+        s.step_authoritative(0.016);
+    }
     let mana_before_retry = s.ecs.get(s.pc_actor.unwrap()).unwrap().pool.unwrap().mana;
     s.enqueue_cast(
         glam::vec3(0.0, 0.6, 0.0),
@@ -117,5 +126,8 @@ fn pc_fireball_cd_and_mana() {
     );
     s.step_authoritative(0.016);
     let mana_after_retry = s.ecs.get(s.pc_actor.unwrap()).unwrap().pool.unwrap().mana;
-    assert!(mana_after_retry < mana_before_retry, "Fireball accepted after CD; mana reduced");
+    assert!(
+        mana_after_retry < mana_before_retry,
+        "Fireball accepted after CD; mana reduced"
+    );
 }

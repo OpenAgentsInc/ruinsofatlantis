@@ -174,7 +174,9 @@ fn forbidden_patterns_guard() -> Result<()> {
         ])
         .output()
         .ok();
-    if let Some(o) = out && !o.stdout.is_empty() {
+    if let Some(o) = out
+        && !o.stdout.is_empty()
+    {
         let s = String::from_utf8_lossy(&o.stdout);
         bail!(
             "archetype branching found in server systems:\n{}\nHint: use faction/component predicates; see docs/ECS.md §Rules.",
@@ -194,7 +196,9 @@ fn forbidden_patterns_guard() -> Result<()> {
         ])
         .output()
         .ok();
-    if let Some(o) = out2 && !o.stdout.is_empty() {
+    if let Some(o) = out2
+        && !o.stdout.is_empty()
+    {
         let s = String::from_utf8_lossy(&o.stdout);
         bail!(
             "found legacy helper name 'wizard_targets' in systems:\n{}\nHint: use 'targets_by_faction(Faction::...)' instead.",

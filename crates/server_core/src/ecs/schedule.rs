@@ -1176,7 +1176,11 @@ impl SpatialGrid {
         } else {
             (1.0 / dx).abs()
         };
-        let t_delta_z = if dz.abs() < 1e-6 { f32::INFINITY } else { (1.0 / dz).abs() };
+        let t_delta_z = if dz.abs() < 1e-6 {
+            f32::INFINITY
+        } else {
+            (1.0 / dz).abs()
+        };
         // Steps: number of cells along dominant axis
         let steps = (dx.max(dz)).ceil() as i32 + 2;
         for _ in 0..steps {

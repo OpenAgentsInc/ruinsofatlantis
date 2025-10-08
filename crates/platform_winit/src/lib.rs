@@ -142,7 +142,8 @@ impl ApplicationHandler for App {
                 self.tick = 0;
                 self.baseline_tick = 0;
                 self.baseline = std::collections::HashMap::new();
-                self.interest_radius_m = 40.0;
+                // Temp: widen interest culling radius to include far casters/targets in demo
+                self.interest_radius_m = 60.0;
                 self.last_sec_start = std::time::Instant::now();
                 self.cmds_this_sec = 0;
             }
