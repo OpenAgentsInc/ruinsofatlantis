@@ -246,8 +246,7 @@ impl ServerState {
     }
     /// Provide world AABBs for all known destructible instances as net records.
     pub fn all_destructible_instances(&self) -> Vec<net_core::snapshot::DestructibleInstance> {
-        self
-            .destruct_instances
+        self.destruct_instances
             .iter()
             .map(|d| net_core::snapshot::DestructibleInstance {
                 did: d.did,
