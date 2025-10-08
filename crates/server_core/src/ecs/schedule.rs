@@ -692,138 +692,97 @@ fn separate_undead(srv: &mut ServerState) {
 
 fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
     use crate::{CastCmd, SpellId};
-    // Build hostile candidates map (alive, hostile to Wizards)
-    let mut hostile: Vec<(ActorId, Vec3, crate::actor::Faction)> = Vec::new();
-    for a in srv.ecs.iter() {
-        if a.hp.alive()
-            && srv
-                .factions
-                .effective_hostile(a.faction, crate::actor::Faction::Wizards)
-        {
-            hostile.push((a.id, a.tr.pos, a.faction));
-        }
-    }
-    if hostile.is_empty() {
-        return;
-    }
-    // Iterate faction Wizards and pick a target
-    let wiz_ids: Vec<ActorId> = srv
+    // Snapshot alive actors (pos, radius, faction)
+    let alive: Vec<(ActorId, Vec3, f32, crate::actor::Faction)> = srv
         .ecs
         .iter()
-        .filter(|a| a.hp.alive() && a.faction == crate::actor::Faction::Wizards)
+        .filter(|a| a.hp.alive())
+        .map(|a| (a.id, a.tr.pos, a.tr.radius, a.faction))
+        .collect();
+    if alive.is_empty() {
+        return;
+    }
+    // Iterate any caster (has Spellbook and ResourcePool)
+    let caster_ids: Vec<ActorId> = srv
+        .ecs
+        .iter()
+        .filter(|a| a.hp.alive() && a.spellbook.is_some() && a.pool.is_some())
         .map(|a| a.id)
         .collect();
-    for wid in wiz_ids {
-        let (wpos, stunned) = if let Some(w) = srv.ecs.get(wid) {
-            (w.tr.pos, w.stunned.is_some())
+    for cid in caster_ids {
+        let (cpos, cfaction, stunned) = if let Some(c) = srv.ecs.get(cid) {
+            (c.tr.pos, c.faction, c.stunned.is_some())
         } else {
             continue;
         };
-        // Choose nearest hostile
-        let mut best: Option<(f32, Vec3)> = None;
-        for (_id, p, _t) in &hostile {
-            let dx = p.x - wpos.x;
-            let dz = p.z - wpos.z;
+        // Face nearest hostile
+        let mut best: Option<(f32, Vec3, f32, crate::actor::Faction)> = None;
+        for (_id, p, r, tf) in &alive {
+            if !srv.factions.effective_hostile(cfaction, *tf) {
+                continue;
+            }
+            let dx = p.x - cpos.x;
+            let dz = p.z - cpos.z;
             let d2 = dx * dx + dz * dz;
-            if best.as_ref().map(|(b, _)| d2 < *b).unwrap_or(true) {
-                best = Some((d2, *p));
+            if best.as_ref().map(|(b, _, _, _)| d2 < *b).unwrap_or(true) {
+                best = Some((d2, *p, *r, *tf));
             }
         }
-        let Some((_d2, tp)) = best else { continue };
-        let dir = tp - wpos;
-        let dir_n = if dir.length_squared() > 1e-6 {
-            dir.normalize()
-        } else {
-            Vec3::new(0.0, 0.0, 1.0)
-        };
-        let yaw = dir_n.x.atan2(dir_n.z);
-        if let Some(w) = srv.ecs.get_mut(wid) {
-            w.tr.yaw = yaw;
-            // Ensure casting components exist
-            if w.spellbook.is_none() {
-                w.spellbook = Some(crate::ecs::world::Spellbook {
-                    known: vec![SpellId::Firebolt, SpellId::Fireball, SpellId::MagicMissile],
-                });
-            }
-            if w.pool.is_none() {
-                w.pool = Some(crate::ecs::world::ResourcePool {
-                    mana: 20,
-                    max: 20,
-                    regen_per_s: 0.5,
-                });
-            }
-            if w.cooldowns.is_none() {
+        let Some((d2, tp, tr, _tf)) = best else { continue };
+        let dir = tp - cpos;
+        let dir_n = if dir.length_squared() > 1e-6 { dir.normalize() } else { Vec3::Z };
+        // update yaw
+        if let Some(c) = srv.ecs.get_mut(cid) {
+            c.tr.yaw = dir_n.x.atan2(dir_n.z);
+            // Ensure resources exist (failsafe for old spawns)
+            if c.cooldowns.is_none() {
                 use std::collections::HashMap;
-                w.cooldowns = Some(crate::ecs::world::Cooldowns {
-                    gcd_s: 0.30,
-                    gcd_ready: 0.0,
-                    per_spell: HashMap::new(),
-                });
+                c.cooldowns = Some(crate::ecs::world::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
             }
         }
-        if stunned {
-            continue;
-        }
-        // Choose spell by situation
-        let dist = (tp - wpos).length();
-        let fb_aoe_r = srv
-            .projectile_spec(crate::ProjKind::Fireball)
-            .aoe_radius_m
-            .max(0.0);
+        if stunned { continue; }
+        let dist = d2.sqrt();
+        // Prefer melee when in reach for actors that have it; let melee system handle the hit
+        let prefer_melee = if let Some(c) = srv.ecs.get(cid) {
+            let extra = c.attack.map(|r| r.m).unwrap_or(0.35);
+            let reach = c.tr.radius + tr + extra;
+            dist <= reach + 0.2
+        } else {
+            false
+        };
+        let fb_aoe_r = srv.projectile_spec(crate::ProjKind::Fireball).aoe_radius_m.max(0.0);
+        // Count hostiles near target within FB AoE radius
         let mut near_count = 0usize;
-        for (_id, p, _t) in &hostile {
-            let d = (p - tp).length();
-            if d <= fb_aoe_r {
-                near_count += 1;
-            }
+        for (_id, p, _r, tf) in &alive {
+            if !srv.factions.effective_hostile(cfaction, *tf) { continue; }
+            if (*p - tp).length() <= fb_aoe_r { near_count += 1; }
         }
-        let want_spell = if near_count >= 2 && (12.0..=25.0).contains(&dist) {
+        let want_spell = if prefer_melee {
+            None
+        } else if near_count >= 2 && (12.0..=25.0).contains(&dist) {
             Some(SpellId::Fireball)
         } else if dist <= 10.0 {
             Some(SpellId::MagicMissile)
         } else {
             Some(SpellId::Firebolt)
         };
-        // Line-of-fire: must be roughly in front
-        let facing = glam::vec3(yaw.sin(), 0.0, yaw.cos());
-        let dot = facing.normalize_or_zero().dot(dir_n);
-        if dot < 0.7 {
-            continue;
-        }
-        // Pre-check cooldowns & mana for chosen spell
+        // Gate on cooldowns & mana
         let mut ok = true;
-        if let Some(w) = srv.ecs.get(wid) {
-            if let Some(cd) = w.cooldowns.as_ref() {
-                if cd.gcd_ready > 0.0 {
-                    ok = false;
-                }
+        if let Some(c) = srv.ecs.get(cid) {
+            if let Some(cd) = c.cooldowns.as_ref() {
+                if cd.gcd_ready > 0.0 { ok = false; }
                 if let Some(sp) = want_spell
-                    && cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0
-                {
-                    ok = false;
-                }
+                    && cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0 { ok = false; }
             }
-            if let Some(pool) = w.pool.as_ref()
-                && let Some(sp) = want_spell
-            {
+            if let (Some(pool), Some(sp)) = (c.pool.as_ref(), want_spell) {
                 let (cost, _cd, _gcd) = srv.spell_cost_cooldown(sp);
-                if pool.mana < cost {
-                    ok = false;
-                }
+                if pool.mana < cost { ok = false; }
             }
         }
-        if !ok {
-            continue;
-        }
-        // Enqueue the chosen spell; cast_system will gate and spawn projectiles
-        let muzzle = wpos + dir_n * 0.35;
+        if !ok { continue; }
         if let Some(sp) = want_spell {
-            srv.pending_casts.push(CastCmd {
-                pos: muzzle,
-                dir: dir_n,
-                spell: sp,
-                caster: Some(wid),
-            });
+            let muzzle = cpos + dir_n * 0.35;
+            srv.pending_casts.push(CastCmd { pos: muzzle, dir: dir_n, spell: sp, caster: Some(cid) });
         }
     }
 }

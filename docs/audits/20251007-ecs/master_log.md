@@ -21,6 +21,8 @@ Changes
   - HitFx already flows via Ctx; ServerState drains ctx.fx_hits after tick.
   - Cached specs: added `specs_arche` and `specs_proj` to ServerState; load in new(); replaced load_default() call sites.
   - Neutralized archetype nouns in test names; added cast_acceptance.rs covering GCD/per-spell cooldown and mana gating.
+  - Caster AI prefers melee in reach; DK now reliably closes and lands melee instead of kiting at close range.
+  - Added tests: pc_mana_regen.rs (1/s regen), cast_reject_toast.rs (HUD toast on insufficient mana), death_knight_engages.rs (moves closer and attacks).
 - xtask
   - Expanded forbidden patterns: block Team (type name) in runtime crates; block legacy msgs; block v:\s*3 in net_core/client_core; keep ActorKind branching guard in server systems.
 - docs
@@ -32,6 +34,7 @@ Verification
 - rg checks: no srv.fx_hits.push in systems; no BossStatusMsg/NpcListMsg in runtime; no v3 decoder acceptance.
 - cargo clippy/test pass locally; xtask ci guards enabled for v4 only.
  - Renderer consumes replicated HitFx and spawns a small spark burst at each impact.
+ - Wizard HP bars are built from replication (repl_buf.wizards) and drop on AoE.
 
 Next
 - Broaden neutral naming in tests (wizard → caster/melee_hostile) across server_core tests (non-functional rename).

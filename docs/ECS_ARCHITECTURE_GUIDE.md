@@ -177,7 +177,8 @@ World (ECS)
 **HUD (server→client)**
 
 * `HudStatus` includes PC mana/max, GCD remaining, per‑spell cooldowns, effect timers.
-* `HudToast` conveys short, transient HUD messages by code (e.g., `1 = Not enough mana`).
+* `HudToast` conveys short, transient HUD messages by code. Defined codes:
+  * `1 = Not enough mana` — client shows a brief red center text and suppresses local cast animation.
 
 **Client apply path**
 

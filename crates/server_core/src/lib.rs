@@ -661,6 +661,21 @@ impl ServerState {
                 cooldown_s: spec.melee_cooldown_s,
                 ready_in_s: 0.0,
             });
+            // Give DK a basic spell kit (Fireball + MagicMissile)
+            a.spellbook = Some(ecs::Spellbook {
+                known: vec![SpellId::Fireball, SpellId::MagicMissile],
+            });
+            a.pool = Some(ecs::ResourcePool {
+                mana: 40,
+                max: 40,
+                regen_per_s: 0.3,
+            });
+            use std::collections::HashMap;
+            a.cooldowns = Some(ecs::Cooldowns {
+                gcd_s: 0.40,
+                gcd_ready: 0.0,
+                per_spell: HashMap::new(),
+            });
         }
         id
     }
