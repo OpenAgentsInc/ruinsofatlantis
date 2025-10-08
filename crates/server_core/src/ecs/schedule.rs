@@ -889,7 +889,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         if !arm_ok {
             continue;
         }
-        let _owner_team = owner
+        let owner_team = owner
             .and_then(|id| srv.ecs.get(id).map(|a| a.faction))
             .unwrap_or(Faction::Pc);
         // test against actors (broad-phase via spatial grid)
@@ -898,8 +898,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         let seg_b = Vec2::new(p1.x, p1.z);
         // Conservative pad to include typical radii; precise test follows.
         let cand_ids = ctx.spatial.query_segment(seg_a, seg_b, 2.0);
-        for aid in cand_ids {
-            let Some(a) = srv.ecs.get(aid) else { continue };
+        let mut local_hits = 0usize;
+        for aid in &cand_ids {
+            let Some(a) = srv.ecs.get(*aid) else { continue };
             if !a.hp.alive() {
                 continue;
             }
@@ -909,6 +910,15 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             if let Some(owner_id) = owner
                 && owner_id == a.id
             {
+                continue;
+            }
+            // Allow PC→Wizard hits even if faction matrix is neutral (demo parity)
+            let target_team = a.faction;
+            let hostile = srv
+                .factions
+                .effective_hostile(owner_team, target_team)
+                || (owner_team == Faction::Pc && target_team == Faction::Wizards);
+            if !hostile {
                 continue;
             }
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
@@ -940,6 +950,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                         }
                     }
                 }
+                local_hits += 1;
                 hit_any = true;
                 break;
             }
@@ -987,6 +998,9 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                 ctx.cmd.despawns.push(pid);
             }
         }
+        if std::env::var("RA_LOG_TICK").ok().as_deref() == Some("1") {
+            tracing::info!(candidates = cand_ids.len(), hits = local_hits, kind = ?kind, "proj-collision");
+        }
     }
     for id in to_apply_slow {
         if let Some(t) = srv.ecs.get_mut(id) {
@@ -1010,11 +1024,23 @@ fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
             let dx = pos.x - e.center_xz.x;
             let dz = pos.z - e.center_xz.y;
             if dx * dx + dz * dz <= e.r2 {
-                ctx.dmg.push(DamageEvent {
-                    src: e.src,
-                    dst: *aid,
-                    amount: projectile_damage_aoe(srv),
-                });
+                // Hostility override for PC→Wizard AoE in demo parity
+                let owner_team = e
+                    .src
+                    .and_then(|id| srv.ecs.get(id).map(|a| a.faction))
+                    .unwrap_or(Faction::Pc);
+                let target_team = srv.ecs.get(*aid).map(|a| a.faction).unwrap_or(Faction::Undead);
+                let hostile = srv
+                    .factions
+                    .effective_hostile(owner_team, target_team)
+                    || (owner_team == Faction::Pc && target_team == Faction::Wizards);
+                if hostile {
+                    ctx.dmg.push(DamageEvent {
+                        src: e.src,
+                        dst: *aid,
+                        amount: projectile_damage_aoe(srv),
+                    });
+                }
                 burning_ids.push(*aid);
             }
         }

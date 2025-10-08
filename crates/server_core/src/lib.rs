@@ -691,6 +691,8 @@ impl ServerState {
             if let Some(sp) = spec {
                 w.tr.radius = sp.radius_m;
             }
+            // Clamp to minimum collision radius to avoid tunneling misses
+            w.tr.radius = w.tr.radius.max(0.7);
         }
         id
     }

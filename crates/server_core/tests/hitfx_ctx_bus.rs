@@ -20,6 +20,6 @@ fn hitfx_flows_through_ctx_and_accumulates() {
         "expected server_state.fx_hits to be populated after a direct hit"
     );
     // HitFx present (position verified indirectly in renderer visuals)
-    assert!(s.fx_hits.len() >= 1);
+    assert!(!s.fx_hits.is_empty());
     let _ = wid; // silence unused if optimized out
 }
