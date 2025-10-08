@@ -73,6 +73,31 @@ fn object_space_radius_scales_with_uniform_transform() {
 }
 
 #[test]
+fn demo_ruins_has_no_top_slab() {
+    // Ensure the demo proxy does not create a full top layer slab (open sky)
+    let mut srv = server_core::ServerState::new();
+    add_demo_ruins_destructible(&mut srv);
+    let did = server_core::destructible::state::DestructibleId(1);
+    let proxy = srv.destruct_registry.proxies.get(&did).expect("proxy");
+    let dims = proxy.grid.dims();
+    let top_y = dims.y - 1;
+    let mut solids = 0usize;
+    for z in 0..dims.z {
+        for x in 0..dims.x {
+            if proxy.grid.is_solid(x, top_y, z) {
+                solids += 1;
+            }
+        }
+    }
+    // No full top slab: allow a tiny tolerance (some side walls may reach top)
+    let total = (dims.x * dims.z) as usize;
+    assert!(
+        solids * 10 < total,
+        "top layer should be mostly open (solids={solids}, total={total})"
+    );
+}
+
+#[test]
 fn remesh_budget_is_deterministic_over_ticks() {
     let mut srv = server_core::ServerState::new();
     add_demo_ruins_destructible(&mut srv);

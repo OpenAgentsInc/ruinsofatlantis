@@ -89,10 +89,11 @@ pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
     for z in 0..d.z {
         for y in 0..d.y {
             for x in 0..d.x {
-                let edge =
-                    x == 0 || y == 0 || z == 0 || x == d.x - 1 || y == d.y - 1 || z == d.z - 1;
-                let wall = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
-                if edge || wall {
+                // Build vertical side walls and a bottom floor. Leave the top open to
+                // avoid generating a giant hovering slab over the entrance.
+                let bottom = y == 0;
+                let side_walls = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
+                if bottom || side_walls {
                     grid.set(x, y, z, true);
                 }
             }
