@@ -548,7 +548,7 @@ impl ServerState {
         sched.run(self, &mut ctx);
         // Drain per-tick visual hits into server buffer for platform to replicate
         if !ctx.fx_hits.is_empty() {
-            self.fx_hits.extend(ctx.fx_hits.drain(..));
+            self.fx_hits.append(&mut ctx.fx_hits);
         }
     }
     /// Spawn an Undead actor (legacy NPC replacement)
