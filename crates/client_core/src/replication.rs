@@ -174,6 +174,23 @@ impl ReplicationBuffer {
                     }
                 }
             }
+            // Populate boss status from actor list (kind=2=Boss, prefer unique==1).
+            // This replaces the legacy BossStatusMsg and drives HUD + DK model updates.
+            if let Some(b) = self
+                .actors
+                .iter()
+                .find(|a| a.kind == 2 && a.unique != 0)
+                .or_else(|| self.actors.iter().find(|a| a.kind == 2))
+                .cloned()
+            {
+                self.boss_status = Some(BossStatus {
+                    name: "Death Knight".to_string(),
+                    ac: 0, // AC can be filled from a future replicated field or config if needed
+                    hp: b.hp,
+                    max: b.max,
+                    pos: b.pos,
+                });
+            }
             // Projectiles (full list)
             self.projectiles.clear();
             for p in d.projectiles {
