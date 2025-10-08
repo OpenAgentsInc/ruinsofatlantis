@@ -16,13 +16,11 @@ mod ecs;
 pub mod jobs;
 pub mod scene_build;
 pub mod systems;
-#[cfg(any())]
-// bring destructible registry types via explicit paths to avoid cfg confusion
+// (destructible module disabled)
 
 // ----------------------------------------------------------------------------
 // Specs (tuning tables)
 // ----------------------------------------------------------------------------
-
 #[derive(Debug, Clone, Copy)]
 pub struct SpellSpec {
     pub cost: i32,
@@ -683,6 +681,7 @@ impl ServerState {
     }
 
     /// Provide world AABBs for all known destructible instances as net records.
+    #[cfg(any())]
     pub fn all_destructible_instances(&self) -> Vec<net_core::snapshot::DestructibleInstance> {
         self.destruct_instances
             .iter()
@@ -695,6 +694,7 @@ impl ServerState {
     }
 
     /// Drain queued chunk mesh deltas accumulated during the last tick.
+    #[cfg(any())]
     pub fn drain_destruct_mesh_deltas(&mut self) -> Vec<net_core::snapshot::ChunkMeshDelta> {
         let mut v = Vec::new();
         std::mem::swap(&mut v, &mut self.destruct_registry.pending_mesh_deltas);
