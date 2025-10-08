@@ -28,7 +28,6 @@ pub struct WorldAabb {
 }
 
 /// Per-instance proxy state. Heavy voxel data lives here; ECS entities hold only lightweight refs.
-#[derive(Debug)]
 pub struct DestructibleProxy {
     pub did: DestructibleId,
     pub grid: VoxelGrid,
@@ -76,6 +75,16 @@ impl Default for DestructibleRegistry {
             pending_mesh_deltas: Vec::new(),
             cfg: DestructibleConfig::default(),
         }
+    }
+}
+
+impl std::fmt::Debug for DestructibleRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DestructibleRegistry")
+            .field("proxies", &self.proxies.len())
+            .field("pending_carves", &self.pending_carves.len())
+            .field("pending_mesh_deltas", &self.pending_mesh_deltas.len())
+            .finish()
     }
 }
 
