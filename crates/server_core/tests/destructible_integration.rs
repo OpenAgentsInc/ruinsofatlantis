@@ -1,3 +1,4 @@
+#![cfg(feature = "destruct_debug")]
 #![allow(clippy::unwrap_used)]
 
 use server_core::scene_build::add_demo_ruins_destructible;

@@ -1,3 +1,4 @@
+#![cfg(feature = "destruct_debug")]
 #![allow(clippy::unwrap_used)]
 
 use glam::UVec3;

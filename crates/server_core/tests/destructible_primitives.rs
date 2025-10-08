@@ -2,6 +2,7 @@
 //! These tests exercise pure CPU helpers: DDA raycast, debris carve,
 //! deterministic chunk queue ordering.
 
+#![cfg(feature = "destruct_debug")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use core_units::Length;

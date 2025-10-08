@@ -23,8 +23,5 @@ fn fireball_reject_shows_toast_and_spawns_no_projectile() {
     assert_eq!(proj_ct, 0, "cast should be rejected; no projectiles");
 
     // HUD toast code 1 = Not enough mana must be queued for platform
-    assert!(
-        s.hud_toasts.iter().any(|&c| c == 1),
-        "expected 'Not enough mana' toast (code 1)"
-    );
+    assert!(s.hud_toasts.contains(&1), "expected 'Not enough mana' toast (code 1)");
 }
