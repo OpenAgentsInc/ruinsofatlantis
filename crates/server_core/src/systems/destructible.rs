@@ -161,9 +161,7 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
                         normals: Vec::new(),
                         indices: Vec::new(),
                     });
-                srv.destruct_registry
-                    .touched_this_tick
-                    .push((*did, c));
+                srv.destruct_registry.touched_this_tick.push((*did, c));
                 continue;
             }
             let mc = MeshCpu {
@@ -182,9 +180,7 @@ pub fn destructible_remesh_budgeted(srv: &mut ServerState) {
                         normals: mc.normals,
                         indices: mc.indices,
                     });
-                srv.destruct_registry
-                    .touched_this_tick
-                    .push((*did, c));
+                srv.destruct_registry.touched_this_tick.push((*did, c));
             }
         }
     }
