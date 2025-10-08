@@ -26,6 +26,7 @@ Changes
 - docs
   - Updated docs/ECS.md to reflect v4 schema, system names, and client apply semantics.
   - Expanded ECS.md with explicit note: renderer selects model/rig solely by archetype_id; added Faction rules box.
+  - Added HUD toast message to replication docs; documented that wizard bars use replicated HP.
 
 Verification
 - rg checks: no srv.fx_hits.push in systems; no BossStatusMsg/NpcListMsg in runtime; no v3 decoder acceptance.

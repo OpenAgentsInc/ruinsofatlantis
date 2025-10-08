@@ -164,19 +164,20 @@ World (ECS)
 
 **Snapshots (server→client)**
 
-* **ActorSnapshotDelta v3** *(one path, no legacy fallbacks)*:
+* **ActorSnapshotDelta v4** *(single path; no legacy fallbacks)*:
 
-  * `spawns: Vec<ActorRep>` — `{ id, archetype_id, team, pos, yaw, radius, hp, max, alive }`
-  * `updates: Vec<ActorDeltaRec>` — bitmask for `{pos, yaw, hp, alive}`
+  * `spawns: Vec<ActorRep>` — `{ id, kind(u8), faction(u8), archetype_id(u16), name_id(u16), unique(u8), pos, yaw, radius, hp, max, alive }`
+  * `updates: Vec<ActorDeltaRec>` — bitmask for `{pos, yaw, hp, alive}` (quantized)
   * `removals: Vec<u32>` — actor ids
   * `projectiles: Vec<ProjectileRep>` — ephemeral list every tick
-  * `hits: Vec<HitFx>` — VFX only
+  * `hits: Vec<HitFx>` — VFX only (no gameplay)
 * **Quantization:** positions and yaw quantized; deltas carry only changed bits.
 * **Interest management:** per‑client center/radius; only include nearby actors.
 
 **HUD (server→client)**
 
 * `HudStatus` includes PC mana/max, GCD remaining, per‑spell cooldowns, effect timers.
+* `HudToast` conveys short, transient HUD messages by code (e.g., `1 = Not enough mana`).
 
 **Client apply path**
 
@@ -197,7 +198,7 @@ World (ECS)
   * idle vs jog vs sprint by speed threshold
   * one‑shot death on `alive=false`, then hold
 * Projectiles drawn from replicated list; Fireball VFX triggered on projectile **disappear/explode**; `HitFx` spawns “spark” bursts on direct hits.
-* HUD renders from `HudStatus`.
+* HUD renders from `HudStatus`; actor overhead health bars use replicated HP/positions, not client‑side overlays.
 
 > **Never** do client‑side collisions, damage, AI, or “fake” hit particles with gameplay implications.
 

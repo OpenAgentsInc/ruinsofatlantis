@@ -57,11 +57,14 @@ Replication (server → client)
   - removals: Vec<u32>
   - projectiles: full ProjectileRep list (id, kind, pos, vel)
   - hits: Vec<HitFx> — tiny impact events for VFX (no gameplay)
+  - HUD toasts: HudToastMsg (code u8) — short messages (1 = "Not enough mana")
 - Client buffer (crates/client_core/src/replication.rs)
-  - Maintains: `actors`, `wizards` (subset), `npcs`, `projectiles`, `hits`, `hud`
+  - Maintains: `actors`, `wizards` (subset), `npcs`, `projectiles`, `hits`, `hud`, `toasts`
   - Applies deltas and rebuilds derived views every v4 apply to ensure HP/pos/yaw sync.
+  - Stores `toasts` for the frame; renderer consumes to show brief on‑screen messages.
 - Presentation: model/rig selection is keyed by `archetype_id` (data-driven), not `kind`.
   - Renderer chooses mesh/rig solely by `archetype_id` (data-driven); `kind` is presentation-only and must not drive model selection.
+  - Actor overhead health bars use replicated HP/positions (authoritative), not client‑side caches.
 
 Faction Rules (server authority)
 - Default hostilities: Pc↔Undead and Wizards↔Undead are hostile; Pc↔Wizards are neutral until PC damages a Wizard.

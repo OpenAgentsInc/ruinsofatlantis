@@ -260,6 +260,9 @@ pub mod queue {
     }
 }
 
+/// ECS-backed destructible registry and proxy state.
+pub mod state;
+
 pub mod config {
     //! Minimal flag parser for destructible demo configuration.
     use core_materials::{MaterialId, find_material_id};
