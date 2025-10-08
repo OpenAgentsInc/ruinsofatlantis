@@ -1040,14 +1040,15 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         .map(|v| v == "0")
         .unwrap_or(false);
     if !overlays_disabled && !r.is_vox_onepath() {
-        // Bars for wizards
+        // Bars for casters (Wizards): use replicated HP/pos (authoritative)
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
-        for (i, m) in r.wizard_models.iter().enumerate() {
-            // vox_onepath_demo only hides wizards when sandboxing is enabled
-            let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
-            let frac = (r.wizard_hp.get(i).copied().unwrap_or(r.wizard_hp_max) as f32)
-                / (r.wizard_hp_max as f32);
-            bar_entries.push((head.truncate(), frac));
+        for w in &r.repl_buf.wizards {
+            if w.hp <= 0 {
+                continue;
+            }
+            let head = glam::vec3(w.pos.x, w.pos.y + 1.7, w.pos.z);
+            let frac = (w.hp.max(0) as f32) / (w.max.max(1) as f32);
+            bar_entries.push((head, frac));
         }
         // Bars for alive zombies (replication only)
         {
@@ -1480,6 +1481,20 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                             r.queue
                                 .write_buffer(&r.dk_instances, 0, bytemuck::bytes_of(inst));
                         }
+                    }
+                }
+            }
+            // HUD toasts: show transient messages for this frame
+            if !r.repl_buf.toasts.is_empty() {
+                for code in std::mem::take(&mut r.repl_buf.toasts) {
+                    if code == 1 {
+                        r.hud.append_center_text(
+                            r.size.width,
+                            r.size.height,
+                            "Not enough mana",
+                            18.0,
+                            [1.0, 0.2, 0.2, 1.0],
+                        );
                     }
                 }
             }

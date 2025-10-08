@@ -211,6 +211,8 @@ pub struct ServerState {
     pub specs_proj: data_runtime::specs::projectiles::ProjectileSpecDb,
     /// Frame-local hit effects emitted by projectile collisions (drained by platform).
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
+    /// Frame-local HUD toasts emitted by systems (drained by platform).
+    pub hud_toasts: Vec<u8>,
 }
 
 impl ServerState {
@@ -232,6 +234,7 @@ impl ServerState {
             specs_arche,
             specs_proj,
             fx_hits: Vec::new(),
+            hud_toasts: Vec::new(),
         }
     }
     // Legacy actor rebuild removed. Actors are authoritative.
@@ -568,6 +571,9 @@ impl ServerState {
         // Drain per-tick visual hits into server buffer for platform to replicate
         if !ctx.fx_hits.is_empty() {
             self.fx_hits.append(&mut ctx.fx_hits);
+        }
+        if !ctx.hud_toasts.is_empty() {
+            self.hud_toasts.append(&mut ctx.hud_toasts);
         }
     }
     /// Spawn an Undead actor (legacy NPC replacement)

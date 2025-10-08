@@ -58,6 +58,8 @@ pub struct Ctx {
     pub hits: Vec<HitEvent>,
     // Server-auth VFX hits to replicate this tick
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
+    // HUD toast codes (transient per-tick; platform drains and sends messages)
+    pub hud_toasts: Vec<u8>,
     pub deaths: Vec<DeathEvent>,
     pub spatial: SpatialGrid,
     pub cmd: crate::ecs::world::CmdBuf,
@@ -371,7 +373,7 @@ fn cooldown_and_mana_tick(srv: &mut ServerState, ctx: &Ctx) {
     }
 }
 
-fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
+fn cast_system(srv: &mut ServerState, ctx: &mut Ctx) {
     if srv.pending_casts.is_empty() {
         return;
     }
@@ -430,15 +432,21 @@ fn cast_system(srv: &mut ServerState, _ctx: &mut Ctx) {
                 gcd_ready_val = cd.gcd_ready;
                 spell_cd_val = cd.per_spell.get(&cmd.spell).copied().unwrap_or(0.0);
             }
+            let mut not_enough_mana = false;
             if ok && let Some(pool) = c.pool.as_mut() {
                 if pool.mana < cost {
                     ok = false;
+                    not_enough_mana = true;
                 } else {
                     pool.mana -= cost;
                 }
                 mana_after = Some(pool.mana);
             }
             if !ok {
+                // Emit HUD toast for insufficient mana for the local PC caster
+                if not_enough_mana && c.faction == crate::actor::Faction::Pc {
+                    ctx.hud_toasts.push(1u8); // 1 = Not enough mana
+                }
                 if std::env::var("RA_LOG_CASTS").ok().as_deref() == Some("1") {
                     let mb = mana_before.unwrap_or(-1);
                     let ma = mana_after.unwrap_or(mb);

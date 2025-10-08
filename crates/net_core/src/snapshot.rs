@@ -731,6 +731,56 @@ impl SnapshotDecode for HudStatusMsg {
     }
 }
 
+// ---------------------------------------------------------------------------
+// HUD toast (short, transient client message)
+// ---------------------------------------------------------------------------
+
+pub const TAG_HUD_TOAST: u8 = 0xB2;
+pub const HUD_TOAST_VERSION: u8 = 1;
+
+/// Minimal HUD toast: client shows a short message based on code.
+/// Codes: 1 = Not enough mana
+#[derive(Debug, Clone, PartialEq)]
+pub struct HudToastMsg {
+    pub v: u8,
+    pub code: u8,
+}
+
+impl SnapshotEncode for HudToastMsg {
+    fn encode(&self, out: &mut Vec<u8>) {
+        out.push(TAG_HUD_TOAST);
+        out.push(self.v);
+        out.push(self.code);
+    }
+}
+
+impl SnapshotDecode for HudToastMsg {
+    fn decode(inp: &mut &[u8]) -> anyhow::Result<Self> {
+        use anyhow::bail;
+        let tag = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if tag != TAG_HUD_TOAST {
+            bail!("not a HudToast tag");
+        }
+        let v = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        if v != HUD_TOAST_VERSION {
+            bail!("unsupported version: {v}");
+        }
+        let code = inp
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("short read"))?;
+        *inp = &inp[1..];
+        Ok(HudToastMsg { v, code })
+    }
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct WizardRep {
     pub id: u32,

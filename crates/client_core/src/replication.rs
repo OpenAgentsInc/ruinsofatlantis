@@ -22,6 +22,7 @@ pub struct ReplicationBuffer {
     pub npcs: Vec<NpcView>,
     pub projectiles: Vec<ProjectileView>,
     pub hits: Vec<net_core::snapshot::HitFx>,
+    pub toasts: Vec<u8>,
     pub hud: HudState,
 }
 
@@ -212,6 +213,12 @@ impl ReplicationBuffer {
             self.hud.burning_ms = hud.burning_ms;
             self.hud.slow_ms = hud.slow_ms;
             self.hud.stunned_ms = hud.stunned_ms;
+            return true;
+        }
+        // HUD toast message
+        let mut toast_slice: &[u8] = payload;
+        if let Ok(toast) = net_core::snapshot::HudToastMsg::decode(&mut toast_slice) {
+            self.toasts.push(toast.code);
             return true;
         }
         false

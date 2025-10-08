@@ -529,6 +529,20 @@ impl ApplicationHandler for App {
                         .increment(fh.len() as u64);
                     let _ = srv_xport.try_send(fh);
                 }
+                // Drain HUD toasts and send messages
+                while let Some(code) = srv.hud_toasts.pop() {
+                    let toast = net_core::snapshot::HudToastMsg {
+                        v: net_core::snapshot::HUD_TOAST_VERSION,
+                        code,
+                    };
+                    let mut tb = Vec::new();
+                    toast.encode(&mut tb);
+                    let mut ft = Vec::with_capacity(tb.len() + 8);
+                    net_core::frame::write_msg(&mut ft, &tb);
+                    metrics::counter!("net.bytes_sent_total", "dir" => "tx")
+                        .increment(ft.len() as u64);
+                    let _ = srv_xport.try_send(ft);
+                }
                 self.tick = self.tick.wrapping_add(1);
             }
         }
