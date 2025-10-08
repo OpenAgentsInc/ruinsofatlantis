@@ -914,9 +914,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             }
             // Allow PC→Wizard hits even if faction matrix is neutral (demo parity)
             let target_team = a.faction;
-            let hostile = srv
-                .factions
-                .effective_hostile(owner_team, target_team)
+            let hostile = srv.factions.effective_hostile(owner_team, target_team)
                 || (owner_team == Faction::Pc && target_team == Faction::Wizards);
             if !hostile {
                 continue;
@@ -1029,10 +1027,12 @@ fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
                     .src
                     .and_then(|id| srv.ecs.get(id).map(|a| a.faction))
                     .unwrap_or(Faction::Pc);
-                let target_team = srv.ecs.get(*aid).map(|a| a.faction).unwrap_or(Faction::Undead);
-                let hostile = srv
-                    .factions
-                    .effective_hostile(owner_team, target_team)
+                let target_team = srv
+                    .ecs
+                    .get(*aid)
+                    .map(|a| a.faction)
+                    .unwrap_or(Faction::Undead);
+                let hostile = srv.factions.effective_hostile(owner_team, target_team)
                     || (owner_team == Faction::Pc && target_team == Faction::Wizards);
                 if hostile {
                     ctx.dmg.push(DamageEvent {
