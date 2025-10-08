@@ -1630,6 +1630,7 @@ version = "0.1.0"
 dependencies = [
  "ecs_core",
  "glam 0.30.8",
+ "log",
  "net_core",
  "tracing",
  "tracing-subscriber",
