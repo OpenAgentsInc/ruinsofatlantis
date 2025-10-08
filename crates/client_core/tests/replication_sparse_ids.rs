@@ -3,13 +3,16 @@ use net_core::snapshot::{ActorRep, ActorSnapshotDelta, SnapshotEncode};
 #[test]
 fn apply_actor_delta_with_sparse_id_does_not_panic() {
     let delta = ActorSnapshotDelta {
-        v: 3,
+        v: 4,
         tick: 1,
         baseline: 0,
         spawns: vec![ActorRep {
             id: 100,
             kind: 1,
-            team: 2,
+            faction: 2,
+            archetype_id: 2,
+            name_id: 0,
+            unique: 0,
             pos: [1.0, 0.6, 2.0],
             yaw: 0.0,
             radius: 0.9,

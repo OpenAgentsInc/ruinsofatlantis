@@ -107,7 +107,10 @@ impl ReplicationBuffer {
                 let av = ActorView {
                     id: a.id,
                     kind: a.kind,
-                    team: a.team,
+                    faction: a.faction,
+                    archetype_id: a.archetype_id,
+                    name_id: a.name_id,
+                    unique: a.unique,
                     pos: glam::vec3(a.pos[0], a.pos[1], a.pos[2]),
                     yaw: a.yaw,
                     radius: a.radius,
@@ -241,7 +244,10 @@ pub struct NpcView {
 pub struct ActorView {
     pub id: u32,
     pub kind: u8,
-    pub team: u8,
+    pub faction: u8,
+    pub archetype_id: u16,
+    pub name_id: u16,
+    pub unique: u8,
     pub pos: glam::Vec3,
     pub yaw: f32,
     pub radius: f32,

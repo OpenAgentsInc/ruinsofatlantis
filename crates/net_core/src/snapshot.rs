@@ -32,7 +32,7 @@ pub struct ChunkMeshDelta {
 
 const VERSION: u8 = 1;
 const ACTOR_SNAP_VERSION: u8 = 2;
-const ACTOR_SNAP_DELTA_VERSION: u8 = 3;
+const ACTOR_SNAP_DELTA_VERSION: u8 = 4;
 pub const TAG_ACTOR_SNAPSHOT: u8 = 0xA2;
 pub const TAG_ACTOR_SNAPSHOT_DELTA: u8 = 0xA3;
 // Legacy TickSnapshot tag removed; ActorSnapshot v2 is canonical.
@@ -148,8 +148,11 @@ impl SnapshotDecode for ChunkMeshDelta {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActorRep {
     pub id: u32,
-    pub kind: u8,
-    pub team: u8,
+    pub kind: u8,          // presentation-only bucket; clients should prefer archetype_id
+    pub faction: u8,       // formerly `team`
+    pub archetype_id: u16, // data id for model/UI mapping
+    pub name_id: u16,      // data id for display name
+    pub unique: u8,        // 0/1 unique flag for bosses/etc.
     pub pos: [f32; 3],
     pub yaw: f32,
     pub radius: f32,
@@ -176,7 +179,9 @@ impl SnapshotEncode for ActorSnapshot {
         for a in &self.actors {
             out.extend_from_slice(&a.id.to_le_bytes());
             out.push(a.kind);
-            out.push(a.team);
+            // ActorSnapshot v2 continues to write the compact faction value in the legacy `team` slot
+            out.push(a.faction);
+            // ActorSnapshot v2 does not carry archetype/name/unique; omitted here intentionally
             for c in &a.pos {
                 out.extend_from_slice(&c.to_le_bytes());
             }
@@ -262,7 +267,10 @@ impl SnapshotDecode for ActorSnapshot {
             actors.push(ActorRep {
                 id,
                 kind,
-                team,
+                faction: team,
+                archetype_id: 0,
+                name_id: 0,
+                unique: 0,
                 pos,
                 yaw,
                 radius,
@@ -341,8 +349,17 @@ impl SnapshotEncode for ActorSnapshotDelta {
         out.extend_from_slice(&ns.to_le_bytes());
         for a in &self.spawns {
             out.extend_from_slice(&a.id.to_le_bytes());
-            out.push(a.kind);
-            out.push(a.team);
+            if self.v >= 4 {
+                out.push(a.kind);
+                out.push(a.faction);
+                out.extend_from_slice(&a.archetype_id.to_le_bytes());
+                out.extend_from_slice(&a.name_id.to_le_bytes());
+                out.push(a.unique);
+            } else {
+                // legacy v3 layout
+                out.push(a.kind);
+                out.push(a.faction);
+            }
             for c in &a.pos {
                 out.extend_from_slice(&c.to_le_bytes());
             }
@@ -431,7 +448,7 @@ impl SnapshotDecode for ActorSnapshotDelta {
             .copied()
             .ok_or_else(|| anyhow::anyhow!("short read"))?;
         *inp = &inp[1..];
-        if v != ACTOR_SNAP_DELTA_VERSION {
+        if v != ACTOR_SNAP_DELTA_VERSION && v != 3 {
             bail!("unsupported version: {v}");
         }
         let tick = u64::from_le_bytes(take::<8>(inp)?);
@@ -441,22 +458,25 @@ impl SnapshotDecode for ActorSnapshotDelta {
         let mut spawns = Vec::with_capacity(ns);
         for _ in 0..ns {
             let id = u32::from_le_bytes(take::<4>(inp)?);
-            let kind = {
-                let b = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-                b
-            };
-            let team = {
-                let b = inp
-                    .first()
-                    .copied()
-                    .ok_or_else(|| anyhow::anyhow!("short read"))?;
-                *inp = &inp[1..];
-                b
-            };
+            let kind: u8;
+            let faction: u8;
+            let archetype_id: u16;
+            let name_id: u16;
+            let unique: u8;
+            if v >= 4 {
+                kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                faction = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                archetype_id = u16::from_le_bytes(take::<2>(inp)?);
+                name_id = u16::from_le_bytes(take::<2>(inp)?);
+                unique = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+            } else {
+                // v3 legacy
+                kind = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                faction = inp.first().copied().ok_or_else(|| anyhow::anyhow!("short read"))?; *inp = &inp[1..];
+                archetype_id = 0;
+                name_id = 0;
+                unique = 0;
+            }
             let mut pos = [0.0f32; 3];
             for v in &mut pos {
                 *v = f32::from_le_bytes(take::<4>(inp)?);
@@ -474,7 +494,10 @@ impl SnapshotDecode for ActorSnapshotDelta {
             spawns.push(ActorRep {
                 id,
                 kind,
-                team,
+                faction,
+                archetype_id,
+                name_id,
+                unique,
                 pos,
                 yaw,
                 radius,
@@ -578,7 +601,7 @@ impl SnapshotDecode for ActorSnapshotDelta {
             hits.push(HitFx { kind, pos });
         }
         Ok(Self {
-            v,
+            v: if v == 3 { ACTOR_SNAP_DELTA_VERSION } else { v },
             tick,
             baseline,
             spawns,

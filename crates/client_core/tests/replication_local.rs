@@ -59,13 +59,16 @@ fn v3_delta_populates_projectiles() {
     let mut repl = ReplicationBuffer::default();
     // Build a minimal v3 delta with one projectile
     let delta = ActorSnapshotDelta {
-        v: 3,
+        v: 4,
         tick: 1,
         baseline: 0,
         spawns: vec![ActorRep {
             id: 1,
             kind: 0,
-            team: 0,
+            faction: 0,
+            archetype_id: 1,
+            name_id: 0,
+            unique: 0,
             pos: [0.0, 0.0, 0.0],
             yaw: 0.0,
             radius: 0.7,

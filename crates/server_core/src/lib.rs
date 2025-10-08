@@ -788,12 +788,19 @@ impl ServerState {
                     ActorKind::Zombie => 1,
                     ActorKind::Boss => 2,
                 },
-                team: match a.team {
+                faction: match a.team {
                     Team::Pc => 0,
                     Team::Wizards => 1,
                     Team::Undead => 2,
                     Team::Neutral => 3,
                 },
+                archetype_id: match a.kind {
+                    ActorKind::Wizard => 1,
+                    ActorKind::Zombie => 2,
+                    ActorKind::Boss => 3,
+                },
+                name_id: if a.name.is_some() { 1 } else { 0 },
+                unique: if Some(a.id) == self.nivita_actor_id { 1 } else { 0 },
                 pos: [a.tr.pos.x, a.tr.pos.y, a.tr.pos.z],
                 yaw: a.tr.yaw,
                 radius: a.tr.radius,

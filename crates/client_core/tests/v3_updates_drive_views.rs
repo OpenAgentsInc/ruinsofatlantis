@@ -9,7 +9,10 @@ fn v3_updates_drive_wizard_view() {
     let spawn = ActorRep {
         id: 10,
         kind: 0,
-        team: 1,
+        faction: 1,
+        archetype_id: 1,
+        name_id: 0,
+        unique: 0,
         pos: [0.0, 0.6, 0.0],
         yaw: 0.0,
         radius: 0.7,
@@ -18,7 +21,7 @@ fn v3_updates_drive_wizard_view() {
         alive: true,
     };
     let delta0 = ActorSnapshotDelta {
-        v: 3,
+        v: 4,
         tick: 1,
         baseline: 0,
         spawns: vec![spawn],
@@ -44,7 +47,7 @@ fn v3_updates_drive_wizard_view() {
         alive: 0,
     };
     let delta1 = ActorSnapshotDelta {
-        v: 3,
+        v: 4,
         tick: 2,
         baseline: 1,
         spawns: vec![],
@@ -64,7 +67,7 @@ fn v3_updates_drive_wizard_view() {
 
     // Removal
     let delta2 = ActorSnapshotDelta {
-        v: 3,
+        v: 4,
         tick: 3,
         baseline: 2,
         spawns: vec![],

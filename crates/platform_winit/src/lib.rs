@@ -448,7 +448,7 @@ impl ApplicationHandler for App {
                     }
                 }
                 let delta = net_core::snapshot::ActorSnapshotDelta {
-                    v: 3,
+                    v: 4,
                     tick: tick64,
                     baseline: self.baseline_tick,
                     spawns,

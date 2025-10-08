@@ -5,7 +5,7 @@ use net_core::snapshot::{
 #[test]
 fn hitfx_roundtrip_in_actor_delta() {
     let delta = ActorSnapshotDelta {
-        v: 3,
+        v: 4,
         tick: 100,
         baseline: 90,
         spawns: vec![],
