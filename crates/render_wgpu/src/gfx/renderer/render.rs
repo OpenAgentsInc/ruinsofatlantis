@@ -1040,14 +1040,37 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         .map(|v| v == "0")
         .unwrap_or(false);
     if !overlays_disabled && !r.is_vox_onepath() {
-        // Bars for casters (Wizards): derive directly from local instance transforms
-        // to avoid dependency on replication sparsity. This keeps overlays stable even
-        // when NPC wizards are client‑only and not present in the actor delta.
+        // Bars for casters (Wizards): derive from local instance transforms and
+        // cull by distance so we don't draw a screen-wide "green band" when many
+        // wizards are lined up. Always include the PC; draw NPC bars only if
+        // within a modest radius of the PC.
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
+        let pc_pos = {
+            let m = r
+                .wizard_models
+                .get(r.pc_index)
+                .copied()
+                .unwrap_or(glam::Mat4::IDENTITY);
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        };
+        // Radius for showing NPC bars (meters); can override with RA_NPC_BAR_RADIUS
+        let npc_bar_radius: f32 = std::env::var("RA_NPC_BAR_RADIUS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(25.0);
         for (i, m) in r.wizard_models.iter().enumerate() {
             let hp = r.wizard_hp.get(i).copied().unwrap_or(0);
             if hp <= 0 {
                 continue;
+            }
+            if i != r.pc_index {
+                let c = m.to_cols_array();
+                let pos = glam::vec3(c[12], c[13], c[14]);
+                let d2 = (pos.x - pc_pos.x).powi(2) + (pos.z - pc_pos.z).powi(2);
+                if d2 > npc_bar_radius * npc_bar_radius {
+                    continue;
+                }
             }
             let max_hp = r.wizard_hp_max.max(1);
             let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
@@ -1132,6 +1155,45 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             let pa = glam::vec3(a[12], a[13], a[14]);
             let pb = glam::vec3(b[12], b[13], b[14]);
             debug_assert!((pa - pb).length_squared() > 1e-6);
+        }
+        // Bars should cull by distance for NPC wizards (default radius 25m)
+        {
+            let old_models = r.wizard_models.clone();
+            let old_hp = r.wizard_hp.clone();
+            // Two wizards: PC at origin, NPC at 100m
+            r.wizard_models = vec![
+                glam::Mat4::from_translation(glam::vec3(0.0, 0.6, 0.0)),
+                glam::Mat4::from_translation(glam::vec3(100.0, 0.6, 0.0)),
+            ];
+            r.wizard_hp = vec![100, 100];
+            r.pc_index = 0;
+            let view_proj = glam::Mat4::IDENTITY.to_cols_array_2d();
+            let vp = glam::Mat4::from_cols_array_2d(&view_proj);
+            let mut entries: Vec<(glam::Vec3, f32)> = Vec::new();
+            // Re-run the same culling logic locally
+            let pc_pos = glam::vec3(0.0, 0.6, 0.0);
+            let npc_bar_radius: f32 = 25.0;
+            for (i, m) in r.wizard_models.iter().enumerate() {
+                let hp = r.wizard_hp.get(i).copied().unwrap_or(0);
+                if hp <= 0 {
+                    continue;
+                }
+                if i != r.pc_index {
+                    let c = m.to_cols_array();
+                    let pos = glam::vec3(c[12], c[13], c[14]);
+                    let d2 = (pos.x - pc_pos.x).powi(2) + (pos.z - pc_pos.z).powi(2);
+                    if d2 > npc_bar_radius * npc_bar_radius {
+                        continue;
+                    }
+                }
+                let head = *m * glam::Vec4::new(0.0, 1.7, 0.0, 1.0);
+                entries.push((head.truncate(), 1.0));
+            }
+            // Only the PC should remain within radius
+            assert_eq!(entries.len(), 1);
+            // Restore
+            r.wizard_models = old_models;
+            r.wizard_hp = old_hp;
         }
     }
 
