@@ -8,4 +8,3 @@ fn archetypes_defaults_present() {
     let dk = db.entries.get("DeathKnight").expect("dk");
     assert!(dk.melee_damage >= 1 && dk.melee_cooldown_s > 0.0);
 }
-

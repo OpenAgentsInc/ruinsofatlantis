@@ -56,6 +56,8 @@ pub struct Ctx {
     pub boom: Vec<ExplodeEvent>,
     #[allow(dead_code)]
     pub hits: Vec<HitEvent>,
+    // Server-auth VFX hits to replicate this tick
+    pub fx_hits: Vec<net_core::snapshot::HitFx>,
     pub deaths: Vec<DeathEvent>,
     pub spatial: SpatialGrid,
     pub cmd: crate::ecs::world::CmdBuf,
@@ -886,7 +888,7 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                             crate::ProjKind::Fireball => 1u8,
                             crate::ProjKind::MagicMissile => 2u8,
                         };
-                        srv.fx_hits.push(net_core::snapshot::HitFx {
+                        ctx.fx_hits.push(net_core::snapshot::HitFx {
                             kind: kind_byte,
                             pos: [p1.x, p1.y, p1.z],
                         });

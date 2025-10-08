@@ -13,8 +13,8 @@ pub mod specdb;
 pub mod spell;
 pub mod zone;
 pub mod specs {
-    pub mod projectiles;
     pub mod archetypes;
+    pub mod projectiles;
 }
 pub mod scene;
 pub mod configs {

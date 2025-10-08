@@ -102,7 +102,9 @@ impl ProjectileSpecDb {
     }
 }
 
-fn default_arming_delay_s() -> f32 { 0.08 }
+fn default_arming_delay_s() -> f32 {
+    0.08
+}
 
 #[cfg(test)]
 mod tests {

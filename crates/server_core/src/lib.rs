@@ -546,6 +546,10 @@ impl ServerState {
         };
         let mut sched = crate::ecs::schedule::Schedule;
         sched.run(self, &mut ctx);
+        // Drain per-tick visual hits into server buffer for platform to replicate
+        if !ctx.fx_hits.is_empty() {
+            self.fx_hits.extend(ctx.fx_hits.drain(..));
+        }
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
@@ -573,10 +577,20 @@ impl ServerState {
                     melee_damage: 5,
                     melee_cooldown_s: 0.6,
                 });
-            a.move_speed = Some(ecs::MoveSpeed { mps: spec.move_speed_mps });
-            a.aggro = Some(ecs::AggroRadius { m: spec.aggro_radius_m });
-            a.attack = Some(ecs::AttackRadius { m: spec.attack_radius_m });
-            a.melee = Some(ecs::Melee { damage: spec.melee_damage, cooldown_s: spec.melee_cooldown_s, ready_in_s: 0.0 });
+            a.move_speed = Some(ecs::MoveSpeed {
+                mps: spec.move_speed_mps,
+            });
+            a.aggro = Some(ecs::AggroRadius {
+                m: spec.aggro_radius_m,
+            });
+            a.attack = Some(ecs::AttackRadius {
+                m: spec.attack_radius_m,
+            });
+            a.melee = Some(ecs::Melee {
+                damage: spec.melee_damage,
+                cooldown_s: spec.melee_cooldown_s,
+                ready_in_s: 0.0,
+            });
         }
         id
     }
@@ -606,10 +620,20 @@ impl ServerState {
                     melee_damage: 18,
                     melee_cooldown_s: 0.9,
                 });
-            a.move_speed = Some(ecs::MoveSpeed { mps: spec.move_speed_mps });
-            a.aggro = Some(ecs::AggroRadius { m: spec.aggro_radius_m });
-            a.attack = Some(ecs::AttackRadius { m: spec.attack_radius_m });
-            a.melee = Some(ecs::Melee { damage: spec.melee_damage, cooldown_s: spec.melee_cooldown_s, ready_in_s: 0.0 });
+            a.move_speed = Some(ecs::MoveSpeed {
+                mps: spec.move_speed_mps,
+            });
+            a.aggro = Some(ecs::AggroRadius {
+                m: spec.aggro_radius_m,
+            });
+            a.attack = Some(ecs::AttackRadius {
+                m: spec.attack_radius_m,
+            });
+            a.melee = Some(ecs::Melee {
+                damage: spec.melee_damage,
+                cooldown_s: spec.melee_cooldown_s,
+                ready_in_s: 0.0,
+            });
         }
         id
     }
