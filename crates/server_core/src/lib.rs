@@ -244,6 +244,25 @@ impl ServerState {
             destruct_bootstrap_instances_outstanding: false,
         }
     }
+    /// Provide world AABBs for all known destructible instances as net records.
+    pub fn all_destructible_instances(&self) -> Vec<net_core::snapshot::DestructibleInstance> {
+        self
+            .destruct_instances
+            .iter()
+            .map(|d| net_core::snapshot::DestructibleInstance {
+                did: d.did,
+                world_min: d.world_min,
+                world_max: d.world_max,
+            })
+            .collect()
+    }
+
+    /// Drain queued chunk mesh deltas accumulated during the last tick.
+    pub fn drain_destruct_mesh_deltas(&mut self) -> Vec<net_core::snapshot::ChunkMeshDelta> {
+        let mut v = Vec::new();
+        std::mem::swap(&mut v, &mut self.destruct_registry.pending_mesh_deltas);
+        v
+    }
     // Legacy actor rebuild removed. Actors are authoritative.
 
     /// Apply AoE to actors, skipping self-damage for PC-owned sources and flipping factions when PC hits Wizards.
