@@ -6,7 +6,7 @@
 //!
 //! Components covered in phase 1:
 //! - Transform (pos, yaw) + Radius
-//! - Kind (Wizard/Zombie/Boss) + Team
+//! - Kind (Wizard/Zombie/Boss) + Faction
 //! - Health (hp/max)
 //!
 //! Later phases will add systems/schedule and additional components (speed,

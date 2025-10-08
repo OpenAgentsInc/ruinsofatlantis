@@ -13,7 +13,7 @@ pub enum ActorKind {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Team {
+pub enum Faction {
     Pc,
     Wizards,
     Undead,
@@ -21,10 +21,7 @@ pub enum Team {
 }
 
 /// Preferred terminology in docs and new code paths.
-/// Alias `Team` to `Faction` to clarify that this is a component-level
-/// allegiance marker, not a separate entity or system. Code may gradually
-/// migrate to `Faction` while keeping `Team` for compatibility.
-pub use Team as Faction;
+// Faction marks allegiance; used for target selection and hostility checks.
 
 #[derive(Copy, Clone, Debug)]
 pub struct Health {
@@ -55,7 +52,7 @@ pub struct Transform {
 pub struct Actor {
     pub id: ActorId,
     pub kind: ActorKind,
-    pub team: Team,
+    pub faction: Faction,
     pub tr: Transform,
     pub hp: Health,
 }

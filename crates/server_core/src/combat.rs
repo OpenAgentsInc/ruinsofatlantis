@@ -1,10 +1,10 @@
 //! Faction rules and hostility helpers.
 
-use crate::actor::Team;
+use crate::actor::Faction;
 
 #[inline]
-pub fn are_hostile(a: Team, b: Team) -> bool {
-    use Team::*;
+pub fn are_hostile(a: Faction, b: Faction) -> bool {
+    use Faction::*;
     matches!(
         (a, b),
         (Pc, Undead) | (Undead, Pc) | (Wizards, Undead) | (Undead, Wizards)
@@ -17,8 +17,8 @@ pub struct FactionState {
 }
 
 impl FactionState {
-    pub fn effective_hostile(&self, a: Team, b: Team) -> bool {
-        use Team::*;
+    pub fn effective_hostile(&self, a: Faction, b: Faction) -> bool {
+        use Faction::*;
         match (a, b) {
             (Pc, Wizards) | (Wizards, Pc) => self.pc_vs_wizards_hostile,
             _ => are_hostile(a, b),

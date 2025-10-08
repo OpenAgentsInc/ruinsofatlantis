@@ -10,7 +10,7 @@ fn count_undead_alive(s: &server_core::ServerState) -> usize {
                 server_core::ActorKind::Zombie | server_core::ActorKind::Boss
             )
         })
-        .filter(|a| a.team == server_core::Team::Undead)
+        .filter(|a| a.faction == server_core::Faction::Undead)
         .filter(|a| a.hp.alive())
         .count()
 }
@@ -18,7 +18,7 @@ fn count_undead_alive(s: &server_core::ServerState) -> usize {
 fn any_undead_damaged(s: &server_core::ServerState) -> bool {
     s.ecs
         .iter()
-        .any(|a| a.team == server_core::Team::Undead && a.hp.hp < a.hp.max)
+        .any(|a| a.faction == server_core::Faction::Undead && a.hp.hp < a.hp.max)
 }
 
 fn any_wizard_damaged(s: &server_core::ServerState) -> bool {
@@ -30,7 +30,7 @@ fn any_wizard_damaged(s: &server_core::ServerState) -> bool {
 fn total_undead_hp(s: &server_core::ServerState) -> i32 {
     s.ecs
         .iter()
-        .filter(|a| a.team == server_core::Team::Undead)
+        .filter(|a| a.faction == server_core::Faction::Undead)
         .map(|a| a.hp.hp)
         .sum()
 }

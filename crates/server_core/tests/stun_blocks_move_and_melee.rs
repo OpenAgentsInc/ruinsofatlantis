@@ -17,7 +17,7 @@ fn stunned_undead_neither_moves_nor_melees() {
         .ecs
         .iter()
         .find(|c| {
-            matches!(c.kind, server_core::ActorKind::Wizard) && c.team == server_core::Team::Pc
+            matches!(c.kind, server_core::ActorKind::Wizard) && c.faction == server_core::Faction::Pc
         })
         .unwrap()
         .id;
@@ -30,7 +30,7 @@ fn stunned_undead_neither_moves_nor_melees() {
             .ecs
             .iter()
             .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
             })
             .map(|a| a.tr.pos)
             .collect();

@@ -88,7 +88,7 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
     let mana0 = s
         .ecs
         .iter()
-        .find(|c| c.team == server_core::Team::Pc)
+        .find(|c| c.faction == server_core::Faction::Pc)
         .and_then(|c| c.pool.as_ref().map(|p| p.mana))
         .unwrap_or(0);
     // Cast Fireball (cost=5)
@@ -99,7 +99,7 @@ fn cast_cooldowns_and_mana_gate_repeated_casts() {
         let c = s
             .ecs
             .iter()
-            .find(|c| c.team == server_core::Team::Pc)
+            .find(|c| c.faction == server_core::Faction::Pc)
             .expect("pc present");
         let gcd = c.cooldowns.as_ref().map(|cd| cd.gcd_ready).unwrap_or(0.0);
         let cd = c

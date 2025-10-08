@@ -7,7 +7,7 @@ fn pc_firebolt_hits_wizard() {
     let _pc = s.spawn_pc_at(vec3(0.0, 0.6, 0.0));
     let wiz = s.ecs.spawn(
         server_core::ActorKind::Wizard,
-        server_core::Team::Wizards,
+        server_core::Faction::Wizards,
         server_core::Transform {
             pos: vec3(0.0, 0.6, 6.0),
             yaw: 0.0,

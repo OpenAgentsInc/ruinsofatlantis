@@ -7,7 +7,7 @@
 use glam::{Vec2, Vec3};
 
 use crate::ServerState;
-use crate::actor::{ActorId, Team};
+use crate::actor::{ActorId, Faction};
 use crate::ecs::geom::segment_hits_circle_xz;
 
 #[derive(Copy, Clone, Debug)]
@@ -96,7 +96,7 @@ fn wizard_targets(srv: &ServerState) -> Vec<(ActorId, Vec3, f32)> {
     // Retained helper name for minimal churn; used by systems that move/attack toward Wizards faction members.
     srv.ecs
         .iter()
-        .filter(|a| a.hp.alive() && a.team == crate::actor::Team::Wizards)
+        .filter(|a| a.hp.alive() && a.faction == crate::actor::Faction::Wizards)
         .map(|a| (a.id, a.tr.pos, a.tr.radius))
         .collect()
 }
@@ -115,13 +115,13 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
             // Acquire up to 3 distinct targets nearest-first within 30m
             let owner_team = cmd
                 .owner
-                .and_then(|id| srv.ecs.get(id).map(|a| a.team))
-                .unwrap_or(crate::actor::Team::Pc);
+                .and_then(|id| srv.ecs.get(id).map(|a| a.faction))
+                .unwrap_or(crate::actor::Faction::Pc);
             let mut cands: Vec<(f32, ActorId)> = srv
                 .ecs
                 .iter()
                 .filter(|a| a.hp.alive() && a.id != cmd.owner.unwrap_or(ActorId(u32::MAX)))
-                .filter(|a| srv.factions.effective_hostile(owner_team, a.team))
+                .filter(|a| srv.factions.effective_hostile(owner_team, a.faction))
                 .map(|a| {
                     let dx = a.tr.pos.x - cmd.pos.x;
                     let dz = a.tr.pos.z - cmd.pos.z;
@@ -147,7 +147,7 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
                 let comps = crate::ecs::world::Components {
                     id: crate::actor::ActorId(0),
                     kind: crate::actor::ActorKind::Zombie, // placeholder; projectiles are ephemeral, kind unused
-                    team: crate::actor::Team::Neutral,
+                    faction: crate::actor::Faction::Neutral,
                     name: None,
                     tr: crate::actor::Transform {
                         pos: spawn_pos,
@@ -184,7 +184,7 @@ fn ingest_projectile_spawns(srv: &mut ServerState, ctx: &mut Ctx) {
             let comps = crate::ecs::world::Components {
                 id: crate::actor::ActorId(0),
                 kind: crate::actor::ActorKind::Zombie, // unused for projectile
-                team: crate::actor::Team::Neutral,
+                faction: crate::actor::Faction::Neutral,
                 name: None,
                 tr: crate::actor::Transform {
                     pos: spawn_pos,
@@ -459,8 +459,9 @@ fn ai_move_hostiles_toward_wizards(srv: &mut ServerState, ctx: &Ctx) {
         .iter()
         .filter(|a| a.hp.alive() && a.move_speed.is_some() && a.aggro.is_some())
         .filter(|a| {
-            srv.factions
-                .effective_hostile(a.team, crate::actor::Team::Wizards)
+            srv
+                .factions
+                .effective_hostile(a.faction, crate::actor::Faction::Wizards)
         })
         .map(|a| a.id)
         .collect();
@@ -519,8 +520,9 @@ fn melee_apply_when_contact(srv: &mut ServerState, ctx: &mut Ctx) {
         .iter()
         .filter(|a| a.hp.alive() && a.melee.is_some())
         .filter(|a| {
-            srv.factions
-                .effective_hostile(a.team, crate::actor::Team::Wizards)
+            srv
+                .factions
+                .effective_hostile(a.faction, crate::actor::Faction::Wizards)
         })
         .map(|a| a.id)
         .collect();
@@ -588,7 +590,7 @@ fn separate_undead(srv: &mut ServerState) {
     let ids: Vec<ActorId> = srv
         .ecs
         .iter()
-        .filter(|a| a.hp.alive() && a.team == crate::actor::Team::Undead)
+        .filter(|a| a.hp.alive() && a.faction == crate::actor::Faction::Undead)
         .map(|a| a.id)
         .collect();
     let n = ids.len();
@@ -638,14 +640,14 @@ fn separate_undead(srv: &mut ServerState) {
 fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
     use crate::{CastCmd, SpellId};
     // Build hostile candidates map (alive, hostile to Wizards)
-    let mut hostile: Vec<(ActorId, Vec3, crate::actor::Team)> = Vec::new();
+    let mut hostile: Vec<(ActorId, Vec3, crate::actor::Faction)> = Vec::new();
     for a in srv.ecs.iter() {
         if a.hp.alive()
             && srv
                 .factions
-                .effective_hostile(a.team, crate::actor::Team::Wizards)
+                .effective_hostile(a.faction, crate::actor::Faction::Wizards)
         {
-            hostile.push((a.id, a.tr.pos, a.team));
+            hostile.push((a.id, a.tr.pos, a.faction));
         }
     }
     if hostile.is_empty() {
@@ -655,7 +657,7 @@ fn ai_wizard_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
     let wiz_ids: Vec<ActorId> = srv
         .ecs
         .iter()
-        .filter(|a| a.hp.alive() && a.team == crate::actor::Team::Wizards)
+        .filter(|a| a.hp.alive() && a.faction == crate::actor::Faction::Wizards)
         .map(|a| a.id)
         .collect();
     for wid in wiz_ids {
@@ -847,8 +849,8 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             continue;
         }
         let _owner_team = owner
-            .and_then(|id| srv.ecs.get(id).map(|a| a.team))
-            .unwrap_or(Team::Pc);
+            .and_then(|id| srv.ecs.get(id).map(|a| a.faction))
+            .unwrap_or(Faction::Pc);
         // test against actors
         let mut hit_any = false;
         for a in srv.ecs.iter() {
@@ -989,8 +991,8 @@ fn faction_flip_on_pc_hits_wizards(srv: &mut ServerState, ctx: &mut Ctx) {
     for d in &ctx.dmg {
         if let Some(src) = d.src
             && let (Some(sa), Some(v)) = (srv.ecs.get(src), srv.ecs.get(d.dst))
-            && sa.team == Team::Pc
-            && v.team == Team::Wizards
+            && sa.faction == Faction::Pc
+            && v.faction == Faction::Wizards
         {
             srv.factions.pc_vs_wizards_hostile = true;
         }
@@ -1098,10 +1100,10 @@ impl SpatialGrid {
 fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
     // Build quick maps to avoid borrow conflicts
     use std::collections::HashMap;
-    let mut alive: HashMap<ActorId, (Vec3, crate::actor::Team)> = HashMap::new();
+    let mut alive: HashMap<ActorId, (Vec3, crate::actor::Faction)> = HashMap::new();
     for a in srv.ecs.iter() {
         if a.hp.alive() {
-            alive.insert(a.id, (a.tr.pos, a.team));
+            alive.insert(a.id, (a.tr.pos, a.faction));
         }
     }
 
@@ -1118,8 +1120,8 @@ fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
         let (p_pos, owner_team, homing) = if let Some(c) = srv.ecs.get(pid) {
             let team = c
                 .owner
-                .and_then(|o| srv.ecs.get(o.id).map(|a| a.team))
-                .unwrap_or(crate::actor::Team::Pc);
+                .and_then(|o| srv.ecs.get(o.id).map(|a| a.faction))
+                .unwrap_or(crate::actor::Faction::Pc);
             (c.tr.pos, team, c.homing)
         } else {
             continue;

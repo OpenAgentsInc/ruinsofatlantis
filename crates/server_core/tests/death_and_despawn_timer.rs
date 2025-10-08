@@ -6,7 +6,7 @@ fn death_sets_despawn_and_removes_after_timer() {
     // Spawn wizard and a low-HP undead so a single hit kills it
     let wid = s.ecs.spawn(
         server_core::ActorKind::Wizard,
-        server_core::Team::Wizards,
+        server_core::Faction::Wizards,
         server_core::Transform {
             pos: vec3(0.0, 0.6, 0.0),
             yaw: 0.0,

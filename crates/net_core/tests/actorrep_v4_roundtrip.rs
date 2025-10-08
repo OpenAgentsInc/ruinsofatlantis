@@ -41,4 +41,3 @@ fn actorrep_v4_roundtrip() {
     assert_eq!(a.name_id, 55);
     assert_eq!(a.unique, 1);
 }
-

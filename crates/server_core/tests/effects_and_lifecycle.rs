@@ -16,7 +16,7 @@ fn burning_ticks_damage_and_expires() {
             .ecs
             .iter()
             .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
             })
             .map(|a| a.tr.pos)
             .collect();
@@ -43,7 +43,7 @@ fn slow_scales_effective_speed() {
             .ecs
             .iter()
             .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
             })
             .map(|a| a.tr.pos)
             .collect();
@@ -65,7 +65,7 @@ fn slow_scales_effective_speed() {
             .ecs
             .iter()
             .filter(|a| {
-                matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+                matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
             })
             .map(|a| a.tr.pos)
             .collect();
@@ -100,7 +100,7 @@ fn stun_blocks_cast() {
         .ecs
         .iter()
         .filter(|a| {
-            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
         })
         .map(|a| a.tr.pos)
         .collect();
@@ -122,7 +122,7 @@ fn death_sets_despawn_or_removes_entity() {
         .ecs
         .iter()
         .filter(|a| {
-            matches!(a.kind, server_core::ActorKind::Wizard) && a.team == server_core::Team::Pc
+            matches!(a.kind, server_core::ActorKind::Wizard) && a.faction == server_core::Faction::Pc
         })
         .map(|a| a.tr.pos)
         .collect();

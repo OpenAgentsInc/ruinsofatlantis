@@ -16,7 +16,12 @@ fn caster_selection_uses_faction_not_kind() {
         s.step_authoritative(0.2);
     }
     // Expect at least one projectile spawned even though 'kind' is not Wizard anymore
-    let saw_any = s.ecs.iter().any(|c| c.projectile.is_some() && c.velocity.is_some());
-    assert!(saw_any, "caster selection should be based on faction/components, not ActorKind label");
+    let saw_any = s
+        .ecs
+        .iter()
+        .any(|c| c.projectile.is_some() && c.velocity.is_some());
+    assert!(
+        saw_any,
+        "caster selection should be based on faction/components, not ActorKind label"
+    );
 }
-

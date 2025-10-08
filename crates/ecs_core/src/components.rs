@@ -318,10 +318,10 @@ pub struct Health {
     pub max: i32,
 }
 
-/// Team affiliation (used for friendly fire and aggro).
+/// Faction affiliation (used for friendly fire and aggro).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "replication", derive(serde::Serialize, serde::Deserialize))]
-pub struct Team {
+pub struct Faction {
     pub id: u32,
 }
 

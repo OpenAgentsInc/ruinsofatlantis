@@ -8,7 +8,7 @@ fn fireball_aoe_hits_wizards() {
     // Spawn one wizard at ~6m to guarantee collision/explosion along +Z
     let w1 = s.ecs.spawn(
         server_core::ActorKind::Wizard,
-        server_core::Team::Wizards,
+        server_core::Faction::Wizards,
         server_core::Transform {
             pos: vec3(0.0, 0.6, 6.0),
             yaw: 0.0,

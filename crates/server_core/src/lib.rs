@@ -234,11 +234,11 @@ impl ServerState {
         damage: i32,
         source: Option<ActorId>,
     ) -> usize {
-        let src_team = source.and_then(|id| self.ecs.get(id).map(|a| a.team));
+        let src_team = source.and_then(|id| self.ecs.get(id).map(|a| a.faction));
         let mut hits = 0usize;
         for a in self.ecs.iter_mut() {
             // Skip self-damage for PC-owned AoE
-            if let (Some(Team::Pc), Some(src)) = (src_team, source)
+            if let (Some(crate::actor::Faction::Pc), Some(src)) = (src_team, source)
                 && a.id == src
             {
                 continue;
@@ -248,8 +248,8 @@ impl ServerState {
             if dx * dx + dz * dz <= r2 && a.hp.alive() {
                 a.hp.hp = (a.hp.hp - damage).max(0);
                 hits += 1;
-                if let Some(Team::Pc) = src_team
-                    && a.team == Team::Wizards
+                if let Some(crate::actor::Faction::Pc) = src_team
+                    && a.faction == crate::actor::Faction::Wizards
                 {
                     self.factions.pc_vs_wizards_hostile = true;
                 }
@@ -272,7 +272,7 @@ impl ServerState {
             if need_spawn {
                 let id = self.ecs.spawn(
                     ActorKind::Wizard,
-                    Team::Pc,
+                    crate::actor::Faction::Pc,
                     Transform {
                         pos: p0,
                         yaw: 0.0,
@@ -304,18 +304,18 @@ impl ServerState {
                 a.tr.pos = p0;
             }
         }
-        // Extra wizard positions correspond to NPC wizards (Team::Wizards)
+        // Extra wizard positions correspond to NPC wizards (Faction::Wizards)
         let need = wiz_pos.len().saturating_sub(1);
         let mut npc_ids: Vec<ActorId> = self
             .ecs
             .iter()
-            .filter(|a| a.kind == ActorKind::Wizard && a.team == Team::Wizards)
+            .filter(|a| a.kind == ActorKind::Wizard && a.faction == crate::actor::Faction::Wizards)
             .map(|a| a.id)
             .collect();
         while npc_ids.len() < need {
             let id = self.ecs.spawn(
                 ActorKind::Wizard,
-                Team::Wizards,
+                crate::actor::Faction::Wizards,
                 Transform {
                     pos: Vec3::ZERO,
                     yaw: 0.0,
@@ -403,7 +403,7 @@ impl ServerState {
         }
         let id = self.ecs.spawn(
             ActorKind::Wizard,
-            Team::Pc,
+            crate::actor::Faction::Pc,
             Transform {
                 pos,
                 yaw: 0.0,
@@ -544,7 +544,7 @@ impl ServerState {
         let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Zombie,
-            Team::Undead,
+            crate::actor::Faction::Undead,
             Transform {
                 pos,
                 yaw: 0.0,
@@ -570,7 +570,7 @@ impl ServerState {
         let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Boss,
-            Team::Undead,
+            crate::actor::Faction::Undead,
             Transform {
                 pos,
                 yaw: 0.0,
@@ -596,7 +596,7 @@ impl ServerState {
         let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Wizard,
-            Team::Wizards,
+            crate::actor::Faction::Wizards,
             Transform {
                 pos,
                 yaw: 0.0,
@@ -642,7 +642,7 @@ impl ServerState {
         let pos = push_out_of_pc_bubble(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Boss,
-            Team::Undead,
+            crate::actor::Faction::Undead,
             Transform {
                 pos,
                 yaw: 0.0,
@@ -788,11 +788,11 @@ impl ServerState {
                     ActorKind::Zombie => 1,
                     ActorKind::Boss => 2,
                 },
-                faction: match a.team {
-                    Team::Pc => 0,
-                    Team::Wizards => 1,
-                    Team::Undead => 2,
-                    Team::Neutral => 3,
+                faction: match a.faction {
+                    crate::actor::Faction::Pc => 0,
+                    crate::actor::Faction::Wizards => 1,
+                    crate::actor::Faction::Undead => 2,
+                    crate::actor::Faction::Neutral => 3,
                 },
                 archetype_id: match a.kind {
                     ActorKind::Wizard => 1,

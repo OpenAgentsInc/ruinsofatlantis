@@ -6,7 +6,7 @@ fn melee_zombie_hits_wizard() {
     // Spawn wizard target
     let wiz = s.ecs.spawn(
         server_core::ActorKind::Wizard,
-        server_core::Team::Wizards,
+        server_core::Faction::Wizards,
         server_core::Transform {
             pos: vec3(0.0, 0.6, 0.0),
             yaw: 0.0,

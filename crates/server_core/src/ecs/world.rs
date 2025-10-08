@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use crate::actor::{ActorId, ActorKind, Health, Team, Transform};
+use crate::actor::{ActorId, ActorKind, Faction, Health, Transform};
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug)]
@@ -33,7 +33,7 @@ pub struct Entity(u32);
 pub struct Components {
     pub id: ActorId,
     pub kind: ActorKind,
-    pub team: Team,
+    pub faction: Faction,
     pub name: Option<String>,
     pub tr: Transform,
     pub hp: Health,
@@ -75,7 +75,7 @@ impl WorldEcs {
         self.ents.len()
     }
 
-    pub fn spawn(&mut self, kind: ActorKind, team: Team, tr: Transform, hp: Health) -> ActorId {
+    pub fn spawn(&mut self, kind: ActorKind, faction: Faction, tr: Transform, hp: Health) -> ActorId {
         let id = ActorId(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
         let _e = Entity(self.next_ent);
@@ -83,7 +83,7 @@ impl WorldEcs {
         self.ents.push(Components {
             id,
             kind,
-            team,
+            faction,
             name: None,
             tr,
             hp,
@@ -148,13 +148,13 @@ impl WorldEcs {
     }
 
     /// Helper: find nearest hostile actor to `pos` within optional max radius^2.
-    pub fn nearest_hostile(&self, team: Team, pos: Vec3, max_r2: Option<f32>) -> Option<ActorId> {
+    pub fn nearest_hostile(&self, faction: Faction, pos: Vec3, max_r2: Option<f32>) -> Option<ActorId> {
         let mut best: Option<(f32, ActorId)> = None;
         for c in &self.ents {
             if !c.hp.alive() {
                 continue;
             }
-            if !hostile_default(team, c.team) {
+            if !hostile_default(faction, c.faction) {
                 continue;
             }
             let dx = c.tr.pos.x - pos.x;
@@ -212,8 +212,8 @@ impl Components {
 }
 
 #[inline]
-fn hostile_default(a: Team, b: Team) -> bool {
-    use Team::*;
+fn hostile_default(a: Faction, b: Faction) -> bool {
+    use Faction::*;
     matches!(
         (a, b),
         (Pc, Undead) | (Undead, Pc) | (Wizards, Undead) | (Undead, Wizards)
