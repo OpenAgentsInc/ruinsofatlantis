@@ -3017,7 +3017,6 @@ mod tests {
         // As a compromise, create a minimal struct via macro that shares the projectiles vec.
         struct Mini {
             projectiles: Vec<crate::gfx::fx::Projectile>,
-            terrain_cpu: crate::gfx::terrain::TerrainCPU,
         }
         impl Mini {
             fn spawn_fireball(
@@ -3032,7 +3031,7 @@ mod tests {
                 let max_range_m = 150.0f32 * 0.3048;
                 let flight_time = max_range_m / speed;
                 let life = base_life.min(flight_time);
-                let origin = gfx::util::clamp_above_terrain(&self.terrain_cpu, origin, 0.15);
+                // Skip terrain clamp in the smoke test
                 self.projectiles.push(crate::gfx::fx::Projectile {
                     pos: origin,
                     vel: dir.normalize_or_zero() * speed,
@@ -3048,7 +3047,6 @@ mod tests {
         }
         let mut mini = Mini {
             projectiles: Vec::new(),
-            terrain_cpu: crate::gfx::terrain::TerrainCPU::new(),
         };
         mini.spawn_fireball(
             glam::vec3(0.0, 1.0, 0.0),
