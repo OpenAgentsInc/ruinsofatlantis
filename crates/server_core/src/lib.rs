@@ -213,12 +213,9 @@ pub struct ServerState {
     pub fx_hits: Vec<net_core::snapshot::HitFx>,
     /// Frame-local HUD toasts emitted by systems (drained by platform).
     pub hud_toasts: Vec<u8>,
-    // Destructible ECS runtime (disabled)
-    #[cfg(any())]
+    // Destructible ECS runtime
     pub destruct_registry: crate::destructible::state::DestructibleRegistry,
-    #[cfg(any())]
     pub destruct_instances: Vec<scene_build::DestructibleWorldAabb>,
-    #[cfg(any())]
     pub destruct_bootstrap_instances_outstanding: bool,
 }
 
@@ -242,11 +239,8 @@ impl ServerState {
             specs_proj,
             fx_hits: Vec::new(),
             hud_toasts: Vec::new(),
-            #[cfg(any())]
             destruct_registry: crate::destructible::state::DestructibleRegistry::default(),
-            #[cfg(any())]
             destruct_instances: Vec::new(),
-            #[cfg(any())]
             destruct_bootstrap_instances_outstanding: false,
         }
     }
@@ -589,7 +583,6 @@ impl ServerState {
             self.hud_toasts.append(&mut ctx.hud_toasts);
         }
         // Apply destructible carves/mesh/colliders and collect net deltas
-        #[cfg(any())]
         self.destruct_registry.tick();
     }
     /// Spawn an Undead actor (legacy NPC replacement)
@@ -681,7 +674,6 @@ impl ServerState {
     }
 
     /// Provide world AABBs for all known destructible instances as net records.
-    #[cfg(any())]
     pub fn all_destructible_instances(&self) -> Vec<net_core::snapshot::DestructibleInstance> {
         self.destruct_instances
             .iter()
@@ -694,7 +686,6 @@ impl ServerState {
     }
 
     /// Drain queued chunk mesh deltas accumulated during the last tick.
-    #[cfg(any())]
     pub fn drain_destruct_mesh_deltas(&mut self) -> Vec<net_core::snapshot::ChunkMeshDelta> {
         let mut v = Vec::new();
         std::mem::swap(&mut v, &mut self.destruct_registry.pending_mesh_deltas);
