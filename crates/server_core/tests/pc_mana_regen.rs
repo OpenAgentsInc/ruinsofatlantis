@@ -13,4 +13,3 @@ fn pc_mana_regen_is_one_per_second() {
     let mana = s.ecs.get(pc).unwrap().pool.as_ref().unwrap().mana;
     assert_eq!(mana, 11, "PC mana should regen by ~1 over one second");
 }
-

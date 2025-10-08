@@ -27,3 +27,6 @@ Commits
 - [4] Platform demo server: send one-time `DestructibleInstance` and per-change `ChunkMeshDelta` over local loopback.
 - [5] Convert `server_core::destructible` into a proper module (`destructible/mod.rs`) and move new `state.rs` under it to avoid module conflicts; restored required helpers (`raycast_voxels`, `carve_and_spawn_debris`, `queue`, `config`).
 - [6] Build fixed with `cargo check`; next step will run full `xtask ci` on push.
+- [7] Tests: added CPU-only coverage for destructible primitives & registry broad-phase
+  - `crates/server_core/tests/destructible_primitives.rs`
+  - `crates/server_core/tests/destructible_registry_broadphase.rs`

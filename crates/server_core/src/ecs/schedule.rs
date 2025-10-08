@@ -728,19 +728,31 @@ fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
                 best = Some((d2, *p, *r, *tf));
             }
         }
-        let Some((d2, tp, tr, _tf)) = best else { continue };
+        let Some((d2, tp, tr, _tf)) = best else {
+            continue;
+        };
         let dir = tp - cpos;
-        let dir_n = if dir.length_squared() > 1e-6 { dir.normalize() } else { Vec3::Z };
+        let dir_n = if dir.length_squared() > 1e-6 {
+            dir.normalize()
+        } else {
+            Vec3::Z
+        };
         // update yaw
         if let Some(c) = srv.ecs.get_mut(cid) {
             c.tr.yaw = dir_n.x.atan2(dir_n.z);
             // Ensure resources exist (failsafe for old spawns)
             if c.cooldowns.is_none() {
                 use std::collections::HashMap;
-                c.cooldowns = Some(crate::ecs::world::Cooldowns { gcd_s: 0.30, gcd_ready: 0.0, per_spell: HashMap::new() });
+                c.cooldowns = Some(crate::ecs::world::Cooldowns {
+                    gcd_s: 0.30,
+                    gcd_ready: 0.0,
+                    per_spell: HashMap::new(),
+                });
             }
         }
-        if stunned { continue; }
+        if stunned {
+            continue;
+        }
         let dist = d2.sqrt();
         // Prefer melee when in reach for actors that have it; let melee system handle the hit
         let prefer_melee = if let Some(c) = srv.ecs.get(cid) {
@@ -750,12 +762,19 @@ fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
         } else {
             false
         };
-        let fb_aoe_r = srv.projectile_spec(crate::ProjKind::Fireball).aoe_radius_m.max(0.0);
+        let fb_aoe_r = srv
+            .projectile_spec(crate::ProjKind::Fireball)
+            .aoe_radius_m
+            .max(0.0);
         // Count hostiles near target within FB AoE radius
         let mut near_count = 0usize;
         for (_id, p, _r, tf) in &alive {
-            if !srv.factions.effective_hostile(cfaction, *tf) { continue; }
-            if (*p - tp).length() <= fb_aoe_r { near_count += 1; }
+            if !srv.factions.effective_hostile(cfaction, *tf) {
+                continue;
+            }
+            if (*p - tp).length() <= fb_aoe_r {
+                near_count += 1;
+            }
         }
         let want_spell = if prefer_melee {
             None
@@ -770,19 +789,33 @@ fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
         let mut ok = true;
         if let Some(c) = srv.ecs.get(cid) {
             if let Some(cd) = c.cooldowns.as_ref() {
-                if cd.gcd_ready > 0.0 { ok = false; }
+                if cd.gcd_ready > 0.0 {
+                    ok = false;
+                }
                 if let Some(sp) = want_spell
-                    && cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0 { ok = false; }
+                    && cd.per_spell.get(&sp).copied().unwrap_or(0.0) > 0.0
+                {
+                    ok = false;
+                }
             }
             if let (Some(pool), Some(sp)) = (c.pool.as_ref(), want_spell) {
                 let (cost, _cd, _gcd) = srv.spell_cost_cooldown(sp);
-                if pool.mana < cost { ok = false; }
+                if pool.mana < cost {
+                    ok = false;
+                }
             }
         }
-        if !ok { continue; }
+        if !ok {
+            continue;
+        }
         if let Some(sp) = want_spell {
             let muzzle = cpos + dir_n * 0.35;
-            srv.pending_casts.push(CastCmd { pos: muzzle, dir: dir_n, spell: sp, caster: Some(cid) });
+            srv.pending_casts.push(CastCmd {
+                pos: muzzle,
+                dir: dir_n,
+                spell: sp,
+                caster: Some(cid),
+            });
         }
     }
 }

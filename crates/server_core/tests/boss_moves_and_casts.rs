@@ -28,4 +28,3 @@ fn death_knight_moves_and_casts_projectiles() {
     assert!(d1 < d0, "DK did not move closer: d0={:.2} d1={:.2}", d0, d1);
     assert!(saw_proj, "DK did not cast any projectile in 6s window");
 }
-

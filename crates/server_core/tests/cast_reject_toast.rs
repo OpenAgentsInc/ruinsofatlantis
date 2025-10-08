@@ -28,4 +28,3 @@ fn fireball_reject_shows_toast_and_spawns_no_projectile() {
         "expected 'Not enough mana' toast (code 1)"
     );
 }
-

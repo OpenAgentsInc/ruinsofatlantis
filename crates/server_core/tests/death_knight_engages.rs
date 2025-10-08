@@ -29,10 +29,12 @@ fn death_knight_moves_then_melees_or_casts() {
         let wzpos = s.ecs.get(wiz).unwrap().tr.pos;
         (dkpos - wzpos).length()
     };
-    assert!(end < start, "DK failed to close distance (start={start:.2}, end={end:.2})");
+    assert!(
+        end < start,
+        "DK failed to close distance (start={start:.2}, end={end:.2})"
+    );
     assert!(
         saw_proj || target_hp_drop,
         "DK neither cast nor dealt melee damage within ~2s"
     );
 }
-
