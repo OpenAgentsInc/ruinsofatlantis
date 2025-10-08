@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Auto-format Rust code before committing and stage the changes so the commit
+# includes formatting. This prevents post-push dirty working trees from fmt.
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "[pre-commit] cargo not found; skipping fmt" >&2
+  exit 0
+fi
+
+echo "[pre-commit] Running cargo fmt (auto-fix)"
+cargo fmt --all
+
+# Stage any formatting changes so they are included in this commit
+if ! git diff --quiet; then
+  echo "[pre-commit] Staging formatting changes"
+  git add -A
+fi
+
+exit 0
+

@@ -44,7 +44,9 @@ fn cargo(args: &[&str]) -> Result<()> {
 
 fn ci() -> Result<()> {
     warn_hooks();
-    cargo(&["fmt", "--all"])?;
+    // Enforce formatting without modifying the working tree here; the pre-commit
+    // hook auto-formats and stages changes. Use --check to fail fast in CI.
+    cargo(&["fmt", "--all", "--", "--check"])?;
     cargo(&["clippy", "--all-targets", "--", "-D", "warnings"])?;
     layering_guard()?;
     forbidden_patterns_guard()?;

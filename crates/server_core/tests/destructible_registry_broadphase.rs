@@ -1,6 +1,5 @@
 //! Registry-level world AABB broad-phase tests.
 #![cfg(feature = "destruct_debug")]
-
 #![allow(clippy::unwrap_used)]
 
 use core_units::Length;
