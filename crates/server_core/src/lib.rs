@@ -575,8 +575,7 @@ impl ServerState {
         if !ctx.hud_toasts.is_empty() {
             self.hud_toasts.append(&mut ctx.hud_toasts);
         }
-        // Apply destructible carves/mesh/colliders and collect net deltas
-        self.destruct_registry.tick();
+        // Destructible runtime disabled
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
@@ -666,24 +665,9 @@ impl ServerState {
         id
     }
 
-    /// Provide world AABBs for all known destructible instances as net records.
-    pub fn all_destructible_instances(&self) -> Vec<net_core::snapshot::DestructibleInstance> {
-        self.destruct_instances
-            .iter()
-            .map(|d| net_core::snapshot::DestructibleInstance {
-                did: d.did,
-                world_min: d.world_min,
-                world_max: d.world_max,
-            })
-            .collect()
-    }
+    // Destructible runtime disabled
 
-    /// Drain queued chunk mesh deltas accumulated during the last tick.
-    pub fn drain_destruct_mesh_deltas(&mut self) -> Vec<net_core::snapshot::ChunkMeshDelta> {
-        let mut v = Vec::new();
-        std::mem::swap(&mut v, &mut self.destruct_registry.pending_mesh_deltas);
-        v
-    }
+    // Destructible runtime disabled
     /// Spawn an NPC wizard (hostile to Undead) for demo or scripted scenes.
     pub fn spawn_wizard_npc(&mut self, pos: Vec3) -> ActorId {
         let pos = push_out_of_pc_bubble(self, pos);
