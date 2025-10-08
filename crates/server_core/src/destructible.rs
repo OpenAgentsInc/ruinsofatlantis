@@ -578,6 +578,7 @@ pub mod config {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use core_materials::find_material_id;

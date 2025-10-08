@@ -1,3 +1,4 @@
+#![deny(clippy::unwrap_used, clippy::expect_used)]
 //! In‑process NPC state and simple melee AI/collision avoidance.
 //!
 //! Also hosts simple voxel destructible helpers (see `destructible` module):
@@ -1020,6 +1021,7 @@ fn push_out_of_pc_bubble(srv: &ServerState, mut pos: Vec3) -> Vec3 {
 // ============================================================================
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests_actor {
     use super::*;
     use glam::Vec3;

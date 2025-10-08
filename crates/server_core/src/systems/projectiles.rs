@@ -157,6 +157,7 @@ pub fn spawn_from_command(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     fn approx(a: f32, b: f32) -> bool {

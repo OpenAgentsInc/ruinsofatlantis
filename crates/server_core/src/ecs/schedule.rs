@@ -857,9 +857,17 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
         let cand_ids = ctx.spatial.query_segment(seg_a, seg_b, 2.0);
         for aid in cand_ids {
             let Some(a) = srv.ecs.get(aid) else { continue };
-            if !a.hp.alive() { continue; }
-            if a.projectile.is_some() { continue; }
-            if let Some(owner_id) = owner && owner_id == a.id { continue; }
+            if !a.hp.alive() {
+                continue;
+            }
+            if a.projectile.is_some() {
+                continue;
+            }
+            if let Some(owner_id) = owner
+                && owner_id == a.id
+            {
+                continue;
+            }
             if segment_hits_circle_xz(p0, p1, a.tr.pos, a.tr.radius) {
                 match kind {
                     crate::ProjKind::Fireball => {
@@ -880,8 +888,13 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
                             crate::ProjKind::Fireball => 1u8,
                             crate::ProjKind::MagicMissile => 2u8,
                         };
-                        srv.fx_hits.push(net_core::snapshot::HitFx { kind: kind_byte, pos: [p1.x, p1.y, p1.z] });
-                        if matches!(kind, crate::ProjKind::MagicMissile) { to_apply_slow.push(a.id); }
+                        srv.fx_hits.push(net_core::snapshot::HitFx {
+                            kind: kind_byte,
+                            pos: [p1.x, p1.y, p1.z],
+                        });
+                        if matches!(kind, crate::ProjKind::MagicMissile) {
+                            to_apply_slow.push(a.id);
+                        }
                     }
                 }
                 hit_any = true;

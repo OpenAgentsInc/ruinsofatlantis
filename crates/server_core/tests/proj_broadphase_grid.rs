@@ -18,6 +18,8 @@ fn projectile_broadphase_uses_grid_candidates() {
     let b = glam::Vec2::new(2.0, 7.0);
     let cand = ctx.spatial.query_segment(a, b, 2.0);
     // Should be far fewer than total actors (PC + 200 undead)
-    assert!(cand.len() < 80, "broad-phase candidate set should be much smaller than total actors");
+    assert!(
+        cand.len() < 80,
+        "broad-phase candidate set should be much smaller than total actors"
+    );
 }
-
