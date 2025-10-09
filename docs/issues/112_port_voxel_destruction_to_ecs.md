@@ -118,3 +118,18 @@ Notes for future
 
 - [2025-10-09 04:33:15Z] Renderer: stable wizard transforms from replication; gate DK draw on boss_status; bars cull with replicated PC
 - [2025-10-09 04:33:15Z] Server: spawn separation vs actors; tests for DK stacking; PC & boss despawn tests added
+ 
+- [2025-10-09 04:58:10Z] Fix: client was terrain-clamping cast origins → negative Y sent to server
+   - Symptom: Fireballs “eaten” (no damage/no carve), logs showed cmds like `Fireball at (..., -2.44, ...)`
+   - Root cause: renderer clamped origin to local terrain height; server terrain is authoritative and differs → origin below proxy AABB
+   - Change: removed clamp on cast command packaging; client now sends world-space hand origin unmodified
+   - Files:
+     - render_wgpu/src/gfx/renderer/update.rs (spawn used directly; no clamp on command)
+   - Docs: ECS_ARCHITECTURE_GUIDE.md updated to state “no client terrain clamp for commands; server authoritative” and v4 wording
+  - Server confirm: projectile→carve tests already cover AABB entry; visual carve confirmed after fix
+
+- [2025-10-09 05:12:00Z] Demo scene: single server-authoritative ruin only
+  - Removed static renderer ruins; platform demo registers exactly one destructible via `add_demo_ruins_destructible()` and streams all geometry.
+  - Tests:
+    - `crates/server_core/tests/only_one_demo_ruin.rs` — asserts exactly one instance+proxy and ground-aligned AABB.
+    - `crates/server_core/tests/fireball_carves_ruins_e2e.rs` — end-to-end: Fireball cast → projectile → carve → mesh delta.

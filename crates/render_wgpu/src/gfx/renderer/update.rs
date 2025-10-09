@@ -80,6 +80,10 @@ mod tests_explosion {
     }
 }
 
+// (helper removed; commands constructed inline to avoid coupling)
+
+// Unit test for command packaging lives in client_core or integration tests; keep this module minimal.
+
 impl Renderer {
     // Approx ruin local-space AABB for fast world AABB expansion
     const RUIN_LOCAL_MIN_X: f32 = -3.0;
@@ -1548,9 +1552,7 @@ impl Renderer {
                             .truncate()
                             .normalize_or_zero();
                         let lateral = 0.20;
-                        let mut spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
-                        // Clamp spawn to just above terrain to avoid underground origins
-                        spawn = gfx::util::clamp_above_terrain(&self.terrain_cpu, spawn, 0.15);
+                        let spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
                         // Gate by replicated HUD (GCD, per-spell cooldowns, mana) to avoid spawning
                         // local VFX when the server would reject the cast. This keeps visuals
                         // consistent and avoids the “first one works, others are eaten” symptom.

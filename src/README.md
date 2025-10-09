@@ -115,7 +115,7 @@ Gameplay wiring (server‑authoritative)
   - util.rs — Small helpers (depth view, surface clamp while preserving aspect).
     - Adds `oct_encode`/`oct_decode` with unit tests for normal packing.
   - anim.rs — CPU animation sampling (palettes, per‑node global transforms, clip timing cues).
-  - scene.rs — Demo scene assembly (spawn world, build instance buffers, camera target). Wizards now spawn over generated terrain.
+  - scene.rs — Demo scene assembly (spawn world, build instance buffers, camera target). Wizards now spawn over generated terrain. The renderer no longer spawns static ruins; the only ruins you see are streamed from the server as destructible chunk meshes.
   - material.rs — Wizard material creation (base color texture + transform uniform).
   - fx.rs — FX resources (instances buffer, model bind group, quad VB) and integration helpers.
   - zombies.rs — Skinned zombie assets/instances (server-driven ring).

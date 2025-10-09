@@ -70,9 +70,11 @@ pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
     use core_units::Length;
     use voxel_proxy::{GlobalId, VoxelGrid, VoxelProxyMeta};
 
-    // Rough bounds near center; tune to your scene placement
-    let world_min = glam::vec3(-8.0, 0.0, -8.0);
-    let world_max = glam::vec3(8.0, 6.0, 8.0);
+    // Place a single ruins just in front of the spawn so the player does not
+    // start inside it. Shift +Z by ~12m; keep on ground (y=0).
+    let shift_z = 12.0f32;
+    let world_min = glam::vec3(-8.0, 0.0, -8.0 + shift_z);
+    let world_max = glam::vec3(8.0, 6.0, 8.0 + shift_z);
 
     // Build a small grid and fill a thick shell
     let meta = VoxelProxyMeta {
@@ -89,9 +91,9 @@ pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
     for z in 0..d.z {
         for y in 0..d.y {
             for x in 0..d.x {
-                // Build vertical side walls and a bottom floor. Leave the top open to
-                // avoid generating a giant hovering slab over the entrance.
-                let bottom = y == 0;
+                // Build vertical side walls only; omit the bottom floor to avoid
+                // z-fighting with the terrain plane.
+                let bottom = false;
                 let side_walls = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
                 if bottom || side_walls {
                     grid.set(x, y, z, true);
@@ -143,7 +145,7 @@ pub fn add_demo_ruins_destructible_at(
     for z in 0..d.z {
         for y in 0..d.y {
             for x in 0..d.x {
-                let bottom = y == 0;
+                let bottom = false;
                 let side_walls = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
                 if bottom || side_walls {
                     grid.set(x, y, z, true);

@@ -32,10 +32,9 @@ gfx-sky = []
 env_logger = "0.11.8"
 log = "0.4.28"
 render_wgpu = { version = "0.1.0", path = "crates/render_wgpu" }
-platform_winit = { version = "0.1.0", path = "crates/platform_winit" }
+platform_winit = { version = "0.1.0", path = "crates/platform_winit", default-features = false }
 ecs_core = { version = "0.1.0", path = "crates/ecs_core" }
 client_core = { version = "0.1.0", path = "crates/client_core" }
-server_core = { version = "0.1.0", path = "crates/server_core" }
 sim_core = { version = "0.1.0", path = "crates/sim_core" }
 
 [patch.crates-io]
@@ -55,3 +54,11 @@ console_log = "0.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.platform_winit]
+version = "0.1.0"
+path = "crates/platform_winit"
+default-features = false
+features = ["demo_server"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+server_core = { version = "0.1.0", path = "crates/server_core" }

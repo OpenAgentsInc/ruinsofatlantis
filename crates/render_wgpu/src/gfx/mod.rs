@@ -410,8 +410,6 @@ pub struct Renderer {
     voxel_meshes: HashMap<(DestructibleId, u32, u32, u32), VoxelChunkMesh>,
     #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     voxel_hashes: HashMap<(DestructibleId, u32, u32, u32), u64>,
-    // Per-destructible Y offset to sit meshes on terrain
-    destruct_y_offset: HashMap<DestructibleId, f32>,
     // Simple model color for voxels (neutral gray)
     voxel_model_bg: wgpu::BindGroup,
     // Debris (instanced cubes)

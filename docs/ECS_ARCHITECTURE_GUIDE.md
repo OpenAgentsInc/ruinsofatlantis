@@ -191,10 +191,11 @@ World (ECS)
 * `ChunkMeshDelta` carries CPU mesh for a single chunk (`did`, `chunk=(x,y,z)`, positions/normals/indices).
 * Clients must accept deltas only after the matching instance arrives; unknown DIDs are deferred. Duplicate deltas for the same DID+chunk are de‑duped.
 * Presentation: once a client receives the first non‑empty chunk mesh for a DID, hide the static GLTF proxy for that DID (debug override: `RA_SHOW_STATIC_RUINS=1`).
+ * Demo note: the prototype level registers exactly one server‑authoritative destructible ruin (DID=1), positioned on the ground slightly in front of the PC spawn. The renderer no longer spawns any static ruins; all visible ruins geometry comes from `ChunkMeshDelta` messages.
 
 **Client apply path**
 
-* `client_core::ReplicationBuffer` applies v3:
+* `client_core::ReplicationBuffer` applies v4:
 
   * Stores `actors` + **derived** `views` (e.g., `npcs`, `wizards` are *derived subsets*, not authorities)
   * Stores `projectiles`, `hits`, `hud`
@@ -241,7 +242,7 @@ World (ECS)
 
 Implementation notes:
 
-* Projectile spawn origin is derived from the caster’s transform (hand/chest offset) and clamped slightly above terrain to avoid underground origins.
+* Projectile spawn origin is derived from the caster’s transform (hand/chest offset) and sent as-is in world space. Do not terrain-clamp on the client; the server is authoritative over terrain/collision and resolves the true outcome.
 * Collisions skip the owner and honor `arming_delay_s` to avoid immediate self‑detonation.
 
 ---

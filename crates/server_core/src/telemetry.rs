@@ -17,19 +17,22 @@ pub fn init_telemetry(cfg: &data_runtime::configs::telemetry::TelemetryCfg) -> R
     // Build registry
     let registry = tracing_subscriber::registry().with(filter).with(fmt_layer);
     registry.init();
-    // Optional Prometheus metrics exporter
-    if let Some(addr) = &cfg.metrics_addr {
-        let parsed = addr.parse();
-        let addr = match parsed {
-            Ok(a) => a,
-            Err(_e) => {
-                // Fallback to a safe default and record an error counter
-                metrics::counter!("server.errors_total", "site" => "telemetry.parse_addr").increment(1);
-                std::net::SocketAddr::from(([127, 0, 0, 1], 9100))
-            }
-        };
-        let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
-        let _ = builder.with_http_listener(addr).install();
+    // Optional Prometheus metrics exporter (native only; not available on web)
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Some(addr) = &cfg.metrics_addr {
+            let parsed = addr.parse();
+            let addr = match parsed {
+                Ok(a) => a,
+                Err(_e) => {
+                    // Fallback to a safe default and record an error counter
+                    metrics::counter!("server.errors_total", "site" => "telemetry.parse_addr").increment(1);
+                    std::net::SocketAddr::from(([127, 0, 0, 1], 9100))
+                }
+            };
+            let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
+            let _ = builder.with_http_listener(addr).install();
+        }
     }
     // One-line effective config for operator visibility
     tracing::info!(
