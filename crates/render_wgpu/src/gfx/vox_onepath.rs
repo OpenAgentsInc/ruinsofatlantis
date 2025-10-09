@@ -268,7 +268,6 @@ impl ApplicationHandler for App {
         force_remesh_all(&mut renderer);
 
         // Hide NPCs/wizards completely for a clean demo
-        renderer.server.npcs.clear();
         renderer.zombie_count = 0;
         renderer.dk_count = 0;
         renderer.dk_id = None;

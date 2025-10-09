@@ -400,7 +400,7 @@ impl Renderer {
         let impact0 = self.impact_id;
         let max_debris0 = self.destruct_cfg.max_debris;
         let vp = self.get_or_spawn_proxy(did);
-        let _dims = vp.grid.dims();
+        let dims = vp.grid.dims();
         destruct_log!(
             "[destruct] carve: did={:?} grid dims={}x{}x{} vm={:.3}",
             did,
@@ -834,12 +834,12 @@ impl Renderer {
             let nx = dims.x.div_ceil(csz.x);
             let ny = dims.y.div_ceil(csz.y);
             let nz = dims.z.div_ceil(csz.z);
-            let mut _enq = 0usize;
+            let mut enq = 0usize;
             for cz in 0..nz {
                 for cy in 0..ny {
                     for cx in 0..nx {
                         rv.chunk_queue.enqueue_many([glam::UVec3::new(cx, cy, cz)]);
-                        _enq += 1;
+                        enq += 1;
                     }
                 }
             }
@@ -859,7 +859,7 @@ impl Renderer {
                 }
                 self.process_one_ruin_vox(ruin_idx, 64);
             }
-            let _total = self
+            let total = self
                 .voxel_meshes
                 .keys()
                 .filter(|(id, _, _, _)| id.0 == ruin_idx)
@@ -893,8 +893,8 @@ impl Renderer {
             return;
         }
         let grid = &rv.grid;
-        let mut _inserted = 0usize;
-        let mut _removed = 0usize;
+        let mut inserted = 0usize;
+        let mut removed = 0usize;
         for c in &chunks {
             let key = (crate::gfx::DestructibleId(ruin_idx), c.x, c.y, c.z);
             let h = grid.chunk_occ_hash(*c);
@@ -906,7 +906,7 @@ impl Renderer {
                 self.voxel_meshes.remove(&key);
                 self.voxel_hashes.remove(&key);
                 rv.colliders.retain(|sc| sc.coord != *c);
-                _removed += 1;
+                removed += 1;
             } else {
                 let _ = crate::gfx::renderer::voxel_upload::upload_chunk_mesh_raw(
                     &self.device,
@@ -922,7 +922,7 @@ impl Renderer {
                     chunkcol::swap_in_updates(&mut rv.colliders, vec![sc]);
                     rv.static_index = Some(chunkcol::rebuild_static_index(&rv.colliders));
                 }
-                _inserted += 1;
+                inserted += 1;
             }
         }
         rv.queue_len = rv.chunk_queue.len();

@@ -1,5 +1,6 @@
 // Empty file if feature not enabled; the module is gated in lib.rs
-use server_core::{HitEvent, ServerState};
+use server_core::ServerState;
+use server_core::ecs::schedule::HitEvent;
 
 /// Extension trait adding projectile collision to ServerState using the renderer's Projectile type.
 pub trait CollideProjectiles {
@@ -14,47 +15,19 @@ pub trait CollideProjectiles {
 impl CollideProjectiles for ServerState {
     fn collide_and_damage(
         &mut self,
-        projectiles: &mut Vec<crate::gfx::fx::Projectile>,
-        dt: f32,
-        damage: i32,
+        _projectiles: &mut Vec<crate::gfx::fx::Projectile>,
+        _dt: f32,
+        _damage: i32,
     ) -> Vec<HitEvent> {
-        let mut events = Vec::new();
-        let mut i = 0;
-        'outer: while i < projectiles.len() {
-            let pr = &projectiles[i];
-            let p0 = pr.pos - pr.vel * dt; // previous position
-            let p1 = pr.pos;
-            for npc in &mut self.npcs {
-                if !npc.alive {
-                    continue;
-                }
-                if segment_hits_circle_xz(p0, p1, npc.pos, npc.radius) {
-                    let hp_before = npc.hp;
-                    let hp_after = (npc.hp - damage).max(0);
-                    npc.hp = hp_after;
-                    if hp_after == 0 {
-                        npc.alive = false;
-                    }
-                    let fatal = !npc.alive;
-                    events.push(HitEvent {
-                        npc: npc.id,
-                        pos: p1,
-                        damage,
-                        hp_before,
-                        hp_after,
-                        fatal,
-                    });
-                    projectiles.swap_remove(i);
-                    continue 'outer;
-                }
-            }
-            i += 1;
-        }
-        events
+        // ServerState no longer exposes an `npcs` list directly; projectile collision
+        // is handled in ECS systems (`ecs::schedule`). This extension remains as a
+        // compatibility shim for the demo feature and returns no hits.
+        Vec::new()
     }
 }
 
 /// Segment-circle intersection in XZ (ignores Y to behave like a vertical cylinder).
+#[allow(dead_code)]
 fn segment_hits_circle_xz(p0: glam::Vec3, p1: glam::Vec3, center: glam::Vec3, r: f32) -> bool {
     let p0 = glam::vec2(p0.x, p0.z);
     let p1 = glam::vec2(p1.x, p1.z);

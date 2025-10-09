@@ -17,8 +17,8 @@ pub fn segment_hits_circle_xz(p0: Vec3, p1: Vec3, center: Vec3, radius: f32) -> 
     (closest - c).length_squared() <= radius * radius
 }
 
-/// Compute the parametric t at which a segment [p0,p1] first enters an axis-aligned AABB.
-/// Returns None when no intersection occurs. t is in [0,1].
+/// Compute the parametric `t` at which a segment `[p0, p1]` first enters an axis-aligned AABB.
+/// Returns `None` when no intersection occurs. `t` is in `[0, 1]`.
 #[inline]
 pub fn segment_aabb_enter_t(p0: Vec3, p1: Vec3, min: Vec3, max: Vec3) -> Option<f32> {
     let d = p1 - p0;

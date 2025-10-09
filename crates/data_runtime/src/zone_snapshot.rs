@@ -1,7 +1,7 @@
 //! Zone snapshot types and loader.
 //!
 //! A baked Zone snapshot is emitted by the zone-bake tool under:
-//!   packs/zones/<slug>/snapshot.v1/
+//!   packs/zones/`<slug>`/snapshot.v1/
 //! with a small set of binary blobs (instances, clusters, colliders) and
 //! optional `meta.json` describing bounds and authoring metadata.
 //!

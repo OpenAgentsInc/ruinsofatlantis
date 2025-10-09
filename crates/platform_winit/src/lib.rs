@@ -192,17 +192,40 @@ impl ApplicationHandler for App {
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
-                // Load Zone batches if a zone slug is provided (env)
-                if let Some(slug) = detect_zone_slug() {
-                    if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
-                        let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(&state, &zp);
-                        state.set_zone_batches(Some(gz));
-                    } else {
-                        log::warn!("zone: failed to load snapshot for slug='{}'", slug);
+                // Decide boot mode and optionally load explicit zone batches
+                let force_picker = std::env::var("RA_FORCE_PICKER")
+                    .map(|v| v == "1")
+                    .unwrap_or(false);
+                let explicit = detect_zone_slug();
+                if !force_picker {
+                    if let Some(slug) = explicit.as_ref() {
+                        if let Ok(zp) = client_core::zone_client::ZonePresentation::load(slug) {
+                            let gz =
+                                render_wgpu::gfx::zone_batches::upload_zone_batches(&state, &zp);
+                            state.set_zone_batches(Some(gz));
+                        } else {
+                            log::warn!("zone: failed to load snapshot for slug='{}'", slug);
+                        }
                     }
                 }
                 self.window = Some(window);
                 self.state = Some(state);
+                // Boot mode
+                self.boot = if !force_picker {
+                    if let Some(slug) = explicit {
+                        BootMode::Running { slug }
+                    } else {
+                        BootMode::Picker
+                    }
+                } else {
+                    BootMode::Picker
+                };
+                if matches!(self.boot, BootMode::Picker) {
+                    self.picker.refresh();
+                    if let Some(win) = &self.window {
+                        win.set_title("Zone Picker — no zone selected — ↑/↓, Enter, Esc");
+                    }
+                }
                 #[cfg(feature = "demo_server")]
                 {
                     let mut srv = server_core::ServerState::new();
@@ -219,10 +242,8 @@ impl ApplicationHandler for App {
                     if srv.pc_actor.is_none() {
                         let _ = srv.spawn_pc_at(pc0);
                     }
-                    // If a Zone is selected and it's a minimal controller demo,
-                    // do not spawn encounter actors. Otherwise, spawn demo content.
-                    let z = detect_zone_slug();
-                    if z.as_deref() != Some("cc_demo") {
+                    // Only spawn encounter actors when running a zone
+                    if let BootMode::Running { .. } = self.boot {
                         srv.ring_spawn(8, 15.0, 20);
                         srv.ring_spawn(12, 30.0, 25);
                         srv.ring_spawn(15, 45.0, 30);

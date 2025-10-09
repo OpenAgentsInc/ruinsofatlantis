@@ -20,7 +20,7 @@ use std::time::Instant;
 #[cfg(not(feature = "vox_onepath_demo"))]
 use voxel_proxy::VoxelGrid;
 #[cfg(feature = "vox_onepath_demo")]
-use voxel_proxy::{VoxelGrid, VoxelProxyMeta, voxelize_surface_fill};
+use voxel_proxy::{VoxelProxyMeta, voxelize_surface_fill};
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
