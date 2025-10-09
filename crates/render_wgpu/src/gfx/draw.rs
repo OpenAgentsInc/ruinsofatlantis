@@ -29,9 +29,6 @@ impl Renderer {
         rpass.draw_indexed(0..idx, 0, 0..1);
     }
     pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if self.wizard_index_count == 0 {
-            return;
-        }
         let use_debug = std::env::var("RA_PC_DEBUG").as_deref() == Ok("1");
         if use_debug {
             if let Some(p) = &self.wizard_pipeline_debug {
