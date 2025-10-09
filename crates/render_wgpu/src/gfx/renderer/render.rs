@@ -1226,7 +1226,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let overlays_disabled = std::env::var("RA_OVERLAYS")
         .map(|v| v == "0")
         .unwrap_or(false);
-    if !overlays_disabled && !r.is_vox_onepath() {
+    if !overlays_disabled && !r.is_vox_onepath() && !r.has_zone_batches() {
         // Bars for wizards from replicated views (positions + HP), with distance cull for NPCs.
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         let pc_pos = if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
@@ -1310,7 +1310,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
 
     // Damage numbers: update, queue, draw (independent of RA_OVERLAYS to ensure visibility)
-    if !r.is_vox_onepath() {
+    if !r.is_vox_onepath() && !r.has_zone_batches() {
         r.damage.update(dt);
         r.damage.queue(
             &r.device,
@@ -1383,7 +1383,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     let draw_labels = std::env::var("RA_NAMEPLATES")
         .map(|v| v == "1")
         .unwrap_or(false);
-    if draw_labels && !r.is_vox_onepath() {
+    if draw_labels && !r.is_vox_onepath() && !r.has_zone_batches() {
         // Alive wizards only
         let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
         for (i, m) in r.wizard_models.iter().enumerate() {
