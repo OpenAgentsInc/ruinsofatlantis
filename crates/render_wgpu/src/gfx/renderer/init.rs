@@ -1887,6 +1887,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_anim_cfg,
         pc_anim_missing_warned: Default::default(),
         zone_batches: None,
+        // Picker overlay state
+        picker_items: Vec::new(),
+        picker_selected: 0,
+        picker_chosen_slug: None,
     };
 
     // Apply default input profile from config if provided

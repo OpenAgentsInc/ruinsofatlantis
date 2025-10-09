@@ -390,13 +390,29 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
-                if let Err(err) = state.render() {
+                if let Err(err) = state.render_with_window(window) {
                     match err {
                         SurfaceError::Lost | SurfaceError::Outdated => {
                             state.recreate_surface_current_size(window)
                         }
                         SurfaceError::OutOfMemory => event_loop.exit(),
                         e => eprintln!("render error: {e:?}"),
+                    }
+                }
+                if let BootMode::Picker = self.boot {
+                    if let Some(slug) = state.take_picker_selected() {
+                        if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
+                            let gz =
+                                render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
+                            state.set_zone_batches(Some(gz));
+                            self.boot = BootMode::Running { slug: slug.clone() };
+                            window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                        } else {
+                            log::error!(
+                                "zone picker: failed to load zone '{}': snapshot missing or invalid",
+                                slug
+                            );
+                        }
                     }
                 }
             }

@@ -485,6 +485,11 @@ pub struct Renderer {
     // Wizard health (including PC at pc_index)
     wizard_hp: Vec<i32>,
     wizard_hp_max: i32,
+
+    // --- Zone Picker UI (minimal overlay) ---
+    picker_items: Vec<(String, String)>, // (slug, display)
+    picker_selected: usize,
+    picker_chosen_slug: Option<String>,
     pc_alive: bool,
     // NPC wizard casting rotation state
     wizard_fire_cycle_count: Vec<u32>,
@@ -1869,17 +1874,20 @@ impl Renderer {
             // Enable bloom by default to accent bright fire bolts
             enable_bloom: true,
             // frame overlay removed
+            picker_items: Vec::new(),
+            picker_selected: 0,
+            picker_chosen_slug: None,
         })
     }
 
     /// Resize the swapchain while preserving aspect and device limits.
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        renderer::resize::resize_impl(self, new_size)
+        renderer::resize::resize_impl(self, new_size);
     }
 
     /// Render one frame (delegate wrapper).
     pub fn render(&mut self) -> Result<(), SurfaceError> {
-        renderer::render::render_impl(self)
+        renderer::render::render_impl(self, None)
     }
 
     /// Recreate swapchain and sized resources using the current window size.
@@ -1890,7 +1898,20 @@ impl Renderer {
 
     /// Back-compat stub for old render body.
     pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {
-        renderer::render::render_impl(self)
+        renderer::render::render_impl(self, None)
+    }
+
+    /// Render one frame with access to the host winit Window (needed for egui input).
+    pub fn render_with_window(
+        &mut self,
+        window: &winit::window::Window,
+    ) -> Result<(), SurfaceError> {
+        renderer::render::render_impl(self, Some(window))
+    }
+
+    /// Take a selected slug from the Picker UI (if any was chosen this frame).
+    pub fn take_picker_selected(&mut self) -> Option<String> {
+        self.picker_chosen_slug.take()
     }
 
     /// Legacy render body (disabled).

@@ -168,3 +168,4 @@ Next Actions
 - Replicate `BossStatus` to client (thin snapshot) and surface a HUD label; keep renderer non‑authoritative.
 - Map `team` to a numeric/team table where AI expects it; attach a capsule shape when the ECS world is wired.
 - Next: optional thin replication to surface name/hp/ac in HUD; later, drive Sorceress visuals from server entity state.
+
