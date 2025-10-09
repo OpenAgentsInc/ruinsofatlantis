@@ -268,6 +268,8 @@ pub struct Renderer {
     pc_prev_pos: glam::Vec3,
     pc_anim_cfg: data_runtime::configs::pc_animations::PcAnimCfg,
     pc_anim_missing_warned: HashSet<String>,
+    // Track last seen replicated PC id for logging
+    pc_rep_id_last: Option<u32>,
     // Zombies
     zombie_palettes_buf: wgpu::Buffer,
     zombie_palettes_bg: wgpu::BindGroup,

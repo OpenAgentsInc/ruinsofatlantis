@@ -17,7 +17,14 @@ use winit::{
 #[allow(dead_code)]
 enum BootMode {
     Picker,
-    Running { slug: String },
+    #[cfg(not(target_arch = "wasm32"))]
+    Loading {
+        slug: String,
+        handle: std::thread::JoinHandle<anyhow::Result<client_core::zone_client::ZonePresentation>>,
+    },
+    Running {
+        slug: String,
+    },
 }
 
 #[derive(Default, Clone)]
@@ -395,46 +402,37 @@ impl ApplicationHandler for App {
                     }
                     (Key::Named(NamedKey::Enter), _) | (_, PhysicalKey::Code(KeyCode::Enter)) => {
                         if let Some(slug) = self.picker.current_slug() {
-                            if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug)
+                            #[cfg(target_arch = "wasm32")]
                             {
-                                let gz =
-                                    render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
-                                state.set_zone_batches(Some(gz));
-                                // Ensure PC assets exist once a zone is chosen so the
-                                // character is visible immediately (cc_demo).
-                                state.ensure_pc_assets();
-                                self.boot = BootMode::Running { slug: slug.clone() };
-                                window.set_title(&format!("RuinsofAtlantis — {}", slug));
-                                // Spawn encounter actors on transition (native demo server only)
-                                // For cc_demo, spawn only PC — no NPCs/bosses.
-                                #[cfg(feature = "demo_server")]
-                                if let Some(srv) = self.demo_server.as_mut() {
-                                    // Always ensure a PC exists
-                                    let _ = srv.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
-                                    if slug.as_str() != "cc_demo" {
-                                        srv.ring_spawn(8, 15.0, 20);
-                                        srv.ring_spawn(12, 30.0, 25);
-                                        srv.ring_spawn(15, 45.0, 30);
-                                        let wiz_count = 4usize;
-                                        let wiz_r = 8.0f32;
-                                        for i in 0..wiz_count {
-                                            let a = (i as f32) / (wiz_count as f32)
-                                                * std::f32::consts::TAU;
-                                            let p =
-                                                glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
-                                            let _ = srv.spawn_wizard_npc(p);
-                                        }
-                                        let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                                        let _dk =
-                                            srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                                        server_core::scene_build::add_demo_ruins_destructible(srv);
-                                    }
+                                if let Ok(zp) =
+                                    client_core::zone_client::ZonePresentation::load(&slug)
+                                {
+                                    let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
+                                        state, &zp,
+                                    );
+                                    state.set_zone_batches(Some(gz));
+                                    state.ensure_pc_assets();
+                                    self.boot = BootMode::Running { slug: slug.clone() };
+                                    window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                } else {
+                                    log::error!(
+                                        "zone picker: failed to load zone '{}': snapshot missing or invalid",
+                                        slug
+                                    );
                                 }
-                            } else {
-                                log::error!(
-                                    "zone picker: failed to load zone '{}': snapshot missing or invalid",
-                                    slug
-                                );
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                let slug_clone = slug.clone();
+                                self.boot = BootMode::Loading {
+                                    slug: slug.clone(),
+                                    handle: std::thread::spawn(move || {
+                                        client_core::zone_client::ZonePresentation::load(
+                                            &slug_clone,
+                                        )
+                                    }),
+                                };
+                                window.set_title(&format!("Loading — {}", slug));
                             }
                         }
                         return;
@@ -514,6 +512,80 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Poll background zone loader (if any) without blocking the UI thread.
+            let mut restore: Option<BootMode> = None;
+            let cur = std::mem::replace(&mut self.boot, BootMode::Picker);
+            match cur {
+                BootMode::Loading { slug, handle } => {
+                    if handle.is_finished() {
+                        match handle.join() {
+                            Ok(Ok(zp)) => {
+                                if let Some(st) = self.state.as_mut() {
+                                    let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
+                                        st, &zp,
+                                    );
+                                    st.set_zone_batches(Some(gz));
+                                    st.ensure_pc_assets();
+                                }
+                                #[cfg(feature = "demo_server")]
+                                if let Some(srv) = self.demo_server.as_mut() {
+                                    let _ = srv.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
+                                    if slug.as_str() != "cc_demo" {
+                                        srv.ring_spawn(8, 15.0, 20);
+                                        srv.ring_spawn(12, 30.0, 25);
+                                        srv.ring_spawn(15, 45.0, 30);
+                                        let wiz_count = 4usize;
+                                        let wiz_r = 8.0f32;
+                                        for i in 0..wiz_count {
+                                            let a = (i as f32) / (wiz_count as f32)
+                                                * std::f32::consts::TAU;
+                                            let p =
+                                                glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                                            let _ = srv.spawn_wizard_npc(p);
+                                        }
+                                        let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                                        let _dk =
+                                            srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
+                                        server_core::scene_build::add_demo_ruins_destructible(srv);
+                                    }
+                                }
+                                self.boot = BootMode::Running { slug: slug.clone() };
+                                if let Some(win) = &self.window {
+                                    win.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                log::error!("zone load failed: {:?}", e);
+                                self.boot = BootMode::Picker;
+                            }
+                            Err(_) => {
+                                log::error!("zone load thread panicked");
+                                self.boot = BootMode::Picker;
+                            }
+                        }
+                    } else {
+                        // Not finished yet; restore state and draw loading overlay
+                        restore = Some(BootMode::Loading {
+                            slug: slug.clone(),
+                            handle,
+                        });
+                        if let (Some(win), Some(st)) = (&self.window, &mut self.state) {
+                            st.draw_picker_overlay("Loading…", "Please wait", &[], 0);
+                            let _ = st.render_with_window(win);
+                        }
+                    }
+                }
+                other => {
+                    // Not loading; restore the previous mode
+                    restore = Some(other);
+                }
+            }
+            if let Some(b) = restore.take() {
+                self.boot = b;
+            }
+        }
         #[cfg(target_arch = "wasm32")]
         {
             // If the async init finished, move Renderer into self.

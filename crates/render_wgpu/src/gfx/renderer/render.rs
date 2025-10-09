@@ -680,6 +680,10 @@ pub fn render_impl(
         // 3) Ensure PC id is pinned to pc_index; if occupied, move that id to a free slot
         if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
             let pc_id = pcw.id;
+            if r.pc_rep_id_last != Some(pc_id) {
+                log::info!("client: local PC replicated id={}", pc_id);
+                r.pc_rep_id_last = Some(pc_id);
+            }
             let mapped = r.wizard_slot_map.get(&pc_id).copied();
             match mapped {
                 Some(slot) if slot == r.pc_index => {}

@@ -1928,6 +1928,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cpu,
         pc_mat_bg,
         pc_prev_pos: pc_initial_pos,
+        pc_rep_id_last: None,
         sorc_palettes_buf,
         sorc_palettes_bg,
         sorc_joints,
