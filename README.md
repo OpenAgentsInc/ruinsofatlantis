@@ -55,7 +55,7 @@ Notes
 - Current keybinds: `P` (perf), `O` (orbit), `H` (HUD), `Space`/`[`/`]` and `-`/`=` control time‑of‑day.
 
 Versioned WASM Releases
-- We publish immutable, versioned WASM bundles as GitHub Release assets. See docs: `docs/wasm-deployment.md:14`.
+- We publish immutable, versioned WASM bundles as GitHub Release assets. See docs: `docs/ops/wasm-deployment.md:14`.
 - Run a release bundle locally (unzip first, then serve over HTTP):
   - Python: `python3 -m http.server 8080 --directory /path/to/unzipped`
   - Node: `npx --yes serve -p 8080 /path/to/unzipped`

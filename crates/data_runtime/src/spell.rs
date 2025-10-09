@@ -18,7 +18,7 @@ impl Spell {
 }
 
 // A more detailed, data-driven spell spec used by the simulator and tools.
-// This maps closely to docs/fire_bolt.md and data/spells/*.json.
+// This maps closely to docs/design/spells/fire_bolt.md and data/spells/*.json.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SpellSpec {
     pub id: String,

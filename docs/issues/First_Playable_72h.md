@@ -102,6 +102,5 @@ Deliverables
 - Tests: keep CPU-only tests deterministic (terrain/sky already have coverage); add small unit tests if new math/helpers are introduced.
 
 Out-of-scope for this milestone (tracked separately)
-- Shadows (CSM) and IBL pipelines: see `docs/issues/Lighting_M1.md`..`Lighting_M4.md` and `docs/lighting.md`. Defer to lighting milestones.
+- Shadows (CSM) and IBL pipelines: see `docs/issues/Lighting_M1.md`..`Lighting_M4.md` and `docs/graphics/lighting.md`. Defer to lighting milestones.
 - Full PBR and material system expansion; stick to current simple shading + small polish.
-

@@ -12,16 +12,16 @@ ensure SRD pdf is fully converted to markdown
 ### Docs snapshot
 ```
 - docs/audits/README.md — ## 0) Goal & scope
-- docs/bevy_gltf.md — # bevy_gltf: Notes and Takeaways
+- docs/graphics/bevy_gltf.md — # bevy_gltf: Notes and Takeaways
 - docs/combat_sim_ecs.md — # Combat Simulation System — ECS Design and SRD Mapping
 - docs/combat_sim.md — # Combat Simulation — Quickstart and Structure
 - docs/delegations/20251006_115017_ensure-the-srd-docs-are-comprehensive-basedon-the-pdf.md — # Delegation: ensure the SRD docs are comprehensive basedon the PDF
 - docs/delegations/20251006_115546_ensure-srd-pdf-is-fully-converted-to-markdown.md — # Delegation: ensure SRD pdf is fully converted to markdown
 - docs/delegations/20251006_124143_ensure-srd-pdf-is-fully-converted-to-markdown-we-already-began-it.md — # Delegation: ensure SRD pdf is fully converted to markdown. we already began it
 - docs/delegations/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.md — # Delegation: ensure SRD pdf is fully converted to markdown.
-- docs/fevir-2025.md — # The core claim
-- docs/fire_bolt.md — # Fire Bolt (SRD 5.2.1) — Implementation Spec
-- docs/gltf-animations.md — # glTF Skinning & Animations — What We Fixed
+- docs/design/fevir-2025.md — # The core claim
+- docs/design/spells/fire_bolt.md — # Fire Bolt (SRD 5.2.1) — Implementation Spec
+- docs/graphics/gltf-animations.md — # glTF Skinning & Animations — What We Fixed
 - docs/issues/0095_ecs_server_authority_plan.md — # Issue 95 — Server‑Authoritative ECS Refactor (Initial Execution Plan)
 - docs/issues/0096_phase0_preflight.md — # Phase 0 — Preflight Hygiene and Feature Gates (Standalone Plan)
 - docs/issues/100_nivita_of_the_undertide_unique_boss.md — # 100: Nivita of the Undertide — Unique Boss NPC
@@ -43,8 +43,8 @@ ensure SRD pdf is fully converted to markdown
 - docs/issues/Lighting_M2.md
 - docs/issues/Lighting_M3.md
 - docs/issues/Lighting_M4.md
-- docs/lighting.md — # Ruins of Atlantis — Lighting Roadmap (engine‑agnostic)
-- docs/magic-missile.md — # Magic Missile (SRD 5.2.1) — Implementation Spec
+- docs/graphics/lighting.md — # Ruins of Atlantis — Lighting Roadmap (engine‑agnostic)
+- docs/design/spells/magic-missile.md — # Magic Missile (SRD 5.2.1) — Implementation Spec
 - docs/old/wizard_viewer.md — # Wizard Viewer (Standalone)
 - docs/research/hud.md — ## 1) Best practices in HUD design (engine‑agnostic)
 - docs/research/hybrid-voxel-system.md — ## TL;DR (recommendation)
@@ -56,9 +56,9 @@ ensure SRD pdf is fully converted to markdown
 - docs/systems/spell_ability_system.md — # Spell & Ability System (MVP)
 - docs/systems/terrain_biomes.md — # Terrain & Biomes (Phase 1)
 - docs/systems/zones_system.md — # Zones System
-- docs/telemetry.md — # Telemetry — Logs, Metrics, Traces (dev usage)
-- docs/wasm-deployment.md — # WebAssembly (WASM) Deployment — Wizard Scene
-- docs/web-wasm-blackout-postmortem.md
+- docs/observability/telemetry.md — # Telemetry — Logs, Metrics, Traces (dev usage)
+- docs/ops/wasm-deployment.md — # WebAssembly (WASM) Deployment — Wizard Scene
+- docs/ops/postmortems/web-wasm-blackout-postmortem.md
 ```
 
 ### Code/commit matches (excerpt)
@@ -114,7 +114,7 @@ docs/delegations/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.m
 - Create `docs/srd/index.json` listing canonical SRD sections (slug, title).
 - Add `tests/docs_srd_coverage.rs` to assert every index entry has a page and no TODO/WIP remain.
 - Scaffold missing pages under `docs/srd/<slug>.md` with frontmatter + anchors; mark `Coverage: Partial` initially.
-- Connect topical specs (e.g., `docs/fire_bolt.md`, `docs/magic-missile.md`) from the SRD ‘Spells’ pages.
+- Connect topical specs (e.g., `docs/design/spells/fire_bolt.md`, `docs/design/spells/magic-missile.md`) from the SRD ‘Spells’ pages.
 - Add cross-links between ‘Rules Glossary’, ‘Combat’, ‘Conditions’, and related sections.
 - Update Status lines in `docs/issues/` and record decisions.
 
@@ -157,4 +157,3 @@ docs/delegations/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.m
 ## Risks & Mitigations
 - Documentation drift → enforce coverage in CI.
 - Over-scoping → ship minimal pages first; iterate.
-

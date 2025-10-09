@@ -13,7 +13,7 @@ This document explains the scaffolding added for the deterministic combat simula
 - Harness (CLI to run scenarios)
   - `src/bin/sim_harness.rs`: parses a scenario, loads data (e.g., Fire Bolt), and will execute the sim loop as systems are filled in
 - Authorable data (checked in, shared)
-  - `data/spells/fire_bolt.json`: SRD-accurate Fire Bolt spec (see `docs/fire_bolt.md`)
+  - `data/spells/fire_bolt.json`: SRD-accurate Fire Bolt spec (see `docs/design/spells/fire_bolt.md`)
   - `data/scenarios/example.yaml`: sample scenario for the harness
 
 ## Run the Simulator
@@ -54,7 +54,7 @@ Loader: `src/core/data/scenario.rs:1`
 
 - SpellSpec (serde model): `src/core/data/spell.rs:1`
 - Loader helper: `src/core/data/loader.rs:1` (e.g., `load_spell_spec("spells/fire_bolt.json")`)
-- Example data: `data/spells/fire_bolt.json` (matches `docs/fire_bolt.md`)
+- Example data: `data/spells/fire_bolt.json` (matches `docs/design/spells/fire_bolt.md`)
 
 Notes
 - Keep authorable, shared data under top-level `data/` so client/server/sim read the same sources.

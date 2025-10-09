@@ -5,7 +5,7 @@ Scope: expands the GDD’s Combat Simulator & Harness into a concrete ECS‑orie
 Goals
 - Deterministic outcomes across machines given identical seeds and scenarios.
 - Faithful SRD 5.2.1 combat mapping (attacks, saves, conditions, concentration, damage types) with MMO real‑time pacing.
-- Data‑driven abilities (see `docs/fire_bolt.md`) and pluggable AI policies.
+- Data‑driven abilities (see `docs/design/spells/fire_bolt.md`) and pluggable AI policies.
 - Clear separation: sim‑core (no rendering) vs. client/viz.
 
 —
@@ -125,7 +125,7 @@ Order is important for determinism; keep within a static schedule.
 ## Data‑Driven Abilities
 
 - Abilities live in `sim-data` and are loaded into `AbilityBook` per actor.
-- See `docs/fire_bolt.md` for a full example (ranged spell attack + projectile + ignition effect).
+- See `docs/design/spells/fire_bolt.md` for a full example (ranged spell attack + projectile + ignition effect).
 - MVP set: basic weapon attack, Fire Bolt, Cure Wounds/Healing Word (healing + concentration check interactions), Grease (AoE + prone/save), Shield (reaction), Bless (concentration aura).
 
 —
@@ -309,7 +309,7 @@ Here’s a clean hierarchy that keeps “authoritative game data + rules” shar
   - Create src/shared/data/{ability.rs,spell.rs,condition.rs,loader.rs} with docblocks; point loaders at data/.
   - Add src/shared/rules/{dice.rs,attack.rs,saves.rs} and src/shared/combat/fsm.rs.
   - Have the sim (and later server) import from crate::shared::*.
-  - Place Fire Bolt JSON under data/spells/fire_bolt.json per docs/fire_bolt.md; wire the loader.
+  - Place Fire Bolt JSON under data/spells/fire_bolt.json per docs/design/spells/fire_bolt.md; wire the loader.
   - Add src/bin/sim_harness.rs that glues shared::data + shared::rules + shared::combat + sim together.
 
   If you want, I can scaffold the src/shared/* modules and a minimal sim_harness entry so you can start writing the FSM types in their final home.
