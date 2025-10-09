@@ -411,12 +411,16 @@ pub fn cast_system(srv: &mut ServerState, ctx: &mut Ctx) {
         let Some(c) = srv.ecs.get_mut(caster) else {
             continue;
         };
-        // Spellbook check (optional in demo)
-        if let Some(book) = c.spellbook.as_ref()
-            && !book.known.contains(&spell_id_map(cmd.spell))
-            && !book.known.contains(&cmd.spell)
-        {
-            // Back-compat: if enum types mismatch, allow cast
+        // Spellbook check: caster must know the spell
+        if let Some(book) = c.spellbook.as_ref() {
+            let known =
+                book.known.contains(&cmd.spell) || book.known.contains(&spell_id_map(cmd.spell));
+            if !known {
+                if std::env::var("RA_LOG_CASTS").ok().as_deref() == Some("1") {
+                    log::info!("srv: cast rejected {:?} (unknown spell)", cmd.spell);
+                }
+                continue;
+            }
         }
         // Gating (stun/mana/GCD) unless bypassed by env
         // Gather pre-state for logging
@@ -797,15 +801,23 @@ fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
                 near_count += 1;
             }
         }
-        let want_spell = if prefer_melee {
-            None
-        } else if near_count >= 2 && (12.0..=25.0).contains(&dist) {
-            Some(SpellId::Fireball)
-        } else if dist <= 10.0 {
-            Some(SpellId::MagicMissile)
-        } else {
-            Some(SpellId::Firebolt)
-        };
+        // Choose a desired spell based on distance/cluster, filtered by the caster's spellbook.
+        let mut want_spell: Option<SpellId> = None;
+        if !prefer_melee {
+            let mut prefs: Vec<SpellId> = if near_count >= 2 && (12.0..=25.0).contains(&dist) {
+                vec![SpellId::Fireball, SpellId::MagicMissile, SpellId::Firebolt]
+            } else if dist <= 10.0 {
+                vec![SpellId::MagicMissile, SpellId::Firebolt, SpellId::Fireball]
+            } else {
+                vec![SpellId::Firebolt, SpellId::MagicMissile, SpellId::Fireball]
+            };
+            if let Some(c) = srv.ecs.get(cid) {
+                if let Some(book) = c.spellbook.as_ref() {
+                    prefs.retain(|s| book.known.contains(s));
+                }
+            }
+            want_spell = prefs.into_iter().next();
+        }
         // Gate on cooldowns & mana
         let mut ok = true;
         if let Some(c) = srv.ecs.get(cid) {

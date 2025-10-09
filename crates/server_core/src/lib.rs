@@ -1308,21 +1308,23 @@ pub fn push_out_of_destructibles(srv: &ServerState, mut pos: Vec3) -> Vec3 {
         let dz_max = (max.z - pos.z).abs();
         // Choose shortest escape
         let (axis, dir) = {
+            // Track minimum distance for branch clarity (only used for comparisons)
+            #[allow(unused_assignments)]
             let mut best = dx_min;
             let mut axis = 0; // 0=x, 1=z
             let mut dir = -1.0; // -1: toward min, +1: toward max
             if dx_max < best {
-                best = dx_max;
                 axis = 0;
                 dir = 1.0;
+                best = dx_max;
             }
             if dz_min < best {
-                best = dz_min;
                 axis = 1;
                 dir = -1.0;
+                best = dz_min;
             }
+            // no need to update `best` after final branch; we only use `axis`/`dir`
             if dz_max < best {
-                best = dz_max;
                 axis = 1;
                 dir = 1.0;
             }

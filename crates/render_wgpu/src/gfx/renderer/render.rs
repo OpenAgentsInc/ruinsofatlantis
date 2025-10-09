@@ -1109,7 +1109,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             if w.hp <= 0 {
                 continue;
             }
-            let is_pc = w.kind == 0;
+            let is_pc = w.is_pc;
             if !is_pc {
                 let d2 = (w.pos.x - pc_pos.x).powi(2) + (w.pos.z - pc_pos.z).powi(2);
                 if d2 > npc_bar_radius * npc_bar_radius {

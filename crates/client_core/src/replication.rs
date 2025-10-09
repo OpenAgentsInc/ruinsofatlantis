@@ -135,6 +135,7 @@ impl ReplicationBuffer {
                         yaw: av.yaw,
                         hp: av.hp,
                         max: av.max,
+                        is_pc: av.faction == 0,
                     }),
                     1 | 2 => self.npcs.push(NpcView {
                         id: a.id,
@@ -163,6 +164,7 @@ impl ReplicationBuffer {
                             yaw: a.yaw,
                             hp: a.hp,
                             max: a.max,
+                            is_pc: a.faction == 0,
                         }),
                         1 | 2 => self.npcs.push(NpcView {
                             id: a.id,
@@ -413,6 +415,7 @@ pub struct WizardView {
     pub yaw: f32,
     pub hp: i32,
     pub max: i32,
+    pub is_pc: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
