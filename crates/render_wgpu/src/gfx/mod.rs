@@ -1999,13 +1999,8 @@ impl Renderer {
             &self.material_bgl,
             &cpu_pc,
         );
-        // Instance at current PC position
-        let pc_model = self
-            .wizard_models
-            .get(self.pc_index)
-            .copied()
-            .unwrap_or(glam::Mat4::IDENTITY);
-        let m = glam::Mat4::from_cols_array(&pc_model.to_cols_array());
+        // Pin instance near origin so camera sees it (initial camera looks at origin)
+        let m = glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0));
         let inst_cpu = InstanceSkin {
             model: m.to_cols_array_2d(),
             color: [1.0, 1.0, 1.0],
@@ -2036,6 +2031,96 @@ impl Renderer {
             }],
         });
         // Install
+        self.pc_vb = Some(vb);
+        self.pc_ib = Some(ib);
+        self.pc_index_count = index_count;
+        self.pc_joints = joints;
+        self.pc_mat_bg = Some(pc_mat.bind_group);
+        self.pc_cpu = Some(cpu_pc);
+        self.pc_instances = Some(inst_buf);
+        self.pc_palettes_buf = Some(pc_pal_buf);
+        self.pc_palettes_bg = Some(pc_pal_bg);
+    }
+
+    /// Install a pre-decoded PC CPU rig into GPU resources (called from UI thread
+    /// after decoding on a background thread).
+    pub fn install_pc_cpu(&mut self, mut cpu_pc: SkinnedMeshCPU) {
+        if self.pc_vb.is_some() {
+            return;
+        }
+        use crate::gfx::types::{InstanceSkin, VertexSkinned};
+        // Merge universal animation library if available (idempotent)
+        let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
+        if lib_path.exists()
+            && let Err(e) = roa_assets::skinning::merge_gltf_animations(&mut cpu_pc, &lib_path)
+        {
+            log::debug!("install_pc_cpu: merge anim lib failed: {:?}", e);
+        }
+        if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
+            log::warn!("install_pc_cpu: empty CPU rig; skipping");
+            return;
+        }
+        let verts: Vec<VertexSkinned> = cpu_pc
+            .vertices
+            .iter()
+            .map(|v| VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                uv: v.uv,
+                joints: v.joints,
+                weights: v.weights,
+            })
+            .collect();
+        let vb = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-vb"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        let ib = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-ib"),
+                contents: bytemuck::cast_slice(&cpu_pc.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        let index_count = cpu_pc.indices.len() as u32;
+        let joints = cpu_pc.joints_nodes.len() as u32;
+        let pc_mat = material::create_wizard_material(
+            &self.device,
+            &self.queue,
+            &self.material_bgl,
+            &cpu_pc,
+        );
+        let inst_cpu = InstanceSkin {
+            model: glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0)).to_cols_array_2d(),
+            color: [1.0, 1.0, 1.0],
+            selected: 1.0,
+            palette_base: 0,
+            _pad_inst: [0; 3],
+        };
+        let inst_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-instance"),
+                contents: bytemuck::bytes_of(&inst_cpu),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        let pc_pal_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pc-ubc-palettes"),
+            size: ((joints.max(1) as usize) * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let pc_pal_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("pc-ubc-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: pc_pal_buf.as_entire_binding(),
+            }],
+        });
         self.pc_vb = Some(vb);
         self.pc_ib = Some(ib);
         self.pc_index_count = index_count;

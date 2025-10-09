@@ -17,6 +17,7 @@ glam = "0.30"
 web-time = "1.1.0"
 client_core = { path = "../client_core" }
 data_runtime = { path = "../data_runtime" }
+roa-assets = { version = "0.1.0", path = "../../shared/assets" }
 
 [features]
 default = ["demo_server"]
@@ -29,3 +30,6 @@ optional = true
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["Document", "Window", "HtmlCanvasElement", "Element"] }
+
+[dev-dependencies]
+tempfile = "3"

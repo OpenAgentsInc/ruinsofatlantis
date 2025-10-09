@@ -24,8 +24,10 @@ impl Renderer {
             rpass.set_bind_group(3, pc_mat_bg, &[]);
             rpass.set_vertex_buffer(0, pc_vb.slice(..));
             rpass.set_vertex_buffer(1, pc_inst.slice(..));
-            rpass.set_index_buffer(pc_ib.slice(..), IndexFormat::Uint16);
+            // UBC male uses 32-bit indices; draw with Uint32 to ensure visibility
+            rpass.set_index_buffer(pc_ib.slice(..), IndexFormat::Uint32);
             rpass.draw_indexed(0..self.pc_index_count, 0, 0..1);
+            // Debug HUD line to prove the pass ran (will be queued by caller)
         } else {
             // Fallback: draw PC from wizard rig
             let stride = std::mem::size_of::<crate::gfx::types::InstanceSkin>() as u64;

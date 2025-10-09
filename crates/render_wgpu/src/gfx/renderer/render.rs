@@ -1154,9 +1154,28 @@ pub fn render_impl(
             // skip wizard visuals entirely in one‑path demo
         } else if r.has_zone_batches() && !r.is_picker_batches() {
             // Draw only the PC rig when a real zone is active (not in Picker)
-            if r.pc_vb.is_some() {
+            let pc_ready = r.pc_vb.is_some()
+                && r.pc_ib.is_some()
+                && r.pc_instances.is_some()
+                && r.pc_mat_bg.is_some()
+                && r.pc_palettes_bg.is_some()
+                && r.pc_index_count > 0;
+            if pc_ready {
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
+                // HUD marker to prove the draw path is running
+                r.hud
+                    .append_perf_text_line(r.size.width, r.size.height, "PC DRAW", 0);
+            } else {
+                log::warn!(
+                    "pc_draw: vb={} ib={} inst={} mat={} pal={} idx={}",
+                    r.pc_vb.is_some(),
+                    r.pc_ib.is_some(),
+                    r.pc_instances.is_some(),
+                    r.pc_mat_bg.is_some(),
+                    r.pc_palettes_bg.is_some(),
+                    r.pc_index_count
+                );
             }
         } else if !r.has_zone_batches()
             && std::env::var("RA_DRAW_WIZARDS")

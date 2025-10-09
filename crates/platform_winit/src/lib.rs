@@ -20,11 +20,51 @@ enum BootMode {
     #[cfg(not(target_arch = "wasm32"))]
     Loading {
         slug: String,
-        handle: std::thread::JoinHandle<anyhow::Result<client_core::zone_client::ZonePresentation>>,
+        handle: std::thread::JoinHandle<
+            anyhow::Result<(
+                client_core::zone_client::ZonePresentation,
+                Option<roa_assets::types::SkinnedMeshCPU>,
+            )>,
+        >,
     },
     Running {
         slug: String,
     },
+}
+
+#[cfg(test)]
+fn can_cast(boot: &BootMode, local_pc: Option<u32>) -> bool {
+    matches!(boot, BootMode::Running { .. }) && local_pc.is_some()
+}
+
+#[cfg(test)]
+mod input_guard_tests {
+    use super::{BootMode, can_cast};
+
+    #[test]
+    fn guard_blocks_when_not_playing() {
+        assert!(!can_cast(&BootMode::Picker, None));
+    }
+
+    #[test]
+    fn guard_blocks_when_no_pc() {
+        assert!(!can_cast(
+            &BootMode::Running {
+                slug: "cc_demo".into()
+            },
+            None
+        ));
+    }
+
+    #[test]
+    fn guard_allows_when_playing_and_pc_present() {
+        assert!(can_cast(
+            &BootMode::Running {
+                slug: "cc_demo".into()
+            },
+            Some(1)
+        ));
+    }
 }
 
 #[derive(Default, Clone)]
@@ -127,6 +167,31 @@ impl ZonePickerModel {
     }
     fn display_lines(&self) -> Vec<String> {
         self.items.iter().map(|e| e.display.clone()).collect()
+    }
+    #[cfg(test)]
+    fn refresh_with_root_for_tests(&mut self, root: &std::path::Path) {
+        let mut next: Vec<ZoneEntry> = Vec::new();
+        match data_runtime::zone_snapshot::ZoneRegistry::discover(root) {
+            Ok(reg) => {
+                for slug in reg.slugs.iter() {
+                    let disp = reg
+                        .load_meta(slug)
+                        .ok()
+                        .and_then(|m| m.display_name)
+                        .unwrap_or_else(|| slug.to_string());
+                    next.push(ZoneEntry {
+                        slug: slug.clone(),
+                        display: disp,
+                    });
+                }
+            }
+            Err(e) => {
+                log::warn!("picker: discover() failed at {:?}: {e:?}", root);
+            }
+        }
+        next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
+        self.items = next;
+        self.selected = 0;
     }
 }
 
@@ -427,9 +492,21 @@ impl ApplicationHandler for App {
                                 self.boot = BootMode::Loading {
                                     slug: slug.clone(),
                                     handle: std::thread::spawn(move || {
-                                        client_core::zone_client::ZonePresentation::load(
+                                        let zp = client_core::zone_client::ZonePresentation::load(
                                             &slug_clone,
-                                        )
+                                        )?;
+                                        // Decode UBC rig CPU-side off the UI thread (best-effort)
+                                        let pc_cpu = {
+                                            use roa_assets::skinning::load_gltf_skinned;
+                                            let ubc_path = std::path::Path::new(env!(
+                                                "CARGO_MANIFEST_DIR"
+                                            ))
+                                            .join(
+                                                "../../assets/models/ubc/godot/Superhero_Male.gltf",
+                                            );
+                                            load_gltf_skinned(&ubc_path).ok()
+                                        };
+                                        Ok((zp, pc_cpu))
                                     }),
                                 };
                                 window.set_title(&format!("Loading — {}", slug));
@@ -521,13 +598,17 @@ impl ApplicationHandler for App {
                 BootMode::Loading { slug, handle } => {
                     if handle.is_finished() {
                         match handle.join() {
-                            Ok(Ok(zp)) => {
+                            Ok(Ok((zp, pc_cpu_opt))) => {
                                 if let Some(st) = self.state.as_mut() {
                                     let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
                                         st, &zp,
                                     );
                                     st.set_zone_batches(Some(gz));
-                                    st.ensure_pc_assets();
+                                    if let Some(cpu) = pc_cpu_opt {
+                                        st.install_pc_cpu(cpu);
+                                    } else {
+                                        st.ensure_pc_assets();
+                                    }
                                 }
                                 #[cfg(feature = "demo_server")]
                                 if let Some(srv) = self.demo_server.as_mut() {
