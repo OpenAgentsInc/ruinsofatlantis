@@ -30,6 +30,7 @@ Read: docs/gdd/01-philosophy.md
 This section is split for maintainability. Start with the overview, then see focused topics:
 
 - docs/gdd/02-mechanics/overview.md
+- docs/gdd/02-mechanics/destructibility.md
 - docs/gdd/02-mechanics/in-world-repair.md
 - docs/gdd/02-mechanics/dynamic-events-bosses.md
 - docs/gdd/02-mechanics/player-housing-settlements.md
