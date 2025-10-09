@@ -827,7 +827,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let total_mats = scene_build.wizard_count as usize * scene_build.joints_per_wizard as usize;
     let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("palettes"),
-        size: (total_mats * 64) as u64,
+        size: ((total_mats.max(1)) * 64) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
