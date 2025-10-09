@@ -58,4 +58,3 @@ pub mod architecture {
         #![doc = include_str!("../../../docs/architecture/ECS_ARCHITECTURE_GUIDE.md")]
     }
 }
-
