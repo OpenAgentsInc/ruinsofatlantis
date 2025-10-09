@@ -108,4 +108,29 @@ impl ZoneRegistry {
     pub fn contains(&self, slug: &str) -> bool {
         self.slugs.iter().any(|s| s == slug)
     }
+    /// Load and parse meta.json for a given slug.
+    pub fn load_meta(&self, slug: &str) -> Result<ZoneMeta> {
+        let path = self.root.join(slug).join("snapshot.v1").join("meta.json");
+        let txt =
+            fs::read_to_string(&path).with_context(|| format!("read meta: {}", path.display()))?;
+        // Try to parse into ZoneMeta first (PascalCase variant), then fall back to minimal fields
+        let parsed: Result<ZoneMeta> =
+            serde_json::from_str(&txt).context("parse meta.json as ZoneMeta");
+        if let Ok(m) = parsed {
+            return Ok(m);
+        }
+        #[derive(Deserialize)]
+        struct Min {
+            slug: Option<String>,
+            display_name: Option<String>,
+        }
+        let m: Min = serde_json::from_str(&txt).context("parse meta.json (min)")?;
+        Ok(ZoneMeta {
+            zone_id: None,
+            slug: m.slug,
+            display_name: m.display_name,
+            world_bounds_min: None,
+            world_bounds_max: None,
+        })
+    }
 }

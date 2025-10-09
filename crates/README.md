@@ -9,16 +9,18 @@ Note: Shared libraries that aren’t under `crates/` (e.g., `shared/assets` as `
 ### render_wgpu
 - WGPU renderer. Hosts the full renderer under `src/gfx/**` (camera, pipelines, shaders, UI overlays, scene assembly, terrain, sky, temporal, helpers).
 - Exposes `gfx::Renderer` used by the app/platform. Integrates with `client_core` (input/controller facade), `ecs_core` (components), `ux_hud`, `data_runtime` (zone/TOD), and replication from `net_core`.
+- Zone system integration: `gfx::zone_batches` API lets the platform attach static zone batches (renderer remains presentation‑only; no gameplay/demo branches).
 - Optional bits: `server_ext` (renderer-side helper traits when a server is present). Demo bin: `--bin vox_onepath` behind `vox_onepath_demo` feature.
 
 ### platform_winit
 - Platform/window/input loop built on winit 0.30. Provides an `ApplicationHandler` that creates a window/canvas and drives `render_wgpu::gfx::Renderer`.
+- Boots into a lightweight Zone Picker by default (no auto‑load) and loads a zone when selected. Bypass with `RA_ZONE`/`--zone <slug>`; force picker with `RA_FORCE_PICKER=1`.
 - Wires simple in‑proc replication via `net_core::transport::LocalLoopbackTransport`.
 - Feature `demo_server` (default) spawns an in‑proc `server_core::ServerState` for the demo.
 
 ### data_runtime
 - SRD‑aligned data models and loaders. Replaces the old `src/core/data` facade.
-- Modules: `specdb` (content facade), `spell`, `class`, `ability`, `monster`, `scenario`, `scene` (destructibles), `zone` (authoring manifest with TOD/terrain/weather), and `configs/*` (destructible, input/camera, telemetry, PC animations, NPC unique).
+- Modules: `specdb` (content facade), `spell`, `class`, `ability`, `monster`, `scenario`, `scene` (destructibles), `zone` (authoring manifest with TOD/terrain/weather), `zone_scene` (scene schema), `zone_snapshot` (snapshot loader + registry), and `configs/*` (destructible, input/camera, telemetry, PC animations, NPC unique).
 - Serializes/deserializes JSON/YAML/TOML where helpful; designed for deterministic authoring flows.
 
 ### ecs_core
@@ -28,6 +30,7 @@ Note: Shared libraries that aren’t under `crates/` (e.g., `shared/assets` as `
 
 ### client_core
 - Client glue: input/controller state, a simple third‑person controller, camera integration helpers, and upload/replication scaffolding.
+- Zone system integration: `zone_client::ZonePresentation::load(slug)` loads snapshot roots for the client; the platform uploads batches to the renderer.
 - `systems/*` update controller and camera; `replication` buffers/apply deltas; `upload` defines a mesh‑upload interface consumed by the renderer.
 - Exposes a read‑only controller facade for the renderer.
 
@@ -77,4 +80,3 @@ Conventions
 - Keep crates dependency‑light and focused. Renderer/platform/web APIs should not leak into gameplay/sim/data crates.
 - Prefer adding unit tests alongside new functionality (math/transforms, parsing, voxel ops, replication encode/decode, etc.).
 - If you add a new workspace crate, update this file with a brief scope and primary consumers.
-

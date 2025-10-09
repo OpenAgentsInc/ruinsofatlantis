@@ -14,6 +14,72 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
+enum BootMode {
+    Picker,
+    Running { slug: String },
+}
+
+#[derive(Default, Clone)]
+struct ZoneEntry {
+    slug: String,
+    display: String,
+}
+
+#[derive(Default)]
+struct ZonePickerModel {
+    filter: String,
+    items: Vec<ZoneEntry>,
+    selected: usize,
+    load_error: Option<String>,
+}
+
+impl ZonePickerModel {
+    fn refresh(&mut self) {
+        let root = packs_zones_root();
+        if let Ok(reg) = data_runtime::zone_snapshot::ZoneRegistry::discover(&root) {
+            let mut next: Vec<ZoneEntry> = Vec::new();
+            for slug in reg.slugs.iter() {
+                let disp = reg
+                    .load_meta(slug)
+                    .ok()
+                    .and_then(|m| m.display_name)
+                    .unwrap_or_else(|| slug.to_string());
+                next.push(ZoneEntry {
+                    slug: slug.clone(),
+                    display: disp,
+                });
+            }
+            next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
+            self.items = next;
+            self.selected = 0;
+        }
+    }
+    fn select_prev(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+    fn select_next(&mut self) {
+        if self.selected + 1 < self.items.len() {
+            self.selected += 1;
+        }
+    }
+    #[allow(dead_code)]
+    fn current_slug(&self) -> Option<String> {
+        self.items.get(self.selected).map(|e| e.slug.clone())
+    }
+}
+
+fn packs_zones_root() -> std::path::PathBuf {
+    let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ws = here.join("../../packs/zones");
+    if ws.exists() {
+        ws
+    } else {
+        here.join("../../packs").join("zones")
+    }
+}
+
 struct App {
     window: Option<Window>,
     state: Option<Renderer>,
@@ -38,6 +104,8 @@ struct App {
     cmds_this_sec: u32,
     // Track which destructible instances have been sent to the client
     sent_destr_instances: std::collections::HashSet<u64>,
+    boot: BootMode,
+    picker: ZonePickerModel,
 }
 
 impl Default for App {
@@ -62,6 +130,8 @@ impl Default for App {
             last_sec_start: web_time::Instant::now(),
             cmds_this_sec: 0,
             sent_destr_instances: std::collections::HashSet::new(),
+            boot: BootMode::Picker,
+            picker: Default::default(),
         }
     }
 }
