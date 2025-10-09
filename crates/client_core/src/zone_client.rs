@@ -16,7 +16,7 @@ impl ZonePresentation {
         // Snapshots live under workspace `packs/zones/<slug>/snapshot.v1`.
         let root = workspace_packs_root();
         let _snap = data_runtime::zone_snapshot::ZoneSnapshot::load(root, slug)
-            .with_context(|| format!("load zone snapshot: {}", slug))?;
+            .with_context(|| format!("load zone snapshot: {slug}"))?;
         Ok(Self {
             slug: slug.to_string(),
         })
