@@ -1650,21 +1650,26 @@ pub fn render_impl(
             }
         }
         r.hud.reset();
-        r.hud.append_center_text(
+        r.hud.death_overlay(
             r.size.width,
             r.size.height,
-            "Choose a Zone (↑/↓, Enter)",
-            24.0,
-            [0.95, 0.98, 1.0, 1.0],
+            "Choose a Zone",
+            "Use ↑/↓ to select — Enter to load — Esc to quit",
         );
         let max_show = 12usize;
+        let base_y = (r.size.height as f32) * 0.5 - 20.0;
         for (line, (i, (_slug, disp))) in
             r.picker_items.iter().enumerate().take(max_show).enumerate()
         {
             let mark = if i == r.picker_selected { ">" } else { " " };
             let txt = format!("{} {}", mark, disp);
-            r.hud
-                .append_perf_text_line(r.size.width, r.size.height, &txt, line as u32);
+            r.hud.append_center_text(
+                r.size.width,
+                r.size.height,
+                &txt,
+                base_y + (line as f32) * 18.0,
+                [0.95, 0.98, 1.0, 1.0],
+            );
         }
     }
     // Submit
