@@ -395,7 +395,7 @@ fn cooldown_and_mana_tick(srv: &mut ServerState, ctx: &Ctx) {
     }
 }
 
-fn cast_system(srv: &mut ServerState, ctx: &mut Ctx) {
+pub fn cast_system(srv: &mut ServerState, ctx: &mut Ctx) {
     if srv.pending_casts.is_empty() {
         return;
     }
@@ -1146,12 +1146,10 @@ fn destructible_from_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
     }
 }
 
-#[cfg(test)]
 pub fn destructible_from_explosions_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
     destructible_from_explosions(srv, ctx);
 }
 
-#[cfg(test)]
 pub fn system_names_for_test() -> Vec<&'static str> {
     vec![
         "input_apply_intents",

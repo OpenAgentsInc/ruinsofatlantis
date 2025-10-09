@@ -160,14 +160,14 @@ pub struct CastCmd {
 
 /// Server-side resolved projectile parameters used for spawning and collision.
 #[derive(Debug, Clone, Copy)]
-struct ProjectileSpec {
-    speed_mps: f32,
-    life_s: f32,
-    aoe_radius_m: f32,
-    damage: i32,
-    arming_delay_s: f32,
-    carves_destructibles: bool,
-    carve_radius_m: f32,
+pub struct ProjectileSpec {
+    pub speed_mps: f32,
+    pub life_s: f32,
+    pub aoe_radius_m: f32,
+    pub damage: i32,
+    pub arming_delay_s: f32,
+    pub carves_destructibles: bool,
+    pub carve_radius_m: f32,
 }
 
 #[inline]
@@ -501,9 +501,8 @@ impl ServerState {
         }
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
-    /// when the DB cannot be loaded.
-    /// Expose resolved projectile spec (server-authoritative). Public for tests and tools.
-    pub fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
+    /// when the DB cannot be loaded. Visible within the crate for systems/tests.
+    pub(crate) fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
         let db = Some(&self.specs_proj);
         match kind {
             ProjKind::Firebolt => {
