@@ -1173,6 +1173,16 @@ pub fn render_impl(
                 if trace {
                     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
+                // Ensure the per-draw model UBO (group=1) is valid; identity is fine because
+                // the PC's per-instance matrix carries the actual transform.
+                let shard_m = crate::gfx::types::Model {
+                    model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    emissive: 0.0,
+                    _pad: [0.0; 4],
+                };
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
                 if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
