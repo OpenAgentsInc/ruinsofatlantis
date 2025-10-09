@@ -24,7 +24,7 @@
 
 ## 2) Mental Model
 
-```
+```text
 World (ECS)
  ├── Entities (PC, NPCs, projectiles, destructibles…)
  ├── Components (Transform, Health, Faction, MoveSpeed, Melee, Projectile, Homing, Effects…)

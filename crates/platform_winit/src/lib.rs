@@ -218,7 +218,16 @@ impl ApplicationHandler for App {
                     BootMode::Picker
                 };
                 if matches!(self.boot, BootMode::Picker) {
+                    // Zone Picker: refresh list and force renderer into "no legacy scene" mode.
+                    // We set a dummy zone-batch so render_wgpu::Renderer::has_zone_batches() is true,
+                    // which suppresses the legacy static scene draws while the picker is shown.
                     self.picker.refresh();
+                    if let Some(st) = self.state.as_mut() {
+                        let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                            slug: "<picker>".to_string(),
+                        };
+                        st.set_zone_batches(Some(gb));
+                    }
                     if let Some(win) = &self.window {
                         win.set_title("Zone Picker — no zone selected — ↑/↓, Enter, Esc");
                     }
@@ -347,7 +356,8 @@ impl ApplicationHandler for App {
                 RENDERER_CELL.with(|cell| {
                     if let Some((win, mut state)) = cell.borrow_mut().take() {
                         self.window = Some(win);
-                        // Load Zone batches if a zone slug is provided (env/URL)
+                        // Load Zone batches if a zone slug is provided (env/URL);
+                        // otherwise, set a dummy batch so legacy static draws are suppressed
                         if let Some(slug) = detect_zone_slug() {
                             if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug)
                             {
@@ -358,6 +368,11 @@ impl ApplicationHandler for App {
                             } else {
                                 log::warn!("zone: failed to load snapshot for slug='{}'", slug);
                             }
+                        } else {
+                            let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                                slug: "<picker>".to_string(),
+                            };
+                            state.set_zone_batches(Some(gb));
                         }
                         self.state = Some(state);
                         // Wire loopback transport and seed demo server on wasm when enabled
@@ -384,10 +399,10 @@ impl ApplicationHandler for App {
                             if srv.pc_actor.is_none() {
                                 let _ = srv.spawn_pc_at(pc0);
                             }
-                            // If a Zone is selected and it's a minimal controller demo,
-                            // do not spawn encounter actors. Otherwise, spawn demo content.
+                            // Only spawn encounter actors when a zone is explicitly selected,
+                            // and skip them for cc_demo. When no zone is selected (Picker), spawn none.
                             let z = detect_zone_slug();
-                            if z.as_deref() != Some("cc_demo") {
+                            if z.is_some() && z.as_deref() != Some("cc_demo") {
                                 srv.ring_spawn(8, 15.0, 20);
                                 srv.ring_spawn(12, 30.0, 25);
                                 srv.ring_spawn(15, 45.0, 30);
