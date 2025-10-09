@@ -38,10 +38,7 @@ use crate::gfx::{
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
     // Only load heavy actor/NPC assets up front when a zone is explicitly selected (native).
-    let load_actor_assets = std::env::var("ROA_ZONE")
-        .ok()
-        .or_else(|| std::env::var("RA_ZONE").ok())
-        .is_some();
+    let load_actor_assets = std::env::var("ROA_ZONE").ok().is_some();
 
     // --- Instance + Surface + Adapter (with backend fallback) ---
     fn backend_from_env() -> Option<wgpu::Backends> {

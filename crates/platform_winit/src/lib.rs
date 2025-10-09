@@ -41,23 +41,66 @@ struct ZonePickerModel {
 impl ZonePickerModel {
     fn refresh(&mut self) {
         let root = packs_zones_root();
-        if let Ok(reg) = data_runtime::zone_snapshot::ZoneRegistry::discover(&root) {
-            let mut next: Vec<ZoneEntry> = Vec::new();
-            for slug in reg.slugs.iter() {
-                let disp = reg
-                    .load_meta(slug)
-                    .ok()
-                    .and_then(|m| m.display_name)
-                    .unwrap_or_else(|| slug.to_string());
-                next.push(ZoneEntry {
-                    slug: slug.clone(),
-                    display: disp,
-                });
+        let mut next: Vec<ZoneEntry> = Vec::new();
+        match data_runtime::zone_snapshot::ZoneRegistry::discover(&root) {
+            Ok(reg) => {
+                for slug in reg.slugs.iter() {
+                    let disp = reg
+                        .load_meta(slug)
+                        .ok()
+                        .and_then(|m| m.display_name)
+                        .unwrap_or_else(|| slug.to_string());
+                    next.push(ZoneEntry {
+                        slug: slug.clone(),
+                        display: disp,
+                    });
+                }
             }
-            next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
-            self.items = next;
-            self.selected = 0;
+            Err(e) => {
+                log::warn!("picker: discover() failed at {:?}: {e:?}", root);
+            }
         }
+        if next.is_empty() {
+            if let Ok(rd) = std::fs::read_dir(&root) {
+                for e in rd.flatten() {
+                    if e.path().join("snapshot.v1").is_dir() {
+                        if let Some(os) = e.file_name().to_str() {
+                            let slug = os.to_string();
+                            let disp = match slug.as_str() {
+                                "wizard_woods" => "Wizard Woods".to_string(),
+                                "cc_demo" => "Character Controller Demo".to_string(),
+                                _ => slug.clone(),
+                            };
+                            next.push(ZoneEntry {
+                                slug,
+                                display: disp,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        if next.is_empty() {
+            next.push(ZoneEntry {
+                slug: "wizard_woods".into(),
+                display: "Wizard Woods".into(),
+            });
+            next.push(ZoneEntry {
+                slug: "cc_demo".into(),
+                display: "Character Controller Demo".into(),
+            });
+        }
+        next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
+        log::info!(
+            "picker: packs root {:?}; zones: {}",
+            root,
+            next.iter()
+                .map(|z| z.slug.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        self.items = next;
+        self.selected = 0;
     }
     fn select_prev(&mut self) {
         if self.selected > 0 {
@@ -976,11 +1019,6 @@ fn detect_zone_slug() -> Option<String> {
             }
         }
     }
-    // Back-compat: allow legacy RA_ZONE if present
-    if let Ok(v) = std::env::var("RA_ZONE")
-        && !v.is_empty()
-    {
-        return Some(v);
-    }
+    // No back-compat for RA_ZONE
     None
 }
