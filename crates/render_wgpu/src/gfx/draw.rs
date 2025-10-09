@@ -3,13 +3,45 @@
 use wgpu::IndexFormat;
 
 use super::Renderer;
+use crate::gfx::mesh;
+use crate::gfx::types::Model;
 
 impl Renderer {
+    /// Debug helper: draw a solid cube at a given model transform using the
+    /// non‑skinned pipeline. Intended for visibility diagnostics.
+    pub(crate) fn draw_debug_cube(&self, rpass: &mut wgpu::RenderPass<'_>, model_m: glam::Mat4) {
+        // Create a tiny cube VB/IB on the fly (debug only)
+        let (vb, ib, idx) = mesh::create_cube(&self.device);
+        // Update the model uniform buffer used by shard_model_bg
+        let m = Model {
+            model: model_m.to_cols_array_2d(),
+            color: [1.0, 0.1, 0.2],
+            emissive: 0.0,
+            _pad: [0.0; 4],
+        };
+        self.queue
+            .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&m));
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_bind_group(0, &self.globals_bg, &[]);
+        rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        rpass.set_vertex_buffer(0, vb.slice(..));
+        rpass.set_index_buffer(ib.slice(..), IndexFormat::Uint16);
+        rpass.draw_indexed(0..idx, 0, 0..1);
+    }
     pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
         if self.wizard_index_count == 0 {
             return;
         }
-        rpass.set_pipeline(&self.wizard_pipeline);
+        let use_debug = std::env::var("RA_PC_DEBUG").as_deref() == Ok("1");
+        if use_debug {
+            if let Some(p) = &self.wizard_pipeline_debug {
+                rpass.set_pipeline(p);
+            } else {
+                rpass.set_pipeline(&self.wizard_pipeline);
+            }
+        } else {
+            rpass.set_pipeline(&self.wizard_pipeline);
+        }
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
         // Prefer PC (UBC) resources when available

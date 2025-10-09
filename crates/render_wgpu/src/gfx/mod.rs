@@ -303,6 +303,7 @@ pub struct Renderer {
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
+    wizard_pipeline_debug: Option<wgpu::RenderPipeline>,
 
     wizard_mat_bg: wgpu::BindGroup,
     _wizard_mat_buf: wgpu::Buffer,
@@ -1032,6 +1033,15 @@ impl Renderer {
             &material_bgl,
             draw_fmt,
         );
+        let wizard_pipeline_debug = Some(pipeline::create_wizard_pipeline_debug(
+            &device,
+            &shader,
+            &globals_bgl,
+            &model_bgl,
+            &palettes_bgl,
+            &material_bgl,
+            draw_fmt,
+        ));
         let particle_pipeline =
             pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
@@ -1787,6 +1797,7 @@ impl Renderer {
             zombie_forward_offsets: vec![zombie_forward_offset; zombie_count as usize],
             wizard_instances_cpu,
             wizard_pipeline,
+            wizard_pipeline_debug,
             // debug pipelines removed
             wizard_mat_bg,
             _wizard_mat_buf,

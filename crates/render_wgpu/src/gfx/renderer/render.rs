@@ -1127,6 +1127,14 @@ pub fn render_impl(
                 log::error!("validation after ruins: {:?}", e);
             }
         }
+        // TEMP: debug cube to prove camera & pass are visible
+        if std::env::var("RA_PC_DEBUG").as_deref() == Ok("1")
+            && r.has_zone_batches()
+            && !r.is_picker_batches()
+        {
+            let m = glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0));
+            r.draw_debug_cube(&mut rp, m);
+        }
         // Voxel chunk meshes (if any)
         if !r.voxel_meshes.is_empty() {
             log::debug!("[draw] voxel meshes: {} chunks", r.voxel_meshes.len());

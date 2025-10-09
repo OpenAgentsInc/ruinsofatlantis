@@ -338,6 +338,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &material_bgl,
         draw_fmt,
     );
+    let wizard_pipeline_debug = Some(pipeline::create_wizard_pipeline_debug(
+        &device,
+        &shader,
+        &globals_bgl,
+        &model_bgl,
+        &palettes_bgl,
+        &material_bgl,
+        draw_fmt,
+    ));
     let particle_pipeline =
         pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
@@ -1795,6 +1804,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_free_slots: (0..wizard_models.len()).collect(),
         wizard_instances_cpu,
         wizard_pipeline,
+        wizard_pipeline_debug,
         wizard_mat_bg,
         _wizard_mat_buf,
         _wizard_tex_view,
