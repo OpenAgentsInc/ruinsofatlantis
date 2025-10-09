@@ -16,6 +16,8 @@ fn projectiles_are_excluded_from_actor_snapshot() {
         vec3(1.0, 0.0, 0.0),
         server_core::ProjKind::Fireball,
     );
+    // Ingest pending spawns into ECS via the authoritative schedule
+    s.step_authoritative(0.0);
 
     // Build snapshot and assert actor list only contains true actors (wizard), not the projectile
     let snap = s.tick_snapshot_actors(1);

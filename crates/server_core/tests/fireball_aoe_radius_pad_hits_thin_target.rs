@@ -6,8 +6,8 @@ use glam::vec3;
 #[test]
 fn fireball_aoe_radius_pad_hits_thin_target() {
     let mut s = server_core::ServerState::new();
-    // Spawn PC for ownership context (not used directly)
-    let _pc = s.spawn_pc_at(vec3(0.0, 0.6, 0.0));
+    // Spawn PC far from the explosion center so spawn safety doesn't push the target
+    let _pc = s.spawn_pc_at(vec3(100.0, 0.6, 0.0));
     // Spawn an Undead slightly outside a 4.0m raw radius, with a small radius
     // (min capsule radius in AoE path is 0.30m, plus a 0.25m pad → effective ~4.55m)
     let z = s.spawn_undead(vec3(4.2, 0.6, 0.0), 0.2, 40);

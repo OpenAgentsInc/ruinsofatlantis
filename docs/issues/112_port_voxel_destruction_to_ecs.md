@@ -92,3 +92,15 @@ Notes for future
   - Change: `tick_snapshot_actors()` now filters out `projectile.is_some()`
   - Added test: `crates/server_core/tests/projectiles_not_in_actor_snapshot.rs`
   - Rationale: projectiles are replicated via `projectiles` list only. Actors list is reserved for real actors.
+
+- [2025-10-09 02:41:20Z] Client delta validation hardened (indices bounds, finite verts, empty delta allowed)
+  - Code: `crates/client_core/src/replication.rs` strict checks
+  - Tests:
+    - `crates/client_core/tests/destructible_delta_validation_strict.rs`
+    - `crates/client_core/tests/projectiles_do_not_mutate_npcs.rs`
+- [2025-10-09 02:41:20Z] ECS test wrappers and projectile→carve/Firebolt gating tests
+  - Wrappers in `crates/server_core/src/ecs/schedule.rs` for test-only invocation
+  - Tests:
+    - `crates/server_core/tests/destructible_from_projectiles_segments.rs`
+    - `crates/server_core/tests/cast_cooldown_rejection.rs`
+    - `crates/server_core/tests/aoe_capsule_edge.rs`

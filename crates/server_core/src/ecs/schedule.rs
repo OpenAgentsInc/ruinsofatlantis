@@ -1490,3 +1490,25 @@ fn homing_acquire_targets(srv: &mut ServerState, ctx: &mut Ctx) {
         }
     }
 }
+
+// ------------------------------
+// Test helpers (no-op wrappers)
+// ------------------------------
+pub fn destructible_from_projectiles_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    destructible_from_projectiles(srv, ctx);
+}
+pub fn ingest_projectile_spawns_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    ingest_projectile_spawns(srv, ctx);
+}
+pub fn projectile_integrate_ecs_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    projectile_integrate_ecs(srv, ctx);
+}
+pub fn projectile_collision_ecs_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    projectile_collision_ecs(srv, ctx);
+}
+pub fn aoe_apply_explosions_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    aoe_apply_explosions(srv, ctx);
+}
+pub fn apply_damage_to_ecs_for_test(srv: &mut ServerState, ctx: &mut Ctx) {
+    apply_damage_to_ecs(srv, ctx);
+}

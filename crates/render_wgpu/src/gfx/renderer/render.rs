@@ -1161,7 +1161,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.wizard_hp = vec![100, 100];
             r.pc_index = 0;
             let view_proj = glam::Mat4::IDENTITY.to_cols_array_2d();
-            let vp = glam::Mat4::from_cols_array_2d(&view_proj);
+            let _vp = glam::Mat4::from_cols_array_2d(&view_proj);
             let mut entries: Vec<(glam::Vec3, f32)> = Vec::new();
             // Re-run the same culling logic locally
             let pc_pos = glam::vec3(0.0, 0.6, 0.0);

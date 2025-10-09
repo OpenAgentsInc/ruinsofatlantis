@@ -258,6 +258,25 @@ impl ReplicationBuffer {
             if delta.positions.len() > 200_000 {
                 return false;
             }
+            // Strict validation: indices must be in-bounds and positions must be finite.
+            // Allow empty (zero-tri) deltas as a valid way to clear a chunk.
+            if delta.positions.is_empty() {
+                // If positions are empty, indices and normals must also be empty
+                if !delta.indices.is_empty() || !delta.normals.is_empty() {
+                    return false;
+                }
+            } else {
+                let plen = delta.positions.len();
+                if delta.indices.iter().any(|&i| (i as usize) >= plen) {
+                    return false;
+                }
+                // Reject any non-finite vertex coordinates
+                for p in &delta.positions {
+                    if !(p[0].is_finite() && p[1].is_finite() && p[2].is_finite()) {
+                        return false;
+                    }
+                }
+            }
             // If we know the DID, ensure the delta bbox lies near the instance AABB
             if let Some((min, max)) = self.destr_instances.get(&delta.did).copied() {
                 let mut bb_min = Vec3::splat(f32::INFINITY);

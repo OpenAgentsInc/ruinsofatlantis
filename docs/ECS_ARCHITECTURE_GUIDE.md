@@ -114,6 +114,8 @@ World (ECS)
 
 * Systems skip entities missing required components.
 * **Self‑skip**: collision never hits owner.
+* **Arming delay**: projectiles ignore collisions for a brief `arming_delay_s` after spawn so they don’t detonate on the caster or immediately at the hand.
+* **AoE radius**: planar XZ AoE uses the explosion radius plus a small pad and the target’s collision capsule radius (min 0.30 m) to avoid thin‑target edge misses.
 * **Hostility**: use the **Faction matrix** (`hostile(a_team, b_team)`) only—never direct team constants.
 
 ---
@@ -183,6 +185,13 @@ World (ECS)
 * `HudToast` conveys short, transient HUD messages by code. Defined codes:
   * `1 = Not enough mana` — client shows a brief red center text and suppresses local cast animation.
 
+**Destructibles (server→client)**
+
+* `DestructibleInstance` announces a destructible proxy by a stable DID and its world AABB.
+* `ChunkMeshDelta` carries CPU mesh for a single chunk (`did`, `chunk=(x,y,z)`, positions/normals/indices).
+* Clients must accept deltas only after the matching instance arrives; unknown DIDs are deferred. Duplicate deltas for the same DID+chunk are de‑duped.
+* Presentation: once a client receives the first non‑empty chunk mesh for a DID, hide the static GLTF proxy for that DID (debug override: `RA_SHOW_STATIC_RUINS=1`).
+
 **Client apply path**
 
 * `client_core::ReplicationBuffer` applies v3:
@@ -203,6 +212,10 @@ World (ECS)
   * one‑shot death on `alive=false`, then hold
 * Projectiles drawn from replicated list; Fireball VFX triggered on projectile **disappear/explode**; `HitFx` spawns “spark” bursts on direct hits.
 * HUD renders from `HudStatus`; actor overhead health bars use replicated HP/positions, not client‑side overlays.
+
+**Client‑side cast gating**
+
+* The client gates local cast VFX and command emission using replicated HUD state (GCD, per‑spell cooldowns, and mana). If a cast would be rejected server‑side, the client does not spawn local VFX and shows the appropriate HUD toast instead. This keeps visuals consistent with server authority.
 
 > **Never** do client‑side collisions, damage, AI, or “fake” hit particles with gameplay implications.
 
@@ -225,6 +238,11 @@ World (ECS)
 * **Fireball**: AoE via `ExplodeEvent` either on proximity hit or TTL expire
 * **Firebolt**: direct hit only
 * Effects applied by the AoE or collision system according to **Specs** (e.g., MM applies Slow).
+
+Implementation notes:
+
+* Projectile spawn origin is derived from the caster’s transform (hand/chest offset) and clamped slightly above terrain to avoid underground origins.
+* Collisions skip the owner and honor `arming_delay_s` to avoid immediate self‑detonation.
 
 ---
 
