@@ -1984,7 +1984,12 @@ impl Renderer {
                 pos: v.pos,
                 nrm: v.nrm,
                 uv: v.uv,
-                joints: v.joints,
+                joints: [
+                    v.joints[0] as u32,
+                    v.joints[1] as u32,
+                    v.joints[2] as u32,
+                    v.joints[3] as u32,
+                ],
                 weights: v.weights,
             })
             .collect();
@@ -2099,7 +2104,12 @@ impl Renderer {
                 pos: v.pos,
                 nrm: v.nrm,
                 uv: v.uv,
-                joints: v.joints,
+                joints: [
+                    v.joints[0] as u32,
+                    v.joints[1] as u32,
+                    v.joints[2] as u32,
+                    v.joints[3] as u32,
+                ],
                 weights: v.weights,
             })
             .collect();

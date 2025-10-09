@@ -743,7 +743,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             VertexSkinned {
                 pos: v.pos,
                 nrm: v.nrm,
-                joints: v.joints,
+                joints: [
+                    v.joints[0] as u32,
+                    v.joints[1] as u32,
+                    v.joints[2] as u32,
+                    v.joints[3] as u32,
+                ],
                 weights: v.weights,
                 uv,
             }
@@ -934,7 +939,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                         pos: v.pos,
                         nrm: v.nrm,
                         uv: v.uv,
-                        joints: v.joints,
+                        joints: [
+                            v.joints[0] as u32,
+                            v.joints[1] as u32,
+                            v.joints[2] as u32,
+                            v.joints[3] as u32,
+                        ],
                         weights: v.weights,
                     })
                     .collect();

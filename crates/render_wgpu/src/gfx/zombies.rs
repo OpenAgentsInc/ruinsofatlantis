@@ -39,7 +39,12 @@ pub fn load_assets(device: &wgpu::Device) -> Result<ZombieAssets> {
         .map(|v| VertexSkinned {
             pos: v.pos,
             nrm: v.nrm,
-            joints: v.joints,
+            joints: [
+                v.joints[0] as u32,
+                v.joints[1] as u32,
+                v.joints[2] as u32,
+                v.joints[3] as u32,
+            ],
             weights: v.weights,
             uv: v.uv,
         })
