@@ -137,8 +137,9 @@ impl ApplicationHandler for App {
                     }
                     // Spawn the unique boss near center
                     let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                    // Spawn a Death Knight a bit further out (demo)
-                    let _dk = srv.spawn_death_knight(glam::vec3(25.0, 0.6, -15.0));
+                    // Spawn a Death Knight farther away so the opener is clean
+                    // Place ~60m along +X to avoid immediate aggro on login
+                    let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
                     // Add a demo destructible ruins proxy so impacts carve
                     server_core::scene_build::add_demo_ruins_destructible(&mut srv);
                     self.demo_server = Some(srv);

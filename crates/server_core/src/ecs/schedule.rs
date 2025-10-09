@@ -1194,7 +1194,15 @@ fn aoe_apply_explosions(srv: &mut ServerState, ctx: &mut Ctx) {
             }
             let dx = pos.x - e.center_xz.x;
             let dz = pos.z - e.center_xz.y;
-            if dx * dx + dz * dz <= e.r2 {
+            // Expand AoE by a small pad and the target's collision radius (min 0.30m)
+            let (r_capsule, r_eff2) = if let Some(a) = srv.ecs.get(*aid) {
+                let r_capsule = a.tr.radius.max(0.30);
+                let r_eff = e.r2.max(0.0).sqrt() + 0.25 + r_capsule;
+                (r_capsule, r_eff * r_eff)
+            } else {
+                (0.30, e.r2)
+            };
+            if dx * dx + dz * dz <= r_eff2 {
                 // Hostility override for PC→Wizard AoE in demo parity
                 let owner_team = e
                     .src

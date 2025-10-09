@@ -258,6 +258,7 @@ World (ECS)
 * Replication applies HP‑only update to derived views.
 * Projectiles appear from v3; disappear triggers FB explosion render hook.
 * Animation mapping: Δpos/alive → idle/jog/death.
+* Replication safety: unrelated frames may never be mis‑decoded as chunk meshes or spawns; deltas must pass validation.
 
 **CI Gates**
 
@@ -350,6 +351,146 @@ World (ECS)
 * Brief doc addition (this file) if you added/changed a component or event contract.
 
 ---
+
+## 21) Destructibles (multi‑proxy pipeline)
+
+The destructible system is server‑authoritative and multi‑proxy (many destructible instances per scene):
+
+1. Broad‑phase: projectiles and explosions emit `CarveRequest`s via `Ctx.carves` when segment/AABB intersects a proxy (surface‑pick for explosions).
+2. Apply: `destructible_apply_carves` converts WS→OS, scales radius, carves the grid, enqueues dirty chunks.
+3. Mesh: `destructible_remesh_budgeted` consumes dirty chunks deterministically and produces CPU meshes; emits `ChunkMeshDelta` per chunk.
+4. Colliders: `destructible_refresh_colliders` refreshes touched chunk colliders under a budget across ticks.
+5. Replication: platform sends `DestructibleInstance` (once) and chunk deltas; client defers deltas until the instance is known.
+
+Rules:
+
+- Never run destructible work outside the ECS order. All mutation happens in systems.
+- Surface‑pick explosions: carve only when an OS ray hits voxels near the AABB, and guard with a max carve distance.
+- Chunk deltas must be validated client‑side (see §22). No “guessing” allowed.
+
+Tests we always keep:
+
+- Ray DDA correctness, carve budget determinism, queue ordering.
+- Registry AABB broad‑phase true/false.
+- Explosions: surface‑pick required and distance guard.
+- Collider refresh drained by `touched_this_tick` under budget.
+
+---
+
+## 22) Replication Hardening & Message Parsing Order
+
+To prevent mis‑decoding and protect the renderer:
+
+- Outer framing may carry any payload. Decoders must be tried in the same order the server encodes:
+  1) `ActorSnapshotDelta` (v4)
+  2) `DestructibleInstance` (validate AABB extents)
+  3) `ChunkMeshDelta` (validate shape + AABB containment if instance known)
+  4) `HudStatusMsg`, `HudToastMsg`
+- Client stores destructible instance AABBs and rejects deltas whose bbox falls outside the AABB (±epsilon).
+- Deltas must have `positions.len()==normals.len()`, `indices.len()%3==0`, and pass size caps.
+- Long‑term: prefer a one‑byte type tag per frame (TODO: ADR if we adopt tags) to remove guess‑decoding entirely.
+
+Never couple projectiles to NPC views:
+
+- `ActorSnapshotDelta.projectiles` is presentation‑only and must not create or mutate NPC views. Tests enforce that only actor spawns/updates drive views.
+
+---
+
+## 23) Overlays & Bars (client)
+
+- Overhead health bars draw from replicated **wizard** views (positions + HP). Do not pull from local ECS state.
+- Distance cull NPC bars (default 25 m; env `RA_NPC_BAR_RADIUS` overrides). PC bar always shows.
+- Bars are screen‑space quads anchored to head `(pos + y≈1.7)`; ensure culling to prevent “green bands” in large crowds.
+
+---
+
+## 24) Boss (Nivita/Death Knight) HUD & Model Updates
+
+- `boss_status` derives from `ActorSnapshotDelta` by scanning actors with `kind=Boss` and `unique=1` (prefer unique, fall back to any boss if unique absent).
+- Renderer uses `boss_status` to update the DK banner and snap the DK model to the replicated position (terrain‑aware).
+- No special boss gameplay pathway on client; all combat is server‑side.
+
+---
+
+## 25) Casting Inputs, Spawn Origin & VFX
+
+- Client sends `Cast { pos, dir }`. Server validates GCD/cooldowns/mana, enqueues projectile spawns.
+- PC local VFX may be spawned immediately for responsiveness, but server remains authoritative for damage/hits.
+- Spawn origins should be derived from the actor’s hand/world transform (not camera rays), then clamped above terrain.
+
+---
+
+## 26) Spatial Grid & Collision Shape Floors
+
+- Use `SpatialGrid.query_segment(a,b,pad)` for projectile broad‑phase; do not scan all actors.
+- Always enforce a **minimum collision radius** (e.g., 0.3 m) on queries to prevent “thin target” misses at very low HP or skinny capsules.
+- AoE tests should consider 3D distance with a small radius pad.
+
+---
+
+## 27) Destructibles – Agent Playbook
+
+- Add a new proxy: register `DestructibleProxy` with world AABB; ensure instance is replicated before deltas.
+- Carve logic: WS→OS center conversion; uniform‑scale radius; retain requests if proxy not yet registered.
+- Mesh/colliders: budgeted, stable order; enqueue only touched chunks for colliders; process across ticks.
+- Replication: instances once; deltas per changed chunk; client defers deltas until instance known; deltas validated.
+- Tests: add CPU‑only tests for DDA, queues, carve budgeting, collider drain, registry broad‑phase.
+
+---
+
+## 28) System Names & Order (reference)
+
+These names are asserted in tests. Changing them requires updating tests and documenting the rationale.
+
+1. `input_apply_intents`
+2. `cooldown_and_mana_tick`
+3. `ai_caster_cast_and_face`
+4. `cast_system`
+5. `ingest_projectile_spawns`
+6. `spatial.rebuild`
+7. `effects_tick`
+8. `ai_move_hostiles`
+9. `separate_undead`
+10. `melee_apply_when_contact`
+11. `homing_acquire_targets`
+12. `homing_update`
+13. `projectile_integrate_ecs`
+14. `projectile_collision_ecS`
+15. `destructible_from_projectiles`
+16. `destructible_from_explosions`
+17. `destructible_apply_carves`
+18. `destructible_remesh_budgeted`
+19. `destructible_refresh_colliders`
+20. `aoe_apply_explosions`
+21. `faction_flip_on_pc_hits_wizards`
+22. `apply_damage_to_ecs`
+23. `cleanup`
+
+---
+
+## 29) Dev Env & Toggles
+
+- `RA_NPC_BAR_RADIUS` — meters for NPC wizard bar visibility (default 25.0).
+- `RA_LOG_CASTS`, `RA_LOG_TICK`, `RA_LOG_SNAPSHOTS`, `RA_LOG_PROJECTILES` — development logging only.
+- Feature flags are only for optional demos (e.g., `vox_onepath_demo`). Gameplay is not feature‑gated.
+
+---
+
+## 30) Agent Do/Don’t Cheat‑Sheet
+
+Do:
+
+- Add components + systems; emit/consume events; keep schedule order explicit.
+- Use the spatial grid for proximity/broad‑phase.
+- Validate replication inputs client‑side (AABBs, sizes); defer deltas until instances are known.
+- Keep the client presentation‑only; derive views from actor deltas; update overlays from replication.
+
+Don’t:
+
+- Branch on archetypes in server logic.
+- Add client collisions/damage/AI.
+- Upload chunk meshes before `DestructibleInstance` is known; or accept deltas outside instance AABBs.
+- Create NPC views from `projectiles` — projectiles are separate visuals.
 
 ### Appendix: Naming & Style
 

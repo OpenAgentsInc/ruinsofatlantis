@@ -1551,8 +1551,35 @@ impl Renderer {
                         let mut spawn = origin_w.truncate() + dir_w * 0.3 - right_w * lateral;
                         // Clamp spawn to just above terrain to avoid underground origins
                         spawn = gfx::util::clamp_above_terrain(&self.terrain_cpu, spawn, 0.15);
+                        // Gate by replicated HUD (GCD, per-spell cooldowns, mana) to avoid spawning
+                        // local VFX when the server would reject the cast. This keeps visuals
+                        // consistent and avoids the “first one works, others are eaten” symptom.
+                        let can_cast_hud =
+                            |kind: super::super::PcCast,
+                             hud: &client_core::replication::HudState| {
+                                // Map to spell index used by HUD and required mana matching server specs
+                                let (idx, req_mana) = match kind {
+                                    super::super::PcCast::FireBolt => (0usize, 0u16),
+                                    super::super::PcCast::Fireball => (1usize, 5u16),
+                                    super::super::PcCast::MagicMissile => (2usize, 2u16),
+                                };
+                                hud.gcd_ms == 0
+                                    && hud.spell_cds.get(idx).copied().unwrap_or(0) == 0
+                                    && hud.mana >= req_mana
+                            };
                         match self.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                             super::super::PcCast::FireBolt => {
+                                if !can_cast_hud(super::super::PcCast::FireBolt, &self.repl_buf.hud)
+                                {
+                                    // Abort: do not send command or spawn local VFX when blocked by HUD
+                                    log::debug!(
+                                        "cast gate: Fire Bolt blocked by HUD (gcd/cd/mana)"
+                                    );
+                                    self.pc_cast_fired = true;
+                                    self.wizard_anim_index[self.pc_index] = 1;
+                                    self.pc_anim_start = None;
+                                    return;
+                                }
                                 // Send authoritative command to server
                                 if let Some(tx) = &self.cmd_tx {
                                     let cmd = net_core::command::ClientCmd::FireBolt {
@@ -1588,6 +1615,18 @@ impl Renderer {
                                 );
                             }
                             super::super::PcCast::MagicMissile => {
+                                if !can_cast_hud(
+                                    super::super::PcCast::MagicMissile,
+                                    &self.repl_buf.hud,
+                                ) {
+                                    log::debug!(
+                                        "cast gate: Magic Missile blocked by HUD (gcd/cd/mana)"
+                                    );
+                                    self.pc_cast_fired = true;
+                                    self.wizard_anim_index[self.pc_index] = 1;
+                                    self.pc_anim_start = None;
+                                    return;
+                                }
                                 if let Some(tx) = &self.cmd_tx {
                                     let cmd = net_core::command::ClientCmd::MagicMissile {
                                         pos: [spawn.x, spawn.y, spawn.z],
@@ -1613,6 +1652,14 @@ impl Renderer {
                                 self.spawn_magic_missile(spawn, dir_w, t);
                             }
                             super::super::PcCast::Fireball => {
+                                if !can_cast_hud(super::super::PcCast::Fireball, &self.repl_buf.hud)
+                                {
+                                    log::debug!("cast gate: Fireball blocked by HUD (gcd/cd/mana)");
+                                    self.pc_cast_fired = true;
+                                    self.wizard_anim_index[self.pc_index] = 1;
+                                    self.pc_anim_start = None;
+                                    return;
+                                }
                                 if let Some(tx) = &self.cmd_tx {
                                     let cmd = net_core::command::ClientCmd::Fireball {
                                         pos: [spawn.x, spawn.y, spawn.z],
