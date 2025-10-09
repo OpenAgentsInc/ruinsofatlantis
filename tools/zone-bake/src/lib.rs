@@ -1,9 +1,9 @@
 pub mod api {
     use anyhow::{Context, Result};
+    use blake3::Hasher as Blake3;
     use serde::Serialize;
     use std::fs;
     use std::path::PathBuf;
-    use blake3::Hasher as Blake3;
 
     #[derive(Debug)]
     pub struct BakeInputs {
@@ -25,15 +25,36 @@ pub mod api {
     }
 
     #[derive(Serialize, Default)]
-    struct Bounds { min: [f32;3], max: [f32;3] }
+    struct Bounds {
+        min: [f32; 3],
+        max: [f32; 3],
+    }
     #[derive(Serialize, Default)]
-    struct Counts { instances: u32, clusters: u32, colliders: u32, logic_triggers: u32, logic_spawns: u32 }
+    struct Counts {
+        instances: u32,
+        clusters: u32,
+        colliders: u32,
+        logic_triggers: u32,
+        logic_spawns: u32,
+    }
     #[derive(Serialize, Default)]
-    struct Hashes { instances: String, clusters: String, colliders: String, logic: String }
+    struct Hashes {
+        instances: String,
+        clusters: String,
+        colliders: String,
+        logic: String,
+    }
 
     pub fn bake_snapshot(inputs: &BakeInputs) -> Result<()> {
         #[derive(serde::Deserialize)]
-        struct ManifestMin { slug: String, display_name: String, #[allow(dead_code)] terrain: serde_json::Value, #[serde(default)] version: Option<String> }
+        struct ManifestMin {
+            slug: String,
+            display_name: String,
+            #[allow(dead_code)]
+            terrain: serde_json::Value,
+            #[serde(default)]
+            version: Option<String>,
+        }
         let m: ManifestMin =
             serde_json::from_str(&inputs.manifest_json).context("parse manifest_json")?;
 
@@ -57,7 +78,13 @@ pub mod api {
             slug: &m.slug,
             version: m.version.as_deref().unwrap_or("1.0.0"),
             bounds: Bounds::default(),
-            counts: Counts { instances: 0, clusters: 0, colliders: 0, logic_triggers: 0, logic_spawns: 0 },
+            counts: Counts {
+                instances: 0,
+                clusters: 0,
+                colliders: 0,
+                logic_triggers: 0,
+                logic_spawns: 0,
+            },
             hashes: Hashes {
                 instances: file_hash("instances.bin")?,
                 clusters: file_hash("clusters.bin")?,

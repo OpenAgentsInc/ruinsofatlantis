@@ -29,11 +29,11 @@ pub struct ZoneSnapshot {
     pub slug: String,
     pub root: PathBuf,
     pub meta: Option<ZoneMeta>,
-    pub instances_bin: Option<Vec<u8>>,        // instanced static meshes (CPU layout TBD)
-    pub clusters_bin: Option<Vec<u8>>,         // cluster grid for culling
-    pub colliders_bin: Option<Vec<u8>>,        // baked collider set
-    pub colliders_index_bin: Option<Vec<u8>>,  // optional index for colliders
-    pub logic_bin: Option<Vec<u8>>,            // baked logic
+    pub instances_bin: Option<Vec<u8>>, // instanced static meshes (CPU layout TBD)
+    pub clusters_bin: Option<Vec<u8>>,  // cluster grid for culling
+    pub colliders_bin: Option<Vec<u8>>, // baked collider set
+    pub colliders_index_bin: Option<Vec<u8>>, // optional index for colliders
+    pub logic_bin: Option<Vec<u8>>,     // baked logic
 }
 
 impl ZoneSnapshot {

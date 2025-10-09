@@ -1,5 +1,5 @@
-use std::{fs};
 use serial_test::serial;
+use std::fs;
 
 #[test]
 #[serial]
