@@ -402,3 +402,10 @@ fn vs_bar(v: BarIn) -> BarOut {
 fn fs_bar(i: BarOut) -> @location(0) vec4<f32> {
   return i.color;
 }
+
+// ---- Debug flat color for skinned pipeline ----
+@fragment
+fn fs_wizard_debug_flat(i: WizOut) -> @location(0) vec4<f32> {
+  // Solid white to prove geometry/skinning without texture/materials
+  return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}

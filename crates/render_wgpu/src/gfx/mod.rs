@@ -2067,6 +2067,13 @@ impl Renderer {
                 resource: pc_pal_buf.as_entire_binding(),
             }],
         });
+        if joints > 0 {
+            let id_mats: Vec<[f32; 16]> = (0..joints)
+                .map(|_| glam::Mat4::IDENTITY.to_cols_array())
+                .collect();
+            self.queue
+                .write_buffer(&pc_pal_buf, 0, bytemuck::cast_slice(&id_mats));
+        }
         // Install
         self.pc_vb = Some(vb);
         self.pc_ib = Some(ib);
@@ -2173,6 +2180,13 @@ impl Renderer {
                 resource: pc_pal_buf.as_entire_binding(),
             }],
         });
+        if joints > 0 {
+            let id_mats: Vec<[f32; 16]> = (0..joints)
+                .map(|_| glam::Mat4::IDENTITY.to_cols_array())
+                .collect();
+            self.queue
+                .write_buffer(&pc_pal_buf, 0, bytemuck::cast_slice(&id_mats));
+        }
         self.pc_vb = Some(vb);
         self.pc_ib = Some(ib);
         self.pc_index_count = index_count;

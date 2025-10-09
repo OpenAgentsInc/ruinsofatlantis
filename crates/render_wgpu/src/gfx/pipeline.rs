@@ -437,7 +437,7 @@ pub fn create_wizard_pipeline_debug(
         },
         fragment: Some(FragmentState {
             module: shader,
-            entry_point: Some("fs_wizard"),
+            entry_point: Some("fs_wizard_debug_flat"),
             targets: &[Some(ColorTargetState {
                 format: color_format,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),

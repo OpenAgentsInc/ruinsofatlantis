@@ -1033,9 +1033,6 @@ pub fn render_impl(
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
-        let pc_debug = std::env::var("RA_PC_DEBUG")
-            .map(|v| v == "1")
-            .unwrap_or(false);
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1043,21 +1040,37 @@ pub fn render_impl(
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &r.attachments.depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: None,
             occlusion_query_set: None,
             timestamp_writes: None,
         });
+        if pc_debug {
+            let shard_m = crate::gfx::types::Model {
+                model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                color: [1.0, 1.0, 1.0],
+                emissive: 0.0,
+                _pad: [0.0; 4],
+            };
+            r.queue
+                .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+            r.draw_pc_only(&mut rp);
+            drop(rp);
+            r.hud
+                .append_perf_text_line(r.size.width, r.size.height, "PC DRAW", 0);
+            r.hud.queue(&r.device, &r.queue);
+            r.hud.draw(&mut encoder, &view);
+            r.queue.submit(Some(encoder.finish()));
+            frame.present();
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                log::error!("validation (main pass): {:?}", e);
+            }
+            return Ok(());
+        }
         if !pc_debug {
             // Terrain
             let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
