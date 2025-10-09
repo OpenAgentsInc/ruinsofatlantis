@@ -256,13 +256,33 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 });
             }
         }
-        // Projectiles: renderer is presentation-only. Mirror replicated projectiles exactly.
+        // Projectiles: renderer is presentation-only. Prefer replicated projectiles, but
+        // keep locally spawned PC projectiles alive briefly to avoid the "eaten immediately"
+        // artifact when a cast is accepted locally and replication arrives a frame later.
         // Also detect fireballs that disappeared this frame and spawn an explosion VFX at their last position.
+        //
+        // Strategy:
+        // - Start from replicated list for authoritative visuals
+        // - Retain any existing local (owner_wizard.is_some()) projectiles whose lifetime
+        //   hasn't expired and that do not have a nearby replicated counterpart this frame.
+        //   This gives a small grace so local visuals aren't wiped before replication catches up.
         let mut next_map: std::collections::HashMap<u32, (u8, glam::Vec3)> =
             std::collections::HashMap::new();
-        r.projectiles.clear();
+        // Collect existing local (PC-owned) projectiles before we rebuild the list
+        let mut locals: Vec<crate::gfx::fx::Projectile> = Vec::new();
+        if !r.projectiles.is_empty() {
+            let mut prev = Vec::new();
+            std::mem::swap(&mut prev, &mut r.projectiles);
+            for pr in prev {
+                // Keep only locally spawned ones that are still alive
+                if pr.owner_wizard.is_some() && r.last_time < pr.t_die {
+                    locals.push(pr);
+                }
+            }
+        }
+        let mut rebuilt: Vec<crate::gfx::fx::Projectile> = Vec::new();
         for p in &r.repl_buf.projectiles {
-            r.projectiles.push(crate::gfx::fx::Projectile {
+            rebuilt.push(crate::gfx::fx::Projectile {
                 pos: p.pos,
                 vel: p.vel,
                 t_die: t + 1.0, // visual grace period only
@@ -283,6 +303,36 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             });
             next_map.insert(p.id, (p.kind, p.pos));
         }
+        // Merge unmatched locals back in (no nearby replicated counterpart)
+        if !locals.is_empty() {
+            const DEDUP_R: f32 = 0.6; // meters
+            for lp in locals {
+                let mut matched = false;
+                for rp in &rebuilt {
+                    let same_kind = matches!(
+                        (rp.kind, lp.kind),
+                        (
+                            crate::gfx::fx::ProjectileKind::Fireball { .. },
+                            crate::gfx::fx::ProjectileKind::Fireball { .. }
+                        ) | (
+                            crate::gfx::fx::ProjectileKind::MagicMissile,
+                            crate::gfx::fx::ProjectileKind::MagicMissile
+                        ) | (
+                            crate::gfx::fx::ProjectileKind::Normal,
+                            crate::gfx::fx::ProjectileKind::Normal
+                        )
+                    );
+                    if same_kind && rp.pos.distance(lp.pos) <= DEDUP_R {
+                        matched = true;
+                        break;
+                    }
+                }
+                if !matched {
+                    rebuilt.push(lp);
+                }
+            }
+        }
+        r.projectiles = rebuilt;
         // Fireball disappear → VFX
         if !r.last_repl_projectiles.is_empty() {
             // Collect disappear events first to avoid aliasing mutable borrow
