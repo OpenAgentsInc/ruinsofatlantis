@@ -16,6 +16,7 @@ metrics = "0.24.2"
 glam = "0.30"
 web-time = "1.1.0"
 client_core = { path = "../client_core" }
+data_runtime = { path = "../data_runtime" }
 
 [features]
 default = ["demo_server"]
