@@ -37,6 +37,12 @@ use crate::gfx::{
 };
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
+    // Only load heavy actor/NPC assets up front when a zone is explicitly selected (native).
+    let load_actor_assets = std::env::var("ROA_ZONE")
+        .ok()
+        .or_else(|| std::env::var("RA_ZONE").ok())
+        .is_some();
+
     // --- Instance + Surface + Adapter (with backend fallback) ---
     fn backend_from_env() -> Option<wgpu::Backends> {
         match std::env::var("RA_BACKEND").ok().as_deref() {
@@ -846,7 +852,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_instances,
         pc_palettes_buf,
         pc_palettes_bg,
-    ) = {
+    ) = if load_actor_assets {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
         let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
@@ -978,6 +984,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             // Disable separate PC rig: yield Nones from this block
             (None, None, 0u32, 0u32, None, None, None, None, None)
         }
+    } else {
+        (None, None, 0u32, 0u32, None, None, None, None, None)
     };
 
     // Death Knight assets (skinned, single instance)
