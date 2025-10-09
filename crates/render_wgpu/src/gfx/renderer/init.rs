@@ -135,9 +135,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         req_features |= wgpu::Features::POLYGON_MODE_LINE;
     }
     let info = adapter.get_info();
-    log::info!("Adapter: {:?} ({:?})", info.name, info.backend);
-    log::warn!("features: {:?}", adapter.features());
-    log::warn!("limits:   {:?}", adapter.limits());
+    log::debug!("Adapter: {:?} ({:?})", info.name, info.backend);
+    log::debug!("features: {:?}", adapter.features());
+    log::debug!("limits:   {:?}", adapter.limits());
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("wgpu-device"),
@@ -199,7 +199,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let max_dim = device.limits().max_texture_dimension_2d.clamp(1, 2048);
     let (w, h) = util::scale_to_max((size.width, size.height), max_dim);
     if (w, h) != (size.width, size.height) {
-        log::warn!(
+        log::debug!(
             "Clamping surface from {}x{} to {}x{} (max_dim={})",
             size.width,
             size.height,
@@ -219,7 +219,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
-    log::info!(
+    log::debug!(
         "swapchain configured: fmt={:?} srgb={} size={}x{} present={:?}",
         config.format,
         config.format.is_srgb(),
@@ -242,7 +242,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         config.format,
         offscreen_fmt,
     );
-    log::info!(
+    log::debug!(
         "attachments: swapchain={:?} offscreen={:?}",
         config.format,
         offscreen_fmt
@@ -277,12 +277,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     {
         if config.format.is_srgb() {
             direct_present = true;
-            log::warn!(
+            log::debug!(
                 "swapchain {:?} is sRGB; enabling direct-present on web",
                 config.format
             );
         } else {
-            log::warn!(
+            log::debug!(
                 "swapchain {:?} is not sRGB; using offscreen+present for gamma-correct output",
                 config.format
             );
@@ -294,7 +294,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     } else {
         offscreen_fmt
     };
-    log::info!(
+    log::debug!(
         "render path: direct_present={} draw_fmt={:?}",
         direct_present,
         draw_fmt

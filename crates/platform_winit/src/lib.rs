@@ -116,6 +116,9 @@ impl ZonePickerModel {
     fn current_slug(&self) -> Option<String> {
         self.items.get(self.selected).map(|e| e.slug.clone())
     }
+    fn display_lines(&self) -> Vec<String> {
+        self.items.iter().map(|e| e.display.clone()).collect()
+    }
 }
 
 #[allow(dead_code)]
@@ -439,6 +442,16 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
+                // In Picker, draw overlay lines from platform before rendering.
+                if let BootMode::Picker = self.boot {
+                    let lines = self.picker.display_lines();
+                    state.draw_picker_overlay(
+                        "Choose a Zone",
+                        "Use ↑/↓ to select   Enter to load   Esc to quit",
+                        &lines,
+                        self.picker.selected,
+                    );
+                }
                 if let Err(err) = state.render_with_window(window) {
                     match err {
                         SurfaceError::Lost | SurfaceError::Outdated => {

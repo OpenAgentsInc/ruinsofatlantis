@@ -1630,48 +1630,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
 
-    // Zone Picker overlay via HUD text (no egui)
-    if r.has_zone_batches() && r.is_picker_batches() {
-        if r.picker_items.is_empty() {
-            let zones_root = crate::gfx::asset_path("packs/zones");
-            if let Ok(reg) = data_runtime::zone_snapshot::ZoneRegistry::discover(&zones_root) {
-                let mut items: Vec<(String, String)> = Vec::new();
-                for slug in reg.slugs.iter() {
-                    let disp = reg
-                        .load_meta(slug)
-                        .ok()
-                        .and_then(|m| m.display_name)
-                        .unwrap_or_else(|| slug.to_string());
-                    items.push((slug.clone(), disp));
-                }
-                items.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
-                r.picker_items = items;
-                r.picker_selected = 0;
-            }
-        }
-        r.hud.reset();
-        r.hud.death_overlay(
-            r.size.width,
-            r.size.height,
-            "Choose a Zone",
-            "Use ↑/↓ to select — Enter to load — Esc to quit",
-        );
-        let max_show = 12usize;
-        let base_y = (r.size.height as f32) * 0.5 - 20.0;
-        for (line, (i, (_slug, disp))) in
-            r.picker_items.iter().enumerate().take(max_show).enumerate()
-        {
-            let mark = if i == r.picker_selected { ">" } else { " " };
-            let txt = format!("{} {}", mark, disp);
-            r.hud.append_center_text(
-                r.size.width,
-                r.size.height,
-                &txt,
-                base_y + (line as f32) * 18.0,
-                [0.95, 0.98, 1.0, 1.0],
-            );
-        }
-    }
+    // Zone Picker overlay: drawn by platform via Renderer::draw_picker_overlay()
     // Submit
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {

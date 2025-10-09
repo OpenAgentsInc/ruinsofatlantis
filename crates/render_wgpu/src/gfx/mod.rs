@@ -1909,6 +1909,31 @@ impl Renderer {
         renderer::render::render_impl(self, Some(window))
     }
 
+    /// Draw the Zone Picker overlay using HUD text. The platform should call this
+    /// each frame while in Picker mode; the renderer will then queue/draw HUD at
+    /// the end of the frame.
+    pub fn draw_picker_overlay(
+        &mut self,
+        header: &str,
+        help: &str,
+        lines: &[String],
+        selected: usize,
+    ) {
+        // Clear previous HUD and draw a centered modal header
+        self.hud.reset();
+        self.hud
+            .death_overlay(self.size.width, self.size.height, header, help);
+        // Draw list lines (top-left for guaranteed visibility across themes)
+        // Keep to first 16 to avoid overflow
+        let max_show = 16usize;
+        for (row, (idx, disp)) in lines.iter().enumerate().take(max_show).enumerate() {
+            let cursor = if idx == selected { "> " } else { "  " };
+            let txt = format!("{}{}", cursor, disp);
+            self.hud
+                .append_perf_text_line(self.size.width, self.size.height, &txt, row as u32);
+        }
+    }
+
     /// Take a selected slug from the Picker UI (if any was chosen this frame).
     pub fn take_picker_selected(&mut self) -> Option<String> {
         self.picker_chosen_slug.take()
