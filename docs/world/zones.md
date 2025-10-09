@@ -238,6 +238,64 @@ packs/zones/<slug>/snapshot.v1/     // baked artifacts
 
 **Desktop Editor (`tools/zone-editor`)**
 
+## 12) Implementation Status (v0)
+
+What is wired up today in the repo:
+
+- Zone selection at boot
+  - Native and Web builds accept a zone slug via `ROA_ZONE` or URL query `?zone=<slug>`.
+  - The platform applies the selection before first frame; the renderer contains no demo/special‑mode branches.
+
+- Snapshot loader (tolerant)
+  - `data_runtime::zone_snapshot` loads baked files from `packs/zones/<slug>/snapshot.v1/`.
+  - Reads `meta.json` and optional blobs (e.g., `colliders.bin`, `colliders_index.bin`). Missing files are tolerated so formats can evolve safely.
+
+- Client presentation
+  - `client_core::zone_client::ZonePresentation::load(slug)` loads a zone snapshot root for the client.
+  - The renderer exposes `set_zone_batches(...)` and checks `has_zone_batches()` to decide whether to draw legacy, hardcoded static content. When a Zone is present, the renderer draws Zone static + replicated actors only.
+
+- Bake (tooling)
+  - `tools/zone-bake` includes a minimal library API (used by tests) that emits a small `snapshot.v1` (terrain/trees/meta/colliders) deterministically. This is a placeholder for the full baker.
+
+- Tests
+  - Schema: serde‑level validation for a minimal `scene.json` structure (deny unknown fields).
+  - Client: zone loader reads a temporary snapshot root.
+  - Renderer policy: GPU‑free unit tests verify selection/draw policy.
+
+## 13) Next Steps
+
+Data & Schemas
+- Define the first `.roazone` (or `scene.json`) authoring schema with JSON Schema + serde. Include instances, logic (spawns/triggers), waypoints, and links.
+- Add a `schemas/` directory and validators (via `xtask`) for example scenes under `data/zones/**`.
+
+Bake Pipeline
+- Expand `tools/zone-bake` to output full `snapshot.v1/*`:
+  - `instances.bin` (static mesh instances), `clusters.bin` (culling grid), `colliders.bin` (+ index), optional `navmesh.bin`, and `logic.bin`.
+  - Determinism: enable a fast determinism test in CI (reduced sizes) and keep a heavier one `#[ignore]` for local checks.
+
+Server Integration
+- Introduce `server_core::zones` with `ZoneRegistry` and `boot_with_zone(world, slug, specs)` that mounts instances/colliders/navmesh and applies zone logic to spawn initial actors.
+  - Example: a `builder_sandbox`/`cc_demo` zone spawns only the PC; a combat zone spawns encounter NPCs.
+  - Maintain server authority; the client only renders what is replicated.
+
+Client & Renderer
+- Implement CPU decode of baked instance/cluster formats in `client_core::zone_client` and upload to GPU via a new `gfx/zone_batches` path.
+- Remove remaining legacy static draws once Zones provide equivalent content in all scenes.
+- Keep the renderer free of gameplay nouns; treat Zones + replication as the single source of visual truth.
+
+Site & Routing
+- Ensure website/demo routes append `?zone=<slug>` (or set `ROA_ZONE`) so live WASM builds boot the intended Zone without code changes.
+
+Tests & CI
+- Golden checks for snapshot meta (counts/bounds) for sample zones to catch drift.
+- Grep guards in CI to forbid reintroducing demo branches into the renderer (e.g., `cc_demo`, `demo_mode`).
+
+Assets & Safety
+- If large GLBs live in‑repo, use Git LFS. Avoid leaking absolute local paths in logs on WASM.
+
+Docs
+- Expand this document with the finalized `.roazone` schema and update any cross‑links.
+
 * [ ] Add **Tile Brush** UI (palette, paint/erase, rotate).
 * [ ] Add Outliner/Layers; Save/Load `scene.json`; Bake button (spawn process).
 * [ ] Feature `editor_preview` to upload CPU scene to GPU for WYSIWYG.
