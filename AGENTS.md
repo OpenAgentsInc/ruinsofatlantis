@@ -173,6 +173,7 @@ cargo xtask bake-zone --slug wizard_woods
 
 NOTE FOR AGENTS
 - Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`) unless the user specifically directs you to. The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
+- Branch discipline: work on `main` by default. Do not switch branches, create branches, or rebase unless the user explicitly instructs you to do so for this session.
 - For orientation, read `crates/README.md` (crate purposes) and `docs/gdd/README.md` (design doc map) before making cross‑crate or design edits.
 
 ## Repo Hygiene (Critical)
