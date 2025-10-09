@@ -780,7 +780,7 @@ impl ServerState {
         }
         id
     }
-    /// Spawn the unique boss "Nivita of the Undertide" if not present.
+    /// Spawn the unique boss "Nivita, Lady of Undertide" if not present.
     /// Returns the NPC id if spawned or already present.
     pub fn spawn_nivita_unique(&mut self, pos: Vec3) -> Option<ActorId> {
         if let Some(id) = self.nivita_actor_id {

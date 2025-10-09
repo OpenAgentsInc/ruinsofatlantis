@@ -197,15 +197,12 @@ impl ApplicationHandler for App {
                     .map(|v| v == "1")
                     .unwrap_or(false);
                 let explicit = detect_zone_slug();
-                if !force_picker {
-                    if let Some(slug) = explicit.as_ref() {
-                        if let Ok(zp) = client_core::zone_client::ZonePresentation::load(slug) {
-                            let gz =
-                                render_wgpu::gfx::zone_batches::upload_zone_batches(&state, &zp);
-                            state.set_zone_batches(Some(gz));
-                        } else {
-                            log::warn!("zone: failed to load snapshot for slug='{}'", slug);
-                        }
+                if !force_picker && let Some(slug) = explicit.as_ref() {
+                    if let Ok(zp) = client_core::zone_client::ZonePresentation::load(slug) {
+                        let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(&state, &zp);
+                        state.set_zone_batches(Some(gz));
+                    } else {
+                        log::warn!("zone: failed to load snapshot for slug='{}'", slug);
                     }
                 }
                 self.window = Some(window);

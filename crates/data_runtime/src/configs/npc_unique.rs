@@ -1,4 +1,4 @@
-//! Unique NPC/Boss configuration loader (e.g., Nivita of the Undertide).
+//! Unique NPC/Boss configuration loader (e.g., Nivita, Lady of Undertide).
 //!
 //! Parses `data/config/nivita.toml` into a structured config used to seed ECS
 //! components on spawn. Keep this crate free of ECS dependencies; convert into

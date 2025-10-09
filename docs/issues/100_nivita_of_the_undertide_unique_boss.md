@@ -1,11 +1,11 @@
-# 100: Nivita of the Undertide — Unique Boss NPC
+# 100: Nivita, Lady of Undertide — Unique Boss NPC
 
 Status: In Progress (MVP wired; server spawn + stats + log)
 
 Owners: Gameplay/Systems (server_core, sim_core, data_runtime), Graphics (render_wgpu integration)
 
 Summary
-- Define and introduce a unique raid boss NPC, “Nivita of the Undertide” (Nivita), as a single-instance named enemy with configured stats, resistances, saves, action economy, spells, and legendary actions.
+- Define and introduce a unique raid boss NPC, “Nivita, Lady of Undertide” (Nivita), as a single-instance named enemy with configured stats, resistances, saves, action economy, spells, and legendary actions.
 - MVP goal: spawn and track a unique Sorceress boss entity with correct HP/AC/resistances and a minimal spellbook stub; basic movement already exists client-side for the Sorceress visual — fold this into an ECS/server definition and data-driven config.
 
 Motivation
@@ -47,7 +47,7 @@ Example `data/config/nivita.toml` (MVP skeleton):
 ```toml
 [npc]
 id = "boss_nivita"
-name = "Nivita of the Undertide"
+name = "Nivita, Lady of Undertide"
 level = 10
 hp_range = [200, 250]
 ac = 18
