@@ -60,23 +60,23 @@ impl ZonePickerModel {
                 log::warn!("picker: discover() failed at {:?}: {e:?}", root);
             }
         }
-        if next.is_empty() {
-            if let Ok(rd) = std::fs::read_dir(&root) {
-                for e in rd.flatten() {
-                    if e.path().join("snapshot.v1").is_dir() {
-                        if let Some(os) = e.file_name().to_str() {
-                            let slug = os.to_string();
-                            let disp = match slug.as_str() {
-                                "wizard_woods" => "Wizard Woods".to_string(),
-                                "cc_demo" => "Character Controller Demo".to_string(),
-                                _ => slug.clone(),
-                            };
-                            next.push(ZoneEntry {
-                                slug,
-                                display: disp,
-                            });
-                        }
-                    }
+        if next.is_empty()
+            && let Ok(rd) = std::fs::read_dir(&root)
+        {
+            for e in rd.flatten() {
+                if e.path().join("snapshot.v1").is_dir()
+                    && let Some(os) = e.file_name().to_str()
+                {
+                    let slug = os.to_string();
+                    let disp = match slug.as_str() {
+                        "wizard_woods" => "Wizard Woods".to_string(),
+                        "cc_demo" => "Character Controller Demo".to_string(),
+                        _ => slug.clone(),
+                    };
+                    next.push(ZoneEntry {
+                        slug,
+                        display: disp,
+                    });
                 }
             }
         }
