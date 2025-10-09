@@ -650,64 +650,126 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     // align with visuals. Map PC to `pc_index`, then map NPC wizards to remaining instances
     // in order of appearance. Preserve current yaw when available, otherwise use replicated yaw.
     if !r.repl_buf.wizards.is_empty() && !r.wizard_models.is_empty() {
-        // Build ordered list: PC first, then others
-        let mut ordered: Vec<&client_core::replication::WizardView> = Vec::new();
-        if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
-            ordered.push(pcw);
-        }
+        use std::collections::HashSet;
+        // 1) Build current id set
+        let mut current_ids: HashSet<u32> = HashSet::new();
         for w in &r.repl_buf.wizards {
-            if !w.is_pc {
-                ordered.push(w);
+            current_ids.insert(w.id);
+        }
+        // 2) Free slots for ids that disappeared
+        let mut to_remove: Vec<u32> = r
+            .wizard_slot_map
+            .keys()
+            .copied()
+            .filter(|id| !current_ids.contains(id))
+            .collect();
+        for id in to_remove.drain(..) {
+            if let Some(slot) = r.wizard_slot_map.remove(&id) {
+                if slot < r.wizard_slot_id.len() {
+                    r.wizard_slot_id[slot] = None;
+                    r.wizard_free_slots.push(slot);
+                }
             }
         }
-        // Build mapping of (slot, wizard) then apply per slot
-        let mut mappings: Vec<(usize, client_core::replication::WizardView)> = Vec::new();
-        // PC to pc_index
-        if let Some(pcw) = ordered.first().filter(|w| w.is_pc).cloned() {
-            mappings.push((r.pc_index, pcw.clone()));
-        }
-        // Remaining NPCs to other slots (skip pc_index)
-        let mut slot = 0usize;
-        for w in ordered.into_iter().filter(|w| !w.is_pc) {
-            while slot == r.pc_index {
-                slot += 1;
+        // 3) Ensure PC id is pinned to pc_index; if occupied, move that id to a free slot
+        if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
+            let pc_id = pcw.id;
+            let mapped = r.wizard_slot_map.get(&pc_id).copied();
+            match mapped {
+                Some(slot) if slot == r.pc_index => {}
+                Some(slot_other) => {
+                    // Free pc_index if held by someone else
+                    if let Some(other_id) = r.wizard_slot_id.get(r.pc_index).copied().flatten() {
+                        // Move other_id to the former pc slot
+                        r.wizard_slot_map.insert(other_id, slot_other);
+                        r.wizard_slot_id[slot_other] = Some(other_id);
+                    } else {
+                        r.wizard_free_slots.retain(|&s| s != slot_other);
+                        r.wizard_free_slots.push(slot_other);
+                    }
+                    r.wizard_slot_map.insert(pc_id, r.pc_index);
+                    r.wizard_slot_id[r.pc_index] = Some(pc_id);
+                }
+                None => {
+                    // Assign to pc_index; if someone occupies it, move them to a free slot
+                    if let Some(other_id) = r.wizard_slot_id.get(r.pc_index).copied().flatten() {
+                        let new_slot = if let Some(s) = r.wizard_free_slots.pop() {
+                            s
+                        } else {
+                            r.pc_index
+                        };
+                        if new_slot != r.pc_index {
+                            r.wizard_slot_map.insert(other_id, new_slot);
+                            r.wizard_slot_id[new_slot] = Some(other_id);
+                        }
+                    }
+                    r.wizard_slot_map.insert(pc_id, r.pc_index);
+                    r.wizard_slot_id[r.pc_index] = Some(pc_id);
+                }
             }
-            if slot >= r.wizard_models.len() {
-                break;
-            }
-            mappings.push((slot, w.clone()));
-            slot += 1;
         }
-        // Apply
-        for (slot, w) in mappings {
-            if slot >= r.wizard_models.len() {
+        // 4) Map remaining ids to stable slots
+        for w in &r.repl_buf.wizards {
+            if r.wizard_slot_map.contains_key(&w.id) {
                 continue;
             }
-            let cur = r.wizard_models[slot];
-            let (_s, rot, _t) = cur.to_scale_rotation_translation();
-            let pos = w.pos;
-            let yaw = if w.yaw.is_finite() { w.yaw } else { 0.0 };
-            let use_yaw = yaw != 0.0 || rot.length_squared() < 0.9;
-            let new_m = if use_yaw {
-                glam::Mat4::from_scale_rotation_translation(
-                    glam::Vec3::splat(1.0),
-                    glam::Quat::from_rotation_y(yaw),
-                    pos,
-                )
+            // Find a free slot (skip pc_index)
+            let mut slot = None;
+            while let Some(s) = r.wizard_free_slots.pop() {
+                if s != r.pc_index {
+                    slot = Some(s);
+                    break;
+                }
+            }
+            if let Some(s) = slot {
+                r.wizard_slot_map.insert(w.id, s);
+                r.wizard_slot_id[s] = Some(w.id);
             } else {
-                glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos)
-            };
-            if new_m.to_cols_array() != cur.to_cols_array() {
-                r.wizard_models[slot] = new_m;
-                let mut inst = r.wizard_instances_cpu[slot];
-                inst.model = new_m.to_cols_array_2d();
-                r.wizard_instances_cpu[slot] = inst;
-                let offset = (slot * std::mem::size_of::<crate::gfx::types::InstanceSkin>()) as u64;
-                r.queue
-                    .write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
+                // Fallback: scan for any None slot
+                if let Some((idx, _)) = r
+                    .wizard_slot_id
+                    .iter()
+                    .enumerate()
+                    .find(|(i, v)| v.is_none() && *i != r.pc_index)
+                {
+                    r.wizard_slot_map.insert(w.id, idx);
+                    r.wizard_slot_id[idx] = Some(w.id);
+                }
             }
         }
-        // Align draw count with replication (cap to instance capacity)
+        // 5) Upload transforms per id→slot
+        for w in &r.repl_buf.wizards {
+            if let Some(&slot) = r.wizard_slot_map.get(&w.id) {
+                if slot >= r.wizard_models.len() {
+                    continue;
+                }
+                let cur = r.wizard_models[slot];
+                let (_s, rot, _t) = cur.to_scale_rotation_translation();
+                let pos = w.pos;
+                let yaw = if w.yaw.is_finite() { w.yaw } else { 0.0 };
+                let use_yaw = yaw != 0.0 || rot.length_squared() < 0.9;
+                let new_m = if use_yaw {
+                    glam::Mat4::from_scale_rotation_translation(
+                        glam::Vec3::splat(1.0),
+                        glam::Quat::from_rotation_y(yaw),
+                        pos,
+                    )
+                } else {
+                    glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos)
+                };
+                if new_m.to_cols_array() != cur.to_cols_array() {
+                    r.wizard_models[slot] = new_m;
+                    let mut inst = r.wizard_instances_cpu[slot];
+                    inst.model = new_m.to_cols_array_2d();
+                    r.wizard_instances_cpu[slot] = inst;
+                    let offset =
+                        (slot * std::mem::size_of::<crate::gfx::types::InstanceSkin>()) as u64;
+                    r.queue
+                        .write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
+                }
+            }
+        }
+        // Align draw count with replication (cap to capacity)
         r.wizard_count = r.repl_buf.wizards.len().min(r.wizard_models.len()) as u32;
     }
     // Update wizard skinning palettes on CPU then upload

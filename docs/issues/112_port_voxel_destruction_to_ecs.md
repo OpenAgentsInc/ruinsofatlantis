@@ -115,3 +115,6 @@ Notes for future
   - Added `push_out_of_destructibles()` and applied to `spawn_wizard_npc`, `spawn_undead`, `spawn_death_knight`, and boss spawn.
   - Prevents hidden casters spawning inside the ruins and firing continuously from within geometry.
   - Test: `crates/server_core/tests/spawn_not_inside_destructible.rs`.
+
+- [2025-10-09 04:33:15Z] Renderer: stable wizard transforms from replication; gate DK draw on boss_status; bars cull with replicated PC
+- [2025-10-09 04:33:15Z] Server: spawn separation vs actors; tests for DK stacking; PC & boss despawn tests added

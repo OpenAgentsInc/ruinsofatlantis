@@ -249,6 +249,12 @@ pub struct Renderer {
     palettes_bg: wgpu::BindGroup,
     joints_per_wizard: u32,
     wizard_models: Vec<glam::Mat4>,
+    // Stable mapping for wizard instances: actor id -> instance slot
+    wizard_slot_map: std::collections::HashMap<u32, usize>,
+    // Reverse mapping: slot -> actor id (or None if free)
+    wizard_slot_id: Vec<Option<u32>>,
+    // Free list of reusable slots
+    wizard_free_slots: Vec<usize>,
     wizard_instances_cpu: Vec<InstanceSkin>,
     // PC skinning palette (UBC male)
     pc_palettes_buf: Option<wgpu::Buffer>,
