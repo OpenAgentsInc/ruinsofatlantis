@@ -646,6 +646,67 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
 
     // Handle queued PC cast and update animation state
     r.process_pc_cast(t);
+    // Sync wizard transforms from replicated positions so overlays/bars and projectile origins
+    // align with visuals. Map PC to `pc_index`, then map NPC wizards to remaining instances
+    // in order of appearance. Preserve current yaw when available, otherwise use replicated yaw.
+    if !r.repl_buf.wizards.is_empty() && !r.wizard_models.is_empty() {
+        // Build ordered list: PC first, then others
+        let mut ordered: Vec<&client_core::replication::WizardView> = Vec::new();
+        if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
+            ordered.push(pcw);
+        }
+        for w in &r.repl_buf.wizards {
+            if !w.is_pc {
+                ordered.push(w);
+            }
+        }
+        // Apply positions (and yaw if needed)
+        let mut apply_slot = |slot: usize, w: &client_core::replication::WizardView| {
+            if slot >= r.wizard_models.len() {
+                return;
+            }
+            let cur = r.wizard_models[slot];
+            let (_s, rot, _t) = cur.to_scale_rotation_translation();
+            let pos = w.pos;
+            let yaw = if w.yaw.is_finite() { w.yaw } else { 0.0 };
+            // If rotation is identity and we have replicated yaw, build from yaw
+            let use_yaw = yaw != 0.0 || rot.length_squared() < 0.9;
+            let new_m = if use_yaw {
+                glam::Mat4::from_scale_rotation_translation(
+                    glam::Vec3::splat(1.0),
+                    glam::Quat::from_rotation_y(yaw),
+                    pos,
+                )
+            } else {
+                glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos)
+            };
+            if new_m.to_cols_array() != cur.to_cols_array() {
+                r.wizard_models[slot] = new_m;
+                let mut inst = r.wizard_instances_cpu[slot];
+                inst.model = new_m.to_cols_array_2d();
+                r.wizard_instances_cpu[slot] = inst;
+                let offset = (slot * std::mem::size_of::<crate::gfx::types::InstanceSkin>()) as u64;
+                r.queue
+                    .write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
+            }
+        };
+        // PC to pc_index
+        if let Some(pcw) = ordered.get(0).filter(|w| w.is_pc).copied() {
+            apply_slot(r.pc_index, pcw);
+        }
+        // Remaining NPCs to other slots (skip pc_index)
+        let mut slot = 0usize;
+        for w in ordered.into_iter().filter(|w| !w.is_pc) {
+            if slot == r.pc_index {
+                slot += 1;
+            }
+            if slot >= r.wizard_models.len() {
+                break;
+            }
+            apply_slot(slot, w);
+            slot += 1;
+        }
+    }
     // Update wizard skinning palettes on CPU then upload
     r.update_wizard_palettes(t);
     // Default build: rotate NPC wizards to face targets (player or nearest replicated NPC)
@@ -1092,7 +1153,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     if !overlays_disabled && !r.is_vox_onepath() {
         // Bars for wizards from replicated views (positions + HP), with distance cull for NPCs.
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
-        let pc_pos = {
+        let pc_pos = if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
+            pcw.pos
+        } else {
             let m = r
                 .wizard_models
                 .get(r.pc_index)

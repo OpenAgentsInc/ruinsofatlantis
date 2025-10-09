@@ -811,10 +811,10 @@ fn ai_caster_cast_and_face(srv: &mut ServerState, _ctx: &mut Ctx) {
             } else {
                 vec![SpellId::Firebolt, SpellId::MagicMissile, SpellId::Fireball]
             };
-            if let Some(c) = srv.ecs.get(cid) {
-                if let Some(book) = c.spellbook.as_ref() {
-                    prefs.retain(|s| book.known.contains(s));
-                }
+            if let Some(c) = srv.ecs.get(cid)
+                && let Some(book) = c.spellbook.as_ref()
+            {
+                prefs.retain(|s| book.known.contains(s));
             }
             want_spell = prefs.into_iter().next();
         }
