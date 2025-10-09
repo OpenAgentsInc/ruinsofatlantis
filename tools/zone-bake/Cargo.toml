@@ -3,6 +3,10 @@ name = "zone-bake"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "zone_bake"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = "1"
 env_logger = "0.11"
@@ -12,3 +16,6 @@ serde_json = "1"
 data_runtime = { path = "../../crates/data_runtime", version = "0.1.0" }
 render_wgpu = { path = "../../crates/render_wgpu", version = "0.1.0" }
 
+[dev-dependencies]
+tempfile = "3"
+blake3 = "1"

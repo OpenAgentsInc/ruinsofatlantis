@@ -1628,10 +1628,13 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 name = "client_core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "data_runtime",
  "ecs_core",
  "glam 0.30.8",
  "log",
  "net_core",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]
@@ -5995,6 +5998,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
+name = "tempfile"
+version = "3.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d31c77bdf42a745371d260a26ca7163f1e0924b64afa0b688e61b5a9fa02f16"
+dependencies = [
+ "fastrand",
+ "getrandom 0.3.3",
+ "once_cell",
+ "rustix 1.1.2",
+ "windows-sys 0.61.0",
+]
+
+[[package]]
 name = "termcolor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7822,12 +7838,14 @@ name = "zone-bake"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "data_runtime",
  "env_logger",
  "log",
  "render_wgpu",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "seed": 42,
+  "BOGUS_FIELD": true,
+  "layers": [],
+  "instances": [],
+  "logic": { "triggers": [], "spawns": [], "waypoints": [], "links": [] }
+}

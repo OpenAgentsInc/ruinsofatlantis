@@ -1,0 +1,5 @@
+{
+  "slug": "forest_grove",
+  "display_name": "Forest Grove",
+  "terrain": { "size": 65, "extent": 120.0, "seed": 1337 }
+}

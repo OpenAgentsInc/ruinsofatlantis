@@ -1,0 +1,5 @@
+{
+  "slug": "cc_demo",
+  "display_name": "Character Controller Demo",
+  "terrain": { "size": 65, "extent": 100.0, "seed": 42 }
+}

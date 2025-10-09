@@ -33,6 +33,7 @@ mod foliage;
 pub mod fx;
 mod material;
 mod npcs;
+pub mod policy;
 mod rocks;
 mod ruins;
 mod scene;

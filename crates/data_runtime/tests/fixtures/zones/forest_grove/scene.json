@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "seed": 1337,
+  "layers": [
+    { "name": "base" }
+  ],
+  "instances": [
+    { "kind": "rock", "transform": [ [1,0,0,0],[0,1,0,0],[0,0,1,0],[3,0,-2,1] ] },
+    { "kind": "tree", "transform": [ [1,0,0,0],[0,1,0,0],[0,0,1,0],[-5,0,7,1] ] }
+  ],
+  "logic": { "triggers": [], "spawns": [{"pc": true}], "waypoints": [], "links": [] }
+}
