@@ -26,7 +26,6 @@ mod types;
 pub use types::Vertex;
 mod anim;
 mod camera_sys;
-pub mod cc_demo;
 mod deathknight;
 mod draw;
 mod foliage;
@@ -44,6 +43,7 @@ mod util;
 #[cfg(feature = "vox_onepath_demo")]
 pub mod vox_onepath;
 mod zombies;
+pub mod zone_batches;
 
 use data_runtime::spell::SpellSpec;
 use roa_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
@@ -376,8 +376,8 @@ pub struct Renderer {
     cmd_tx: Option<net_core::channel::Tx>,
     // Pending pointer-lock request emitted by controller systems; applied by platform
     pointer_lock_request: Option<bool>,
-    // Character Controller demo mode (minimal scene)
-    cc_demo: bool,
+    // Optional zone batches (when present, static content is driven by Zone)
+    zone_batches: Option<zone_batches::GpuZoneBatches>,
     // Actual pointer-lock state as applied by the platform (used to choose
     // between relative mouse deltas vs. cursor movement deltas).
     pointer_locked: bool,
@@ -604,9 +604,14 @@ impl Renderer {
         };
         self.pointer_lock_request = None;
     }
+    /// Returns true if static content is driven by a loaded Zone snapshot.
     #[inline]
-    pub fn is_cc_demo(&self) -> bool {
-        self.cc_demo
+    pub fn has_zone_batches(&self) -> bool {
+        self.zone_batches.is_some()
+    }
+    /// Attach or clear zone batches uploaded by the client.
+    pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
+        self.zone_batches = z;
     }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs

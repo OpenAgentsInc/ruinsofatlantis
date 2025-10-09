@@ -4,7 +4,6 @@
 //! `render_wgpu::gfx::Renderer` via winit's ApplicationHandler API.
 
 use net_core::snapshot::{SnapshotDecode, SnapshotEncode};
-mod cc_demo;
 use net_core::transport::Transport;
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
@@ -244,9 +243,17 @@ impl ApplicationHandler for App {
                 RENDERER_CELL.with(|cell| {
                     if let Some((win, mut state)) = cell.borrow_mut().take() {
                         self.window = Some(win);
-                        // Optional: trim to character-controller demo scene
-                        if cc_demo::is_enabled() {
-                            render_wgpu::gfx::cc_demo::apply_cc_demo(&mut state);
+                        // Load Zone batches if a zone slug is provided (env/URL)
+                        if let Some(slug) = detect_zone_slug() {
+                            if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug)
+                            {
+                                let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
+                                    &state, &zp,
+                                );
+                                state.set_zone_batches(Some(gz));
+                            } else {
+                                log::warn!("zone: failed to load snapshot for slug='{}'", slug);
+                            }
                         }
                         self.state = Some(state);
                         // Wire loopback transport and seed demo server on wasm when enabled
@@ -273,20 +280,24 @@ impl ApplicationHandler for App {
                             if srv.pc_actor.is_none() {
                                 let _ = srv.spawn_pc_at(pc0);
                             }
-                            // NPC rings and boss setup
-                            srv.ring_spawn(8, 15.0, 20);
-                            srv.ring_spawn(12, 30.0, 25);
-                            srv.ring_spawn(15, 45.0, 30);
-                            let wiz_count = 4usize;
-                            let wiz_r = 8.0f32;
-                            for i in 0..wiz_count {
-                                let a = (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
-                                let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
-                                let _ = srv.spawn_wizard_npc(p);
+                            // If a Zone is selected and it's a minimal controller demo,
+                            // do not spawn encounter actors. Otherwise, spawn demo content.
+                            let z = detect_zone_slug();
+                            if z.as_deref() != Some("cc_demo") {
+                                srv.ring_spawn(8, 15.0, 20);
+                                srv.ring_spawn(12, 30.0, 25);
+                                srv.ring_spawn(15, 45.0, 30);
+                                let wiz_count = 4usize;
+                                let wiz_r = 8.0f32;
+                                for i in 0..wiz_count {
+                                    let a = (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
+                                    let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                                    let _ = srv.spawn_wizard_npc(p);
+                                }
+                                let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                                let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
+                                server_core::scene_build::add_demo_ruins_destructible(&mut srv);
                             }
-                            let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                            let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                            server_core::scene_build::add_demo_ruins_destructible(&mut srv);
                             self.demo_server = Some(srv);
                         }
                     }
@@ -743,4 +754,37 @@ pub fn run() -> anyhow::Result<()> {
     let mut app = App::default();
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+/// Detect selected zone slug from environment (native) or query string (web).
+fn detect_zone_slug() -> Option<String> {
+    // Prefer explicit env var in both native/web builds if set by the harness.
+    if let Ok(v) = std::env::var("ROA_ZONE") {
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    // WASM: parse ?zone=<slug> from the URL.
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(win) = web_sys::window() {
+            if let Ok(search) = win.location().search() {
+                let q = web_sys::UrlSearchParams::new_with_str(&search).ok();
+                if let Some(qs) = q {
+                    if let Some(v) = qs.get("zone") {
+                        if !v.is_empty() {
+                            return Some(v);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Back-compat: allow legacy RA_ZONE if present
+    if let Ok(v) = std::env::var("RA_ZONE") {
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    None
 }

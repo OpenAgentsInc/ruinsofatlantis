@@ -12,6 +12,7 @@ pub mod scenario;
 pub mod specdb;
 pub mod spell;
 pub mod zone;
+pub mod zone_snapshot;
 pub mod specs {
     pub mod archetypes;
     pub mod projectiles;

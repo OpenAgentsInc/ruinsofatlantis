@@ -1023,7 +1023,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Trees
-        if r.trees_count > 0 && !r.is_vox_onepath() {
+        if r.trees_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
             log::debug!("draw: trees x{}", r.trees_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1048,7 +1048,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
         // Rocks
-        if r.rocks_count > 0 && !r.is_vox_onepath() {
+        if r.rocks_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
             log::debug!("draw: rocks x{}", r.rocks_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1089,7 +1089,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             r.draw_calls += 1;
         }
         // Ruins
-        if r.ruins_count > 0 && !r.is_vox_onepath() {
+        if r.ruins_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
             log::debug!("draw: ruins x{}", r.ruins_count);
             if trace {
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -1136,6 +1136,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Skinned: wizards (PC always visible even if hide_wizards)
         if r.is_vox_onepath() {
             // skip wizard visuals entirely in one‑path demo
+        } else if r.has_zone_batches() {
+            // Draw only the PC rig in the demo
+            if r.pc_vb.is_some() {
+                r.draw_pc_only(&mut rp);
+                r.draw_calls += 1;
+            }
         } else if std::env::var("RA_DRAW_WIZARDS")
             .map(|v| v != "0")
             .unwrap_or(true)
@@ -1152,19 +1158,24 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
         // Skinned: Death Knight (boss)
-        if r.dk_count > 0 && !r.is_vox_onepath() && r.repl_buf.boss_status.is_some() {
+        if r.dk_count > 0
+            && !r.is_vox_onepath()
+            && !r.has_zone_batches()
+            && r.repl_buf.boss_status.is_some()
+        {
             log::debug!("draw: deathknight x{}", r.dk_count);
             r.draw_deathknight(&mut rp);
             r.draw_calls += 1;
         }
         // Skinned: Sorceress (static idle)
-        if r.sorc_count > 0 && !r.is_vox_onepath() {
+        if r.sorc_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
             log::debug!("draw: sorceress x{}", r.sorc_count);
             r.draw_sorceress(&mut rp);
             r.draw_calls += 1;
         }
         // Skinned: zombies
         if !r.is_vox_onepath()
+            && !r.has_zone_batches()
             && std::env::var("RA_DRAW_ZOMBIES")
                 .map(|v| v != "0")
                 .unwrap_or(true)

@@ -98,3 +98,5 @@ pub mod facade {
 }
 /// Mesh upload interface used by renderer or client runtime integration.
 pub mod upload;
+/// Client-side zone snapshot loader (CPU presentation for renderer).
+pub mod zone_client;
