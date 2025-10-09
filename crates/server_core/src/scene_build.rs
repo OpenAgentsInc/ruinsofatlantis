@@ -114,6 +114,58 @@ pub fn add_demo_ruins_destructible(srv: &mut crate::ServerState) {
     srv.destruct_bootstrap_instances_outstanding = true;
 }
 
+/// Add a second demo ruins instance centered at `center`. The AABB matches the
+/// default demo ruins size: 16m (X/Z) wide and 6m tall. `did` must be unique.
+pub fn add_demo_ruins_destructible_at(
+    srv: &mut crate::ServerState,
+    center: glam::Vec3,
+    did_val: u64,
+) {
+    use crate::destructible::state::{DestructibleId, DestructibleProxy, WorldAabb};
+    use core_units::Length;
+    use voxel_proxy::{GlobalId, VoxelGrid, VoxelProxyMeta};
+
+    let half = glam::vec3(8.0, 3.0, 8.0);
+    let world_min = glam::vec3(center.x - half.x, 0.0, center.z - half.z);
+    let world_max = glam::vec3(center.x + half.x, 6.0, center.z + half.z);
+
+    let meta = VoxelProxyMeta {
+        object_id: GlobalId(1),
+        origin_m: glam::DVec3::new(world_min.x as f64, world_min.y as f64, world_min.z as f64),
+        voxel_m: Length::meters(0.5),
+        dims: glam::UVec3::new(32, 16, 32),
+        chunk: glam::UVec3::new(8, 8, 8),
+        material: core_materials::find_material_id("stone")
+            .unwrap_or(core_materials::MaterialId(0)),
+    };
+    let mut grid = VoxelGrid::new(meta);
+    let d = grid.dims();
+    for z in 0..d.z {
+        for y in 0..d.y {
+            for x in 0..d.x {
+                let bottom = y == 0;
+                let side_walls = x < 2 || z < 2 || x > d.x - 3 || z > d.z - 3;
+                if bottom || side_walls {
+                    grid.set(x, y, z, true);
+                }
+            }
+        }
+    }
+    let did = DestructibleId(did_val);
+    let aabb = WorldAabb {
+        min: world_min,
+        max: world_max,
+    };
+    let proxy = DestructibleProxy::new(did, grid, aabb);
+    srv.destruct_registry.insert_proxy(proxy);
+    srv.destruct_instances.push(DestructibleWorldAabb {
+        did: did.0,
+        world_min: [world_min.x, world_min.y, world_min.z],
+        world_max: [world_max.x, world_max.y, world_max.z],
+    });
+    srv.destruct_bootstrap_instances_outstanding = true;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
