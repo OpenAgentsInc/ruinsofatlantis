@@ -416,47 +416,7 @@ Read: docs/gdd/12-environment/sky-weather.md
 
 ## World: Terrain & Biomes
 
-**Design Intent.** Fast, attractive terrain that varies by biome and is **procedurally generated once, then baked** into persistent zone snapshots. Phase 1 focuses on a Woodland baseline (rolling hills, dense grass, scattered trees).
-
-**Player Experience.**
-
-* Natural rolling hills; grass thick near the player; trees spaced believably.
-* Layout is stable across sessions/players (persistent zone), not re‑rolled.
-
-**Scope (Phase 1).**
-
-* Heightfield generation: **OpenSimplex2 fBm + domain warping**.
-* Chunked mesh (e.g., 64×64 verts) with simple distance LOD and skirts.
-* **Triplanar** material with slope/height blending (grass/dirt/rock).
-* Vegetation:
-
-  * **Trees** from GLB prototypes placed via **Poisson‑disk** (baked, instanced).
-  * **Grass** as GPU‑instanced cards with density masks per chunk (baked).
-* Bake tool writes `snapshot.terrain.bin`, `snapshot.instances.bin`, masks, meta.
-
-**Data & Authoring.**
-
-* `data/zones/<zone>/config.json`: size, seeds, noise params, densities.
-* `data/zones/<zone>/prototypes.json`: tree GLBs, radii, LOD hints.
-* Bake outputs under `data/zones/<zone>/snapshot.*`.
-
-**Runtime Behavior.**
-
-* Client streams visible terrain chunks; builds VB/IB once per chunk; instanced draws for vegetation.
-* Height sampling helper `terrain::sample_height(xz)` for gameplay placement.
-
-**Integration Points.**
-
-* Uses Sky & Weather lighting uniforms for consistent shading.
-* Zones System consumes baked assets; AOI decides which chunks to stream.
-* Sim uses deterministic seeds for spawn masks if needed.
-
-**Performance Targets.**
-
-* Terrain + vegetation ≤5 ms on mid‑range GPU at default draw distance.
-* Zero per‑frame allocations in hot path; instance upload ring buffers.
-
-**Future Work.**
+Read: docs/gdd/12-environment/terrain-biomes.md
 
 * CDLOD/quadtree with geomorphing; occlusion/indirect draws; roads/decals; wind animation; navmesh bake.
 
