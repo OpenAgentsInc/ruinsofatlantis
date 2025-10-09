@@ -1634,7 +1634,6 @@ dependencies = [
  "glam 0.30.8",
  "log",
  "net_core",
- "tempfile",
  "tracing",
  "tracing-subscriber",
 ]
