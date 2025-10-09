@@ -323,79 +323,11 @@ UI and adaptation notes
 
 ## Player vs. Player (PvP)
 
-Open simulation and consequence‑driven conflict; no per‑player PvP toggles. If it exists, you can interact with it—players included.
-
-Always‑interactable targets
-- All entities are valid targets except players who are your allies via party, guild, or raid. Hostile actions (attacks, harmful spells/effects, hostile interactions) do not apply to allied members; buffs and beneficial effects still do.
-- Concentration, saves, conditions, opportunity attacks, and damage rules apply identically in PvE and PvP, with the ally exception above. Area effects ignore allied members by default.
-
-Civilized spaces and consequences (not invulnerability)
-- Towns and sanctuaries are protected by in‑world law and warding, not “PvP off” flags. Aggression is allowed but swiftly punished: guards respond, wards mark/outlaw offenders, and capture/arrest systems resolve crimes.
-- Outlaw status is visible and persistent: bounties, faction hostility, confiscation on defeat, and travel restrictions create meaningful deterrents without removing agency.
-
-Consentful conflict, in‑world
-- Duels: initiate via heralds/circles/contracts that both parties accept; rules (timers, no outside aid, stakes) are enforced by the rite, not UI toggles.
-- Wars: guilds/kingdoms declare war at heralds over regions/routes; after notice, members are open targets within the declared scope. Treaties and ceasefires are likewise filed in world.
-
-Non‑lethal and escalation options
-- Subdual outcomes (knockout, disarm, fine, exile) coexist with lethal combat. Victors choose to rob, ransom, arrest, or parley; repeated offenses escalate penalties.
-- Civilian protection focuses on consequences (summoned guards, crowd control, temporary binding) rather than immunity bubbles; interactions still occur.
-
-Anti‑grief tuning (within the fiction)
-- Diminishing returns on control effects in PvP; respawn/jail logistics that remove repeat harassment loops near crime scenes.
-- Safe travel that is explainable (convoys, escorts, warded ferries) rather than global invulnerability; risk scales with route and reputation.
-
-Notes on SRD alignment
-- The SRD permits targeting any creature; RoA preserves this except for explicit ally groupings (party/guild/raid), where hostile actions are disabled by design. Duels/wars temporarily override this when consented or declared. Other MMO‑specific mitigations (guards, bounties, duel rites) are layered as world systems.
+Read: docs/gdd/06-pvp.md
 
 ### Combat Simulator & Harness
 
-Goals
-- Run thousands of deterministic combat simulations (PvE/PvP) to validate balance, tactics, and encounter design.
-- Control timestep, latency, RNG seed, and policies to compare outcomes.
-- Headless by default; optional debug visualization.
-
-Design doc: see `docs/combat_sim_ecs.md` for the ECS design, system pipeline, and SRD rules mapping used by the simulator.
-
-Architecture (planned crates)
-- sim-core: deterministic rules engine (fixed timestep, e.g., 50 ms). Holds entities, stats, cooldowns, effects, threat, concentration, and an event bus. No rendering.
-- sim-data: SRD-derived data (JSON/TOML) for classes, spells, conditions, monsters. Versioned IDs and provenance.
-- sim-policies: tactical policies (boss AIs, player rotas/priority lists, movement heuristics). Pluggable strategies.
-- sim-harness: CLI runner for scenarios, sweeps, and metrics export (CSV/JSON).
-- sim-viz (optional): minimal wgpu/winit debug renderer (orthographic), or TUI for timelines/logs.
-
-Determinism & timestep
-- Fixed-timestep loop (e.g., 20 Hz/50 ms) with discrete-event scheduling for casts, cooldowns, DoTs/HoTs.
-- Seeded RNG per run and per-actor streams; all random draws (hit, crit, save) come from these streams.
-- Net-latency model: per-actor input delay and server tick alignment for realistic cast/queue timing.
-
-Scenario format
-- YAML/JSON: map, actors (class/build), gear tier, boss type, initial positions, policies, win/lose conditions, and metrics to collect.
-- Example: boss: aboleth, underwater: true, depth: shallow, party: [fighter_tank, cleric_heal, wizard_ctrl, rogue_dps, monk_dps, ranger_dps].
-
-Policies (tactics)
-- Priority lists and behavior trees: tank taunt→heavy→shove; cleric keep bless→heal<35%→cure windows.
-- Movement heuristics: keep flank, avoid 8 m cones, break LoS when dominated.
-- PvP: role kits (burst, peel, kite) and focus-fire rules.
-
-Outputs & metrics
-- Per-fight: TTK, DPS/HPS, damage taken, save rates, conc breaks, threat swings, time-in-melee, distance moved, ability usage histograms.
-- Aggregates: mean/median/percentiles, win rate by policy, sensitivity to latency or gear.
-- Artifacts: event logs (NDJSON), timelines, replay seeds.
-
-Visualization (optional)
-- Headless CSV/JSON by default. Debug modes: TUI (timelines, threat meter) and simple wgpu orthographic render (positions, AoEs, cast bars).
-- Replays: load event log + seed to step or scrub.
-
-CLI (proposed)
-- Single run: `cargo run -p sim-harness -- --scenario scenarios/aboleth.yaml --seed 42 --tick 50ms --log results/run.ndjson`
-- Monte Carlo: `... --trials 1000 --vary policy=tank_a,tank_b --out results/aboleth.csv`
-- PvP skirmish: `... --mode pvp --team-a scenarios/team_a.yaml --team-b scenarios/team_b.yaml`
-
-Next steps
-- Define sim-core state and event types; draft Aboleth encounter from this GDD.
-- Implement priority policy for the six-player party; add baseline boss AI.
-- Add metrics collectors and CSV exporter; wire seeds and determinism tests.
+Read: docs/gdd/07-combat-simulator.md
 
 ## Zones & Cosmology
 
