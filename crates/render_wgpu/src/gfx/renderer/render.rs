@@ -90,6 +90,9 @@ pub fn render_impl(
         drop(sky);
         // 2) Main terrain into offscreen with depth
         {
+            let pc_debug = std::env::var("RA_PC_DEBUG")
+                .map(|v| v == "1")
+                .unwrap_or(false);
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wasm-debug-main-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -960,6 +963,9 @@ pub fn render_impl(
     // Sky-only pass
     log::debug!("pass: sky");
     if !present_only {
+        let pc_debug = std::env::var("RA_PC_DEBUG")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sky-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -991,6 +997,9 @@ pub fn render_impl(
     // Capture validation across the entire main pass to surface concrete errors
     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     if !present_only {
+        let pc_debug = std::env::var("RA_PC_DEBUG")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1041,7 +1050,7 @@ pub fn render_impl(
         // Trees
         // Show vegetation when not in Picker. Previously this was suppressed when
         // zone_batches existed; until zone-baked draws land, allow draws here too.
-        if r.trees_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() {
+        if r.trees_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
             log::debug!("draw: trees x{}", r.trees_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1066,7 +1075,7 @@ pub fn render_impl(
             }
         }
         // Rocks
-        if r.rocks_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() {
+        if r.rocks_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
             log::debug!("draw: rocks x{}", r.rocks_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1107,7 +1116,7 @@ pub fn render_impl(
             r.draw_calls += 1;
         }
         // Ruins
-        if r.ruins_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() {
+        if r.ruins_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
             log::debug!("draw: ruins x{}", r.ruins_count);
             if trace {
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -1138,7 +1147,7 @@ pub fn render_impl(
             r.draw_debug_cube(&mut rp, m);
         }
         // Voxel chunk meshes (if any)
-        if !r.voxel_meshes.is_empty() {
+        if !r.voxel_meshes.is_empty() && !pc_debug {
             log::debug!("[draw] voxel meshes: {} chunks", r.voxel_meshes.len());
             let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
             if trace {
@@ -1215,6 +1224,7 @@ pub fn render_impl(
                 );
             }
         } else if !r.has_zone_batches()
+            && !pc_debug
             && std::env::var("RA_DRAW_WIZARDS")
                 .map(|v| v != "0")
                 .unwrap_or(true)
