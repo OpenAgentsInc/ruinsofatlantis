@@ -4,13 +4,13 @@ This folder organizes project documentation by topic. Start here for key specs a
 
 Priority Reads
 - architecture/ECS_ARCHITECTURE_GUIDE.md — Authoritative ECS architecture guide
-- world/zones.md — Zone authoring spec (time‑of‑day, terrain, weather)
+- systems/zones.md — Zone system (authoring, bake, runtime)
 
 Sections
 - architecture/ — System and code architecture guides and overviews
 - systems/ — Subsystem docs (renderer frame graph, voxel/destructible, zones system, controls)
 - graphics/ — Rendering topics (lighting, GLTF, animations)
-- world/ — World and zone authoring
+- world/ — World authoring (non‑system flavor docs)
 - design/ — Game design notes (factions, spell write‑ups, essays)
 - observability/ — Telemetry, metrics, logging
 - ops/ — Deployment and operations (deploy guides, postmortems)
@@ -21,4 +21,3 @@ Sections
 - old/ — Archived or superseded documents
 
 If you add or move documents, update this index and prefer placing docs under a relevant subfolder. Archive superseded/brainstorm notes in old/ with a short note at the top of the file.
-

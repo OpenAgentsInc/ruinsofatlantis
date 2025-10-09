@@ -4,7 +4,7 @@ This folder hosts the detailed design sections split out from the root `GDD.md` 
 
 Priority reads
 - architecture: see `docs/architecture/ECS_ARCHITECTURE_GUIDE.md`
-- world authoring: see `docs/world/zones.md`
+- zone system: see `docs/systems/zones.md`
 
 Structure
 - 01‑philosophy.md — Philosophy and Design Pillars
@@ -28,4 +28,3 @@ Contribution checklist
   - Update the corresponding `docs/systems/**` or `docs/graphics/**` file; keep this folder focused on design intent.
 - Keep files short and focused; favor new focused files over very long ones.
 - Update `GDD.md` links when adding or renaming files here.
-

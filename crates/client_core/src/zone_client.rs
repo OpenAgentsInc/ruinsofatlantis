@@ -34,10 +34,5 @@ fn workspace_packs_root() -> std::path::PathBuf {
     // Try workspace root (../../packs) first, fall back to local packs.
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let ws = here.join("../../packs");
-    if ws.exists() {
-        ws
-    } else {
-        here.join("../..//packs")
-    }
+    if ws.exists() { ws } else { here.join("../../packs") }
 }
-

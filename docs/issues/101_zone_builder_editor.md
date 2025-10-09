@@ -20,7 +20,7 @@ New
 - `crates/data_runtime/schemas/zone.scene.schema.json` — scene schema (instances, layers, logic volumes, spawn points, links).
 - `crates/data_runtime/src/zone_scene.rs` — serde types + loader/validator for scene files.
 - `crates/ecs_core/src/components/zone.rs` — ECS tags/components for placed content (StaticInstance, LogicVolume, SpawnPoint, Waypoint, TagSet).
-- `docs/systems/zone_builder.md` — design doc for editor UX/data flow (kept current with changes).
+- `docs/systems/zones.md` — Zones spec (authoring/bake/runtime) including editor notes.
 
 Changes
 - `tools/zone-bake` — extend to consume `zone.scene.json` and output `packs/zones/<slug>/snapshot.v1/*` with instance clusters, culling grid, colliders, and optional navmesh.
@@ -137,7 +137,7 @@ M4 — Logic & Spawns (2 wk)
 - Triggers (enter/exit), spawns, waypoints, links; minimal quest script hook in `sim_core` (e.g., trigger → spawn wave or toggle door).
 
 M5 — Polish & Docs (1 wk)
-- Undo/redo stack; selection sets; asset tagging; docs in `docs/systems/zone_builder.md`; update `src/README.md` for inputs.
+- Undo/redo stack; selection sets; asset tagging; docs in `docs/systems/zones.md`; update `src/README.md` for inputs.
 
 ---
 
@@ -164,7 +164,7 @@ Runtime Integration
 - [ ] Load new snapshot formats at runtime; scene assembly (`ecs_core`) consumes baked data.
 
 Docs & Hygiene
-- [ ] `docs/systems/zone_builder.md` written and maintained.
+- [ ] `docs/systems/zones.md` written and maintained.
 - [ ] Update `src/README.md` with inputs and editor reference.
 - [ ] Track large binaries via git‑lfs; do not commit raw kit downloads.
 - [ ] Use Cargo tooling (`cargo add/rm/upgrade`) for new deps.
@@ -195,4 +195,3 @@ Docs & Hygiene
 
 - Labels: `area:tools` `area:data` `area:renderer` `type:feature` `docs-needed`
 - Depends on: none strictly, but integrates with `tools/zone-bake`, `render_wgpu`, `data_runtime`, `ecs_core`.
-

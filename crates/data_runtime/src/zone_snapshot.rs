@@ -33,6 +33,7 @@ pub struct ZoneSnapshot {
     pub clusters_bin: Option<Vec<u8>>,         // cluster grid for culling
     pub colliders_bin: Option<Vec<u8>>,        // baked collider set
     pub colliders_index_bin: Option<Vec<u8>>,  // optional index for colliders
+    pub logic_bin: Option<Vec<u8>>,            // baked logic
 }
 
 impl ZoneSnapshot {
@@ -55,6 +56,7 @@ impl ZoneSnapshot {
         out.clusters_bin = read_opt(&snap.join("clusters.bin"));
         out.colliders_bin = read_opt(&snap.join("colliders.bin"));
         out.colliders_index_bin = read_opt(&snap.join("colliders_index.bin"));
+        out.logic_bin = read_opt(&snap.join("logic.bin"));
         Ok(out)
     }
 }
@@ -107,4 +109,3 @@ impl ZoneRegistry {
         self.slugs.iter().any(|s| s == slug)
     }
 }
-

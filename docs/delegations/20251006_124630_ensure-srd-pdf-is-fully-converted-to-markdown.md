@@ -55,7 +55,7 @@ ensure SRD pdf is fully converted to markdown
 - docs/systems/sky_weather.md — # Sky & Weather
 - docs/systems/spell_ability_system.md — # Spell & Ability System (MVP)
 - docs/systems/terrain_biomes.md — # Terrain & Biomes (Phase 1)
-- docs/systems/zones_system.md — # Zones System
+- docs/systems/zones.md — # Zones System (authoring, bake, runtime)
 - docs/observability/telemetry.md — # Telemetry — Logs, Metrics, Traces (dev usage)
 - docs/ops/wasm-deployment.md — # WebAssembly (WASM) Deployment — Wizard Scene
 - docs/ops/postmortems/web-wasm-blackout-postmortem.md

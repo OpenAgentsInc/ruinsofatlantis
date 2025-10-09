@@ -28,10 +28,11 @@ fn bake_minimal_cc_demo_produces_snapshot() {
 
     let snap_dir = out.join("cc_demo").join("snapshot.v1");
     for f in [
-        "terrain.json",
-        "trees.json",
+        "instances.bin",
+        "clusters.bin",
         "colliders.bin",
         "colliders_index.bin",
+        "logic.bin",
         "meta.json",
     ] {
         assert!(snap_dir.join(f).exists(), "missing {}", f);
@@ -39,7 +40,7 @@ fn bake_minimal_cc_demo_produces_snapshot() {
 
     let meta_txt = fs::read_to_string(snap_dir.join("meta.json")).unwrap();
     assert!(meta_txt.contains("\"schema\""));
-    assert!(meta_txt.contains("\"trees\""));
+    assert!(meta_txt.contains("\"counts\""));
 }
 
 #[test]
@@ -66,10 +67,11 @@ fn bake_is_deterministic_for_same_seed_and_inputs() {
         let snap = out.join("forest_grove").join("snapshot.v1");
         let mut hasher = Hasher::new();
         for f in [
-            "terrain.json",
-            "trees.json",
+            "instances.bin",
+            "clusters.bin",
             "colliders.bin",
             "colliders_index.bin",
+            "logic.bin",
             "meta.json",
         ] {
             let b = fs::read(snap.join(f)).unwrap();

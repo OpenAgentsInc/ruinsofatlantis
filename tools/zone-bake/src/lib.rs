@@ -1,11 +1,9 @@
 pub mod api {
     use anyhow::{Context, Result};
-    use render_wgpu::gfx::terrain;
     use serde::Serialize;
-    use std::collections::hash_map::DefaultHasher;
     use std::fs;
-    use std::hash::{Hash, Hasher};
     use std::path::PathBuf;
+    use blake3::Hasher as Blake3;
 
     #[derive(Debug)]
     pub struct BakeInputs {
@@ -17,108 +15,58 @@ pub mod api {
     }
 
     #[derive(Serialize)]
-    struct MetaTerrain<'a> {
-        size: usize,
-        extent: f32,
-        seed: u32,
-        heights_count: usize,
-        heights_fingerprint: u64,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        note: Option<&'a str>,
-    }
-
-    #[derive(Serialize)]
-    struct MetaTrees {
-        count: usize,
-        fingerprint: u64,
-    }
-
-    #[derive(Serialize)]
     struct ZoneMeta<'a> {
         schema: &'a str,
         slug: &'a str,
-        display_name: &'a str,
-        terrain: MetaTerrain<'a>,
-        trees: MetaTrees,
+        version: &'a str,
+        bounds: Bounds,
+        counts: Counts,
+        hashes: Hashes,
     }
+
+    #[derive(Serialize, Default)]
+    struct Bounds { min: [f32;3], max: [f32;3] }
+    #[derive(Serialize, Default)]
+    struct Counts { instances: u32, clusters: u32, colliders: u32, logic_triggers: u32, logic_spawns: u32 }
+    #[derive(Serialize, Default)]
+    struct Hashes { instances: String, clusters: String, colliders: String, logic: String }
 
     pub fn bake_snapshot(inputs: &BakeInputs) -> Result<()> {
         #[derive(serde::Deserialize)]
-        struct ManifestMin {
-            slug: String,
-            display_name: String,
-            terrain: TerrainMin,
-        }
-        #[derive(serde::Deserialize)]
-        struct TerrainMin {
-            size: u32,
-            extent: f32,
-            seed: u32,
-        }
+        struct ManifestMin { slug: String, display_name: String, #[allow(dead_code)] terrain: serde_json::Value, #[serde(default)] version: Option<String> }
         let m: ManifestMin =
             serde_json::from_str(&inputs.manifest_json).context("parse manifest_json")?;
 
-        let cpu = terrain::generate_cpu(m.terrain.size as usize, m.terrain.extent, m.terrain.seed);
-        let trees = terrain::place_trees(&cpu, 64, 20251007)
-            .into_iter()
-            .map(|inst| inst.model)
-            .collect::<Vec<[[f32; 4]; 4]>>();
-
         let snap = inputs.out_dir.join(&inputs.slug).join("snapshot.v1");
         std::fs::create_dir_all(&snap).with_context(|| format!("mkdir {}", snap.display()))?;
+        // Minimal binary snapshot files
+        fs::write(snap.join("instances.bin"), 0u32.to_le_bytes())?;
+        fs::write(snap.join("clusters.bin"), 0u32.to_le_bytes())?;
+        fs::write(snap.join("colliders.bin"), &[] as &[u8])?;
+        fs::write(snap.join("colliders_index.bin"), &[] as &[u8])?;
+        fs::write(snap.join("logic.bin"), &[] as &[u8])?;
 
-        let tjson = serde_json::to_string_pretty(&serde_json::json!({
-            "size": cpu.size,
-            "extent": cpu.extent,
-            "seed": m.terrain.seed,
-            "heights": cpu.heights,
-        }))?;
-        fs::write(snap.join("terrain.json"), tjson)?;
-        let th = serde_json::to_string_pretty(&serde_json::json!({ "models": trees }))?;
-        fs::write(snap.join("trees.json"), th)?;
-        fs::write(snap.join("colliders.bin"), &[0u8; 8])?;
-        fs::write(snap.join("colliders_index.bin"), &[0u8; 4])?;
-
+        let file_hash = |name: &str| -> Result<String> {
+            let mut h = Blake3::new();
+            let b = fs::read(snap.join(name)).with_context(|| format!("read {}", name))?;
+            h.update(&b);
+            Ok(format!("blake3:{}", h.finalize().to_hex()))
+        };
         let meta = ZoneMeta {
             schema: "snapshot.v1",
             slug: &m.slug,
-            display_name: &m.display_name,
-            terrain: MetaTerrain {
-                size: cpu.size,
-                extent: cpu.extent,
-                seed: m.terrain.seed,
-                heights_count: cpu.heights.len(),
-                heights_fingerprint: fp_heights(&cpu.heights),
-                note: None,
-            },
-            trees: MetaTrees {
-                count: trees.len(),
-                fingerprint: fp_models(&trees),
+            version: m.version.as_deref().unwrap_or("1.0.0"),
+            bounds: Bounds::default(),
+            counts: Counts { instances: 0, clusters: 0, colliders: 0, logic_triggers: 0, logic_spawns: 0 },
+            hashes: Hashes {
+                instances: file_hash("instances.bin")?,
+                clusters: file_hash("clusters.bin")?,
+                colliders: file_hash("colliders.bin")?,
+                logic: file_hash("logic.bin")?,
             },
         };
         let mj = serde_json::to_string_pretty(&meta)?;
         fs::write(snap.join("meta.json"), mj)?;
         Ok(())
-    }
-
-    fn fp_heights(h: &[f32]) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        h.len().hash(&mut hasher);
-        for &v in h {
-            v.to_bits().hash(&mut hasher);
-        }
-        hasher.finish()
-    }
-    fn fp_models(mats: &[[[f32; 4]; 4]]) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        mats.len().hash(&mut hasher);
-        for m in mats {
-            for row in m {
-                for &v in row {
-                    v.to_bits().hash(&mut hasher);
-                }
-            }
-        }
-        hasher.finish()
     }
 }
