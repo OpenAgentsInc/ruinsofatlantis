@@ -110,3 +110,8 @@ Notes for future
   - Replication invariants spelled out: indices in-bounds; finite vertex data; projectile–actor id collision note
   - Added §§ 31–34: Determinism & RNG, Frame Type Tags, Budgets & Back-Pressure, Security & Rate-Limits
   - Expanded §14 testing requirements with replication guard cases
+
+- [2025-10-09 03:39:52Z] Fix: NPC spawns avoid destructible AABBs
+  - Added `push_out_of_destructibles()` and applied to `spawn_wizard_npc`, `spawn_undead`, `spawn_death_knight`, and boss spawn.
+  - Prevents hidden casters spawning inside the ruins and firing continuously from within geometry.
+  - Test: `crates/server_core/tests/spawn_not_inside_destructible.rs`.

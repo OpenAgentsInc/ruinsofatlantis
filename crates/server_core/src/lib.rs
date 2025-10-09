@@ -629,7 +629,8 @@ impl ServerState {
     }
     /// Spawn an Undead actor (legacy NPC replacement)
     pub fn spawn_undead(&mut self, pos: Vec3, radius: f32, hp: i32) -> ActorId {
-        let pos = push_out_of_pc_bubble(self, pos);
+        let mut pos = push_out_of_pc_bubble(self, pos);
+        pos = push_out_of_destructibles(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Zombie,
             crate::actor::Faction::Undead,
@@ -671,7 +672,8 @@ impl ServerState {
     }
     /// Spawn a Death Knight (boss-like hostile). Not unique by design.
     pub fn spawn_death_knight(&mut self, pos: Vec3) -> ActorId {
-        let pos = push_out_of_pc_bubble(self, pos);
+        let mut pos = push_out_of_pc_bubble(self, pos);
+        pos = push_out_of_destructibles(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Boss,
             crate::actor::Faction::Undead,
@@ -736,7 +738,8 @@ impl ServerState {
     // Destructible runtime disabled
     /// Spawn an NPC wizard (hostile to Undead) for demo or scripted scenes.
     pub fn spawn_wizard_npc(&mut self, pos: Vec3) -> ActorId {
-        let pos = push_out_of_pc_bubble(self, pos);
+        let mut pos = push_out_of_pc_bubble(self, pos);
+        pos = push_out_of_destructibles(self, pos);
         let id = self.ecs.spawn(
             ActorKind::Wizard,
             crate::actor::Faction::Wizards,
@@ -1280,4 +1283,69 @@ mod tests_actor {
         let mana = s.ecs.get(pc).unwrap().pool.as_ref().unwrap().mana;
         assert_eq!(mana, 11, "PC mana should regen by ~1 over one second");
     }
+}
+
+/// If `pos` lies inside any registered destructible world AABB, push it outside along the
+/// nearest axis by a small margin (0.5 m). Returns possibly adjusted position.
+pub fn push_out_of_destructibles(srv: &ServerState, mut pos: Vec3) -> Vec3 {
+    let margin = 0.5f32;
+    for inst in &srv.destruct_instances {
+        let min = glam::Vec3::from(inst.world_min);
+        let max = glam::Vec3::from(inst.world_max);
+        let inside = pos.x >= min.x
+            && pos.x <= max.x
+            && pos.y >= min.y
+            && pos.y <= max.y
+            && pos.z >= min.z
+            && pos.z <= max.z;
+        if !inside {
+            continue;
+        }
+        // Distances to each face
+        let dx_min = (pos.x - min.x).abs();
+        let dx_max = (max.x - pos.x).abs();
+        let dz_min = (pos.z - min.z).abs();
+        let dz_max = (max.z - pos.z).abs();
+        // Choose shortest escape
+        let (axis, dir) = {
+            let mut best = dx_min;
+            let mut axis = 0; // 0=x, 1=z
+            let mut dir = -1.0; // -1: toward min, +1: toward max
+            if dx_max < best {
+                best = dx_max;
+                axis = 0;
+                dir = 1.0;
+            }
+            if dz_min < best {
+                best = dz_min;
+                axis = 1;
+                dir = -1.0;
+            }
+            if dz_max < best {
+                best = dz_max;
+                axis = 1;
+                dir = 1.0;
+            }
+            (axis, dir)
+        };
+        match axis {
+            0 => {
+                // Push along X
+                pos.x = if dir < 0.0 {
+                    min.x - margin
+                } else {
+                    max.x + margin
+                };
+            }
+            _ => {
+                // Push along Z
+                pos.z = if dir < 0.0 {
+                    min.z - margin
+                } else {
+                    max.z + margin
+                };
+            }
+        }
+    }
+    pos
 }
