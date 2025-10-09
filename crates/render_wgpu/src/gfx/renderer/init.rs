@@ -701,8 +701,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
     // Load wizard GLTF, possibly merging UVs from simple loader for robustness
-    let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
-        .context("load skinned wizard.gltf")?;
+    let skinned_cpu = if load_actor_assets {
+        load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
+            .context("load skinned wizard.gltf")?
+    } else {
+        crate::gfx::Renderer::empty_skinned_cpu()
+    };
     let viewer_uv: Option<Vec<[f32; 2]>> = (|| {
         let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).ok()?;
         let mesh = doc.meshes().next()?;
@@ -752,11 +756,23 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let wizard_index_count = skinned_cpu.indices.len() as u32;
 
     // Zombie assets (skinned)
-    let zombie_assets = zombies::load_assets(&device).context("load zombie assets")?;
-    let zombie_cpu = zombie_assets.cpu;
-    let zombie_vb = zombie_assets.vb;
-    let zombie_ib = zombie_assets.ib;
-    let zombie_index_count = zombie_assets.index_count;
+    let (zombie_cpu, zombie_vb, zombie_ib, zombie_index_count) = if load_actor_assets {
+        let a = zombies::load_assets(&device).context("load zombie assets")?;
+        (a.cpu, a.vb, a.ib, a.index_count)
+    } else {
+        let b = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("zombie-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (
+            crate::gfx::Renderer::empty_skinned_cpu(),
+            b.clone(),
+            b,
+            0u32,
+        )
+    };
 
     // Scene assembly
     let scene_build = scene::build_demo_scene(
@@ -989,20 +1005,54 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // Death Knight assets (skinned, single instance)
-    let dk_assets =
-        super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
-    let dk_cpu = dk_assets.cpu;
-    let dk_vb = dk_assets.vb;
-    let dk_ib = dk_assets.ib;
-    let dk_index_count = dk_assets.index_count;
-    let dk_joints = dk_cpu.joints_nodes.len() as u32;
-    let dk_mat = material::create_wizard_material(&device, &queue, &material_bgl, &dk_cpu);
-    let dk_mat_bg = dk_mat.bind_group;
-    let _dk_mat_buf = dk_mat.uniform_buf;
-    let _dk_tex_view = dk_mat.texture_view;
-    let _dk_sampler = dk_mat.sampler;
-
-    // (reserved) Env gates for heavy actor-instance buffers can be added here if needed.
+    let (
+        dk_cpu,
+        dk_vb,
+        dk_ib,
+        dk_index_count,
+        dk_joints,
+        dk_mat_bg,
+        _dk_mat_buf,
+        _dk_tex_view,
+        _dk_sampler,
+    ) = if load_actor_assets {
+        let a =
+            super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
+        let cpu = a.cpu;
+        let joints = cpu.joints_nodes.len() as u32;
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &cpu);
+        (
+            cpu,
+            a.vb,
+            a.ib,
+            a.index_count,
+            joints,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    } else {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("dk-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
+        (
+            empty_cpu,
+            dummy.clone(),
+            dummy,
+            0u32,
+            0u32,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    };
 
     // NPCs and server
     let npcs = npcs::build(&device, terrain_extent);
@@ -1093,7 +1143,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
-    // Sorceress — single idle instance behind the Death Knight (configurable model)
+    // Sorceress — gate under actor assets
+    if !load_actor_assets { /* leave placeholders below */ }
     let sorc_cfg = data_runtime::configs::sorceress::load_default().unwrap_or_default();
     let (
         sorc_cpu,
