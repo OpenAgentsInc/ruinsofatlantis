@@ -104,3 +104,9 @@ Notes for future
     - `crates/server_core/tests/destructible_from_projectiles_segments.rs`
     - `crates/server_core/tests/cast_cooldown_rejection.rs`
     - `crates/server_core/tests/aoe_capsule_edge.rs`
+
+- [2025-10-09 03:06:29Z] ECS Guide tightened
+  - Version consistency: v3→v4; corrected `projectile_collision_ecs` name
+  - Replication invariants spelled out: indices in-bounds; finite vertex data; projectile–actor id collision note
+  - Added §§ 31–34: Determinism & RNG, Frame Type Tags, Budgets & Back-Pressure, Security & Rate-Limits
+  - Expanded §14 testing requirements with replication guard cases

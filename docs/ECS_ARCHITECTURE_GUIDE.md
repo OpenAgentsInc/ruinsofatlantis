@@ -280,6 +280,10 @@ Implementation notes:
 * Projectiles appear from v3; disappear triggers FB explosion render hook.
 * Animation mapping: Δpos/alive → idle/jog/death.
 * Replication safety: unrelated frames may never be mis‑decoded as chunk meshes or spawns; deltas must pass validation.
+  - Non‑delta frames (HUD, etc.) are not mis‑decoded as `ChunkMeshDelta`.
+  - `ChunkMeshDelta` validation: sizes, indices in‑bounds, positions/normals finite, empty deltas allowed, AABB containment vs instance.
+  - Invalid `DestructibleInstance` payload does not register DID nor flush deferred deltas; valid instance flushes.
+  - Projectiles never create/modify NPC views (even with id collisions).
 
 **CI Gates**
 
@@ -341,7 +345,7 @@ Implementation notes:
 
 ## 18) Versioning, Flags, & Cleanup
 
-* **One** replication mode: **v3 delta** (spawns/updates/removals + projectiles + hits). No legacy fallbacks in runtime.
+* **One** replication mode: **v4 delta** (spawns/updates/removals + projectiles + hits). No legacy fallbacks in runtime.
 * Feature flags only for **optional dev tooling** (e.g., `vox_onepath_demo`). Gameplay features are not hidden behind flags.
 
 ---
@@ -358,7 +362,7 @@ Implementation notes:
 6. On **AoE**: emit `ExplodeEvent` → `aoe_apply_explosions` → `DamageEvent`s; push `HitFx` entries as desired.
 7. `apply_damage` mutates HP; emits `DeathEvent`, sets `DespawnAfter`.
 8. `cleanup` removes projectiles and entities with expired timers.
-9. platform builds v3 delta (with `hits`) → client applies → renderer shows FX/HUD.
+9. platform builds v4 delta (with `hits`) → client applies → renderer shows FX/HUD.
 
 ---
 
@@ -409,11 +413,14 @@ To prevent mis‑decoding and protect the renderer:
   4) `HudStatusMsg`, `HudToastMsg`
 - Client stores destructible instance AABBs and rejects deltas whose bbox falls outside the AABB (±epsilon).
 - Deltas must have `positions.len()==normals.len()`, `indices.len()%3==0`, and pass size caps.
+- All indices are in-bounds: `max(indices) < positions.len()`.
+- All vertex data are finite: reject any `NaN`/`Inf` coordinates or normals.
 - Long‑term: prefer a one‑byte type tag per frame (TODO: ADR if we adopt tags) to remove guess‑decoding entirely.
 
 Never couple projectiles to NPC views:
 
 - `ActorSnapshotDelta.projectiles` is presentation‑only and must not create or mutate NPC views. Tests enforce that only actor spawns/updates drive views.
+- Projectile–Actor ID collisions are allowed; clients must still never create or mutate actor views from `projectiles`.
 
 ---
 
@@ -476,7 +483,7 @@ These names are asserted in tests. Changing them requires updating tests and doc
 11. `homing_acquire_targets`
 12. `homing_update`
 13. `projectile_integrate_ecs`
-14. `projectile_collision_ecS`
+14. `projectile_collision_ecs`
 15. `destructible_from_projectiles`
 16. `destructible_from_explosions`
 17. `destructible_apply_carves`
@@ -528,3 +535,35 @@ Don’t:
 This contract is what keeps the codebase coherent as we scale content and contributors. If you’re about to add a branch keyed on “Wizard,” **stop** and express the behavior in components + data. If you’re about to scan all actors each frame, **stop** and add a grid query. If you’re about to make the client “just handle” something, **stop** and replicate a minimal event.
 
 If a change cannot meet these constraints, write an ADR explaining the exception, the blast radius, and the plan to remove it.
+
+---
+
+## 31) Determinism & RNG (server)
+
+- All randomness is seeded (world seed + tick + entity id). No wall‑clock or OS entropy in systems.
+- Gameplay never reads `Instant::now()`; use tick counters and `dt` throughout.
+- Avoid non‑deterministic math in hot loops; prefer stable approximations if needed.
+- Tests: same inputs/seed → identical HP totals, despawn sets, and event counts.
+
+## 32) Framing & Type Tags (wire)
+
+- Every frame on the wire carries a one‑byte type tag:
+  - `0x01 = ActorSnapshotDelta(v4)`
+  - `0x02 = DestructibleInstance`
+  - `0x03 = ChunkMeshDelta`
+  - `0x10 = HudStatusMsg`
+  - `0x11 = HudToastMsg`
+- Clients dispatch by tag; unknown tags are ignored. If tags are negotiated off, strict decode order + validation in §22 applies.
+- Tests: randomized bytes never panic; mis‑tagged frames do not leak into other decoders.
+
+## 33) Budgets, Back‑Pressure & Drops
+
+- Expensive systems run under explicit per‑tick budgets (meshing, colliders, carve bus).
+- Use FIFO within a DID and round‑robin across DIDs; increment metrics on drops (`destruct.*`).
+- Tests: queues drain over ticks; drops counted; order stable and deterministic.
+
+## 34) Security & Rate‑Limits (commands)
+
+- Server validates and rate‑limits all `Cast`/`Move`; rejects on cooldown/mana with a HUD toast.
+- Projectiles enforce an `arming_delay_s` to avoid immediate self‑hits.
+- Tests: cast bursts throttle; cooldown rejection produces toast; owner cannot be hit during arming window.
