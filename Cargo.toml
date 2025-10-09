@@ -21,7 +21,7 @@ members = [
     "crates/platform_winit", # winit platform loop
     "crates/ux_hud"          # HUD logic
     ,"crates/collision_static"
-, "crates/client_runtime", "crates/core_units", "crates/core_materials", "crates/voxel_proxy", "crates/voxel_mesh", "crates/net_core", "crates/client_core"]
+, "crates/client_runtime", "crates/core_units", "crates/core_materials", "crates/voxel_proxy", "crates/voxel_mesh", "crates/net_core", "crates/client_core", "crates/dev_docs"]
 resolver = "2"
 
 [features]
