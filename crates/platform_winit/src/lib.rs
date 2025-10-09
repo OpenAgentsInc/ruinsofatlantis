@@ -307,6 +307,62 @@ impl ApplicationHandler for App {
         if window.id() != window_id {
             return;
         }
+        // Zone Picker keyboard handling (native): arrows to change selection; Enter to load
+        if matches!(self.boot, BootMode::Picker) {
+            use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
+            if let WindowEvent::KeyboardInput { event: kev, .. } = &event {
+                // Navigation
+                match (&kev.logical_key, &kev.physical_key) {
+                    (Key::Named(NamedKey::ArrowUp), _)
+                    | (_, PhysicalKey::Code(KeyCode::ArrowUp)) => {
+                        self.picker.select_prev();
+                        let disp = self
+                            .picker
+                            .items
+                            .get(self.picker.selected)
+                            .map(|e| e.display.clone())
+                            .unwrap_or_else(|| "".into());
+                        window.set_title(&format!("Zone Picker — {} — ↑/↓, Enter, Esc", disp));
+                        return;
+                    }
+                    (Key::Named(NamedKey::ArrowDown), _)
+                    | (_, PhysicalKey::Code(KeyCode::ArrowDown)) => {
+                        self.picker.select_next();
+                        let disp = self
+                            .picker
+                            .items
+                            .get(self.picker.selected)
+                            .map(|e| e.display.clone())
+                            .unwrap_or_else(|| "".into());
+                        window.set_title(&format!("Zone Picker — {} — ↑/↓, Enter, Esc", disp));
+                        return;
+                    }
+                    (Key::Named(NamedKey::Enter), _) | (_, PhysicalKey::Code(KeyCode::Enter)) => {
+                        if let Some(slug) = self.picker.current_slug() {
+                            if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug)
+                            {
+                                let gz =
+                                    render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
+                                state.set_zone_batches(Some(gz));
+                                self.boot = BootMode::Running { slug: slug.clone() };
+                                window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                            } else {
+                                log::error!(
+                                    "zone picker: failed to load zone '{}': snapshot missing or invalid",
+                                    slug
+                                );
+                            }
+                        }
+                        return;
+                    }
+                    (Key::Named(NamedKey::Escape), _) | (_, PhysicalKey::Code(KeyCode::Escape)) => {
+                        event_loop.exit();
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+        }
         state.handle_window_event(&event);
         // Apply any pointer-lock request emitted by controller systems.
         if let Some(lock) = state.take_pointer_lock_request() {
