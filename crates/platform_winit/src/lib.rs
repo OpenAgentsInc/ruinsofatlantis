@@ -399,20 +399,19 @@ impl ApplicationHandler for App {
                         e => eprintln!("render error: {e:?}"),
                     }
                 }
-                if let BootMode::Picker = self.boot {
-                    if let Some(slug) = state.take_picker_selected() {
-                        if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
-                            let gz =
-                                render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
-                            state.set_zone_batches(Some(gz));
-                            self.boot = BootMode::Running { slug: slug.clone() };
-                            window.set_title(&format!("RuinsofAtlantis — {}", slug));
-                        } else {
-                            log::error!(
-                                "zone picker: failed to load zone '{}': snapshot missing or invalid",
-                                slug
-                            );
-                        }
+                if let BootMode::Picker = self.boot
+                    && let Some(slug) = state.take_picker_selected()
+                {
+                    if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
+                        let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
+                        state.set_zone_batches(Some(gz));
+                        self.boot = BootMode::Running { slug: slug.clone() };
+                        window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                    } else {
+                        log::error!(
+                            "zone picker: failed to load zone '{}': snapshot missing or invalid",
+                            slug
+                        );
                     }
                 }
             }
