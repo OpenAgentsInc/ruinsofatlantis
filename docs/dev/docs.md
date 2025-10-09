@@ -92,8 +92,36 @@ Here are the practical options to automatically generate Rust-based documentatio
   - Aggregator crate: Add a new workspace crate; wire include_str! paths; add xtask + optional publishing script.
   - mdBook: Install mdbook, add minimal book.toml + SUMMARY.md, map our existing docs; add CI/build step.
 
-  If you want, I can:
+If you want, I can:
 
   - Scaffold the dev_docs crate and wire in our top design/system docs.
   - Add xtask docs to build docs locally and a script to publish to GitHub Pages or the sibling site.
   - Draft a minimal mdBook config mapping the current docs/ tree so we can compare against a rustdoc-only approach.
+
+## Status Update (Implemented) and Next Steps
+
+What’s implemented now
+- Added a short‑term Rustdoc aggregator crate: `crates/dev_docs`.
+  - Aggregates key Markdown docs via `include_str!` into a browsable Rustdoc site.
+  - Wired into the workspace. Build locally with: `cargo doc -p dev_docs --no-deps --open`.
+  - Included docs: `docs/README.md`, `docs/gdd/README.md`, GDD Mechanics (overview, destructibility), and `docs/systems/**` (zones, telemetry, frame graph, model loading, sky/weather, terrain/biomes, controls, voxel destruction status, spells MVP), plus `docs/architecture/ECS_ARCHITECTURE_GUIDE.md`.
+- Cleaned up docs structure and links:
+  - Canonical Zones spec: `docs/systems/zones.md` (removed older duplicates).
+  - Telemetry moved to `docs/systems/telemetry.md` (removed `observability/` references).
+  - GDD split linked and up to date; added “Destructibility” mechanics page.
+- Agent guidance updated (`AGENTS.md`) to use `docs/gdd/README.md` and keep work on `main` by default.
+
+What’s next (short‑term)
+- Add `xtask docs` to build `dev_docs` and optionally copy output to `dist/docs/` for publishing.
+- Expand `dev_docs` coverage incrementally (more `docs/gdd/**` sections and any additional systems pages).
+- Tag non‑Rust code blocks in Markdown with `text` or `ignore` to avoid rustdoc warnings.
+
+What’s next (medium‑term)
+- Add mdBook for design/navigation (GDD + systems) while keeping Rustdoc for API.
+  - Create `book.toml` + `docs/book/SUMMARY.md`; map current docs.
+  - Add CI job to build and publish both (Rustdoc API + mdBook) to GitHub Pages or our site.
+- Optionally add crate‑level `#![doc = include_str!("../README.md")]` for select crates and strengthen API docs with `///`.
+
+Stretch goals
+- Add search and cross‑linking conventions (heading anchors, consistent section headers).
+- Consider `rustdoc --output-format json` (nightly) only if we decide to build a custom docs UI later.
