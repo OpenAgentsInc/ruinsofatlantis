@@ -218,20 +218,7 @@ Read: docs/gdd/03-srd/scope-implementation.md
 
 ## Classes
 
-(Directly from SRD)
-
-- Barbarian
-- Bard
-- Cleric
-- Druid
-- Fighter
-- Monk
-- Paladin
-- Ranger
-- Rogue
-- Sorcerer
-- Warlock
-- Wizard
+Read: docs/gdd/04-classes/overview.md
 
 ## Races
 
@@ -249,34 +236,7 @@ Read: docs/gdd/03-srd/scope-implementation.md
 
 ## Class Lore
 
-Pulled from SRD 5.2.1 classes; original names retained. This section frames how each archetype fits an Atlantis‑ruins, oceanic world and the SRD cosmology without renaming mechanics.
-
-### Martial & Primal Classes
-- Barbarian: survivors of storm‑wrecked coasts and open seas; rage as primal fury of currents and crashing waves; often tied to Inner Planes (Water, Storm, Earth).
-- Fighter: backbone of naval militias, mercenary crews, and ruin‑delving expeditions; masters of harpoons, boarding pikes, and Atlantean relic‑arms.
-- Rogue: smugglers, divers, and treasure‑hunters; adept at navigating wrecks, bypassing Atlantean wards, and thriving in lawless ports.
-- Ranger: coastal wardens and beast‑bonded sailors; specialists in sea‑monster hunts across reefs and open water.
-- Monk: ascetics who adapt discipline to currents and tides; train near thermal vents or cliff‑side monasteries to channel inner balance.
-
-### Divine & Spiritual Classes
-- Cleric: servants of sea gods, storm lords, and drowned ancestors; domains tied to tides, storms, lighthouse light, or stillness of the deep.
-- Paladin: holy knights sworn to protect seafarers, coastal settlements, or Atlantean secrets; oaths bind them to Outer Planes patrons of justice or vengeance beneath the waves.
-- Druid: stewards of reefs, currents, and the wild ocean; channel balance between sea and land and guide communities toward harmony with nature.
-
-### Arcane & Mystical Classes
-- Wizard: scholars of Atlantean relics and rune‑etched ruins; seek forbidden lore in flooded archives or astral tide‑charts.
-- Sorcerer: innate casters shaped by planar tides—descended from storm elementals, sirens, or Atlantean bloodlines; magic manifests as waves, lightning, or abyssal whispers.
-- Warlock: pact‑bound to beings beyond the Material—drowned gods, abyssal leviathans, or Feywild siren‑queens; gifts pull them toward Shadowfell trenches or Abyssal whirlpools.
-- Bard: keepers of seafaring songs and lore; inspire crews, charm spirits, and preserve Atlantean myths through performance.
-
-### Planar Integration
-- Material Plane: Fighters, Rogues, Barbarians, Rangers—survivalists and adventurers.
-- Feywild: Bards, Druids—music and nature in oceanic reflections.
-- Shadowfell: Warlocks, some Rogues and Sorcerers—abyssal influence and drowned dead.
-- Inner Planes: Barbarians, Druids, Sorcerers—primal ties to elements and tides.
-- Outer Planes: Clerics, Paladins, Monks—divine oaths and cosmic order.
-- Astral/Ethereal: Wizards, Warlocks—arcane travel, dream‑sailing, ghostly insight.
-
+Read: docs/gdd/04-classes/lore.md
 
 ## Combat
 
