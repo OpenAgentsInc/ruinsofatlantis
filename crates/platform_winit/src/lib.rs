@@ -31,7 +31,10 @@ struct App {
     baseline: std::collections::HashMap<u32, net_core::snapshot::ActorRep>,
     interest_radius_m: f32,
     // Simple server-side rate limiter for client commands
+    #[cfg(not(target_arch = "wasm32"))]
     last_sec_start: std::time::Instant,
+    #[cfg(target_arch = "wasm32")]
+    last_sec_start: web_time::Instant,
     cmds_this_sec: u32,
     // Track which destructible instances have been sent to the client
     sent_destr_instances: std::collections::HashSet<u64>,
@@ -53,7 +56,10 @@ impl Default for App {
             baseline_tick: 0,
             baseline: std::collections::HashMap::new(),
             interest_radius_m: 40.0,
+            #[cfg(not(target_arch = "wasm32"))]
             last_sec_start: std::time::Instant::now(),
+            #[cfg(target_arch = "wasm32")]
+            last_sec_start: web_time::Instant::now(),
             cmds_this_sec: 0,
             sent_destr_instances: std::collections::HashSet::new(),
         }
@@ -97,15 +103,18 @@ impl ApplicationHandler for App {
                     return;
                 }
             };
-            // Wire a local replication channel for NPC/Boss status
-            let (_srv, _cli) = net_core::transport::LocalLoopbackTransport::new(4096);
-            let (tx_cli, rx_cli) = _cli.split();
-            state.set_replication_rx(rx_cli);
-            state.set_command_tx(tx_cli);
+            // Wire a local replication channel for NPC/Boss status (native only)
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (_srv, _cli) = net_core::transport::LocalLoopbackTransport::new(4096);
+                let (tx_cli, rx_cli) = _cli.split();
+                state.set_replication_rx(rx_cli);
+                state.set_command_tx(tx_cli);
+                self.transport_srv = Some(_srv);
+            }
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.window = Some(window);
-                self.transport_srv = Some(_srv);
                 self.state = Some(state);
                 #[cfg(feature = "demo_server")]
                 {
@@ -235,6 +244,46 @@ impl ApplicationHandler for App {
                     if let Some((win, state)) = cell.borrow_mut().take() {
                         self.window = Some(win);
                         self.state = Some(state);
+                        // Wire loopback transport and seed demo server on wasm when enabled
+                        #[cfg(feature = "demo_server")]
+                        {
+                            let (srv, cli) = net_core::transport::LocalLoopbackTransport::new(4096);
+                            let (tx_cli, rx_cli) = cli.split();
+                            if let Some(st) = self.state.as_mut() {
+                                st.set_replication_rx(rx_cli);
+                                st.set_command_tx(tx_cli);
+                            }
+                            self.transport_srv = Some(srv);
+                            // Spawn demo server content similar to native path
+                            let mut srv = server_core::ServerState::new();
+                            let wiz_now = self
+                                .state
+                                .as_ref()
+                                .map(|s| s.wizard_positions())
+                                .unwrap_or_default();
+                            let pc0 = wiz_now
+                                .first()
+                                .copied()
+                                .unwrap_or(glam::vec3(0.0, 0.6, 0.0));
+                            if srv.pc_actor.is_none() {
+                                let _ = srv.spawn_pc_at(pc0);
+                            }
+                            // NPC rings and boss setup
+                            srv.ring_spawn(8, 15.0, 20);
+                            srv.ring_spawn(12, 30.0, 25);
+                            srv.ring_spawn(15, 45.0, 30);
+                            let wiz_count = 4usize;
+                            let wiz_r = 8.0f32;
+                            for i in 0..wiz_count {
+                                let a = (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
+                                let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                                let _ = srv.spawn_wizard_npc(p);
+                            }
+                            let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                            let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
+                            server_core::scene_build::add_demo_ruins_destructible(&mut srv);
+                            self.demo_server = Some(srv);
+                        }
                     }
                 });
             }
@@ -261,7 +310,16 @@ impl ApplicationHandler for App {
                                 | net_core::command::ClientCmd::MagicMissile { .. }
                         );
                         if rate_limited {
-                            let now = std::time::Instant::now();
+                            let now = {
+                                #[cfg(not(target_arch = "wasm32"))]
+                                {
+                                    std::time::Instant::now()
+                                }
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    web_time::Instant::now()
+                                }
+                            };
                             if now.duration_since(self.last_sec_start).as_secs_f32() >= 1.0 {
                                 self.last_sec_start = now;
                                 self.cmds_this_sec = 0;

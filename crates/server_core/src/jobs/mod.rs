@@ -3,7 +3,10 @@
 //! For now, dispatches synchronously and records metrics; later we can add
 //! a thread pool and MPSC queues.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 pub struct JobScheduler;
 

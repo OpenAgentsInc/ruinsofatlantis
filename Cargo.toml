@@ -54,6 +54,12 @@ console_log = "0.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+
+[target.wasm32-unknown-unknown.dependencies.platform_winit]
+version = "0.1.0"
+path = "crates/platform_winit"
+default-features = false
+features = ["demo_server"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.platform_winit]
 version = "0.1.0"
 path = "crates/platform_winit"

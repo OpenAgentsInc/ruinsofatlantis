@@ -1013,7 +1013,10 @@ impl ServerState {
     /*
         pub fn step_npc_ai(&mut self, _dt: f32, _wizards: &[Vec3]) -> Vec<(usize, i32)> { return Vec::new(); }
     /*
+            #[cfg(not(target_arch = "wasm32"))]
             let _t0 = std::time::Instant::now();
+            #[cfg(target_arch = "wasm32")]
+            let _t0 = web_time::Instant::now();
             if wizards.is_empty() {
                 let ms = _t0.elapsed().as_secs_f64() * 1000.0;
                 metrics::histogram!("tick.ms").record(ms);
@@ -1054,7 +1057,10 @@ impl ServerState {
                     }
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
             let _c0 = std::time::Instant::now();
+            #[cfg(target_arch = "wasm32")]
+            let _c0 = web_time::Instant::now();
             self.resolve_collisions(wizards);
             let coll_ms = _c0.elapsed().as_secs_f64() * 1000.0;
             metrics::histogram!("collider.ms").record(coll_ms);

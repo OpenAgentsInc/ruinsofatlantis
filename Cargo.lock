@@ -5664,6 +5664,7 @@ dependencies = [
  "tracing-subscriber",
  "voxel_mesh",
  "voxel_proxy",
+ "web-time",
 ]
 
 [[package]]

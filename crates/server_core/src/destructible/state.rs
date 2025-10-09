@@ -38,8 +38,13 @@ pub struct DestructibleProxy {
 
 impl DestructibleProxy {
     pub fn new(did: DestructibleId, grid: VoxelGrid, world_aabb: WorldAabb) -> Self {
-        let world_from_object = Mat4::IDENTITY;
-        let object_from_world = Mat4::IDENTITY;
+        // Object-space coordinates for meshes are in the grid's local space with
+        // origin at `meta.origin_m`. Build transforms so we can emit world-space
+        // positions in replication consistently with the announced AABB.
+        let o = grid.origin_m();
+        let trans = glam::Vec3::new(o.x as f32, o.y as f32, o.z as f32);
+        let world_from_object = Mat4::from_translation(trans);
+        let object_from_world = world_from_object.inverse();
         let mut proxy = Self {
             did,
             grid,
