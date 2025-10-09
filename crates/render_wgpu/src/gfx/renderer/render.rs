@@ -1004,7 +1004,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             .unwrap_or(false)
         {
             log::debug!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
-        } else {
+        } else if !r.is_picker_batches() {
             log::debug!("draw: terrain");
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
