@@ -8,11 +8,9 @@ Priority Reads
 
 Sections
 - architecture/ — System and code architecture guides and overviews
-- systems/ — Subsystem docs (renderer frame graph, voxel/destructible, zones system, controls)
+- systems/ — Subsystem docs (renderer frame graph, voxel/destructible, zones system, telemetry, controls)
 - graphics/ — Rendering topics (lighting, GLTF, animations)
-- world/ — World authoring (non‑system flavor docs)
 - design/ — Game design notes (factions, spell write‑ups, essays)
-- observability/ — Telemetry, metrics, logging
 - ops/ — Deployment and operations (deploy guides, postmortems)
 - audits/ — Code/config/security audits and reviews
 - issues/ — Work proposals and design issue write‑ups

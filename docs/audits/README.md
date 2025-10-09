@@ -275,7 +275,7 @@ rg -n "/Users/|Downloads" -S
 
 **What to examine**
 
-* `docs/observability/telemetry.md`, server/client telemetry init.
+* `docs/systems/telemetry.md`, server/client telemetry init.
 * Metrics naming, label cardinality, and emit rate.
 * Log levels and targets (`tracing` vs `log` mixing).
 

@@ -15,10 +15,10 @@ ensure SRD pdf is fully converted to markdown
 - docs/graphics/bevy_gltf.md — # bevy_gltf: Notes and Takeaways
 - docs/combat_sim_ecs.md — # Combat Simulation System — ECS Design and SRD Mapping
 - docs/combat_sim.md — # Combat Simulation — Quickstart and Structure
-- docs/delegations/20251006_115017_ensure-the-srd-docs-are-comprehensive-basedon-the-pdf.md — # Delegation: ensure the SRD docs are comprehensive basedon the PDF
-- docs/delegations/20251006_115546_ensure-srd-pdf-is-fully-converted-to-markdown.md — # Delegation: ensure SRD pdf is fully converted to markdown
-- docs/delegations/20251006_124143_ensure-srd-pdf-is-fully-converted-to-markdown-we-already-began-it.md — # Delegation: ensure SRD pdf is fully converted to markdown. we already began it
-- docs/delegations/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.md — # Delegation: ensure SRD pdf is fully converted to markdown.
+- docs/old/20251006_115017_ensure-the-srd-docs-are-comprehensive-basedon-the-pdf.md — # Delegation: ensure the SRD docs are comprehensive basedon the PDF
+- docs/old/20251006_115546_ensure-srd-pdf-is-fully-converted-to-markdown.md — # Delegation: ensure SRD pdf is fully converted to markdown
+- docs/old/20251006_124143_ensure-srd-pdf-is-fully-converted-to-markdown-we-already-began-it.md — # Delegation: ensure SRD pdf is fully converted to markdown. we already began it
+- docs/old/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.md — # Delegation: ensure SRD pdf is fully converted to markdown.
 - docs/design/fevir-2025.md — # The core claim
 - docs/design/spells/fire_bolt.md — # Fire Bolt (SRD 5.2.1) — Implementation Spec
 - docs/graphics/gltf-animations.md — # glTF Skinning & Animations — What We Fixed
@@ -56,7 +56,7 @@ ensure SRD pdf is fully converted to markdown
 - docs/systems/spell_ability_system.md — # Spell & Ability System (MVP)
 - docs/systems/terrain_biomes.md — # Terrain & Biomes (Phase 1)
 - docs/systems/zones.md — # Zones System (authoring, bake, runtime)
-- docs/observability/telemetry.md — # Telemetry — Logs, Metrics, Traces (dev usage)
+- docs/systems/telemetry.md — # Telemetry — Logs, Metrics, Traces (dev usage)
 - docs/ops/wasm-deployment.md — # WebAssembly (WASM) Deployment — Wizard Scene
 - docs/ops/postmortems/web-wasm-blackout-postmortem.md
 ```
@@ -107,9 +107,9 @@ crates/server_core/src/destructible.rs:338:            // Ensure effective value
   - conditions: 897
 - Related delegations (recent):
 ``
-docs/delegations/20251006_115546_ensure-srd-pdf-is-fully-converted-to-markdown.md
-docs/delegations/20251006_124143_ensure-srd-pdf-is-fully-converted-to-markdown-we-already-began-it.md
-docs/delegations/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.md
+docs/old/20251006_115546_ensure-srd-pdf-is-fully-converted-to-markdown.md
+docs/old/20251006_124143_ensure-srd-pdf-is-fully-converted-to-markdown-we-already-began-it.md
+docs/old/20251006_124444_ensure-srd-pdf-is-fully-converted-to-markdown.md
 ``
 - Create `docs/srd/index.json` listing canonical SRD sections (slug, title).
 - Add `tests/docs_srd_coverage.rs` to assert every index entry has a page and no TODO/WIP remain.
