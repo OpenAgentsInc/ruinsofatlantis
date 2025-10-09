@@ -412,50 +412,7 @@ Read: docs/gdd/10-factions/framework.md
 Read: docs/gdd/11-technical/overview.md
 ## Environment: Sky & Weather
 
-**Design Intent.** A physically‑plausible, configurable sky that animates day/night, drives sun light and ambient skylight, and supports per‑zone weather variation—consistent with RoA’s “in‑world, no toggles” philosophy.
-
-**Player Experience.**
-
-* Sun and sky progress naturally through the day; dawn/dusk tint the world.
-* Overcast, haze, and fog vary by zone (swampy lowlands vs. coastal cliffs).
-* Lighting changes are readable and influence visibility and mood.
-
-**Scope (Phase 1).**
-
-* Analytic clear‑sky model (Hosek–Wilkie) evaluated per pixel.
-* Sun position from game time (day‑fraction) with optional geographic driver.
-* Directional sunlight + **SH‑L2** ambient skylight for fill.
-* Distance/height‑based fog. Optional simple tonemapper (Reinhard / ACES fit).
-* Per‑zone weather overrides: turbidity, fog density/color, ambient tint, exposure.
-* Tooling hooks in `tools/model-viewer`.
-
-**Data & Authoring.**
-
-* `data/environment/defaults.json` (global), `data/environment/zones.json` (overrides).
-* Runtime controls: pause/scrub time, rate scale.
-* Debug: show azimuth/elevation; sliders for turbidity/fog/exposure.
-
-**Runtime Behavior.**
-
-* **Renderer order:** sky → shadows → opaque → transparent/FX → UI.
-* **Lighting:** `sun_dir_ws`, `sun_illuminance`, `sh9_ambient` in `Globals` UBO.
-* **Zones:** entering a WeatherZone blends to its profile over 0.5–2.0s.
-
-**Integration Points.**
-
-* Terrain/biomes shading uses directional + SH ambient.
-* Minimap shows weather glyph; HUD clock displays zone time.
-* Sim/Events may trigger storms later (Phase 2).
-
-**Performance Targets.**
-
-* Sky pass ≤0.2 ms; SH projection ≤0.1 ms/frame amortized; single shadow map in Phase 1.
-
-**Future Work.**
-
-* Volumetric clouds and aerial perspective; precipitation; moon/stars; cascaded shadows.
-
----
+Read: docs/gdd/12-environment/sky-weather.md
 
 ## World: Terrain & Biomes
 
