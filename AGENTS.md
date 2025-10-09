@@ -62,6 +62,28 @@ IMPORTANT: Keep `src/README.md` current
 - Before gameplay/rules changes, update `GDD.md` in the same PR; explain rationale and SRD impact.
 - SRD usage: maintain exact attribution in `NOTICE`; document any terminology deviations (e.g., using “race”).
 
+### GDD Split Structure & Editing
+- Read `docs/gdd/README.md` before editing design docs. `GDD.md` is the index; detailed sections live under `docs/gdd/**`.
+- Where topics live:
+  - Philosophy/Pillars → `docs/gdd/01-philosophy.md`
+  - Game Mechanics → `docs/gdd/02-mechanics/*`
+  - SRD Usage/Scope → `docs/gdd/03-srd/*`
+  - Classes/Races/Lore → `docs/gdd/04-classes/*`
+  - Combat → `docs/gdd/05-combat/*`
+  - PvP → `docs/gdd/06-pvp.md`
+  - Combat Simulator → `docs/gdd/07-combat-simulator.md`
+  - Zones & Cosmology → `docs/gdd/08-zones-cosmology/*`
+  - Progression Matrix → `docs/gdd/09-progression/tiers.md`
+  - Faction Framework → `docs/gdd/10-factions/framework.md`
+  - Technical Overview → `docs/gdd/11-technical/overview.md`
+  - Environment/World → `docs/gdd/12-environment/*`
+  - Rules: Spell & Ability System → `docs/gdd/13-rules/spell-ability-system.md`
+- When asked to “update the GDD”, edit the specific `docs/gdd/**` file. Only adjust `GDD.md` if adding a new top‑level index entry or changing link targets.
+- Cross‑link to `docs/systems/**` and `docs/graphics/**` instead of duplicating implementation details in the GDD.
+- SRD changes: if scope/terminology/attribution is affected, update `docs/gdd/03-srd/scope-implementation.md` and ensure `NOTICE` is correct.
+- Searching: use ripgrep to find headings quickly (e.g., `rg -n "^## .*Zones" docs/gdd`).
+- New topics: add a focused file under the closest folder and include a brief intro; update `docs/gdd/README.md` (and `GDD.md` if it’s a new index item).
+
 ## Golden Rules
 - Never run interactive apps in CI or automation. Use `cargo xtask ci`.
 - Never hand‑edit `Cargo.toml`; use `cargo add/rm/upgrade`.
@@ -151,6 +173,7 @@ cargo xtask bake-zone --slug wizard_woods
 
 NOTE FOR AGENTS
 - Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`) unless the user specifically directs you to. The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
+- For orientation, read `crates/README.md` (crate purposes) and `docs/gdd/README.md` (design doc map) before making cross‑crate or design edits.
 
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
