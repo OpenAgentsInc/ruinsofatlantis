@@ -1914,6 +1914,22 @@ impl Renderer {
         self.picker_chosen_slug.take()
     }
 
+    /// Update Picker items (slug, display) provided by the platform.
+    pub fn set_picker_items(&mut self, items: Vec<(String, String)>) {
+        self.picker_items = items;
+        self.picker_selected = 0;
+    }
+
+    /// Update which item is selected in the Picker list (platform-driven).
+    pub fn set_picker_selected_index(&mut self, idx: usize) {
+        let len = self.picker_items.len();
+        if len == 0 {
+            self.picker_selected = 0;
+        } else {
+            self.picker_selected = idx.min(len - 1);
+        }
+    }
+
     /// Legacy render body (disabled).
     #[cfg(any())]
     pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {

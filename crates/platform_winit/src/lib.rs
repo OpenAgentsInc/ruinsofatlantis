@@ -316,6 +316,9 @@ impl ApplicationHandler for App {
                     (Key::Named(NamedKey::ArrowUp), _)
                     | (_, PhysicalKey::Code(KeyCode::ArrowUp)) => {
                         self.picker.select_prev();
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_picker_selected_index(self.picker.selected);
+                        }
                         let disp = self
                             .picker
                             .items
@@ -328,6 +331,9 @@ impl ApplicationHandler for App {
                     (Key::Named(NamedKey::ArrowDown), _)
                     | (_, PhysicalKey::Code(KeyCode::ArrowDown)) => {
                         self.picker.select_next();
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_picker_selected_index(self.picker.selected);
+                        }
                         let disp = self
                             .picker
                             .items
