@@ -1,3 +1,14 @@
+//! Zone snapshot types and loader.
+//!
+//! A baked Zone snapshot is emitted by the zone-bake tool under:
+//!   packs/zones/<slug>/snapshot.v1/
+//! with a small set of binary blobs (instances, clusters, colliders) and
+//! optional `meta.json` describing bounds and authoring metadata.
+//!
+//! This module provides a tolerant loader: it reads any files that exist and
+//! leaves missing sections as `None`, so the runtime can evolve without
+//! breaking older snapshots.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -18,10 +29,10 @@ pub struct ZoneSnapshot {
     pub slug: String,
     pub root: PathBuf,
     pub meta: Option<ZoneMeta>,
-    pub instances_bin: Option<Vec<u8>>,
-    pub clusters_bin: Option<Vec<u8>>,
-    pub colliders_bin: Option<Vec<u8>>,
-    pub colliders_index_bin: Option<Vec<u8>>,
+    pub instances_bin: Option<Vec<u8>>, // instanced static meshes (CPU layout TBD)
+    pub clusters_bin: Option<Vec<u8>>,  // cluster grid for culling
+    pub colliders_bin: Option<Vec<u8>>, // baked collider set
+    pub colliders_index_bin: Option<Vec<u8>>, // optional index for colliders
 }
 
 impl ZoneSnapshot {
@@ -32,12 +43,14 @@ impl ZoneSnapshot {
             root: snap.clone(),
             ..Default::default()
         };
+        // meta.json (optional)
         let meta_path = snap.join("meta.json");
         if meta_path.exists() {
             let txt = fs::read_to_string(&meta_path).context("read meta.json")?;
             let m: ZoneMeta = serde_json::from_str(&txt).context("parse meta.json")?;
             out.meta = Some(m);
         }
+        // known blobs (optional)
         out.instances_bin = read_opt(&snap.join("instances.bin"));
         out.clusters_bin = read_opt(&snap.join("clusters.bin"));
         out.colliders_bin = read_opt(&snap.join("colliders.bin"));
@@ -48,12 +61,19 @@ impl ZoneSnapshot {
 
 fn read_opt(path: &Path) -> Option<Vec<u8>> {
     if path.exists() {
-        fs::read(path).ok()
+        match fs::read(path) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                log::warn!("zones: failed to read {:?}: {}", path, e);
+                None
+            }
+        }
     } else {
         None
     }
 }
 
+/// Scan `packs/zones/*/snapshot.v1` and build a simple registry.
 #[derive(Default)]
 pub struct ZoneRegistry {
     pub root: PathBuf,

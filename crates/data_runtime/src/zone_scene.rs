@@ -1,7 +1,7 @@
 //! Minimal zone scene schema + validation helper.
 //!
-//! Placeholder for future JSON Schema; for now we forbid unknown fields and
-//! use serde-only validation.
+//! This is a placeholder for a future JSON Schema based validator. For now we
+//! rely on serde with `deny_unknown_fields` to catch unexpected fields.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,7 @@ pub struct Logic {
     pub links: Vec<serde_json::Value>,
 }
 
+/// Validate a scene JSON string by attempting to deserialize into `ZoneScene`.
 pub fn validate_scene_against_schema(txt: &str) -> Result<()> {
     let _: ZoneScene = serde_json::from_str(txt).context("parse scene json")?;
     Ok(())
