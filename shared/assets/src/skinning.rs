@@ -25,6 +25,99 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         } else if p.contains("assets/models/zombie-guy.glb") {
             let bytes: &'static [u8] = include_bytes!("../../../assets/models/zombie-guy.glb");
             gltf::import_slice(bytes).context("import skinned glTF (zombie-guy.glb slice)")?
+        } else if p.contains("assets/anims/universal/AnimationLibrary.glb") {
+            let bytes: &'static [u8] =
+                include_bytes!("../../../assets/anims/universal/AnimationLibrary.glb");
+            gltf::import_slice(bytes).context("import animations (AnimationLibrary.glb slice)")?
+        } else if p.contains("assets/models/ubc/godot/Superhero_Male.gltf") {
+            // Inline GLTF externals via JSON patch, then import from a single slice
+            use base64::Engine as _;
+            use base64::engine::general_purpose::STANDARD as B64;
+            let gltf_txt = include_str!("../../../assets/models/ubc/godot/Superhero_Male.gltf");
+            let mut doc: serde_json::Value =
+                serde_json::from_str(gltf_txt).context("parse UBC male GLTF JSON")?;
+            // Map filenames to embedded bytes
+            use std::collections::HashMap;
+            let mut imgs: HashMap<&'static str, &'static [u8]> = HashMap::new();
+            imgs.insert(
+                "T_Eye_Brown.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Eye_Brown.png"),
+            );
+            imgs.insert(
+                "T_Eye_Normal.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Eye_Normal.png"),
+            );
+            imgs.insert(
+                "T_Hair_1_BaseColor.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Hair_1_BaseColor.png"),
+            );
+            imgs.insert(
+                "T_Hair_1_BaseColor_png.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Hair_1_BaseColor_png.png"),
+            );
+            imgs.insert(
+                "T_Hair_1_Normal.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Hair_1_Normal.png"),
+            );
+            imgs.insert(
+                "T_Hair_2_BaseColor.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Hair_2_BaseColor.png"),
+            );
+            imgs.insert(
+                "T_Hair_2_BaseColor_png.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Hair_2_BaseColor_png.png"),
+            );
+            imgs.insert(
+                "T_Hair_2_Normal.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Hair_2_Normal.png"),
+            );
+            imgs.insert(
+                "T_Superhero_Male_Dark.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Superhero_Male_Dark.png"),
+            );
+            imgs.insert(
+                "T_Superhero_Male_Normal.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Superhero_Male_Normal.png"),
+            );
+            imgs.insert(
+                "T_Superhero_Male_Roughness.png",
+                include_bytes!("../../../assets/models/ubc/godot/T_Superhero_Male_Roughness.png"),
+            );
+            // Replace any JSON field named "uri" that matches known assets
+            fn patch_uris(v: &mut serde_json::Value, imgs: &HashMap<&'static str, &'static [u8]>) {
+                match v {
+                    serde_json::Value::Object(map) => {
+                        if let Some(serde_json::Value::String(u)) = map.get_mut("uri") {
+                            if let Some(bytes) = imgs.get(u.as_str()) {
+                                let data = format!("data:image/png;base64,{}", B64.encode(bytes));
+                                *u = data;
+                            } else if u.ends_with("Superhero_Male.bin") {
+                                let bytes: &'static [u8] = include_bytes!(
+                                    "../../../assets/models/ubc/godot/Superhero_Male.bin"
+                                );
+                                let data = format!(
+                                    "data:application/octet-stream;base64,{}",
+                                    B64.encode(bytes)
+                                );
+                                *u = data;
+                            }
+                        }
+                        for (_k, vv) in map.iter_mut() {
+                            patch_uris(vv, imgs);
+                        }
+                    }
+                    serde_json::Value::Array(arr) => {
+                        for vv in arr.iter_mut() {
+                            patch_uris(vv, imgs);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            patch_uris(&mut doc, &imgs);
+            let patched = serde_json::to_string(&doc).expect("serialize patched GLTF");
+            gltf::import_slice(patched.as_bytes())
+                .context("import skinned glTF (Superhero_Male inlined slice)")?
         } else {
             // Fallback: try slice import if the caller embedded bytes elsewhere.
             // As a last resort, this will fail early rather than attempting std::fs.

@@ -4,6 +4,7 @@
 //! `render_wgpu::gfx::Renderer` via winit's ApplicationHandler API.
 
 use net_core::snapshot::{SnapshotDecode, SnapshotEncode};
+mod cc_demo;
 use net_core::transport::Transport;
 use render_wgpu::gfx::Renderer;
 use wgpu::SurfaceError;
@@ -241,8 +242,12 @@ impl ApplicationHandler for App {
             // If the async init finished, move Renderer into self.
             if self.window.is_none() || self.state.is_none() {
                 RENDERER_CELL.with(|cell| {
-                    if let Some((win, state)) = cell.borrow_mut().take() {
+                    if let Some((win, mut state)) = cell.borrow_mut().take() {
                         self.window = Some(win);
+                        // Optional: trim to character-controller demo scene
+                        if cc_demo::is_enabled() {
+                            render_wgpu::gfx::cc_demo::apply_cc_demo(&mut state);
+                        }
                         self.state = Some(state);
                         // Wire loopback transport and seed demo server on wasm when enabled
                         #[cfg(feature = "demo_server")]

@@ -849,10 +849,17 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     ) = {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
-        let ubc_path = super::super::asset_path("assets/models/ubc/godot/Superhero_Male.gltf");
+        let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
+        let ubc_path = super::super::asset_path(ubc_rel);
         let cpu_pc = match load_gltf_skinned(&ubc_path) {
             Ok(c) => Some(c),
             Err(e) => {
+                #[cfg(target_arch = "wasm32")]
+                log::warn!(
+                    "PC: failed to load UBC male at {}: {e:?}. Falling back to wizard rig for PC.",
+                    ubc_rel
+                );
+                #[cfg(not(target_arch = "wasm32"))]
                 log::warn!(
                     "PC: failed to load UBC male at {:?}: {e:?}. Falling back to wizard rig for PC.",
                     ubc_path
@@ -1879,6 +1886,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _sorc_sampler,
         pc_anim_cfg,
         pc_anim_missing_warned: Default::default(),
+        cc_demo: false,
     };
 
     // Apply default input profile from config if provided

@@ -26,6 +26,7 @@ mod types;
 pub use types::Vertex;
 mod anim;
 mod camera_sys;
+pub mod cc_demo;
 mod deathknight;
 mod draw;
 mod foliage;
@@ -375,6 +376,8 @@ pub struct Renderer {
     cmd_tx: Option<net_core::channel::Tx>,
     // Pending pointer-lock request emitted by controller systems; applied by platform
     pointer_lock_request: Option<bool>,
+    // Character Controller demo mode (minimal scene)
+    cc_demo: bool,
     // Actual pointer-lock state as applied by the platform (used to choose
     // between relative mouse deltas vs. cursor movement deltas).
     pointer_locked: bool,
@@ -600,6 +603,10 @@ impl Renderer {
             ecs_core::components::ControllerMode::Cursor
         };
         self.pointer_lock_request = None;
+    }
+    #[inline]
+    pub fn is_cc_demo(&self) -> bool {
+        self.cc_demo
     }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs
