@@ -663,7 +663,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Build mapping of (slot, wizard) then apply per slot
         let mut mappings: Vec<(usize, client_core::replication::WizardView)> = Vec::new();
         // PC to pc_index
-        if let Some(pcw) = ordered.get(0).filter(|w| w.is_pc).cloned() {
+        if let Some(pcw) = ordered.first().filter(|w| w.is_pc).cloned() {
             mappings.push((r.pc_index, pcw.clone()));
         }
         // Remaining NPCs to other slots (skip pc_index)
@@ -707,6 +707,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                     .write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
             }
         }
+        // Align draw count with replication (cap to instance capacity)
+        r.wizard_count = r.repl_buf.wizards.len().min(r.wizard_models.len()) as u32;
     }
     // Update wizard skinning palettes on CPU then upload
     r.update_wizard_palettes(t);
@@ -1088,7 +1090,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             log::debug!("draw: wizards skipped (RA_DRAW_WIZARDS=0)");
         }
         // Skinned: Death Knight (boss)
-        if r.dk_count > 0 && !r.is_vox_onepath() {
+        if r.dk_count > 0 && !r.is_vox_onepath() && r.repl_buf.boss_status.is_some() {
             log::debug!("draw: deathknight x{}", r.dk_count);
             r.draw_deathknight(&mut rp);
             r.draw_calls += 1;

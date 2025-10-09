@@ -182,6 +182,7 @@ impl ReplicationBuffer {
             }
             // Populate boss status from actor list (kind=2=Boss, prefer unique==1).
             // This replaces the legacy BossStatusMsg and drives HUD + DK model updates.
+            self.boss_status = None;
             if let Some(b) = self
                 .actors
                 .iter()
