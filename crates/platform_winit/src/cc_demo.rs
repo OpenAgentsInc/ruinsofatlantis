@@ -1,4 +1,5 @@
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 pub fn is_enabled() -> bool {
     if let Some(win) = web_sys::window() {
         let q = win.location().search().ok().unwrap_or_default();
@@ -9,6 +10,7 @@ pub fn is_enabled() -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 pub fn is_enabled() -> bool {
     std::env::var("RA_CC_DEMO")
         .map(|v| v == "1")
