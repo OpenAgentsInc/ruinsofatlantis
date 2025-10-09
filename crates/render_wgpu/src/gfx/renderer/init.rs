@@ -1156,7 +1156,27 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _sorc_mat_buf,
         _sorc_tex_view,
         _sorc_sampler,
-    ) = if let Some(model_rel) = sorc_cfg.model.as_deref() {
+    ) = if !load_actor_assets {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sorc-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
+        (
+            empty_cpu,
+            dummy.clone(),
+            dummy,
+            0u32,
+            0u32,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    } else if let Some(model_rel) = sorc_cfg.model.as_deref() {
         if let Ok(sa) = super::super::sorceress::load_assets(&device, model_rel) {
             let mut cpu = sa.cpu;
             // Try to merge the universal animation library so Sorceress can use the same Walk/Idle clips as the PC.
