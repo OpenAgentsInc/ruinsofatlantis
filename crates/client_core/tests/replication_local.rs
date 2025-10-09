@@ -20,7 +20,16 @@ impl MeshUpload for DummyUploader {
 #[test]
 fn local_loop_sends_and_applies_chunk_mesh() {
     let (tx, rx) = channel::channel();
-    // Server encodes a small delta
+    // Server encodes a minimal instance then a small delta
+    let inst = net_core::snapshot::DestructibleInstance {
+        did: 7,
+        world_min: [-1.0, 0.0, -1.0],
+        world_max: [1.0, 2.0, 1.0],
+    };
+    let mut inst_buf = Vec::new();
+    inst.encode(&mut inst_buf);
+    assert!(tx.try_send(inst_buf));
+    // Delta for the same DID
     let delta = ChunkMeshDelta {
         did: 7,
         chunk: (1, 2, 3),

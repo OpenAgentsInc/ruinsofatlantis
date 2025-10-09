@@ -171,6 +171,9 @@ World (ECS)
   * `removals: Vec<u32>` — actor ids
   * `projectiles: Vec<ProjectileRep>` — ephemeral list every tick
   * `hits: Vec<HitFx>` — VFX only (no gameplay)
+* Important: the server excludes entities with a `Projectile` component from the `actors` list.
+  Projectiles are carried only in the dedicated `projectiles` vector to prevent clients from
+  creating NPC views from projectile replicas.
 * **Quantization:** positions and yaw quantized; deltas carry only changed bits.
 * **Interest management:** per‑client center/radius; only include nearby actors.
 
