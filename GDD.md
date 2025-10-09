@@ -344,19 +344,7 @@ Read:
 
 ## Progression Matrix (Zones × Classes, Land Drama)
 
-We keep standard D&D tiers (1–4 local heroes, 5–10 regional champions, 11–16 planar adventurers, 17–20 legendary figures) and map them to an oceanic + planar world with strong land‑based politics and a gold‑rush economy.
-
-### Tier I: Levels 1–4 — Survivors & Local Heroes
-
-Zones: fishing towns, coastal villages, frontier islands, shallow ruins newly revealed by tides.
-
-- Land drama: petty kings, corrupt governors, and guilds try to monopolize ruins; mercenaries and smugglers race to sell finds.
-- Class hooks:
-  - Fighters/Rogues: hired blades for guilds or rebels.
-  - Clerics/Paladins: protect shrines defiled by relic‑hunters.
-  - Bards: spread songs of newfound wealth, warn of curses.
-  - Wizards: first to study recovered Atlantean glyphs; Warlocks/Sorcerers feel planar pull.
-- Quest themes: town defense from pirates, ruin‑scavenging, local court intrigue, protecting relic‑hunters from jealous nobles.
+Read: docs/gdd/09-progression/tiers.md
 
 Player journey: establish survival and identity within the drowned world.
 
