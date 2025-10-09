@@ -78,7 +78,6 @@ CLI/Env toggles
 
 - tools/ (workspace crates)
   - model-viewer — Standalone wgpu viewer for GLTF/GLB.
-  - bevy-probe — Bevy‑based material/texture probe for wizard asset.
   - gltf-decompress — One‑time CLI to decompress Draco GLTFs (offline step).
   - image-probe — Simple image IO experiments.
 

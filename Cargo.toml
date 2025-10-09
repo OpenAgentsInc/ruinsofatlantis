@@ -13,7 +13,6 @@ members = [
     "tools/zone-bake",
     "tools/gltf-decompress",
     "tools/image-probe",
-    "tools/bevy-probe",
     "tools/sim-harness",
     "crates/data_runtime", # data schemas + loaders
     "crates/render_wgpu",    # renderer crate
