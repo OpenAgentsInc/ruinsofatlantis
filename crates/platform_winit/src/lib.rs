@@ -14,6 +14,7 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
+#[allow(dead_code)]
 enum BootMode {
     Picker,
     Running { slug: String },
@@ -22,17 +23,21 @@ enum BootMode {
 #[derive(Default, Clone)]
 struct ZoneEntry {
     slug: String,
+    #[allow(dead_code)]
     display: String,
 }
 
 #[derive(Default)]
 struct ZonePickerModel {
+    #[allow(dead_code)]
     filter: String,
     items: Vec<ZoneEntry>,
     selected: usize,
+    #[allow(dead_code)]
     load_error: Option<String>,
 }
 
+#[allow(dead_code)]
 impl ZonePickerModel {
     fn refresh(&mut self) {
         let root = packs_zones_root();
@@ -70,6 +75,7 @@ impl ZonePickerModel {
     }
 }
 
+#[allow(dead_code)]
 fn packs_zones_root() -> std::path::PathBuf {
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let ws = here.join("../../packs/zones");
@@ -104,7 +110,9 @@ struct App {
     cmds_this_sec: u32,
     // Track which destructible instances have been sent to the client
     sent_destr_instances: std::collections::HashSet<u64>,
+    #[allow(dead_code)]
     boot: BootMode,
+    #[allow(dead_code)]
     picker: ZonePickerModel,
 }
 
