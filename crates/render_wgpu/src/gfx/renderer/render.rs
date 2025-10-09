@@ -1670,13 +1670,7 @@ pub fn render_impl(
     }
 
     // Zone Picker overlay: drawn by platform via Renderer::draw_picker_overlay()
-    // Submit
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-        log::error!("wgpu validation error (skipping frame): {:?}", e);
-        return Ok(());
-    }
-
+    // Submit (defer error-scope pop until AFTER submit to catch pass/encoder errors)
     log::debug!("submit: normal path");
     // legacy BossStatus emission removed; HUD is replication-driven
     // HUD
@@ -1871,5 +1865,12 @@ pub fn render_impl(
     r.hud.draw(&mut encoder, &view);
     r.queue.submit(Some(encoder.finish()));
     frame.present();
+    // Pop the validation scope after submit; this captures any errors raised
+    // during encoder.finish() or queue.submit().
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+        log::error!("wgpu validation error (after submit): {:?}", e);
+        return Ok(());
+    }
     Ok(())
 }
