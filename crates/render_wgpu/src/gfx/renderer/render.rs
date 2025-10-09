@@ -1027,7 +1027,9 @@ pub fn render_impl(
             }
         }
         // Trees
-        if r.trees_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
+        // Show vegetation when not in Picker. Previously this was suppressed when
+        // zone_batches existed; until zone-baked draws land, allow draws here too.
+        if r.trees_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() {
             log::debug!("draw: trees x{}", r.trees_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1052,7 +1054,7 @@ pub fn render_impl(
             }
         }
         // Rocks
-        if r.rocks_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
+        if r.rocks_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() {
             log::debug!("draw: rocks x{}", r.rocks_count);
             if trace {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1093,7 +1095,7 @@ pub fn render_impl(
             r.draw_calls += 1;
         }
         // Ruins
-        if r.ruins_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
+        if r.ruins_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() {
             log::debug!("draw: ruins x{}", r.ruins_count);
             if trace {
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
