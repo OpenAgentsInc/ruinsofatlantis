@@ -30,6 +30,8 @@ impl Renderer {
     }
     pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
         let use_debug = std::env::var("RA_PC_DEBUG").as_deref() == Ok("1");
+        let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+        rpass.insert_debug_marker("pc:begin");
         if use_debug {
             if let Some(p) = &self.wizard_pipeline_debug {
                 rpass.set_pipeline(p);
@@ -39,8 +41,24 @@ impl Renderer {
         } else {
             rpass.set_pipeline(&self.wizard_pipeline);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if trace {
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("pc:set_pipeline validation: {:?}", e);
+                return;
+            }
+        }
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        #[cfg(not(target_arch = "wasm32"))]
+        if trace {
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("pc:set_bind_group(0/1) validation: {:?}", e);
+                return;
+            }
+        }
         // Prefer PC (UBC) resources when available
         if let (Some(pc_pal_bg), Some(pc_mat_bg), Some(pc_vb), Some(pc_ib), Some(pc_inst)) = (
             self.pc_palettes_bg.as_ref(),
@@ -53,8 +71,23 @@ impl Renderer {
             rpass.set_bind_group(3, pc_mat_bg, &[]);
             rpass.set_vertex_buffer(0, pc_vb.slice(..));
             rpass.set_vertex_buffer(1, pc_inst.slice(..));
-            // UBC male uses 32-bit indices; draw with Uint32 to ensure visibility
+            #[cfg(not(target_arch = "wasm32"))]
+            if trace {
+                self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("pc:set_vertex_buffers validation: {:?}", e);
+                    return;
+                }
+            }
             rpass.set_index_buffer(pc_ib.slice(..), self.pc_index_format);
+            #[cfg(not(target_arch = "wasm32"))]
+            if trace {
+                self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("pc:set_index_buffer validation: {:?}", e);
+                    return;
+                }
+            }
             rpass.draw_indexed(0..self.pc_index_count, 0, 0..1);
             // Debug HUD line to prove the pass ran (will be queued by caller)
         } else {
