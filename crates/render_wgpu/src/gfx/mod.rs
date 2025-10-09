@@ -610,6 +610,11 @@ impl Renderer {
     pub fn has_zone_batches(&self) -> bool {
         self.zone_batches.is_some()
     }
+    /// Returns true if a dummy picker batch is set (used to suppress legacy draws during Picker).
+    #[inline]
+    pub fn is_picker_batches(&self) -> bool {
+        matches!(self.zone_batches.as_ref(), Some(z) if z.slug == "<picker>")
+    }
     /// Attach or clear zone batches uploaded by the client.
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
         self.zone_batches = z;
