@@ -296,8 +296,10 @@ impl ApplicationHandler for App {
                     if srv.pc_actor.is_none() {
                         let _ = srv.spawn_pc_at(pc0);
                     }
-                    // Only spawn encounter actors when running a zone
-                    if let BootMode::Running { .. } = self.boot {
+                    // Only spawn encounter NPCs when running a non‑demo zone
+                    if let BootMode::Running { slug } = &self.boot
+                        && slug.as_str() != "cc_demo"
+                    {
                         srv.ring_spawn(8, 15.0, 20);
                         srv.ring_spawn(12, 30.0, 25);
                         srv.ring_spawn(15, 45.0, 30);
@@ -400,6 +402,27 @@ impl ApplicationHandler for App {
                                 state.set_zone_batches(Some(gz));
                                 self.boot = BootMode::Running { slug: slug.clone() };
                                 window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                // Spawn encounter actors on transition (native demo server only)
+                                // For cc_demo, spawn only PC — no NPCs/bosses.
+                                #[cfg(feature = "demo_server")]
+                                if let Some(srv) = self.demo_server.as_mut()
+                                    && slug.as_str() != "cc_demo"
+                                {
+                                    srv.ring_spawn(8, 15.0, 20);
+                                    srv.ring_spawn(12, 30.0, 25);
+                                    srv.ring_spawn(15, 45.0, 30);
+                                    let wiz_count = 4usize;
+                                    let wiz_r = 8.0f32;
+                                    for i in 0..wiz_count {
+                                        let a =
+                                            (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
+                                        let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                                        let _ = srv.spawn_wizard_npc(p);
+                                    }
+                                    let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                                    let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
+                                    server_core::scene_build::add_demo_ruins_destructible(srv);
+                                }
                             } else {
                                 log::error!(
                                     "zone picker: failed to load zone '{}': snapshot missing or invalid",

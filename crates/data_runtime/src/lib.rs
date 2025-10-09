@@ -5,6 +5,7 @@
 
 pub mod ability;
 pub mod class;
+pub mod encounter;
 pub mod ids;
 pub mod loader;
 pub mod monster;
