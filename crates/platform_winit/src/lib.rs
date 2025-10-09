@@ -400,28 +400,35 @@ impl ApplicationHandler for App {
                                 let gz =
                                     render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
                                 state.set_zone_batches(Some(gz));
+                                // Ensure PC assets exist once a zone is chosen so the
+                                // character is visible immediately (cc_demo).
+                                state.ensure_pc_assets();
                                 self.boot = BootMode::Running { slug: slug.clone() };
                                 window.set_title(&format!("RuinsofAtlantis — {}", slug));
                                 // Spawn encounter actors on transition (native demo server only)
                                 // For cc_demo, spawn only PC — no NPCs/bosses.
                                 #[cfg(feature = "demo_server")]
-                                if let Some(srv) = self.demo_server.as_mut()
-                                    && slug.as_str() != "cc_demo"
-                                {
-                                    srv.ring_spawn(8, 15.0, 20);
-                                    srv.ring_spawn(12, 30.0, 25);
-                                    srv.ring_spawn(15, 45.0, 30);
-                                    let wiz_count = 4usize;
-                                    let wiz_r = 8.0f32;
-                                    for i in 0..wiz_count {
-                                        let a =
-                                            (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
-                                        let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
-                                        let _ = srv.spawn_wizard_npc(p);
+                                if let Some(srv) = self.demo_server.as_mut() {
+                                    // Always ensure a PC exists
+                                    let _ = srv.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
+                                    if slug.as_str() != "cc_demo" {
+                                        srv.ring_spawn(8, 15.0, 20);
+                                        srv.ring_spawn(12, 30.0, 25);
+                                        srv.ring_spawn(15, 45.0, 30);
+                                        let wiz_count = 4usize;
+                                        let wiz_r = 8.0f32;
+                                        for i in 0..wiz_count {
+                                            let a = (i as f32) / (wiz_count as f32)
+                                                * std::f32::consts::TAU;
+                                            let p =
+                                                glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                                            let _ = srv.spawn_wizard_npc(p);
+                                        }
+                                        let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                                        let _dk =
+                                            srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
+                                        server_core::scene_build::add_demo_ruins_destructible(srv);
                                     }
-                                    let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                                    let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                                    server_core::scene_build::add_demo_ruins_destructible(srv);
                                 }
                             } else {
                                 log::error!(

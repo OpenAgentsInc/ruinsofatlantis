@@ -648,8 +648,10 @@ pub fn render_impl(
     r.queue
         .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
 
-    // Handle queued PC cast and update animation state
-    r.process_pc_cast(t);
+    // Handle queued PC cast and update animation state (skip in Picker)
+    if !r.is_picker_batches() {
+        r.process_pc_cast(t);
+    }
     // Sync wizard transforms from replicated positions so overlays/bars and projectile origins
     // align with visuals. Map PC to `pc_index`, then map NPC wizards to remaining instances
     // in order of appearance. Preserve current yaw when available, otherwise use replicated yaw.
@@ -776,8 +778,10 @@ pub fn render_impl(
         // Align draw count with replication (cap to capacity)
         r.wizard_count = r.repl_buf.wizards.len().min(r.wizard_models.len()) as u32;
     }
-    // Update wizard skinning palettes on CPU then upload
-    r.update_wizard_palettes(t);
+    // Update wizard skinning palettes on CPU then upload (skip in Picker)
+    if !r.is_picker_batches() {
+        r.update_wizard_palettes(t);
+    }
     // Default build: rotate NPC wizards to face targets (player or nearest replicated NPC)
     {
         let yaw_rate = 2.5 * dt;
@@ -840,8 +844,10 @@ pub fn render_impl(
             }
         }
     }
-    // Update PC (UBC) palette if separate rig is active
-    r.update_pc_palette(t);
+    // Update PC (UBC) palette if separate rig is active (skip in Picker)
+    if !r.is_picker_batches() {
+        r.update_pc_palette(t);
+    }
     // Zombie AI/movement on server; then update local transforms and palettes
     {
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(r.wizard_count as usize);

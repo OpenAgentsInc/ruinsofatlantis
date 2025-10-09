@@ -1696,6 +1696,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ssr_depth_bgl: ssr_depth_bgl.clone(),
         ssr_scene_bgl: ssr_scene_bgl.clone(),
         palettes_bgl: palettes_bgl.clone(),
+        material_bgl: material_bgl.clone(),
         globals_bg,
         post_ao_bg,
         ssgi_globals_bg,

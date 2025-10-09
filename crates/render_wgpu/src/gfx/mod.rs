@@ -130,6 +130,7 @@ pub struct Renderer {
     ssgi_scene_bgl: wgpu::BindGroupLayout,
     ssr_depth_bgl: wgpu::BindGroupLayout,
     ssr_scene_bgl: wgpu::BindGroupLayout,
+    material_bgl: wgpu::BindGroupLayout,
     palettes_bgl: wgpu::BindGroupLayout,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
@@ -1932,6 +1933,116 @@ impl Renderer {
             self.hud
                 .append_perf_text_line(self.size.width, self.size.height, &txt, row as u32);
         }
+    }
+
+    /// Ensure the separate PC (UBC) rig is available after a zone is selected.
+    /// Safe to call multiple times; no-ops if already created or if GLTF fails.
+    pub fn ensure_pc_assets(&mut self) {
+        if self.pc_vb.is_some() {
+            return;
+        }
+        use crate::gfx::types::{InstanceSkin, VertexSkinned};
+        use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+        let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
+        let ubc_path = asset_path(ubc_rel);
+        let mut cpu_pc = match load_gltf_skinned(&ubc_path) {
+            Ok(c) => c,
+            Err(e) => {
+                log::debug!("ensure_pc_assets: failed to load {:?}: {:?}", ubc_path, e);
+                return;
+            }
+        };
+        // Merge universal animation library if available
+        let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
+        if lib_path.exists()
+            && let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path)
+        {
+            log::debug!("ensure_pc_assets: merge anim lib failed: {:?}", e);
+        }
+        if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
+            return;
+        }
+        // Build VB/IB
+        let verts: Vec<VertexSkinned> = cpu_pc
+            .vertices
+            .iter()
+            .map(|v| VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                uv: v.uv,
+                joints: v.joints,
+                weights: v.weights,
+            })
+            .collect();
+        let vb = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-vb"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        let ib = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-ib"),
+                contents: bytemuck::cast_slice(&cpu_pc.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        let index_count = cpu_pc.indices.len() as u32;
+        let joints = cpu_pc.joints_nodes.len() as u32;
+        // Material bind group using the same layout the pipelines expect
+        let pc_mat = material::create_wizard_material(
+            &self.device,
+            &self.queue,
+            &self.material_bgl,
+            &cpu_pc,
+        );
+        // Instance at current PC position
+        let pc_model = self
+            .wizard_models
+            .get(self.pc_index)
+            .copied()
+            .unwrap_or(glam::Mat4::IDENTITY);
+        let m = glam::Mat4::from_cols_array(&pc_model.to_cols_array());
+        let inst_cpu = InstanceSkin {
+            model: m.to_cols_array_2d(),
+            color: [1.0, 1.0, 1.0],
+            selected: 1.0,
+            palette_base: 0,
+            _pad_inst: [0; 3],
+        };
+        let inst_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-instance"),
+                contents: bytemuck::bytes_of(&inst_cpu),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        // Palette buffer (single instance)
+        let pc_pal_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pc-ubc-palettes"),
+            size: ((joints.max(1) as usize) * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let pc_pal_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("pc-ubc-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: pc_pal_buf.as_entire_binding(),
+            }],
+        });
+        // Install
+        self.pc_vb = Some(vb);
+        self.pc_ib = Some(ib);
+        self.pc_index_count = index_count;
+        self.pc_joints = joints;
+        self.pc_mat_bg = Some(pc_mat.bind_group);
+        self.pc_cpu = Some(cpu_pc);
+        self.pc_instances = Some(inst_buf);
+        self.pc_palettes_buf = Some(pc_pal_buf);
+        self.pc_palettes_bg = Some(pc_pal_bg);
     }
 
     /// Take a selected slug from the Picker UI (if any was chosen this frame).

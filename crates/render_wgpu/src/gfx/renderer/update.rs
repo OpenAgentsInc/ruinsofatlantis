@@ -1528,6 +1528,11 @@ impl Renderer {
     }
 
     pub(crate) fn process_pc_cast(&mut self, t: f32) {
+        // If no animation clips are available (e.g., demo Picker or stripped build),
+        // skip casting timeline to avoid clip selection panics.
+        if self.skinned_cpu.animations.is_empty() {
+            return;
+        }
         if !self.pc_alive || self.pc_index >= self.wizard_count as usize {
             return;
         }
