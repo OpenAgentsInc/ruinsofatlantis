@@ -80,11 +80,13 @@ impl ZonePickerModel {
                 }
             }
         }
-        if next.is_empty() {
+        if next.iter().all(|e| e.slug != "wizard_woods") {
             next.push(ZoneEntry {
                 slug: "wizard_woods".into(),
                 display: "Wizard Woods".into(),
             });
+        }
+        if next.iter().all(|e| e.slug != "cc_demo") {
             next.push(ZoneEntry {
                 slug: "cc_demo".into(),
                 display: "Character Controller Demo".into(),
