@@ -1146,9 +1146,10 @@ pub fn render_impl(
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
             }
-        } else if std::env::var("RA_DRAW_WIZARDS")
-            .map(|v| v != "0")
-            .unwrap_or(true)
+        } else if !r.has_zone_batches()
+            && std::env::var("RA_DRAW_WIZARDS")
+                .map(|v| v != "0")
+                .unwrap_or(true)
         {
             log::debug!("draw: wizards x{}", r.wizard_count);
             r.draw_wizards(&mut rp);
@@ -1717,7 +1718,7 @@ pub fn render_impl(
             "You died.",
             "Press R to respawn",
         );
-    } else if !overlays_disabled {
+    } else if !overlays_disabled && !r.is_picker_batches() {
         let cast_label = if !r.is_vox_onepath() && cast_frac > 0.0 {
             match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                 super::super::PcCast::FireBolt => Some("Fire Bolt"),
