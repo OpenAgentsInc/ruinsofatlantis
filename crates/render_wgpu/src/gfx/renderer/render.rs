@@ -1169,8 +1169,15 @@ pub fn render_impl(
                 && r.pc_palettes_bg.is_some()
                 && r.pc_index_count > 0;
             if pc_ready {
+                let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+                if trace {
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after PC draw: {:?}", e);
+                }
                 // HUD marker to prove the draw path is running
                 r.hud
                     .append_perf_text_line(r.size.width, r.size.height, "PC DRAW", 0);
