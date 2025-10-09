@@ -660,16 +660,33 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 ordered.push(w);
             }
         }
-        // Apply positions (and yaw if needed)
-        let mut apply_slot = |slot: usize, w: &client_core::replication::WizardView| {
+        // Build mapping of (slot, wizard) then apply per slot
+        let mut mappings: Vec<(usize, client_core::replication::WizardView)> = Vec::new();
+        // PC to pc_index
+        if let Some(pcw) = ordered.get(0).filter(|w| w.is_pc).cloned() {
+            mappings.push((r.pc_index, pcw.clone()));
+        }
+        // Remaining NPCs to other slots (skip pc_index)
+        let mut slot = 0usize;
+        for w in ordered.into_iter().filter(|w| !w.is_pc) {
+            while slot == r.pc_index {
+                slot += 1;
+            }
             if slot >= r.wizard_models.len() {
-                return;
+                break;
+            }
+            mappings.push((slot, w.clone()));
+            slot += 1;
+        }
+        // Apply
+        for (slot, w) in mappings {
+            if slot >= r.wizard_models.len() {
+                continue;
             }
             let cur = r.wizard_models[slot];
             let (_s, rot, _t) = cur.to_scale_rotation_translation();
             let pos = w.pos;
             let yaw = if w.yaw.is_finite() { w.yaw } else { 0.0 };
-            // If rotation is identity and we have replicated yaw, build from yaw
             let use_yaw = yaw != 0.0 || rot.length_squared() < 0.9;
             let new_m = if use_yaw {
                 glam::Mat4::from_scale_rotation_translation(
@@ -689,22 +706,6 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 r.queue
                     .write_buffer(&r.wizard_instances, offset, bytemuck::bytes_of(&inst));
             }
-        };
-        // PC to pc_index
-        if let Some(pcw) = ordered.get(0).filter(|w| w.is_pc).copied() {
-            apply_slot(r.pc_index, pcw);
-        }
-        // Remaining NPCs to other slots (skip pc_index)
-        let mut slot = 0usize;
-        for w in ordered.into_iter().filter(|w| !w.is_pc) {
-            if slot == r.pc_index {
-                slot += 1;
-            }
-            if slot >= r.wizard_models.len() {
-                break;
-            }
-            apply_slot(slot, w);
-            slot += 1;
         }
     }
     // Update wizard skinning palettes on CPU then upload
