@@ -11,6 +11,7 @@ use crate::gfx::{camera_sys, terrain, types::Model};
 // legacy client AI paths removed; renderer is replication-driven only
 
 /// Full render implementation (moved from gfx/mod.rs).
+#[allow(unused_variables)]
 pub fn render_impl(
     r: &mut crate::gfx::Renderer,
     window: Option<&winit::window::Window>,
