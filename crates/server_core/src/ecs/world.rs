@@ -75,6 +75,11 @@ impl WorldEcs {
         self.ents.len()
     }
 
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.ents.is_empty()
+    }
+
     pub fn spawn(
         &mut self,
         kind: ActorKind,

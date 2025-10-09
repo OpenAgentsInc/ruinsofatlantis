@@ -17,7 +17,7 @@ fn carve_bus_cap_is_enforced() {
             center_m: glam::dvec3((i % 8) as f64 + 0.5, 1.0, (i / 8 % 8) as f64 + 0.5),
             radius_m: 0.6,
             seed: 0,
-            impact_id: i as u64,
+            impact_id: i as u32,
         });
     }
 

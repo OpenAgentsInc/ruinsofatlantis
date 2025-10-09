@@ -6,13 +6,13 @@
 //! - Carve impact sphere + spawn debris with seeded RNG
 
 use ecs_core::components as ec;
-mod actor;
-mod combat;
+pub mod actor;
+pub mod combat;
 pub use actor::*;
 pub use combat::*;
 use glam::Vec3;
 pub mod destructible;
-mod ecs;
+pub mod ecs;
 pub mod jobs;
 pub mod scene_build;
 pub mod systems;
@@ -502,7 +502,8 @@ impl ServerState {
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
     /// when the DB cannot be loaded.
-    fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
+    /// Expose resolved projectile spec (server-authoritative). Public for tests and tools.
+    pub fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
         let db = Some(&self.specs_proj);
         match kind {
             ProjKind::Firebolt => {
