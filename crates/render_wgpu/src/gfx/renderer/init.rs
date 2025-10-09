@@ -994,6 +994,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let _dk_tex_view = dk_mat.texture_view;
     let _dk_sampler = dk_mat.sampler;
 
+    // (reserved) Env gates for heavy actor-instance buffers can be added here if needed.
+
     // NPCs and server
     let npcs = npcs::build(&device, terrain_extent);
     let npc_vb = npcs.vb;
