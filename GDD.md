@@ -464,59 +464,7 @@ Read: docs/gdd/12-environment/sky-weather.md
 
 ## World: Zones (Persistence & Streaming)
 
-**Design Intent.** A **Zone** is the atomic world unit: named, persistent, streamable, and authoritative on the server. Content is generated/authored once, **baked to a snapshot**, then served with runtime **delta logs** for persistent changes (destroyed doors, captured flags, placed campfires).
-
-**Player Experience.**
-
-* Zones feel alive and consistent: changes persist across sessions.
-* Travel uses in‑world **connectors** (gates, docks, caves); brief hand‑off between zones.
-
-**Core Concepts.**
-
-* **Manifest** (authoring input): IDs, plane, size, seeds, environment defaults, spawn tables, connectors.
-* **Snapshot** (cooked, immutable): terrain chunks, instances, masks, meta (content hash).
-* **Delta Log** (append‑only): runtime changes applied over the snapshot; compacted into checkpoints.
-* **Zone Graph**: directed connectors between zones with requirements/costs.
-* **AOI Grid**: interest management for streaming chunks/entities to clients.
-
-**Server Responsibilities.**
-
-* Load snapshot + checkpoint + trailing deltas → **ZoneRuntime**.
-* Manage AOI subscriptions, NPC spawners, timers; persist deltas and periodic checkpoints.
-* Validate travel requests; hand off players to target zones/connectors.
-
-**Client Responsibilities.**
-
-* Subscribe to AOI cells around the camera; request and cache chunk blobs.
-* Build/destroy GPU buffers as chunks enter/exit AOI; render terrain/instances.
-* Trigger travel when entering connector volumes; show minimal loading.
-
-**Data & Authoring.**
-
-* `data/zones/<zone>/manifest.json`, `graph.json`.
-* Bake tool `zone_bake` emits `snapshot.v1/*` (terrain/instances/masks/meta).
-* `zone_check` validates IDs/graph, budgets, and content hashes.
-
-**Integration Points.**
-
-* Terrain & Biomes: snapshot payloads; height sampling.
-* Sky & Weather: environment defaults merge with zone weather.
-* Sim/Rules: deltas carry structure/state changes; events inform HUD toasts.
-* PvP/Law (later): ward volumes + policies enforce consequences (no invuln toggles).
-
-**Determinism & Security.**
-
-* Per‑zone seeded RNG streams; content‑addressed snapshots; client only consumes server‑approved blobs.
-
-**Performance Targets.**
-
-* AOI churn ≤2 ms/tick server‑side at target concurrency; steady‑state snapshot streaming ≤1 MB/s per client at default radius.
-
-**Future Work.**
-
-* Seamless cross‑zone streaming; city law/ward logic; instanced expeditions/raids; sharding.
-
----
+Read: docs/gdd/12-environment/zones-persistence-streaming.md
 
 ## Rules: Spell & Ability System
 
