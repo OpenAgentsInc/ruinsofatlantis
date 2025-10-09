@@ -664,11 +664,11 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             .filter(|id| !current_ids.contains(id))
             .collect();
         for id in to_remove.drain(..) {
-            if let Some(slot) = r.wizard_slot_map.remove(&id) {
-                if slot < r.wizard_slot_id.len() {
-                    r.wizard_slot_id[slot] = None;
-                    r.wizard_free_slots.push(slot);
-                }
+            if let Some(slot) = r.wizard_slot_map.remove(&id)
+                && slot < r.wizard_slot_id.len()
+            {
+                r.wizard_slot_id[slot] = None;
+                r.wizard_free_slots.push(slot);
             }
         }
         // 3) Ensure PC id is pinned to pc_index; if occupied, move that id to a free slot

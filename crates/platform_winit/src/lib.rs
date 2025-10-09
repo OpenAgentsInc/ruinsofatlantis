@@ -371,12 +371,17 @@ impl ApplicationHandler for App {
                 let tick64 = self.tick as u64;
                 // Always build v3 deltas with interest limiting and send after stepping
                 let asnap = srv.tick_snapshot_actors(tick64);
-                // Interest center: PC
-                let center = s
-                    .wizard_positions()
-                    .first()
-                    .copied()
-                    .unwrap_or(glam::vec3(0.0, 0.0, 0.0));
+                // Interest center: authoritative PC position from server when available
+                let center = if let Some(pc_id) = srv.pc_actor
+                    && let Some(pc) = srv.ecs.get(pc_id)
+                {
+                    pc.tr.pos
+                } else {
+                    s.wizard_positions()
+                        .first()
+                        .copied()
+                        .unwrap_or(glam::vec3(0.0, 0.0, 0.0))
+                };
                 let r2 = self.interest_radius_m * self.interest_radius_m;
                 let mut cur: std::collections::HashMap<u32, net_core::snapshot::ActorRep> =
                     std::collections::HashMap::new();
@@ -438,20 +443,24 @@ impl ApplicationHandler for App {
                         removals.push(*id);
                     }
                 }
-                // projectiles (full from ECS)
+                // Projectiles: interest-limited to same center/radius
                 let mut projectiles = Vec::new();
                 for c in srv.ecs.iter() {
                     if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
-                        projectiles.push(net_core::snapshot::ProjectileRep {
-                            id: c.id.0,
-                            kind: match proj.kind {
-                                server_core::ProjKind::Firebolt => 0,
-                                server_core::ProjKind::Fireball => 1,
-                                server_core::ProjKind::MagicMissile => 2,
-                            },
-                            pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
-                            vel: [vel.v.x, vel.v.y, vel.v.z],
-                        });
+                        let dx = c.tr.pos.x - center.x;
+                        let dz = c.tr.pos.z - center.z;
+                        if dx * dx + dz * dz <= r2 {
+                            projectiles.push(net_core::snapshot::ProjectileRep {
+                                id: c.id.0,
+                                kind: match proj.kind {
+                                    server_core::ProjKind::Firebolt => 0,
+                                    server_core::ProjKind::Fireball => 1,
+                                    server_core::ProjKind::MagicMissile => 2,
+                                },
+                                pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
+                                vel: [vel.v.x, vel.v.y, vel.v.z],
+                            });
+                        }
                     }
                 }
                 let delta = net_core::snapshot::ActorSnapshotDelta {

@@ -1703,7 +1703,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_palettes_buf,
         pc_palettes_bg,
         joints_per_wizard: scene_build.joints_per_wizard,
-        wizard_models,
+        wizard_models: wizard_models.clone(),
         wizard_slot_map: std::collections::HashMap::new(),
         wizard_slot_id: vec![None; wizard_models.len()],
         wizard_free_slots: (0..wizard_models.len()).collect(),

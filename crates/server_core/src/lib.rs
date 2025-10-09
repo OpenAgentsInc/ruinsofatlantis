@@ -1365,7 +1365,7 @@ pub fn push_out_of_actors(srv: &ServerState, mut pos: Vec3, radius: f32) -> Vec3
             let dx = pos.x - a.tr.pos.x;
             let dz = pos.z - a.tr.pos.z;
             let d2 = dx * dx + dz * dz;
-            let need = (radius + a.tr.radius + pad);
+            let need = radius + a.tr.radius + pad;
             if d2 < need * need {
                 let d = d2.sqrt().max(1e-3);
                 let dir = glam::vec3(dx / d, 0.0, dz / d);
