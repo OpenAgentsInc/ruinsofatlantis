@@ -3,7 +3,7 @@
 //! Creates a bind group for the wizard’s base color texture and a small
 //! material transform uniform (supports KHR_texture_transform if present).
 
-use ra_assets::types::SkinnedMeshCPU;
+use roa_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
 
 pub struct WizardMaterial {

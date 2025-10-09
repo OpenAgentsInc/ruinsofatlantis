@@ -1,4 +1,4 @@
-//! ra-assets: Shared asset-loading library crate.
+//! roa-assets: Shared asset-loading library crate.
 //!
 //! This crate owns the CPU-side asset ingest (GLTF/GLB v1) and exposes
 //! simple types suitable for GPU upload. It is renderer-agnostic.

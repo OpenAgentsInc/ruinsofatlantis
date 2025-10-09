@@ -5,7 +5,7 @@ Inventory
 - Workspace members grep saved: docs/audits/20251004/evidence/workspace-members.txt.
 
 Desired layering (checked)
-- shared/* utilities (e.g., `ra-assets`) must not depend on game ECS — OK.
+- shared/* utilities (e.g., `roa-assets`) must not depend on game ECS — OK.
 - `data_runtime` ECS‑agnostic — OK; no `use ecs_core` found (evidence/layering-ecs-use.txt).
 - `server_core` owns authority; `client_core` owns input/prediction/UI; `render_wgpu` draws only — Needs work.
 - `net_core` provides encode/decode/channel — Present and used by client/server.

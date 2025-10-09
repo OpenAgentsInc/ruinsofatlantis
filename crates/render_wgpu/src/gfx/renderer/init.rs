@@ -8,8 +8,8 @@ use anyhow::Context;
 #[cfg(not(target_arch = "wasm32"))]
 use data_runtime::zone::load_zone_manifest;
 use data_runtime::{loader as data_loader, zone::ZoneManifest};
-use ra_assets::skinning::load_gltf_skinned;
 use rand::Rng as _;
+use roa_assets::skinning::load_gltf_skinned;
 // Monotonic clock: std::time::Instant isn't available on wasm32-unknown-unknown.
 #[cfg(feature = "vox_onepath_demo")]
 use glam::{DVec3, UVec3};
@@ -848,7 +848,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_palettes_bg,
     ) = {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
-        use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+        use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
         let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
         let ubc_path = super::super::asset_path(ubc_rel);
         let cpu_pc = match load_gltf_skinned(&ubc_path) {
@@ -1016,7 +1016,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (trees_vb, trees_ib, trees_index_count) =
         (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
 
-    // Rocks: enable full mesh + instances on Web too (we embed rock.glb bytes in ra_assets).
+    // Rocks: enable full mesh + instances on Web too (we embed rock.glb bytes in roa_assets).
     let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
         .context("build rocks (instances + mesh) for zone")?;
     let rocks_instances = rocks_gpu.instances;
@@ -1100,7 +1100,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             let mut cpu = sa.cpu;
             // Try to merge the universal animation library so Sorceress can use the same Walk/Idle clips as the PC.
             {
-                use ra_assets::skinning::merge_gltf_animations;
+                use roa_assets::skinning::merge_gltf_animations;
                 let lib_path =
                     super::super::asset_path("assets/anims/universal/AnimationLibrary.glb");
                 if lib_path.exists() {
@@ -1335,7 +1335,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     #[cfg(feature = "vox_onepath_demo")]
     let voxel_grid = if let Some(ref model_path) = dcfg.voxel_model {
         // Load triangles and voxelize a surface shell, then flood-fill
-        match ra_assets::gltf::load_gltf_mesh(std::path::Path::new(model_path)) {
+        match roa_assets::gltf::load_gltf_mesh(std::path::Path::new(model_path)) {
             Ok(cpu) => {
                 let mut min = glam::Vec3::splat(f32::INFINITY);
                 let mut max = glam::Vec3::splat(f32::NEG_INFINITY);

@@ -8,8 +8,8 @@ use crate::gfx::types::{Instance, InstanceSkin, ParticleInstance};
 use crate::gfx::{self, anim, fx::Particle, terrain};
 #[cfg(feature = "vox_onepath_demo")]
 use glam::DVec3;
-use ra_assets::types::AnimClip;
 use rand::Rng as _;
+use roa_assets::types::AnimClip;
 // use destructible via fully-qualified path
 #[cfg(feature = "vox_onepath_demo")]
 use server_core::destructible::{carve_and_spawn_debris, raycast_voxels};

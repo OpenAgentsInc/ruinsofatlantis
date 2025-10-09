@@ -6,7 +6,7 @@ Purpose
 
 Context
 - Downloaded kit observed: `~/Downloads/Stylized Nature MegaKit[Standard] (1)/{glTF, FBX, OBJ, Textures}` with many GLTFs (trees, rocks, grass, paths) and PNG textures. This will seed the initial environment library (import as GLTF to avoid format churn).
-- Current repo: zones have `manifest.json` with TOD controls; `tools/zone-bake` bakes terrain + trees; renderer supports instancing and GLTF via `ra_assets`.
+- Current repo: zones have `manifest.json` with TOD controls; `tools/zone-bake` bakes terrain + trees; renderer supports instancing and GLTF via `roa_assets`.
 
 Out of Scope (initial)
 - Navmesh quality tooling (advanced parameters/visualization beyond basic generation), multi‑user collaboration, networked editing, streaming/mega‑world editing, lighting bake/global illumination bake.
@@ -28,7 +28,7 @@ Changes
 - `data/zones/<slug>/manifest.json` — honored by editor (TOD/weather); add reference to `scene.json`.
 
 Integration
-- Asset ingestion: import GLTFs from `assets/models/**` (including the MegaKit GLTFs); track large assets via git‑lfs. Use Draco‑decompressed GLTF if needed (not observed in the kit). Use `ra_assets` conventions.
+- Asset ingestion: import GLTFs from `assets/models/**` (including the MegaKit GLTFs); track large assets via git‑lfs. Use Draco‑decompressed GLTF if needed (not observed in the kit). Use `roa_assets` conventions.
 
 ---
 

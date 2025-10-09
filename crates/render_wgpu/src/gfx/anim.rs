@@ -3,7 +3,7 @@
 //! CPU-side sampling of glTF animation tracks to joint palettes, plus small
 //! query helpers used by the renderer.
 
-use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
+use roa_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
 
 pub fn sample_palette(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32) -> Vec<glam::Mat4> {
     use std::collections::HashMap;

@@ -15,5 +15,5 @@ use crate::types::SkinnedMeshCPU;
 /// Note: Real parsing lives behind the `fbx` feature. This default build just provides
 /// a friendly error so tools can compile without FBX support.
 pub fn merge_fbx_animations(_base: &mut SkinnedMeshCPU, _fbx_path: &Path) -> Result<usize> {
-    bail!("FBX animation import requires building ra-assets with the `fbx` feature")
+    bail!("FBX animation import requires building roa-assets with the `fbx` feature")
 }

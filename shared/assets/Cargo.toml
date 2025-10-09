@@ -1,10 +1,10 @@
 [package]
-name = "ra-assets"
+name = "roa-assets"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "ra_assets"
+name = "roa_assets"
 path = "src/lib.rs"
 
 [dependencies]

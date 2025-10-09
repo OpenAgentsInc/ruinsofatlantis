@@ -22,7 +22,7 @@ hw-skymodel = "0.1.1"
 log = "0.4.28"
 wgpu = "26.0.1"
 winit = "0.30.12"
-ra-assets = { version = "0.1.0", path = "../../shared/assets" }
+roa-assets = { version = "0.1.0", path = "../../shared/assets" }
 data_runtime = { version = "0.1.0", path = "../data_runtime" }
 ux_hud = { version = "0.1.0", path = "../ux_hud" }
 ecs_core = { version = "0.1.0", path = "../ecs_core" }

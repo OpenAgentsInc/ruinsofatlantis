@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 base64 = "0.22.1"
-ra-assets = { version = "0.1.0", path = "../../shared/assets" }
+roa-assets = { version = "0.1.0", path = "../../shared/assets" }
 serde_json = "1.0.145"
 which = "8"
 

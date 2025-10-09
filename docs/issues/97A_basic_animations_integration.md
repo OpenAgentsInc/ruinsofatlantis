@@ -21,7 +21,7 @@ Plan
 - Validate core clips (Idle, Walk, Run, Attack, Cast, Dodge) and wire to controller states for quick testing.
 
 Files to touch
-- `shared/assets` (crate `ra-assets`):
+- `shared/assets` (crate `roa-assets`):
   - Add `load_gltf_animations(path) -> Vec<AnimClip>` that extracts node channels by joint name; group into named clips.
   - If clips reside in a single GLB timeline, segment by named animations (often stored as separate animations in glTF).
 - `crates/render_wgpu/src/gfx/anim.rs`:
@@ -33,7 +33,7 @@ Files to touch
 
 Tasks
 - [x] Use `assets/anims/universal/AnimationLibrary.glb` as the source of clips (tracked via LFS).
-- [x] Reuse glTF animation merge (`ra_assets::skinning::merge_gltf_animations`) to produce `AnimClip` and per‑joint tracks aligned to the UBC skeleton.
+- [x] Reuse glTF animation merge (`roa_assets::skinning::merge_gltf_animations`) to produce `AnimClip` and per‑joint tracks aligned to the UBC skeleton.
 - [x] Viewer: add `--anim-lib <path>` to auto‑merge clips into the loaded model at startup; refresh animation list.
 - [ ] Engine: expose a simple clip registry (`Idle`, `Walk`, `Run`, `Attack`, `Cast`, `Dodge`) and drive from controller inputs (follow‑up).
 - [ ] Add CPU‑only sampling tests for a tiny rig (follow‑up).
@@ -54,7 +54,7 @@ Notes
   - The viewer and loaders perform name‑based bone matching. If names differ, add `retarget.toml` and apply during merge.
 
 Prep notes
-- The `ra_assets::skinning::merge_gltf_animations` path already merges GLTF clips by node names and refreshes the viewer’s clip list. We will reuse this in engine code and add a retarget map when needed.
+- The `roa_assets::skinning::merge_gltf_animations` path already merges GLTF clips by node names and refreshes the viewer’s clip list. We will reuse this in engine code and add a retarget map when needed.
 
 Addendum — What shipped
 - Model viewer CLI gained `--anim-lib <path>`; when combined with a UBC model path, it auto‑merges clips and refreshes the list.

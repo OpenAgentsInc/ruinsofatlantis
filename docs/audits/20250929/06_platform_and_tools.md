@@ -10,7 +10,7 @@ Recommendations
 - For robustness, detect and log adapter/surface selection details and requested vs actual formats.
 
 Tools
-- `tools/model-viewer`: good for asset inspection; consider extracting shared render bootstrap to a small `ra_viewer` helper if logic grows.
+- `tools/model-viewer`: good for asset inspection; consider extracting shared render bootstrap to a small `roa_viewer` helper if logic grows.
 - `tools/zone-bake`: deterministic metadata with fingerprints; add golden test on `zone_meta.json`.
 - `tools/sim-harness`: useful for headless scenario runs; wire into CI with a sample scenario and assert end-state invariants.
 - `tools/gltf-decompress` and `shared/assets`: clarify the single source of truth for Draco handling in docs and ensure CLI is used in CI for any new models.

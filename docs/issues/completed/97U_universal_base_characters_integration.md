@@ -15,14 +15,14 @@ Source (local)
   - Unity variant: `.fbx` (skip; prefer glTF/GLB for our loader)
 
 Plan
-- Place assets under `assets/models/ubc/` preserving relative texture paths. Prefer the “Unreal Engine” or “Godot” `.gltf + .bin` variants for compatibility with `ra_assets::gltf`.
-- Load both meshes via existing `ra_assets::gltf` helpers; extend loaders to fetch skin/joint data and material maps if needed.
+- Place assets under `assets/models/ubc/` preserving relative texture paths. Prefer the “Unreal Engine” or “Godot” `.gltf + .bin` variants for compatibility with `roa_assets::gltf`.
+- Load both meshes via existing `roa_assets::gltf` helpers; extend loaders to fetch skin/joint data and material maps if needed.
 - Ensure texture references resolve (our gltf loader uses `import` and relative paths). Keep the directory structure intact.
 - Drive animations once `97A` (Animation Library) lands; for now, validate bind pose + materials.
 
 Model Viewer integration (verified path and pipeline)
 - Tool: `tools/model-viewer` (runs with `cargo run -p model-viewer -- <path-to-gltf-or-glb>`)
-- Loader path: `ra_assets::util::prepare_gltf_path` + `ra_assets::skinning::load_gltf_skinned`
+- Loader path: `roa_assets::util::prepare_gltf_path` + `roa_assets::skinning::load_gltf_skinned`
   - Accepts external absolute paths; `gltf::import` resolves images/buffers relative to the GLTF dir.
   - Falls back to basic mesh if no joints/weights; UBC provides skinning so the skinned path is used.
 - Shaders: viewer binds a single baseColor texture (sRGB) and draws at bind pose; no normals/roughness in viewer (good enough for inspection).
@@ -37,7 +37,7 @@ Model Viewer integration (verified path and pipeline)
   - Non‑interactive snapshot: add `--snapshot /tmp/ubc.png` to save a PNG and exit.
 
 Files to touch
-- `shared/assets` (crate `ra-assets`):
+- `shared/assets` (crate `roa-assets`):
   - Add a small loader to extract: skinned vertex streams (pos/norm/uv), joint indices/weights, and materials/textures into `SkinnedMeshCPU` and a `MaterialCPU` with PBR maps (basecolor/normal/roughness).
 - `crates/render_wgpu/src/gfx/material.rs` and `pipeline.rs`:
   - Confirm PBR material binding supports basecolor/normal/roughness maps; add hair/eye textures as needed.
@@ -48,7 +48,7 @@ Files to touch
 
 Tasks
 - [ ] Copy `.gltf/.bin` + textures under `assets/models/ubc/{male, female}/` (preserve filenames exactly).
-- [ ] Extend `ra_assets::gltf` loader to parse skins and materials (if our current mesh loader is “mesh-only”).
+- [ ] Extend `roa_assets::gltf` loader to parse skins and materials (if our current mesh loader is “mesh-only”).
 - [ ] Build `SkinnedMeshCPU` for UBC and verify joints count; expose via renderer init.
 - [ ] Create a demo spawn: place UBC male/female at fixed points; verify materials render and joint palettes upload.
 - [ ] Wire simple idle animation once `97A` is integrated (see that issue).

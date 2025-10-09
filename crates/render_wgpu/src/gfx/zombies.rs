@@ -6,10 +6,10 @@ use anyhow::{Context, Result};
 use wgpu::util::DeviceExt;
 
 use crate::gfx::types::{InstanceSkin, VertexSkinned};
-use ra_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
 
 pub struct ZombieAssets {
-    pub cpu: ra_assets::types::SkinnedMeshCPU,
+    pub cpu: roa_assets::types::SkinnedMeshCPU,
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub index_count: u32,
@@ -86,7 +86,7 @@ pub fn build_instances(
     (instances, instances_cpu, models, ids, 0u32)
 }
 
-pub fn forward_offset(cpu: &ra_assets::types::SkinnedMeshCPU) -> f32 {
+pub fn forward_offset(cpu: &roa_assets::types::SkinnedMeshCPU) -> f32 {
     if let Some(root_ix) = cpu.root_node {
         let r = cpu
             .base_r

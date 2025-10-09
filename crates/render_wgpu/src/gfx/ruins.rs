@@ -5,7 +5,7 @@
 //! on mesh upload and basic metrics needed for terrain alignment/tilt.
 
 use anyhow::Result;
-use ra_assets::gltf::load_gltf_mesh;
+use roa_assets::gltf::load_gltf_mesh;
 use wgpu::util::DeviceExt;
 
 pub struct RuinsGpu {

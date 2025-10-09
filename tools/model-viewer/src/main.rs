@@ -17,8 +17,8 @@ use anyhow::Result;
 use clap::Parser;
 use glam::{Mat4, Vec3};
 use log::info;
-use ra_assets::skinning::{merge_fbx_animations, merge_gltf_animations};
-use ra_assets::{CpuMesh, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
+use roa_assets::skinning::{merge_fbx_animations, merge_gltf_animations};
+use roa_assets::{CpuMesh, SkinnedMeshCPU, load_gltf_mesh, load_gltf_skinned};
 use wgpu::util::DeviceExt;
 use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
@@ -370,7 +370,7 @@ struct AnimData {
     corr_weight: Option<Vec<f32>>, // optional per-node correction weight
     corr_quat: glam::Quat,         // base correction quaternion
     // Ordered clips parallel to displayed anims
-    clips: Vec<ra_assets::AnimClip>,
+    clips: Vec<roa_assets::AnimClip>,
 }
 
 impl AnimData {
@@ -410,7 +410,7 @@ impl AnimData {
             if let Some(c) = sk.animations.get(name) {
                 clips.push(c.clone());
             } else {
-                clips.push(ra_assets::AnimClip {
+                clips.push(roa_assets::AnimClip {
                     name: name.clone(),
                     duration: 0.0,
                     t_tracks: Default::default(),
@@ -536,7 +536,7 @@ impl AnimData {
     }
 }
 
-fn sample_vec3(track: &ra_assets::TrackVec3, t: f32) -> Vec3 {
+fn sample_vec3(track: &roa_assets::TrackVec3, t: f32) -> Vec3 {
     let times = &track.times;
     let vals = &track.values;
     if times.is_empty() {
@@ -560,7 +560,7 @@ fn sample_vec3(track: &ra_assets::TrackVec3, t: f32) -> Vec3 {
     a.lerp(b, w)
 }
 
-fn sample_quat(track: &ra_assets::TrackQuat, t: f32) -> glam::Quat {
+fn sample_quat(track: &roa_assets::TrackQuat, t: f32) -> glam::Quat {
     let times = &track.times;
     let vals = &track.values;
     if times.is_empty() {
@@ -1041,7 +1041,7 @@ async fn run(cli: Cli) -> Result<()> {
                       mat_bgl: &wgpu::BindGroupLayout,
                       skin_bgl: &wgpu::BindGroupLayout|
      -> Result<ModelGpu> {
-        let prepared = ra_assets::util::prepare_gltf_path(path)?;
+        let prepared = roa_assets::util::prepare_gltf_path(path)?;
         match load_gltf_skinned(&prepared) {
             Ok(skinned) => {
                 info!(

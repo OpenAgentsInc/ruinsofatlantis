@@ -1,7 +1,7 @@
     Checking core_units v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/crates/core_units)
     Checking net_core v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/crates/net_core)
     Checking data_runtime v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/crates/data_runtime)
-    Checking ra-assets v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/shared/assets)
+    Checking roa-assets v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/shared/assets)
     Checking ux_hud v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/crates/ux_hud)
     Checking core_materials v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/crates/core_materials)
     Checking sim_core v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/crates/sim_core)

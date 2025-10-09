@@ -24,7 +24,7 @@ Developer tips (viewer)
 - Merge animations from a library into the loaded model:
   - Load a skinned model first, then click `ANIMATIONLIBRARY` in the Library pane (scans `assets/anims/**`). GLTF/GLB clips are merged into the current model by node name.
 - See loader decisions in logs:
-  - `RUST_LOG=info,ra_assets=info cargo run -p model-viewer -- <path>` prints lines like:
+  - `RUST_LOG=info,roa_assets=info cargo run -p model-viewer -- <path>` prints lines like:
     - `skinning: selected skin index … (N verts)`
     - `append prim: verts=… idx=… material=…`
 

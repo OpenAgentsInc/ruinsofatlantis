@@ -46,7 +46,7 @@ pub mod vox_onepath;
 mod zombies;
 
 use data_runtime::spell::SpellSpec;
-use ra_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
+use roa_assets::types::{AnimClip, SkinnedMeshCPU, TrackQuat, TrackVec3};
 use types::InstanceSkin;
 
 // moved trait import to renderer/update.rs

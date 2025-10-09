@@ -3,7 +3,7 @@ use std::{env, ffi::OsStr, fs, path::PathBuf, process::Command};
 use anyhow::{Context, Result};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use ra_assets::gltf::load_gltf_mesh;
+use roa_assets::gltf::load_gltf_mesh;
 
 fn main() {
     let mut args = env::args_os().skip(1);

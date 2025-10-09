@@ -12,10 +12,10 @@ use anyhow::{Context, Result};
 use wgpu::util::DeviceExt;
 
 use crate::gfx::types::{InstanceSkin, VertexSkinned};
-use ra_assets::skinning::load_gltf_skinned;
+use roa_assets::skinning::load_gltf_skinned;
 
 pub struct DeathKnightAssets {
-    pub cpu: ra_assets::types::SkinnedMeshCPU,
+    pub cpu: roa_assets::types::SkinnedMeshCPU,
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub index_count: u32,

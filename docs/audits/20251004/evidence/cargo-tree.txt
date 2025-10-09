@@ -205,7 +205,7 @@ ruinsofatlantis v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis)
 │   │   │   ├── flate2 v1.1.2 (*)
 │   │   │   └── miniz_oxide v0.8.9 (*)
 │   │   ├── pollster v0.4.0
-│   │   ├── ra-assets v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/shared/assets)
+│   │   ├── roa-assets v0.1.0 (/Users/christopherdavid/code/ruinsofatlantis/shared/assets)
 │   │   │   ├── anyhow v1.0.100
 │   │   │   ├── base64 v0.22.1
 │   │   │   ├── bytemuck v1.23.2 (*)

@@ -15,7 +15,7 @@
 - `crates/ecs_core` — Minimal ECS (entities, transforms, render kinds) used by scene assembly.
 - `crates/client_core` — Input state and third‑person controller used by the app/renderer.
 - `crates/server_core` — In‑process NPC state + simple AI/collision avoidance used by the demo.
-- `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer (import as `ra_assets`).
+- `shared/assets` — Asset loaders/types (GLTF/Draco helpers) used by tools and the renderer (import as `roa_assets`).
 
 ### Time‑of‑Day & Weather
 - Zone authors can control initial time‑of‑day via `data/zones/<slug>/manifest.json`:
@@ -37,7 +37,7 @@
 - `tools/image-probe` — Simple image stats probe. Usage: `cargo run -p image-probe -- <png>`.
 - `tools/bevy-probe` — Bevy-based material/texture extractor for the wizard asset.
 
-Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `ra_assets` directly.
+Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `roa_assets` directly.
 
 Guidance: new reusable systems (renderer modules, platform, data, sim, HUD logic, ECS, client/server glue, tools libraries) should live in dedicated crates. App glue, small bins, and short‑lived prototypes can remain in `src/` until they harden, at which point prefer moving them under `crates/` or `tools/`.
 

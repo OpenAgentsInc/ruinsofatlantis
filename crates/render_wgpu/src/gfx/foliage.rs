@@ -9,7 +9,7 @@
 
 use anyhow::Result;
 
-use ra_assets::gltf::load_gltf_mesh;
+use roa_assets::gltf::load_gltf_mesh;
 use wgpu::util::DeviceExt;
 
 use super::terrain;

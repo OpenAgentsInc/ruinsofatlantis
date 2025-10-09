@@ -11,8 +11,8 @@ use crate::gfx::terrain::TerrainCPU;
 use crate::gfx::types::{Instance, InstanceSkin};
 use ecs_core::{RenderKind, Transform, World};
 #[cfg(feature = "vox_onepath_demo")]
-use ra_assets::gltf::load_gltf_mesh;
-use ra_assets::types::SkinnedMeshCPU;
+use roa_assets::gltf::load_gltf_mesh;
+use roa_assets::types::SkinnedMeshCPU;
 use wgpu::util::DeviceExt;
 
 pub struct SceneBuild {
