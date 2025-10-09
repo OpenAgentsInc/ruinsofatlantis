@@ -988,6 +988,8 @@ pub fn render_impl(
     }
     // Main pass with depth
     log::debug!("pass: main");
+    // Capture validation across the entire main pass to surface concrete errors
+    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     if !present_only {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
@@ -1896,7 +1898,7 @@ pub fn render_impl(
     // during encoder.finish() or queue.submit().
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-        log::error!("wgpu validation error (after submit): {:?}", e);
+        log::error!("validation (main pass): {:?}", e);
         return Ok(());
     }
     Ok(())

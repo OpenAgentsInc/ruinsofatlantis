@@ -1745,6 +1745,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_vb,
         pc_ib,
         pc_index_count,
+        pc_index_format: wgpu::IndexFormat::Uint16,
         pc_instances,
         dk_vb,
         dk_ib,

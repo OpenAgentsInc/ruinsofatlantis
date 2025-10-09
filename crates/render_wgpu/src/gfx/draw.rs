@@ -54,7 +54,7 @@ impl Renderer {
             rpass.set_vertex_buffer(0, pc_vb.slice(..));
             rpass.set_vertex_buffer(1, pc_inst.slice(..));
             // UBC male uses 32-bit indices; draw with Uint32 to ensure visibility
-            rpass.set_index_buffer(pc_ib.slice(..), IndexFormat::Uint32);
+            rpass.set_index_buffer(pc_ib.slice(..), self.pc_index_format);
             rpass.draw_indexed(0..self.pc_index_count, 0, 0..1);
             // Debug HUD line to prove the pass ran (will be queued by caller)
         } else {

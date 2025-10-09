@@ -179,6 +179,7 @@ pub struct Renderer {
     pc_vb: Option<wgpu::Buffer>,
     pc_ib: Option<wgpu::Buffer>,
     pc_index_count: u32,
+    pc_index_format: wgpu::IndexFormat,
     pc_instances: Option<wgpu::Buffer>,
     // Zombie skinned geometry
     zombie_vb: wgpu::Buffer,
@@ -2002,6 +2003,26 @@ impl Renderer {
                 usage: wgpu::BufferUsages::INDEX,
             });
         let index_count = cpu_pc.indices.len() as u32;
+        // Detect index format dynamically based on max index value
+        let needs_u32 = cpu_pc
+            .indices
+            .iter()
+            .any(|&i| u32::from(i) > u16::MAX as u32);
+        self.pc_index_format = if needs_u32 {
+            wgpu::IndexFormat::Uint32
+        } else {
+            wgpu::IndexFormat::Uint16
+        };
+        // Detect index format dynamically based on max index value
+        let needs_u32 = cpu_pc
+            .indices
+            .iter()
+            .any(|&i| u32::from(i) > u16::MAX as u32);
+        self.pc_index_format = if needs_u32 {
+            wgpu::IndexFormat::Uint32
+        } else {
+            wgpu::IndexFormat::Uint16
+        };
         let joints = cpu_pc.joints_nodes.len() as u32;
         // Material bind group using the same layout the pipelines expect
         let pc_mat = material::create_wizard_material(
@@ -2097,6 +2118,16 @@ impl Renderer {
                 usage: wgpu::BufferUsages::INDEX,
             });
         let index_count = cpu_pc.indices.len() as u32;
+        // Detect index format dynamically based on max index value
+        let needs_u32 = cpu_pc
+            .indices
+            .iter()
+            .any(|&i| u32::from(i) > u16::MAX as u32);
+        self.pc_index_format = if needs_u32 {
+            wgpu::IndexFormat::Uint32
+        } else {
+            wgpu::IndexFormat::Uint16
+        };
         let joints = cpu_pc.joints_nodes.len() as u32;
         let pc_mat = material::create_wizard_material(
             &self.device,
