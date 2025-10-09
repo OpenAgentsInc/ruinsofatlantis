@@ -175,6 +175,13 @@ NOTE FOR AGENTS
 - Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`) unless the user specifically directs you to. The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
 - For orientation, read `crates/README.md` (crate purposes) and `docs/gdd/README.md` (design doc map) before making cross‑crate or design edits.
 
+## Repo Hygiene (Critical)
+- Verify target repo before any edits:
+  - `git remote get-url origin` must be `git@github.com:OpenAgentsInc/ruinsofatlantis.git` for this game repo.
+  - Sentinel files: `Cargo.toml` workspace with `crates/`, `GDD.md`, `NOTICE`.
+- Never write files into sibling repos (e.g., the website `ruinsofatlantis.com` or ops) when working on game tasks.
+- If you find you accidentally created folders like `crates/` or Rust test files in a non‑game repo, delete them immediately and document the cleanup in the PR/daily log.
+
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
