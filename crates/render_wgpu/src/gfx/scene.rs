@@ -4,7 +4,7 @@
 //! data for wizards (skinned) and ruins (static), assigns palette bases, and
 //! returns a camera focus point to orbit.
 
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::gfx::terrain::TerrainCPU;
@@ -39,14 +39,14 @@ pub struct SceneBuild {
 pub fn build_demo_scene(
     device: &wgpu::Device,
     skinned_cpu: &SkinnedMeshCPU,
-    plane_extent: f32,
+    _plane_extent: f32,
     terrain: Option<&TerrainCPU>,
     ruins_base_offset: f32,
-    ruins_radius: f32,
+    _ruins_radius: f32,
 ) -> SceneBuild {
     // Build a tiny ECS world and spawn entities
     let mut world = World::new();
-    let mut rng = ChaCha8Rng::seed_from_u64(42);
+    let _rng = ChaCha8Rng::seed_from_u64(42);
 
     // Cluster wizards around a central one so the camera can see all of them.
     // Use one central PC and a single outward-facing ring of NPC wizards.
@@ -67,67 +67,10 @@ pub fn build_demo_scene(
         RenderKind::Wizard,
     );
     // Inner ring removed (except center PC). We keep a single large ring below.
-    // Place a set of ruins around the wizard circle
-    // Ruins placement policy: by default, keep ruins in the distance so they
-    // frame the scene without cluttering gameplay space. On desktop you can
-    // opt into a few closer showcase pieces with `RA_RUINS_NEAR=1`.
-    let ruins_near = std::env::var("RA_RUINS_NEAR")
-        .map(|v| v == "1")
-        .unwrap_or(false);
-    let place_range = if ruins_near { 25.0 } else { plane_extent * 0.9 };
-    // A few backdrop ruins placed far away for depth
-    // The ruins model origin is roughly centered; raise Y so it rests on ground.
-    let ruins_y = ruins_base_offset; // base offset aligns model min Y to ground with small embed
-    if ruins_near {
-        let ruins_positions = [
-            glam::vec3(-place_range * 0.9, ruins_y, -place_range * 0.7),
-            glam::vec3(place_range * 0.85, ruins_y, -place_range * 0.2),
-            glam::vec3(-place_range * 0.2, ruins_y, place_range * 0.95),
-        ];
-        for pos in ruins_positions {
-            let mut p = pos;
-            let mut tilt = glam::Quat::IDENTITY;
-            if let Some(t) = terrain {
-                let (h, n) = height_min_under(t, p.x, p.z, ruins_radius);
-                p.y = h + ruins_y;
-                tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
-            }
-            let yaw = glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-            let rotation = tilt * yaw;
-            world.spawn(
-                Transform {
-                    translation: p,
-                    rotation,
-                    scale: glam::Vec3::splat(1.0),
-                },
-                RenderKind::Ruins,
-            );
-        }
-    }
-    // Additional distant ruins distributed on a wide ring for background depth
-    // Fewer distant pieces keep the silhouette without overwhelming the scene.
-    let far_count = 6usize;
-    for i in 0..far_count {
-        let base_a = (i as f32) / (far_count as f32) * std::f32::consts::TAU;
-        let a = base_a + rng.random::<f32>() * 0.2 - 0.1; // jitter
-        let r = place_range * (0.78 + rng.random::<f32>() * 0.15);
-        let mut pos = glam::vec3(r * a.cos(), ruins_y, r * a.sin());
-        let mut tilt = glam::Quat::IDENTITY;
-        if let Some(t) = terrain {
-            let (h, n) = height_min_under(t, pos.x, pos.z, ruins_radius);
-            pos.y = h + ruins_y;
-            tilt = tilt_toward_normal(n, 8.0_f32.to_radians());
-        }
-        let rot = tilt * glam::Quat::from_rotation_y(rng.random::<f32>() * std::f32::consts::TAU);
-        world.spawn(
-            Transform {
-                translation: pos,
-                rotation: rot,
-                scale: glam::Vec3::splat(1.0),
-            },
-            RenderKind::Ruins,
-        );
-    }
+    // Remove all static (non-destructible) ruins from the renderer scene. The
+    // only ruins we show now are the server-authoritative destructible ones,
+    // replicated via ChunkMeshDelta.
+    let _ruins_y = ruins_base_offset; // kept for height computations when needed
 
     // Add one outward-facing ring of wizards
     let outer_ring_radius = 7.5f32; // wider circle for better spacing
@@ -156,6 +99,8 @@ pub fn build_demo_scene(
             RenderKind::Wizard,
         );
     }
+
+    // Deliberately do not spawn any static ruins here.
 
     // Build instance lists
     let mut wiz_instances: Vec<InstanceSkin> = Vec::new();
@@ -336,6 +281,7 @@ pub fn build_demo_scene(
     }
 }
 
+#[allow(dead_code)]
 fn tilt_toward_normal(n: glam::Vec3, max_angle: f32) -> glam::Quat {
     let up = glam::Vec3::Y;
     let nn = n.normalize_or_zero();
@@ -350,6 +296,7 @@ fn tilt_toward_normal(n: glam::Vec3, max_angle: f32) -> glam::Quat {
     }
 }
 
+#[allow(dead_code)]
 fn height_min_under(t: &TerrainCPU, x: f32, z: f32, radius: f32) -> (f32, glam::Vec3) {
     // Sample center + four cardinal points at given radius; choose min height.
     let mut hmin = f32::INFINITY;

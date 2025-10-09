@@ -140,15 +140,8 @@ impl ApplicationHandler for App {
                     // Spawn a Death Knight farther away so the opener is clean
                     // Place ~60m along +X to avoid immediate aggro on login
                     let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                    // Add demo destructibles: one at origin and another just in front of the wizard ring
+                    // Add a single demo destructible ruins centered at the arena
                     server_core::scene_build::add_demo_ruins_destructible(&mut srv);
-                    // Circle radius is ~8m; place a second ruins so its near edge sits on the circle edge
-                    let center_front = glam::vec3(0.0, 0.0, 16.0);
-                    server_core::scene_build::add_demo_ruins_destructible_at(
-                        &mut srv,
-                        center_front,
-                        2,
-                    );
                     self.demo_server = Some(srv);
                 }
                 self.last_time = Some(std::time::Instant::now());

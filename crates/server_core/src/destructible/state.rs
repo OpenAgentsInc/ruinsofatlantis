@@ -40,7 +40,7 @@ impl DestructibleProxy {
     pub fn new(did: DestructibleId, grid: VoxelGrid, world_aabb: WorldAabb) -> Self {
         let world_from_object = Mat4::IDENTITY;
         let object_from_world = Mat4::IDENTITY;
-        Self {
+        let mut proxy = Self {
             did,
             grid,
             dirty: ChunkDirty::default(),
@@ -50,7 +50,21 @@ impl DestructibleProxy {
             world_from_object,
             object_from_world,
             world_aabb,
+        };
+        // Mark all chunks dirty on creation so we produce initial meshes/deltas
+        let dims = proxy.grid.dims();
+        let cs = proxy.grid.meta().chunk;
+        let nx = (dims.x + cs.x - 1) / cs.x;
+        let ny = (dims.y + cs.y - 1) / cs.y;
+        let nz = (dims.z + cs.z - 1) / cs.z;
+        for z in 0..nz {
+            for y in 0..ny {
+                for x in 0..nx {
+                    proxy.dirty.0.push(glam::UVec3::new(x, y, z));
+                }
+            }
         }
+        proxy
     }
 }
 
