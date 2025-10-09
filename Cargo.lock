@@ -4752,6 +4752,7 @@ name = "platform_winit"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "client_core",
  "futures-util",
  "glam 0.30.8",
  "log",
