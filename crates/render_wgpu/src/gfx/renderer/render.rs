@@ -1657,13 +1657,13 @@ pub fn render_impl(
             [0.95, 0.98, 1.0, 1.0],
         );
         let max_show = 12usize;
-        let mut line = 0usize;
-        for (i, (_slug, disp)) in r.picker_items.iter().enumerate().take(max_show) {
+        for (line, (i, (_slug, disp))) in
+            r.picker_items.iter().enumerate().take(max_show).enumerate()
+        {
             let mark = if i == r.picker_selected { ">" } else { " " };
             let txt = format!("{} {}", mark, disp);
             r.hud
                 .append_perf_text_line(r.size.width, r.size.height, &txt, line as u32);
-            line += 1;
         }
     }
     // Submit
