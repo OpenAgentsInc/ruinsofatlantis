@@ -54,9 +54,9 @@ impl DestructibleProxy {
         // Mark all chunks dirty on creation so we produce initial meshes/deltas
         let dims = proxy.grid.dims();
         let cs = proxy.grid.meta().chunk;
-        let nx = (dims.x + cs.x - 1) / cs.x;
-        let ny = (dims.y + cs.y - 1) / cs.y;
-        let nz = (dims.z + cs.z - 1) / cs.z;
+        let nx = dims.x.div_ceil(cs.x);
+        let ny = dims.y.div_ceil(cs.y);
+        let nz = dims.z.div_ceil(cs.z);
         for z in 0..nz {
             for y in 0..ny {
                 for x in 0..nx {

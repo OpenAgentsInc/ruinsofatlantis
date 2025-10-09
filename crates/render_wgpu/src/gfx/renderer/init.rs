@@ -1767,6 +1767,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         vox_onepath_ui: None,
         voxel_meshes: std::collections::HashMap::new(),
         voxel_hashes: std::collections::HashMap::new(),
+        destruct_y_offset: std::collections::HashMap::new(),
         destr_voxels: std::collections::HashMap::new(),
         destruct_meshes_cpu: scene_build.destruct_meshes_cpu,
         destruct_instances: scene_build.destruct_instances,
