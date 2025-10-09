@@ -1169,10 +1169,9 @@ pub fn render_impl(
                 && r.pc_palettes_bg.is_some()
                 && r.pc_index_count > 0;
             if pc_ready {
-                let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
-                if trace {
-                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-                }
+                // Always validate the PC draw pass so encoder errors are surfaced with context.
+                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+
                 // Ensure the per-draw model UBO (group=1) is valid; identity is fine because
                 // the PC's per-instance matrix carries the actual transform.
                 let shard_m = crate::gfx::types::Model {
@@ -1183,9 +1182,20 @@ pub fn render_impl(
                 };
                 r.queue
                     .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+
+                // Extra visibility: record resource readiness
+                log::debug!(
+                    "pc_draw(start): vb={} ib={} inst={} mat={} pal={} idx={}",
+                    r.pc_vb.is_some(),
+                    r.pc_ib.is_some(),
+                    r.pc_instances.is_some(),
+                    r.pc_mat_bg.is_some(),
+                    r.pc_palettes_bg.is_some(),
+                    r.pc_index_count
+                );
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
-                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                     log::error!("validation after PC draw: {:?}", e);
                 }
                 // HUD marker to prove the draw path is running
