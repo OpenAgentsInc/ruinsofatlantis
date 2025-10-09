@@ -289,10 +289,24 @@ impl ReplicationBuffer {
                 indices: delta.indices,
             };
             if self.known_dids.contains(&delta.did) {
-                self.pending_mesh.push((delta.did, delta.chunk, entry));
-                self.updated_chunks += 1;
+                // Avoid enqueuing duplicate pending entries for the same DID+chunk
+                let exists = self
+                    .pending_mesh
+                    .iter()
+                    .any(|(did, ch, _)| *did == delta.did && *ch == delta.chunk);
+                if !exists {
+                    self.pending_mesh.push((delta.did, delta.chunk, entry));
+                    self.updated_chunks += 1;
+                }
             } else {
-                self.deferred_mesh.push((delta.did, delta.chunk, entry));
+                // Avoid duplicate deferred entries for the same DID+chunk
+                let exists = self
+                    .deferred_mesh
+                    .iter()
+                    .any(|(did, ch, _)| *did == delta.did && *ch == delta.chunk);
+                if !exists {
+                    self.deferred_mesh.push((delta.did, delta.chunk, entry));
+                }
             }
             return true;
         }

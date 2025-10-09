@@ -85,3 +85,10 @@ Notes for future
 - Replace demo proxy with baked `data/voxel/ruins.voxgrid`; keep current box as fallback
 - Renderer: hide static ruins draw after first non-empty delta for a DID; unhide when proxy empties
 - Consider persistence: append op-log on carves and replay on load
+
+
+- [2025-10-09 01:48:34Z] Server snapshot: exclude projectile entities from ActorRep
+  - Fixes client spawning zombie/NPC views at projectile positions (MM/FB/FBolt)
+  - Change: `tick_snapshot_actors()` now filters out `projectile.is_some()`
+  - Added test: `crates/server_core/tests/projectiles_not_in_actor_snapshot.rs`
+  - Rationale: projectiles are replicated via `projectiles` list only. Actors list is reserved for real actors.

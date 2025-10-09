@@ -10,16 +10,16 @@ fn deltas_are_deferred_per_did_until_instance_arrives() {
     let d0 = ChunkMeshDelta {
         did: 10,
         chunk: (0, 0, 0),
-        positions: vec![[0.0, 0.0, 0.0]],
-        normals: vec![[0.0, 1.0, 0.0]],
-        indices: vec![0],
+        positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        normals: vec![[0.0, 1.0, 0.0]; 3],
+        indices: vec![0, 1, 2],
     };
     let d1 = ChunkMeshDelta {
         did: 11,
         chunk: (0, 0, 1),
-        positions: vec![[0.0, 0.0, 0.0]],
-        normals: vec![[0.0, 1.0, 0.0]],
-        indices: vec![0],
+        positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        normals: vec![[0.0, 1.0, 0.0]; 3],
+        indices: vec![0, 1, 2],
     };
 
     for d in [d0, d1] {

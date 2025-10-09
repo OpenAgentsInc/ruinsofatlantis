@@ -501,8 +501,8 @@ impl ServerState {
         }
     }
     /// Resolve server-authoritative projectile spec. Falls back to baked defaults
-    /// when the DB cannot be loaded. Visible within the crate for systems/tests.
-    pub(crate) fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
+    /// when the DB cannot be loaded. Public for tests and tools.
+    pub fn projectile_spec(&self, kind: ProjKind) -> ProjectileSpec {
         let db = Some(&self.specs_proj);
         match kind {
             ProjKind::Firebolt => {
@@ -929,9 +929,13 @@ impl ServerState {
     /// the nearest wizard.
     // Legacy TickSnapshot removed; actor-centric snapshot is canonical.
     pub fn tick_snapshot_actors(&self, tick: u64) -> net_core::snapshot::ActorSnapshot {
+        // Only true actors (non-projectiles) are included in the actor list.
+        // Projectiles are carried separately under `projectiles` and must never
+        // be represented as NPC spawns to the client.
         let actors: Vec<net_core::snapshot::ActorRep> = self
             .ecs
             .iter()
+            .filter(|a| a.projectile.is_none())
             .map(|a| net_core::snapshot::ActorRep {
                 id: a.id.0,
                 kind: match a.kind {
