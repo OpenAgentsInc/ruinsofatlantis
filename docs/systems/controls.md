@@ -1,19 +1,35 @@
 # Controls and Input Profiles
 
-This document describes the client controls, input profiles, and configuration for the Neverwinter‑style action combat scheme.
+This document describes the current client controls, input profiles, and configuration.
 
 Overview
 - Default profile: Action/Reticle — persistent mouselook with a center reticle.
 - Classic fallback: Classic Cursor — cursor visible by default; holding RMB engages temporary mouselook; releasing RMB restores the cursor.
 - ALT behavior is configurable (toggle or hold‑to‑hold). In hold mode, pressing ALT releases the cursor and on release returns to mouselook.
 
-Key bindings
-- Mouse: LMB/RMB — At‑Will abilities (emits `InputCommand::AtWillLMB/AtWillRMB`)
-- Keyboard: Q/E/R — Encounter abilities; Shift — Dodge/Guard; Tab — Class mechanic
-- ALT — Cursor toggle (default) or hold (configurable)
-- Scroll — Camera zoom; WASD — movement; optional legacy orbit with RMB drag
+Movement & Camera
+- WASD — movement
+  - RMB held: A/D become strafes; W/S move relative to camera forward.
+  - RMB released: A/D turn the character; W/S move relative to the character’s facing (no camera drift).
+- Q/E — dedicated strafes (Q = left, E = right) regardless of RMB.
+- Mouse Wheel — camera zoom.
+- RMB drag — orbit the camera around the player while keeping the player as the orbit target.
+  - Pointer‑lock is requested only while RMB is held; camera yaw/pitch update from mouse deltas.
+  - Zoom and pitch limits are clamped to prevent flipping.
 
-Config file (optional)
+Abilities & Actions
+- LMB / RMB — primary/secondary actions (emits `InputCommand::AtWillLMB/AtWillRMB`).
+- Q/E/R — encounter actions (when bound); Shift — dodge/guard; Tab — class mechanic.
+
+Autorun & Walk
+- Num Lock — toggle autorun (pressing S cancels autorun).
+- Numpad Divide — toggle walk/run.
+
+Profiles & Cursor
+- Profiles: `ActionCombat` or `ClassicCursor`.
+- ALT: toggle or hold (configurable) to show/hide the cursor.
+
+Configuration (optional)
 - Path: `data/config/input_camera.toml`
 - Keys:
   - `sensitivity_deg_per_count` (float)
@@ -29,7 +45,7 @@ invert_y = false
 min_pitch_deg = -75
 max_pitch_deg = 75
 alt_hold = true
-profile = "ActionCombat"
+profile = "ClassicCursor"
 ```
 
 Environment overrides
@@ -43,4 +59,3 @@ Logging
 Notes
 - The client only emits `InputCommand` events. Server remains authoritative for gameplay.
 - On platforms where pointer‑lock is denied (browser/OS), the client falls back to cursor mode automatically.
-

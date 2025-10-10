@@ -75,7 +75,7 @@ pub mod controller {
         }
 
         /// Update WoW-style character controller: turn/strafe/autorun.
-        pub fn update(&mut self, input: &InputState, dt: f32, cam_forward: Vec3) {
+        pub fn update(&mut self, input: &InputState, dt: f32, _cam_forward: Vec3) {
             // Constants converted from yards/sec
             const RUN_SPEED: f32 = 6.4008; // 7.0 yd/s
             const WALK_SPEED: f32 = 2.2860; // 2.5 yd/s
@@ -115,11 +115,7 @@ pub mod controller {
             };
 
             // 4) Orientation rules (CCW-positive yaw)
-            if input.mouse_look {
-                // Character yaw follows camera yaw every frame; CCW-positive
-                let cam_yaw = cam_forward.x.atan2(cam_forward.z);
-                self.yaw = wrap_angle(cam_yaw);
-            } else {
+            if !input.mouse_look {
                 // Keyboard turn: A turns left (increase yaw), D turns right (decrease yaw)
                 if input.turn_left {
                     self.yaw = wrap_angle(self.yaw + turn_speed * dt);
