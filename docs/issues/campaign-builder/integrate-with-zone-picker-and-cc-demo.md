@@ -20,7 +20,7 @@ What We’re Building (V1)
 - “Builder Mode” for `campaign_builder`:
   - Toggle with `B` after loading `campaign_builder` (also enable when `RA_BUILDER=1`).
   - Place simple “logic spawn markers” at the screen-center ground plane (Y=0) with yaw steps (`Q/E` ±15°, `Ctrl+Wheel` ±1°).
-  - Export the session to `data/zones/cc_demo/scene.json` under a `logic.spawns[]` array that zone-bake packs into `snapshot.v1/logic.bin`.
+  - Export the session to `data/zones/campaign_builder/scene.json` under a `logic.spawns[]` array that zone-bake packs into `snapshot.v1/logic.bin`.
   - Import existing `scene.json` to continue editing.
 
 Design Constraints (align to ECS guide)
