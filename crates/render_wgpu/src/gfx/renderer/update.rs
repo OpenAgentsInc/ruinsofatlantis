@@ -1412,8 +1412,10 @@ impl Renderer {
             glam::vec3(c[12], c[13], c[14])
         };
         // Movement intent from input takes precedence over tiny position noise
-        let moving_by_input =
-            self.input.forward || self.input.backward || self.input.left || self.input.right;
+        let moving_by_input = self.input.forward
+            || self.input.backward
+            || self.input.strafe_left
+            || self.input.strafe_right;
         let moving = moving_by_input || (current_pos - self.pc_prev_pos).length_squared() > 1e-4;
         let is_casting = self.pc_anim_start.is_some();
         // Desired names by situation (exact match preferred)

@@ -1920,6 +1920,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         cam_lift: 3.5,
         cam_look_height: 1.6,
         rmb_down: false,
+        lmb_down: false,
         last_cursor_pos: None,
         screenshot_start: None,
         #[cfg(any())]

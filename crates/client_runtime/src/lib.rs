@@ -28,6 +28,15 @@ impl SceneInputs {
     pub fn apply_input(&mut self, input: &InputState) {
         self.input = *input;
     }
+    pub fn toggle_autorun(&mut self) {
+        self.controller.toggle_autorun();
+    }
+    pub fn cancel_autorun(&mut self) {
+        self.controller.cancel_autorun();
+    }
+    pub fn toggle_walk(&mut self) {
+        self.controller.toggle_walk();
+    }
     pub fn pos(&self) -> Vec3 {
         self.controller.pos
     }
@@ -46,17 +55,18 @@ impl SceneInputs {
         self.controller.update(&self.input, dt, cam_forward);
         if let Some(idx) = static_index {
             let cap = Capsule {
+                // WoW-like humanoid: height 1.9m, radius 0.35m → segment from 0.35 to 1.55
                 p0: Vec3::new(
                     self.controller.pos.x,
-                    self.controller.pos.y + 0.4,
+                    self.controller.pos.y + 0.35,
                     self.controller.pos.z,
                 ),
                 p1: Vec3::new(
                     self.controller.pos.x,
-                    self.controller.pos.y + 1.8,
+                    self.controller.pos.y + 1.55,
                     self.controller.pos.z,
                 ),
-                radius: 0.4,
+                radius: 0.35,
             };
             let aabb = Aabb {
                 min: Vec3::new(
@@ -76,7 +86,7 @@ impl SceneInputs {
                 self.controller.pos,
                 &cap,
                 idx,
-                0.25,
+                0.45, // step offset (meters)
                 4,
             );
             self.controller.pos = resolved;

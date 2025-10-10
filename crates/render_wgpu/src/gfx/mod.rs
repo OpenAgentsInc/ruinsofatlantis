@@ -480,6 +480,7 @@ pub struct Renderer {
     cam_lift: f32,
     cam_look_height: f32,
     rmb_down: bool,
+    lmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
 
     // UI capture helpers
@@ -709,6 +710,7 @@ impl Renderer {
         self.cam_lift = 3.5;
         self.cam_look_height = 1.6;
         self.rmb_down = false;
+        self.lmb_down = false;
         self.last_cursor_pos = None;
         self.pc_cast_queued = false;
         self.pc_anim_start = None;
@@ -3060,12 +3062,14 @@ impl Renderer {
             self.draw_calls += 1;
         }
 
-        // Submit only if no validation errors occurred
-        // Pop error scope AFTER submitting to ensure validation covers command submission
+        // Submit frame. On wasm, skip synchronous pop_error_scope to avoid blocking.
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
             // Skip submit on validation error to keep running without panicking
             log::error!("wgpu validation error (skipping frame): {:?}", e);
-        } else {
+            return Ok(());
+        }
+        {
             log::debug!("submit: normal path");
             // HUD: build, upload, and draw overlay before submit
             let pc_hp = self

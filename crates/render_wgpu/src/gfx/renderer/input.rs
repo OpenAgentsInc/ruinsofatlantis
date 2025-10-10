@@ -42,10 +42,25 @@ impl Renderer {
                         self.input.forward = pressed
                     }
                     PhysicalKey::Code(KeyCode::KeyS) if self.pc_alive => {
-                        self.input.backward = pressed
+                        self.input.backward = pressed;
+                        if pressed {
+                            self.scene_inputs.cancel_autorun();
+                        }
                     }
-                    PhysicalKey::Code(KeyCode::KeyA) if self.pc_alive => self.input.left = pressed,
-                    PhysicalKey::Code(KeyCode::KeyD) if self.pc_alive => self.input.right = pressed,
+                    PhysicalKey::Code(KeyCode::KeyA) if self.pc_alive => {
+                        if self.rmb_down {
+                            self.input.strafe_left = pressed;
+                        } else {
+                            self.input.turn_left = pressed;
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyD) if self.pc_alive => {
+                        if self.rmb_down {
+                            self.input.strafe_right = pressed;
+                        } else {
+                            self.input.turn_right = pressed;
+                        }
+                    }
                     PhysicalKey::Code(KeyCode::ShiftLeft)
                     | PhysicalKey::Code(KeyCode::ShiftRight)
                         if self.pc_alive =>
@@ -304,6 +319,17 @@ impl Renderer {
                             }
                         }
                     }
+                    // WoW-like toggles
+                    PhysicalKey::Code(KeyCode::NumLock) => {
+                        if pressed {
+                            self.scene_inputs.toggle_autorun();
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::NumpadDivide) => {
+                        if pressed {
+                            self.scene_inputs.toggle_walk();
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -358,18 +384,22 @@ impl Renderer {
                         );
                     }
                 }
-                if *button == winit::event::MouseButton::Left && state.is_pressed() {
-                    let binds = client_core::systems::action_bindings::Bindings::default();
-                    let snap = client_core::systems::action_bindings::ButtonSnapshot {
-                        lmb_pressed: true,
-                        ..Default::default()
-                    };
-                    client_core::systems::action_bindings::handle_buttons(
-                        &binds,
-                        &self.controller_state,
-                        &snap,
-                        &mut self.input_queue,
-                    );
+                if *button == winit::event::MouseButton::Left {
+                    self.lmb_down = state.is_pressed();
+                    // Treat LMB as an action press on press-down
+                    if state.is_pressed() {
+                        let binds = client_core::systems::action_bindings::Bindings::default();
+                        let snap = client_core::systems::action_bindings::ButtonSnapshot {
+                            lmb_pressed: true,
+                            ..Default::default()
+                        };
+                        client_core::systems::action_bindings::handle_buttons(
+                            &binds,
+                            &self.controller_state,
+                            &snap,
+                            &mut self.input_queue,
+                        );
+                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
