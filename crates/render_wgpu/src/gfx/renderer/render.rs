@@ -646,7 +646,8 @@ pub fn render_impl(
         if v.length_squared() > 1.0 {
             v = v.normalize();
         }
-        let dx = v.x;
+        // Net intent expects LEFT positive for dx, FORWARD positive for dz
+        let dx = -v.x;
         let dz = v.y;
         // Move intent
         {
