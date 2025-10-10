@@ -318,7 +318,6 @@ impl Renderer {
                 }
                 if step != 0.0 {
                     self.scene_inputs.rig_zoom(step);
-                    self.cam_distance = self.scene_inputs.rig_distance();
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -379,8 +378,6 @@ impl Renderer {
                         .to_radians();
                     self.scene_inputs
                         .rig_apply_mouse_orbit(dx, dy, to_rad, -1.2, 1.2);
-                    self.cam_orbit_yaw = self.scene_inputs.rig_yaw();
-                    self.cam_orbit_pitch = self.scene_inputs.rig_pitch();
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));
@@ -412,8 +409,6 @@ impl Renderer {
                 .to_radians();
             self.scene_inputs
                 .rig_apply_mouse_orbit(dx, dy, to_rad, -1.2, 1.2);
-            self.cam_orbit_yaw = self.scene_inputs.rig_yaw();
-            self.cam_orbit_pitch = self.scene_inputs.rig_pitch();
         }
     }
 }

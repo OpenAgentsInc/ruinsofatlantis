@@ -481,7 +481,7 @@ pub fn render_impl(
         let elapsed = (t - ts).max(0.0);
         if elapsed <= 5.0 {
             let speed = 0.6; // rad/s
-            r.cam_orbit_yaw = crate::gfx::Renderer::wrap_angle(r.cam_orbit_yaw + dt * speed);
+            r.scene_inputs.rig_add_yaw(dt * speed);
         } else {
             r.screenshot_start = None;
         }
@@ -534,7 +534,6 @@ pub fn render_impl(
         r.input.run = out.intents.run;
         if out.cam_yaw_delta != 0.0 {
             r.scene_inputs.rig_add_yaw(out.cam_yaw_delta);
-            r.cam_orbit_yaw = r.scene_inputs.rig_yaw();
         }
         r.scene_inputs.apply_input(&r.input);
         // One-shot: clear jump so holding Space does not repeat
@@ -573,7 +572,7 @@ pub fn render_impl(
             let last_anchor = if in_panic {
                 r.cam_yaw_changed_at
             } else {
-                r.cam_face_reset_at.max(r.cam_yaw_changed_at)
+                r.cam_face_reset_at
             };
             let new_yaw = client_core::systems::auto_face::auto_face_step(
                 cur_yaw,

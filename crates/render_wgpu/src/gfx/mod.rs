@@ -486,12 +486,6 @@ pub struct Renderer {
     // Fire Bolt cooldown duration (seconds); remaining tracked in SceneInputs
     firebolt_cd_dur: f32,
     // Deprecated GCD tracking removed — gating via SceneInputs + SpecDb
-    // Orbit params
-    cam_orbit_yaw: f32,
-    cam_orbit_pitch: f32,
-    cam_distance: f32,
-    cam_lift: f32,
-    cam_look_height: f32,
     rmb_down: bool,
     lmb_down: bool,
     // Raw key states; resolved each frame
@@ -726,11 +720,6 @@ impl Renderer {
             current_pos: glam::vec3(0.0, 5.0, -10.0),
             current_look: scene_build.cam_target,
         };
-        self.cam_orbit_yaw = 0.0;
-        self.cam_orbit_pitch = 0.2;
-        self.cam_distance = 8.5;
-        self.cam_lift = 3.5;
-        self.cam_look_height = 1.6;
         self.rmb_down = false;
         self.lmb_down = false;
         self.last_cursor_pos = None;
@@ -2301,8 +2290,7 @@ impl Renderer {
             let elapsed = (t - ts).max(0.0);
             if elapsed <= 5.0 {
                 let speed = 0.6; // rad/s
-                self.cam_orbit_yaw = Self::wrap_angle(self.cam_orbit_yaw + dt * speed);
-                self.scene_inputs.rig_set_yaw(self.cam_orbit_yaw);
+                self.scene_inputs.rig_add_yaw(dt * speed);
             } else {
                 self.screenshot_start = None;
             }
