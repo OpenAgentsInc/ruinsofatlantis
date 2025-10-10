@@ -694,6 +694,7 @@ impl ApplicationHandler for App {
                                     &state, &zp,
                                 );
                                 state.set_zone_batches(Some(gz));
+                                self.boot = BootMode::Running { slug };
                             } else {
                                 log::warn!("zone: failed to load snapshot for slug='{}'", slug);
                             }
@@ -702,6 +703,12 @@ impl ApplicationHandler for App {
                                 slug: "<picker>".to_string(),
                             };
                             state.set_zone_batches(Some(gb));
+                            // Populate the picker list on web as well so the overlay shows entries
+                            self.picker.refresh();
+                            self.boot = BootMode::Picker;
+                            if let Some(w) = &self.window {
+                                w.set_title("Zone Picker — no zone selected — ↑/↓, Enter, Esc");
+                            }
                         }
                         self.state = Some(state);
                         // Wire loopback transport and seed demo server on wasm when enabled
