@@ -20,16 +20,14 @@ Workspace crates (added for modularization)
 ## Controls
 - ALT: toggle cursor ↔ mouselook (Action/Reticle default)
 - RMB hold (Classic profile): temporarily capture pointer for camera look
-- LMB/RMB (mouselook): At‑Will abilities (client emits InputCommands)
-- Q/E/R (mouselook): Encounter abilities (client emits InputCommands)
-- Tab (mouselook): Class mechanic (client emits InputCommands)
+- 1/2/3: cast spells (demo bindings)
+- LMB/RMB: no at‑will casting (reserved for look/forward‑chord only)
 - RMB drag (legacy orbit): orbit camera and rotate player facing
 - Scroll: zoom in/out
 - WASD: move (A/D turn in place)
 - Shift: run
   - Only when holding W; does not apply while strafing/backpedaling
   - Increases forward speed by ~30% (tunable)
-- 1/2/3: demo spell triggers (legacy prototype path)
 - Space: Jump (when PC is alive); when dead, toggles sky pause
 - [: scrub time backward a bit; ]: forward a bit
 - - / =: halve / double time scale

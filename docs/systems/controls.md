@@ -17,10 +17,12 @@ Movement & Camera
 - RMB drag — orbit the camera around the player while keeping the player as the orbit target.
   - Pointer‑lock is requested only while RMB is held; camera yaw/pitch update from mouse deltas.
   - Zoom and pitch limits are clamped to prevent flipping.
+ - Auto‑face (camera → character): after rotating the camera in mouselook, the character smoothly turns to face the camera’s forward direction after ~0.25 s, unless you’re turning with A/D. Turn rate ≈ 180°/s.
+ - Strafing visuals: strafing uses a walk cadence for readability (not a sprint/jog).
 
 Abilities & Actions
-- LMB / RMB — primary/secondary actions (emits `InputCommand::AtWillLMB/AtWillRMB`).
-- Q/E/R — encounter actions (when bound); Shift — dodge/guard; Tab — class mechanic.
+- 1 / 2 / 3 — cast bound spells (demo bindings). No other default cast keys.
+- LMB / RMB — no at‑will actions; used only for look and LMB+RMB forward chord.
 
 Autorun & Walk
 - Num Lock — toggle autorun (pressing S cancels autorun).

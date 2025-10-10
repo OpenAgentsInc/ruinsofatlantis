@@ -470,7 +470,6 @@ pub struct Renderer {
     pc_index: usize,
     player: client_core::controller::PlayerController,
     input: client_core::input::InputState,
-    input_queue: client_core::facade::controller::InputQueue,
     cam_follow: camera_sys::FollowState,
     pc_cast_queued: bool,
     pc_cast_kind: Option<PcCast>,

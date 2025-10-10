@@ -204,38 +204,11 @@ impl Renderer {
                             }
                         }
                     }
-                    // Action bindings: R, Shift, Tab (Q/E reserved for movement)
-                    PhysicalKey::Code(KeyCode::KeyR)
-                    | PhysicalKey::Code(KeyCode::ShiftLeft)
-                    | PhysicalKey::Code(KeyCode::ShiftRight)
-                    | PhysicalKey::Code(KeyCode::Tab) => {
-                        if pressed {
-                            // If dead and the user presses R, respawn instead of enqueuing an Encounter
-                            if !self.pc_alive
-                                && matches!(event.physical_key, PhysicalKey::Code(KeyCode::KeyR))
-                            {
-                                log::info!("Respawn via R key");
-                                self.respawn();
-                                return;
-                            }
-                            use client_core::systems::action_bindings::{Bindings, ButtonSnapshot};
-                            let mut snap = ButtonSnapshot::default();
-                            match event.physical_key {
-                                PhysicalKey::Code(KeyCode::KeyR) => snap.r_pressed = true,
-                                PhysicalKey::Code(KeyCode::ShiftLeft)
-                                | PhysicalKey::Code(KeyCode::ShiftRight) => {
-                                    snap.shift_pressed = true
-                                }
-                                PhysicalKey::Code(KeyCode::Tab) => snap.tab_pressed = true,
-                                _ => {}
-                            }
-                            let binds = Bindings::default();
-                            client_core::systems::action_bindings::handle_buttons(
-                                &binds,
-                                &self.controller_state,
-                                &snap,
-                                &mut self.input_queue,
-                            );
+                    // R: respawn only when dead; no other action bindings
+                    PhysicalKey::Code(KeyCode::KeyR) => {
+                        if pressed && !self.pc_alive {
+                            log::info!("Respawn via R key");
+                            self.respawn();
                         }
                     }
                     // Space: Jump when PC is alive; otherwise toggle sky pause (legacy)
@@ -371,40 +344,9 @@ impl Renderer {
                     }
                     // WoW-style: request pointer lock only while RMB is held
                     self.pointer_lock_request = Some(self.rmb_down);
-                    // In mouselook, treat RMB as an action press
-                    if self.controller_state.mode()
-                        == ecs_core::components::ControllerMode::Mouselook
-                        && self.rmb_down
-                    {
-                        let binds = client_core::systems::action_bindings::Bindings::default();
-                        let snap = client_core::systems::action_bindings::ButtonSnapshot {
-                            rmb_pressed: true,
-                            ..Default::default()
-                        };
-                        client_core::systems::action_bindings::handle_buttons(
-                            &binds,
-                            &self.controller_state,
-                            &snap,
-                            &mut self.input_queue,
-                        );
-                    }
                 }
                 if *button == winit::event::MouseButton::Left {
                     self.lmb_down = state.is_pressed();
-                    // Treat LMB as an action press on press-down
-                    if state.is_pressed() {
-                        let binds = client_core::systems::action_bindings::Bindings::default();
-                        let snap = client_core::systems::action_bindings::ButtonSnapshot {
-                            lmb_pressed: true,
-                            ..Default::default()
-                        };
-                        client_core::systems::action_bindings::handle_buttons(
-                            &binds,
-                            &self.controller_state,
-                            &snap,
-                            &mut self.input_queue,
-                        );
-                    }
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {

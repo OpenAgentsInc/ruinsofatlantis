@@ -564,7 +564,7 @@ pub fn render_impl(
                 diff += std::f32::consts::TAU;
             }
             let diff_abs = diff.abs();
-            let delay_s = 1.0f32;
+            let delay_s = 0.25f32;
             let allow = (r.last_time - r.cam_yaw_changed_at) >= delay_s
                 && diff_abs > 0.10
                 && !r.input.turn_left
