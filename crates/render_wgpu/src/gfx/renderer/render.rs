@@ -1049,7 +1049,7 @@ pub fn render_impl(
         if pc_debug {
             // If the picker overlay is active, do NOT draw the PC in debug mode.
             if r.is_picker_batches() {
-                drop(rp);
+                // Keep the pass open but do not draw the PC while the Zone Picker is active.
             } else {
                 // Proactively ensure PC rig assets exist in debug isolate
                 r.ensure_pc_assets();
