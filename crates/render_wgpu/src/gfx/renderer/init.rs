@@ -1911,6 +1911,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_land_start_time: None,
         pc_cast_shoot_time: None,
         pc_cast_end_time: None,
+        cam_yaw_prev: 0.0,
+        cam_yaw_changed_at: 0.0,
         shift_down: false,
         pc_cast_time,
         magic_missile_cast_time: mm_cast_time,

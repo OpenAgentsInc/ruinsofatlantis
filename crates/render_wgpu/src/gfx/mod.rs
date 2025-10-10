@@ -276,6 +276,9 @@ pub struct Renderer {
     // Cast phase moments for PC rig
     pc_cast_shoot_time: Option<f32>,
     pc_cast_end_time: Option<f32>,
+    // Auto-face camera yaw after small delay
+    cam_yaw_prev: f32,
+    cam_yaw_changed_at: f32,
     // Track last seen replicated PC id for logging
     pc_rep_id_last: Option<u32>,
     // Zombies
@@ -735,6 +738,8 @@ impl Renderer {
         self.pc_land_start_time = None;
         self.pc_cast_shoot_time = None;
         self.pc_cast_end_time = None;
+        self.cam_yaw_prev = 0.0;
+        self.cam_yaw_changed_at = self.last_time;
         self.pc_cast_fired = false;
 
         // Reset HP and alive flag

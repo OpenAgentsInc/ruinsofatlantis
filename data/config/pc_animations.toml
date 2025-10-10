@@ -4,7 +4,7 @@
 idle = "Idle_Loop"
 walk = "Walk_Loop"
 sprint = "Sprint_Loop"
-strafe = "Jog_Fwd_Loop" # fallback: reuse jog for sideways movement
+strafe = "Walk_Loop" # strafe uses walk cadence for lateral motion
 cast = "Spell_Simple_Idle_Loop" # back-compat; phase-specific overrides below
 
 # Cast phase clips
