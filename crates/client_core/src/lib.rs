@@ -114,13 +114,7 @@ pub mod controller {
                 RUN_SPEED
             };
 
-            // 4) Build local move vector (normalize to avoid diagonal boost)
-            let mut v_local = glam::Vec3::new(strafe, 0.0, fwd);
-            if v_local.length_squared() > 0.0 {
-                v_local = v_local.normalize() * base_speed;
-            }
-
-            // 5) Orientation rules (CCW-positive yaw)
+            // 4) Orientation rules (CCW-positive yaw)
             if input.mouse_look {
                 // Character yaw follows camera yaw every frame; CCW-positive
                 let cam_yaw = cam_forward.x.atan2(cam_forward.z);
@@ -135,14 +129,32 @@ pub mod controller {
                 }
             }
 
-            // 6) Rotate local velocity by yaw and integrate (CCW-positive yaw)
-            if v_local.length_squared() > 0.0 {
-                let cy = self.yaw;
-                let world_x = v_local.x * cy.cos() - v_local.z * cy.sin();
-                let world_z = v_local.x * cy.sin() + v_local.z * cy.cos();
-                let v_world = glam::Vec3::new(world_x, 0.0, world_z);
-                self.pos += v_world * dt;
-                // Stop conditions are immediate; no inertia (handled by inputs above)
+            // 5) Build world-space velocity using yaw basis (avoids sign mismatches)
+            let mut mx = 0.0f32; // right(+)/left(-)
+            let mut mz = 0.0f32; // forward(+)/back(-)
+            mz += if fwd > 0.0 {
+                1.0
+            } else if fwd < 0.0 {
+                -1.0
+            } else {
+                0.0
+            };
+            mx += if strafe > 0.0 {
+                1.0
+            } else if strafe < 0.0 {
+                -1.0
+            } else {
+                0.0
+            };
+            if mx != 0.0 || mz != 0.0 {
+                let (s, c) = self.yaw.sin_cos();
+                let basis_fwd = glam::Vec3::new(s, 0.0, c);
+                let basis_right = glam::Vec3::new(c, 0.0, -s);
+                let mut v = basis_right * mx + basis_fwd * mz;
+                if v.length_squared() > 1.0 {
+                    v = v.normalize();
+                }
+                self.pos += v * base_speed * dt;
             }
         }
     }
