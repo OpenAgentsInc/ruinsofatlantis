@@ -557,11 +557,29 @@ pub fn render_impl(
                 r.last_time,
             );
             let cur_yaw = r.scene_inputs.yaw();
+            // Compute panic vs normal and update face reset when exiting panic
+            let mut d = cam_yaw - cur_yaw;
+            while d > std::f32::consts::PI {
+                d -= std::f32::consts::TAU;
+            }
+            while d < -std::f32::consts::PI {
+                d += std::f32::consts::TAU;
+            }
+            let in_panic = d.abs() > std::f32::consts::FRAC_PI_2;
+            if r.cam_prev_panic && !in_panic {
+                r.cam_face_reset_at = r.last_time;
+            }
+            r.cam_prev_panic = in_panic;
+            let last_anchor = if in_panic {
+                r.cam_yaw_changed_at
+            } else {
+                r.cam_face_reset_at.max(r.cam_yaw_changed_at)
+            };
             let new_yaw = client_core::systems::auto_face::auto_face_step(
                 cur_yaw,
                 cam_yaw,
                 client_core::systems::auto_face::AutoFaceParams {
-                    last_change_at: r.cam_yaw_changed_at,
+                    last_change_at: last_anchor,
                     now: r.last_time,
                     delay_s: 0.25,
                     turning: false,

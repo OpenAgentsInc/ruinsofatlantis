@@ -279,6 +279,8 @@ pub struct Renderer {
     // Auto-face camera yaw after small delay
     cam_yaw_prev: f32,
     cam_yaw_changed_at: f32,
+    cam_face_reset_at: f32,
+    cam_prev_panic: bool,
     // Track last seen replicated PC id for logging
     pc_rep_id_last: Option<u32>,
     // Zombies
@@ -706,6 +708,8 @@ impl Renderer {
             }
             v
         };
+        self.cam_prev_panic = false;
+        self.cam_face_reset_at = self.last_time;
 
         // 2) Reset player and camera
         let pc_initial_pos = {

@@ -17,7 +17,9 @@ Movement & Camera
 - RMB drag — orbit the camera around the player while keeping the player as the orbit target.
   - Pointer‑lock is requested only while RMB is held; camera yaw/pitch update from mouse deltas.
   - Zoom and pitch limits are clamped to prevent flipping.
- - Auto‑face (camera → character): after rotating the camera in mouselook, the character smoothly turns to face the camera’s forward direction after ~0.25 s, unless you’re turning with A/D. Turn rate ≈ 180°/s.
+ - Auto‑face (camera → character):
+   - Normal: after rotating the camera, the character smoothly turns to face the camera’s forward after ~0.25 s (turn rate ≈ 180°/s).
+   - Large swings: if the camera deviates by more than 90° from the character’s facing, the character begins turning immediately but trails the camera by ~90°. Once within 90°, the normal ~0.25 s delay applies before finishing the turn to face the camera.
  - Strafing visuals: strafing uses a walk cadence for readability (not a sprint/jog).
 
 Abilities & Actions
