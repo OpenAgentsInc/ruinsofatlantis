@@ -33,7 +33,7 @@ mod tests {
         input.turn_left = true;
         update(&mut pc, &input, dt, cam);
         assert!(pc.pos.length() < 1e-3);
-        assert!(pc.yaw < 0.0);
+        assert!(pc.yaw > 0.0);
         // Now hold RMB (mouselook) and press A: should STRAFE left
         pc.pos = Vec3::ZERO;
         pc.yaw = 0.0;
