@@ -2,9 +2,7 @@
 mod wow_controller_input_tests {
     use glam::{Vec2, vec2};
 
-    /// Mirrors the production per-frame A/D resolution in render.rs:
-    /// - RMB held  -> A/D = strafes (A left, D right), Q/E preserved.
-    /// - RMB not held -> A/D = turns  (A left, D right), Q/E preserved.
+    /// New mapping: A/D swing the camera; Q/E are strafes; no direct turns from A/D.
     fn resolve_ad_to_turn_or_strafe(
         rmb_down: bool,
         a_down: bool,
@@ -13,18 +11,11 @@ mod wow_controller_input_tests {
         q_strafe_right: bool,
     ) -> (bool, bool, bool, bool) {
         // returns (turn_left, turn_right, strafe_left, strafe_right)
-        let mut turn_left = false;
-        let mut turn_right = false;
-        // Mirror production mapping (flipped): Q -> right, E -> left; under RMB A->right, D->left
-        let mut strafe_left = q_strafe_right; // E
-        let mut strafe_right = q_strafe_left; // Q
-        if rmb_down {
-            strafe_left |= d_down;
-            strafe_right |= a_down;
-        } else {
-            turn_left |= a_down;
-            turn_right |= d_down;
-        }
+        let turn_left = false;
+        let turn_right = false;
+        // Flipped mapping: Q -> right, E -> left; A/D do not affect strafes directly
+        let strafe_left = q_strafe_right; // E
+        let strafe_right = q_strafe_left; // Q
         (turn_left, turn_right, strafe_left, strafe_right)
     }
 
@@ -84,27 +75,15 @@ mod wow_controller_input_tests {
     // --- A/D resolution (root of the left/right inversion bugs) ---
 
     #[test]
-    fn ad_maps_to_turn_when_rmb_is_not_held() {
-        // Q/E not pressed; RMB up => A/D turn, not strafe.
+    fn ad_no_longer_turn_or_strafe() {
+        // A/D should not turn or strafe in the new mapping
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(false, true, false, false, false);
-        assert!(tl && !tr && !sl && !sr, "A should turn left when RMB is up");
-
+        assert!(!tl && !tr && !sl && !sr);
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(false, false, true, false, false);
-        assert!(
-            !tl && tr && !sl && !sr,
-            "D should turn right when RMB is up"
-        );
+        assert!(!tl && !tr && !sl && !sr);
     }
 
-    #[test]
-    fn ad_maps_to_strafe_when_rmb_is_held() {
-        // Q/E not pressed; RMB down => A/D strafe, not turn (flipped mapping)
-        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, true, false, false, false);
-        assert!(!tl && !tr && !sl && sr, "RMB+A should strafe right");
-
-        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, true, false, false);
-        assert!(!tl && !tr && sl && !sr, "RMB+D should strafe left");
-    }
+    // A/D strafing under RMB no longer applies; Q/E still strafe (kept by next test)
 
     #[test]
     fn qe_are_dedicated_strafes_and_preserved() {

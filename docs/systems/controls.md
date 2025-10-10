@@ -9,8 +9,8 @@ Overview
 
 Movement & Camera
 - WASD — movement
-  - RMB held: A/D become strafes; W/S move relative to camera forward.
-  - RMB released: A/D turn the character; W/S move relative to the character’s facing (no camera drift).
+  - A/D now swing the camera left/right (orbit); the character auto‑faces the camera’s forward after ~0.25 s.
+  - Q/E are strafes (Q = right, E = left). W/S move relative to the camera’s forward.
 - Q/E — dedicated strafes (Q = left, E = right) regardless of RMB.
 - Space — Jump (when grounded; WoW-like short hop)
 - Mouse Wheel — camera zoom.

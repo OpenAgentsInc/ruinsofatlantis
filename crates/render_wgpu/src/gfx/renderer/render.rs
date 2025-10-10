@@ -510,17 +510,16 @@ pub fn render_impl(
         r.input.turn_right = false;
         r.input.strafe_left = false;
         r.input.strafe_right = false;
-        // Q/E are always strafes (flipped): Q -> right, E -> left
+        // Q/E are dedicated strafes (flipped): Q -> right, E -> left
         r.input.strafe_left |= r.e_down; // E = left
         r.input.strafe_right |= r.q_down; // Q = right
-        // A/D become strafes under RMB; else turns
-        if r.rmb_down {
-            // Flip A/D strafes under RMB: A -> right, D -> left
-            r.input.strafe_left |= r.d_down; // D -> left
-            r.input.strafe_right |= r.a_down; // A -> right
-        } else {
-            r.input.turn_left |= r.a_down; // A -> turn left
-            r.input.turn_right |= r.d_down; // D -> turn right
+        // A/D rotate the camera (swing) rather than turning/strafe.
+        // Player will auto-face camera after a short delay (handled below).
+        let turn_speed = 180.0f32.to_radians();
+        if r.a_down && !r.d_down {
+            r.cam_orbit_yaw = super::update::wrap_angle(r.cam_orbit_yaw + turn_speed * dt);
+        } else if r.d_down && !r.a_down {
+            r.cam_orbit_yaw = super::update::wrap_angle(r.cam_orbit_yaw - turn_speed * dt);
         }
         // Derive effective sprint from raw Shift state with gating (forward-only)
         r.input.run = r.shift_down
