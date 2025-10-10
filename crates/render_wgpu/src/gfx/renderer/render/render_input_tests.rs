@@ -15,12 +15,12 @@ mod wow_controller_input_tests {
         // returns (turn_left, turn_right, strafe_left, strafe_right)
         let mut turn_left = false;
         let mut turn_right = false;
-        // Mirror production mapping: Q -> left, E -> right
-        let mut strafe_left = q_strafe_left;
-        let mut strafe_right = q_strafe_right;
+        // Mirror production mapping (flipped): Q -> right, E -> left; under RMB A->right, D->left
+        let mut strafe_left = q_strafe_right; // E
+        let mut strafe_right = q_strafe_left; // Q
         if rmb_down {
-            strafe_left |= a_down;
-            strafe_right |= d_down;
+            strafe_left |= d_down;
+            strafe_right |= a_down;
         } else {
             turn_left |= a_down;
             turn_right |= d_down;
@@ -98,22 +98,22 @@ mod wow_controller_input_tests {
 
     #[test]
     fn ad_maps_to_strafe_when_rmb_is_held() {
-        // Q/E not pressed; RMB down => A/D strafe, not turn.
+        // Q/E not pressed; RMB down => A/D strafe, not turn (flipped mapping)
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, true, false, false, false);
-        assert!(!tl && !tr && sl && !sr, "RMB+A should strafe left");
+        assert!(!tl && !tr && !sl && sr, "RMB+A should strafe right");
 
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, true, false, false);
-        assert!(!tl && !tr && !sl && sr, "RMB+D should strafe right");
+        assert!(!tl && !tr && sl && !sr, "RMB+D should strafe left");
     }
 
     #[test]
     fn qe_are_dedicated_strafes_and_preserved() {
         // Q/E must remain strafes regardless of RMB, and not become turns.
-        // Q -> left, E -> right
+        // Flipped mapping: Q -> right, E -> left
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(false, false, false, true, false);
-        assert!(!tl && !tr && sl && !sr, "Q should strafe left (RMB up)");
-        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, false, false, true);
-        assert!(!tl && !tr && !sl && sr, "E should strafe right (RMB down)");
+        assert!(!tl && !tr && !sl && sr, "Q should strafe right (RMB up)");
+        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(false, false, false, false, true);
+        assert!(!tl && !tr && sl && !sr, "E should strafe left (RMB up)");
     }
 
     #[test]

@@ -510,13 +510,14 @@ pub fn render_impl(
         r.input.turn_right = false;
         r.input.strafe_left = false;
         r.input.strafe_right = false;
-        // Q/E are always strafes: Q -> left, E -> right
-        r.input.strafe_left |= r.q_down; // Q = left
-        r.input.strafe_right |= r.e_down; // E = right
+        // Q/E are always strafes (flip as requested): Q -> right, E -> left
+        r.input.strafe_left |= r.e_down; // E = left
+        r.input.strafe_right |= r.q_down; // Q = right
         // A/D become strafes under RMB; else turns
         if r.rmb_down {
-            r.input.strafe_left |= r.a_down; // A -> left
-            r.input.strafe_right |= r.d_down; // D -> right
+            // Flip A/D strafes under RMB
+            r.input.strafe_left |= r.d_down; // D -> left
+            r.input.strafe_right |= r.a_down; // A -> right
         } else {
             r.input.turn_left |= r.a_down; // A -> turn left
             r.input.turn_right |= r.d_down; // D -> turn right
