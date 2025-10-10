@@ -101,65 +101,42 @@ impl Renderer {
                         if self.pc_alive =>
                     {
                         if pressed {
-                            // Gate by cooldown via client_runtime ability state
-                            if let Some(tx) = &self.cmd_tx {
-                                let yaw = self.player.yaw;
-                                let dir =
-                                    glam::Vec3::new(yaw.sin(), 0.0, yaw.cos()).normalize_or_zero();
-                                let m = self
-                                    .wizard_models
-                                    .get(self.pc_index)
-                                    .copied()
-                                    .unwrap_or(glam::Mat4::IDENTITY);
-                                let pos = m.transform_point3(glam::Vec3::new(0.0, 1.2, 0.0));
-                                let cmd = net_core::command::ClientCmd::MagicMissile {
-                                    pos: [pos.x, pos.y, pos.z],
-                                    dir: [dir.x, dir.y, dir.z],
-                                };
-                                let mut payload = Vec::new();
-                                cmd.encode(&mut payload);
-                                let mut framed = Vec::with_capacity(payload.len() + 8);
-                                net_core::frame::write_msg(&mut framed, &payload);
-                                let _ = tx.try_send(framed);
-                            }
                             let spell_id = "wiz.magic_missile.srd521";
                             if self.scene_inputs.can_cast(spell_id, self.last_time) {
                                 self.pc_cast_queued = true;
                                 self.pc_cast_kind = Some(super::super::PcCast::MagicMissile);
-                                // Use SpecDb-provided cast time captured at init
                                 self.pc_cast_time = self.magic_missile_cast_time.max(0.0);
                                 log::info!(
                                     "input: key 2 → queue Magic Missile (cast={:.2}s)",
                                     self.magic_missile_cast_time
                                 );
+                                if let Some(tx) = &self.cmd_tx {
+                                    let yaw = self.player.yaw;
+                                    let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
+                                        .normalize_or_zero();
+                                    let m = self
+                                        .wizard_models
+                                        .get(self.pc_index)
+                                        .copied()
+                                        .unwrap_or(glam::Mat4::IDENTITY);
+                                    let pos = m.transform_point3(glam::Vec3::new(0.0, 1.2, 0.0));
+                                    let cmd = net_core::command::ClientCmd::MagicMissile {
+                                        pos: [pos.x, pos.y, pos.z],
+                                        dir: [dir.x, dir.y, dir.z],
+                                    };
+                                    let mut payload = Vec::new();
+                                    cmd.encode(&mut payload);
+                                    let mut framed = Vec::with_capacity(payload.len() + 8);
+                                    net_core::frame::write_msg(&mut framed, &payload);
+                                    let _ = tx.try_send(framed);
+                                }
                             } else {
                                 log::info!(
                                     "input: Magic Missile cooldown {:.0} ms remaining",
                                     ((self.scene_inputs.cooldown_frac(
                                         spell_id,
                                         self.last_time,
-                                        self.magic_missile_cd_dur,
-                                        if let Some(tx) = &self.cmd_tx {
-                                            let yaw = self.player.yaw;
-                                            let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
-                                                .normalize_or_zero();
-                                            let m = self
-                                                .wizard_models
-                                                .get(self.pc_index)
-                                                .copied()
-                                                .unwrap_or(glam::Mat4::IDENTITY);
-                                            let pos =
-                                                m.transform_point3(glam::Vec3::new(0.0, 1.2, 0.0));
-                                            let cmd = net_core::command::ClientCmd::Fireball {
-                                                pos: [pos.x, pos.y, pos.z],
-                                                dir: [dir.x, dir.y, dir.z],
-                                            };
-                                            let mut payload = Vec::new();
-                                            cmd.encode(&mut payload);
-                                            let mut framed = Vec::with_capacity(payload.len() + 8);
-                                            net_core::frame::write_msg(&mut framed, &payload);
-                                            let _ = tx.try_send(framed);
-                                        }
+                                        self.magic_missile_cd_dur
                                     ) * self.magic_missile_cd_dur)
                                         * 1000.0)
                                         .max(0.0)
@@ -180,13 +157,33 @@ impl Renderer {
                                     "input: key 3 → queue Fireball (cast={:.2}s)",
                                     self.fireball_cast_time
                                 );
+                                if let Some(tx) = &self.cmd_tx {
+                                    let yaw = self.player.yaw;
+                                    let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
+                                        .normalize_or_zero();
+                                    let m = self
+                                        .wizard_models
+                                        .get(self.pc_index)
+                                        .copied()
+                                        .unwrap_or(glam::Mat4::IDENTITY);
+                                    let pos = m.transform_point3(glam::Vec3::new(0.0, 1.2, 0.0));
+                                    let cmd = net_core::command::ClientCmd::Fireball {
+                                        pos: [pos.x, pos.y, pos.z],
+                                        dir: [dir.x, dir.y, dir.z],
+                                    };
+                                    let mut payload = Vec::new();
+                                    cmd.encode(&mut payload);
+                                    let mut framed = Vec::with_capacity(payload.len() + 8);
+                                    net_core::frame::write_msg(&mut framed, &payload);
+                                    let _ = tx.try_send(framed);
+                                }
                             } else {
                                 log::info!(
                                     "input: Fireball cooldown {:.0} ms remaining",
                                     ((self.scene_inputs.cooldown_frac(
                                         spell_id,
                                         self.last_time,
-                                        self.fireball_cd_dur,
+                                        self.fireball_cd_dur
                                     ) * self.fireball_cd_dur)
                                         * 1000.0)
                                         .max(0.0)
