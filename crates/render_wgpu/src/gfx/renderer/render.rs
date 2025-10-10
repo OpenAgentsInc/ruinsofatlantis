@@ -161,16 +161,9 @@ pub fn render_impl(
                 view: &view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: if pc_debug {
-                    wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    }
-                } else {
-                    wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
@@ -1054,16 +1047,9 @@ pub fn render_impl(
                 view: render_view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: if pc_debug {
-                    wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    }
-                } else {
-                    wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: if want_depth {
@@ -1662,16 +1648,9 @@ pub fn render_impl(
                 view: &r.attachments.scene_read_view,
                 resolve_target: None,
                 depth_slice: None,
-                ops: if pc_debug {
-                    wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    }
-                } else {
-                    wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    }
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
