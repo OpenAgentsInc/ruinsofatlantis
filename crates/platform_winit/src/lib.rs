@@ -686,74 +686,68 @@ impl ApplicationHandler for App {
             }
             // Builder key handling (Campaign Builder zone only)
             WindowEvent::KeyboardInput { event: kev, .. } => {
-                if let BootMode::Running { slug } = &self.boot {
-                    if slug.as_str() == "campaign_builder" {
-                        use winit::event::ElementState;
-                        use winit::keyboard::KeyCode as KC;
-                        let pressed = matches!(kev.state, ElementState::Pressed);
-                        if let winit::keyboard::PhysicalKey::Code(code) = kev.physical_key {
-                            match code {
-                                KC::KeyB if pressed => {
-                                    self.builder.active = !self.builder.active;
-                                    return;
-                                }
-                                KC::Enter if pressed && self.builder.active => {
-                                    if let Some(pos) = state.center_ray_hit_y0() {
-                                        let m = SpawnMarker {
-                                            id: format!("m{:04}", self.builder.markers.len() + 1),
-                                            kind: "tree.default".into(),
-                                            pos,
-                                            yaw_deg: self.builder.yaw_deg.rem_euclid(360.0),
-                                            tags: Vec::new(),
-                                        };
-                                        self.builder.markers.push(m);
-                                    }
-                                    return;
-                                }
-                                KC::KeyQ if pressed && self.builder.active => {
-                                    self.builder.yaw_deg =
-                                        (self.builder.yaw_deg - 15.0).rem_euclid(360.0);
-                                    return;
-                                }
-                                KC::KeyE if pressed && self.builder.active => {
-                                    self.builder.yaw_deg =
-                                        (self.builder.yaw_deg + 15.0).rem_euclid(360.0);
-                                    return;
-                                }
-                                KC::KeyX if pressed && self.builder.active => {
-                                    #[cfg(not(target_arch = "wasm32"))]
-                                    {
-                                        let path = data_scene_path(slug);
-                                        ensure_scene_parent(&path);
-                                        let mut doc = load_scene(&path).unwrap_or(SceneDoc {
-                                            version: "1.0.0".into(),
-                                            seed: 0,
-                                            layers: vec![],
-                                            instances: vec![],
-                                            logic: SceneLogic {
-                                                triggers: vec![],
-                                                spawns: vec![],
-                                                waypoints: vec![],
-                                                links: vec![],
-                                            },
-                                        });
-                                        doc.logic.spawns = self.builder.markers.clone();
-                                        let _ = save_scene(&path, doc);
-                                    }
-                                    return;
-                                }
-                                KC::KeyI if pressed && self.builder.active => {
-                                    #[cfg(not(target_arch = "wasm32"))]
-                                    {
-                                        let path = data_scene_path(slug);
-                                        if let Some(doc) = load_scene(&path) {
-                                            self.builder.markers = doc.logic.spawns;
-                                        }
-                                    }
-                                    return;
-                                }
-                                _ => {}
+                if let BootMode::Running { slug } = &self.boot
+                    && slug.as_str() == "campaign_builder"
+                {
+                    use winit::event::ElementState;
+                    use winit::keyboard::KeyCode as KC;
+                    let pressed = matches!(kev.state, ElementState::Pressed);
+                    if let winit::keyboard::PhysicalKey::Code(code) = kev.physical_key {
+                        match code {
+                            KC::KeyB if pressed => {
+                                self.builder.active = !self.builder.active;
                             }
+                            KC::Enter if pressed && self.builder.active => {
+                                if let Some(pos) = state.center_ray_hit_y0() {
+                                    let m = SpawnMarker {
+                                        id: format!("m{:04}", self.builder.markers.len() + 1),
+                                        kind: "tree.default".into(),
+                                        pos,
+                                        yaw_deg: self.builder.yaw_deg.rem_euclid(360.0),
+                                        tags: Vec::new(),
+                                    };
+                                    self.builder.markers.push(m);
+                                }
+                            }
+                            KC::KeyQ if pressed && self.builder.active => {
+                                self.builder.yaw_deg =
+                                    (self.builder.yaw_deg - 15.0).rem_euclid(360.0);
+                            }
+                            KC::KeyE if pressed && self.builder.active => {
+                                self.builder.yaw_deg =
+                                    (self.builder.yaw_deg + 15.0).rem_euclid(360.0);
+                            }
+                            KC::KeyX if pressed && self.builder.active => {
+                                #[cfg(not(target_arch = "wasm32"))]
+                                {
+                                    let path = data_scene_path(slug);
+                                    ensure_scene_parent(&path);
+                                    let mut doc = load_scene(&path).unwrap_or(SceneDoc {
+                                        version: "1.0.0".into(),
+                                        seed: 0,
+                                        layers: vec![],
+                                        instances: vec![],
+                                        logic: SceneLogic {
+                                            triggers: vec![],
+                                            spawns: vec![],
+                                            waypoints: vec![],
+                                            links: vec![],
+                                        },
+                                    });
+                                    doc.logic.spawns = self.builder.markers.clone();
+                                    let _ = save_scene(&path, doc);
+                                }
+                            }
+                            KC::KeyI if pressed && self.builder.active => {
+                                #[cfg(not(target_arch = "wasm32"))]
+                                {
+                                    let path = data_scene_path(slug);
+                                    if let Some(doc) = load_scene(&path) {
+                                        self.builder.markers = doc.logic.spawns;
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
