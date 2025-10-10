@@ -12,6 +12,9 @@ pub struct PcAnimCfg {
     pub walk: Option<String>,
     pub sprint: Option<String>,
     pub cast: Option<String>,
+    pub jump_start: Option<String>,
+    pub jump_loop: Option<String>,
+    pub jump_land: Option<String>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -53,6 +56,15 @@ pub fn load_default() -> Result<PcAnimCfg> {
     }
     if let Ok(v) = std::env::var("PC_ANIM_CAST") {
         cfg.cast = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_JUMP_START") {
+        cfg.jump_start = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_JUMP_LOOP") {
+        cfg.jump_loop = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_JUMP_LAND") {
+        cfg.jump_land = Some(v);
     }
     Ok(cfg)
 }

@@ -85,6 +85,12 @@ pub mod controller {
             self.walk_mode = !self.walk_mode;
         }
 
+        /// True while the controller is off the ground (jumping/falling).
+        #[must_use]
+        pub fn airborne(&self) -> bool {
+            self.airborne
+        }
+
         /// Provide latest ground height under the controller (terrain or collider).
         /// - If grounded, snaps the character to this height and updates current ground.
         /// - If airborne, raises the ground plane only (landing on raised terrain works).

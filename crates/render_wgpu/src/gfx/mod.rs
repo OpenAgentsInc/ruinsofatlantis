@@ -269,6 +269,10 @@ pub struct Renderer {
     pc_prev_pos: glam::Vec3,
     pc_anim_cfg: data_runtime::configs::pc_animations::PcAnimCfg,
     pc_anim_missing_warned: HashSet<String>,
+    // Jump state tracking for animation selection
+    pc_prev_airborne: bool,
+    pc_jump_start_time: Option<f32>,
+    pc_land_start_time: Option<f32>,
     // Track last seen replicated PC id for logging
     pc_rep_id_last: Option<u32>,
     // Zombies
@@ -721,6 +725,9 @@ impl Renderer {
         self.last_cursor_pos = None;
         self.pc_cast_queued = false;
         self.pc_anim_start = None;
+        self.pc_prev_airborne = false;
+        self.pc_jump_start_time = None;
+        self.pc_land_start_time = None;
         self.pc_cast_fired = false;
 
         // Reset HP and alive flag

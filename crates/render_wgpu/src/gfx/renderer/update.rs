@@ -1409,6 +1409,16 @@ impl Renderer {
             _ => return,
         };
         let joints = self.pc_joints as usize;
+        // Jump state transitions (airborne edges) for animation selection
+        let airborne_now = self.scene_inputs.airborne();
+        if airborne_now && !self.pc_prev_airborne {
+            self.pc_jump_start_time = Some(time_global);
+            self.pc_land_start_time = None;
+        } else if !airborne_now && self.pc_prev_airborne {
+            self.pc_land_start_time = Some(time_global);
+            self.pc_jump_start_time = None;
+        }
+        self.pc_prev_airborne = airborne_now;
         // Movement detection
         let current_pos = {
             let m = self
@@ -1426,15 +1436,60 @@ impl Renderer {
             || self.input.strafe_right;
         let moving = moving_by_input || (current_pos - self.pc_prev_pos).length_squared() > 1e-4;
         let is_casting = self.pc_anim_start.is_some();
-        // Desired names by situation (exact match preferred)
-        let desired_exact = if is_casting {
-            self.pc_anim_cfg.cast.as_deref()
-        } else if moving && self.input.run {
-            self.pc_anim_cfg.sprint.as_deref()
-        } else if moving {
-            self.pc_anim_cfg.walk.as_deref()
+        // Jump override takes priority over cast/move/idle
+        let mut chosen_name: Option<String> = None;
+        let mut chosen_time: Option<f32> = None;
+        if airborne_now {
+            // While airborne, play Jump_Start for its duration, then Jump_Loop
+            let js = self
+                .pc_anim_cfg
+                .jump_start
+                .as_deref()
+                .unwrap_or("Jump_Start");
+            let jl = self.pc_anim_cfg.jump_loop.as_deref().unwrap_or("Jump_Loop");
+            if let Some(start) = self.pc_jump_start_time
+                && let Some(clip) = pc_cpu.animations.get(js)
+            {
+                let elapsed = (time_global - start).max(0.0);
+                if elapsed < clip.duration.max(0.0001) {
+                    chosen_name = Some(js.to_string());
+                    chosen_time = Some(elapsed);
+                } else if pc_cpu.animations.contains_key(jl) {
+                    chosen_name = Some(jl.to_string());
+                    chosen_time = Some(elapsed);
+                }
+            } else if pc_cpu.animations.contains_key(jl) {
+                chosen_name = Some(jl.to_string());
+                chosen_time = Some(0.0);
+            }
+        } else if let Some(land) = self.pc_land_start_time {
+            // Shortly after landing, play Jump_Land clip for its duration
+            let name = self.pc_anim_cfg.jump_land.as_deref().unwrap_or("Jump_Land");
+            if let Some(clip) = pc_cpu.animations.get(name) {
+                let elapsed = (time_global - land).max(0.0);
+                if elapsed < clip.duration.max(0.0001) {
+                    chosen_name = Some(name.to_string());
+                    chosen_time = Some(elapsed);
+                } else {
+                    self.pc_land_start_time = None; // clip finished
+                }
+            } else {
+                self.pc_land_start_time = None;
+            }
+        }
+        // Desired names by situation (exact match preferred) if jump didn't take over
+        let desired_exact = if chosen_name.is_none() {
+            if is_casting {
+                self.pc_anim_cfg.cast.as_deref()
+            } else if moving && self.input.run {
+                self.pc_anim_cfg.sprint.as_deref()
+            } else if moving {
+                self.pc_anim_cfg.walk.as_deref()
+            } else {
+                self.pc_anim_cfg.idle.as_deref()
+            }
         } else {
-            self.pc_anim_cfg.idle.as_deref()
+            None
         };
         // Helper: exact match then case-insensitive contains fallback
         let find_named = |name: &str| -> Option<String> {
@@ -1460,13 +1515,17 @@ impl Renderer {
             }
             None
         };
-        let lookup = if let Some(want) = desired_exact {
+        let lookup = if let Some(n) = chosen_name {
+            Some(n)
+        } else if let Some(want) = desired_exact {
             find_named(want)
         } else {
             None
         }
         .or_else(|| {
-            if is_casting {
+            if chosen_time.is_some() {
+                None
+            } else if is_casting {
                 pick_any(&["spell", "cast"])
             } else if moving && self.input.run {
                 pick_any(&["sprint", "run", "jog"])
@@ -1490,7 +1549,9 @@ impl Renderer {
             && let Some(clip) = pc_cpu.animations.get(&name)
         {
             // Respect local casting timeline if present
-            let t = if is_casting {
+            let t = if let Some(tj) = chosen_time {
+                tj
+            } else if is_casting {
                 if let Some(start) = self.pc_anim_start {
                     (time_global - start).max(0.0)
                 } else {

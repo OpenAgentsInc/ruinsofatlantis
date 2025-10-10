@@ -49,6 +49,11 @@ impl SceneInputs {
         self.controller.yaw = yaw;
     }
 
+    /// True while the controller is off the ground (jumping/falling).
+    pub fn airborne(&self) -> bool {
+        self.controller.airborne()
+    }
+
     /// Provide the latest ground height from terrain/collision to the controller.
     pub fn set_ground_height(&mut self, h: f32) {
         self.controller.set_ground_height(h);
