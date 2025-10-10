@@ -609,6 +609,8 @@ impl ApplicationHandler for App {
                                     } else {
                                         st.ensure_pc_assets();
                                     }
+                                    // Dismiss any HUD loading modal drawn during Loading
+                                    st.hud_reset();
                                 }
                                 #[cfg(feature = "demo_server")]
                                 if let Some(srv) = self.demo_server.as_mut() {
@@ -639,10 +641,16 @@ impl ApplicationHandler for App {
                             }
                             Ok(Err(e)) => {
                                 log::error!("zone load failed: {:?}", e);
+                                if let Some(st) = self.state.as_mut() {
+                                    st.hud_reset();
+                                }
                                 self.boot = BootMode::Picker;
                             }
                             Err(_) => {
                                 log::error!("zone load thread panicked");
+                                if let Some(st) = self.state.as_mut() {
+                                    st.hud_reset();
+                                }
                                 self.boot = BootMode::Picker;
                             }
                         }

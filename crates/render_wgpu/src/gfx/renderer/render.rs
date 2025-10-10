@@ -1049,6 +1049,8 @@ pub fn render_impl(
             timestamp_writes: None,
         });
         if pc_debug {
+            // Proactively ensure PC rig assets exist in debug isolate
+            r.ensure_pc_assets();
             let shard_m = crate::gfx::types::Model {
                 model: glam::Mat4::IDENTITY.to_cols_array_2d(),
                 color: [1.0, 1.0, 1.0],

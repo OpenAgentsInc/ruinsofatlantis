@@ -1829,6 +1829,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _zombie_tex_view,
         _zombie_sampler,
         wire_enabled: false,
+        pc_debug_warned_not_ready: false,
         sky: sky_state,
         terrain_cpu,
         start: Instant::now(),

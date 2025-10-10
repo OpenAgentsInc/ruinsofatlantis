@@ -91,9 +91,15 @@ impl Renderer {
             rpass.draw_indexed(0..self.pc_index_count, 0, 0..1);
             // Debug HUD line to prove the pass ran (will be queued by caller)
         } else {
-            // Fallback: draw PC from wizard rig (skip in debug isolate to avoid empty buffers)
+            // Fallbacks when PC (UBC) resources aren't ready
             if use_debug {
-                log::warn!("pc: resources not ready in debug; skipping fallback to wizard rig");
+                // In debug isolate, avoid spamming logs and draw a placeholder so the frame isn't black
+                if !self.pc_debug_warned_not_ready {
+                    log::warn!("pc: resources not ready in debug; drawing placeholder");
+                    self.pc_debug_warned_not_ready = true;
+                }
+                let m = glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0));
+                self.draw_debug_cube(rpass, m);
                 return;
             }
             // Fallback: draw PC from wizard rig

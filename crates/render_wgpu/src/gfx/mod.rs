@@ -325,6 +325,8 @@ pub struct Renderer {
 
     // Flags
     wire_enabled: bool,
+    // One-shot gate to avoid spamming logs when PC resources aren't ready in debug
+    pc_debug_warned_not_ready: bool,
 
     // Sky/time-of-day state
     sky: sky::SkyStateCPU,
@@ -1922,6 +1924,11 @@ impl Renderer {
         window: &winit::window::Window,
     ) -> Result<(), SurfaceError> {
         renderer::render::render_impl(self, Some(window))
+    }
+
+    /// Clear any previously queued HUD overlay content (e.g., loading modal).
+    pub fn hud_reset(&mut self) {
+        self.hud.reset();
     }
 
     /// Draw the Zone Picker overlay using HUD text. The platform should call this
