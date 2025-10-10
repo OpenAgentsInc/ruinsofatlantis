@@ -1035,6 +1035,7 @@ pub fn render_impl(
     // Main pass with depth
     log::debug!("pass: main");
     // Capture validation across the entire main pass to surface concrete errors
+    #[cfg(not(target_arch = "wasm32"))]
     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     if !present_only {
         let pc_debug = std::env::var("RA_PC_DEBUG")
@@ -1269,6 +1270,7 @@ pub fn render_impl(
                 && r.pc_index_count > 0;
             if pc_ready {
                 // Always validate the PC draw pass so encoder errors are surfaced with context.
+                #[cfg(not(target_arch = "wasm32"))]
                 r.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
                 // Ensure the per-draw model UBO (group=1) is valid; identity is fine because
@@ -1294,6 +1296,7 @@ pub fn render_impl(
                 );
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                     log::error!("validation after PC draw: {:?}", e);
                 }

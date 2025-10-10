@@ -20,13 +20,24 @@ fn data_root() -> PathBuf {
 }
 
 pub fn load_default() -> Result<PcAnimCfg> {
-    let path = data_root().join("config/pc_animations.toml");
-    let mut cfg = if path.is_file() {
-        let txt =
-            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        toml::from_str::<PcAnimCfg>(&txt).context("parse pc_animations TOML")?
-    } else {
-        PcAnimCfg::default()
+    let mut cfg = {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // On wasm, the filesystem is unavailable; embed the default config.
+            let txt = include_str!("../../../../data/config/pc_animations.toml");
+            toml::from_str::<PcAnimCfg>(txt).context("parse embedded pc_animations TOML")?
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = data_root().join("config/pc_animations.toml");
+            if path.is_file() {
+                let txt = std::fs::read_to_string(&path)
+                    .with_context(|| format!("read {}", path.display()))?;
+                toml::from_str::<PcAnimCfg>(&txt).context("parse pc_animations TOML")?
+            } else {
+                PcAnimCfg::default()
+            }
+        }
     };
     // Env overrides
     if let Ok(v) = std::env::var("PC_ANIM_IDLE") {

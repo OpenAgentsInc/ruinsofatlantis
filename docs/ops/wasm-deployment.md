@@ -204,6 +204,12 @@ trunk build --release
 
 The output lives in `dist/`. You can host the `dist/` directory on any static host.
 
+Selecting a specific Zone in the browser
+- Append `?zone=<slug>` to the URL to bypass the Zone Picker.
+- Examples:
+  - Local dev (Trunk): `http://127.0.0.1:8080/?zone=cc_demo`
+  - Live site route: `/play?zone=cc_demo`
+
 Base path note: when deploying under a subpath (e.g., GitHub Pages `/ruinsofatlantis/`), build with `trunk build --release --public-url /ruinsofatlantis/` so asset URLs resolve.
 
 ### Integrating into existing sites (Laravel / React / Inertia / Vite)

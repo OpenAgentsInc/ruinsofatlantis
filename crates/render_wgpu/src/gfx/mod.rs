@@ -1982,8 +1982,20 @@ impl Renderer {
                 return;
             }
         };
-        // Merge universal animation library if available
+        // Merge universal animation library so PC has Idle/Walk/Run/Cast clips.
         let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
+        #[cfg(target_arch = "wasm32")]
+        {
+            // On wasm, assets are embedded; attempt merge unconditionally.
+            if let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path) {
+                log::debug!(
+                    "ensure_pc_assets(wasm): merge anim lib failed at {:?}: {:?}",
+                    lib_path,
+                    e
+                );
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if lib_path.exists()
             && let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path)
         {
@@ -2111,6 +2123,17 @@ impl Renderer {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         // Merge universal animation library if available (idempotent)
         let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Err(e) = roa_assets::skinning::merge_gltf_animations(&mut cpu_pc, &lib_path) {
+                log::debug!(
+                    "install_pc_cpu(wasm): merge anim lib failed at {:?}: {:?}",
+                    lib_path,
+                    e
+                );
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if lib_path.exists()
             && let Err(e) = roa_assets::skinning::merge_gltf_animations(&mut cpu_pc, &lib_path)
         {

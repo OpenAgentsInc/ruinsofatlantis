@@ -45,6 +45,9 @@ cargo install trunk
 
 # serve the WASM build locally (http://127.0.0.1:8080)
 trunk serve --release
+
+# tip: to skip the Zone Picker, append a zone param
+# example: http://127.0.0.1:8080/?zone=cc_demo
 ```
 
 Notes

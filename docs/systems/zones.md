@@ -61,7 +61,9 @@ Server integration (initial)
 
 Selecting a zone
 - Native: `ROA_ZONE=<slug> cargo run -p platform_winit`
-- Web: append `?zone=<slug>` to the URL (e.g., `/play?zone=cc_demo`).
+- Web: append `?zone=<slug>` to the URL. Examples:
+  - Live site: `/play?zone=cc_demo`
+  - Local dev (Trunk): `http://127.0.0.1:8080/?zone=cc_demo`
 - Back‑compat: `RA_ZONE` is still accepted, but `ROA_ZONE` is canonical.
 
 ---
@@ -109,4 +111,3 @@ Editor grid schema (optional)
 - Bake outputs: `packs/zones/<slug>/snapshot.v1/`
 - Loaders: `data_runtime::zone_snapshot`, `client_core::zone_client`
 - GPU: `render_wgpu::gfx::zone_batches`
-

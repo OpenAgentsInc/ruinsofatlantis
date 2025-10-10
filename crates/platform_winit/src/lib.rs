@@ -694,6 +694,8 @@ impl ApplicationHandler for App {
                                     &state, &zp,
                                 );
                                 state.set_zone_batches(Some(gz));
+                                // Ensure PC rig assets are available when skipping the Picker via URL
+                                state.ensure_pc_assets();
                                 self.boot = BootMode::Running { slug };
                             } else {
                                 log::warn!("zone: failed to load snapshot for slug='{}'", slug);
