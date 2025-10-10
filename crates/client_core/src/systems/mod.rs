@@ -7,6 +7,7 @@ pub mod auto_face;
 pub mod camera;
 pub mod cursor;
 pub mod mouselook;
+pub mod pc_controller;
 
 #[cfg(test)]
 mod tests {

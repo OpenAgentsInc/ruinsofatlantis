@@ -505,28 +505,36 @@ pub fn render_impl(
         // Derive per-frame controller flags that depend on mouse buttons
         r.input.mouse_look = r.rmb_down;
         r.input.click_move_forward = r.lmb_down && r.rmb_down;
-        // Rebuild movement flags from raw states only (no latching frame-to-frame)
+        // Resolve raw buttons → intents and camera swing via client_core helper
+        let raw = client_core::systems::pc_controller::RawButtons {
+            w: r.input.forward,
+            s: r.input.backward,
+            a: r.a_down,
+            d: r.d_down,
+            q: r.q_down,
+            e: r.e_down,
+            lmb: r.lmb_down,
+            rmb: r.rmb_down,
+            shift: r.shift_down,
+        };
+        let out = client_core::systems::pc_controller::resolve(
+            raw,
+            client_core::systems::pc_controller::ResolveParams {
+                dt,
+                turn_speed_rad_per_s: 180.0f32.to_radians(),
+            },
+        );
         r.input.turn_left = false;
         r.input.turn_right = false;
-        r.input.strafe_left = false;
-        r.input.strafe_right = false;
-        // Q/E are dedicated strafes (flipped): Q -> right, E -> left
-        r.input.strafe_left |= r.e_down; // E = left
-        r.input.strafe_right |= r.q_down; // Q = right
-        // A/D rotate the camera (swing) rather than turning/strafe.
-        // Player will auto-face camera after a short delay (handled below).
-        let turn_speed = 180.0f32.to_radians();
-        if r.a_down && !r.d_down {
-            r.cam_orbit_yaw = super::update::wrap_angle(r.cam_orbit_yaw + turn_speed * dt);
-        } else if r.d_down && !r.a_down {
-            r.cam_orbit_yaw = super::update::wrap_angle(r.cam_orbit_yaw - turn_speed * dt);
+        r.input.strafe_left = out.intents.strafe_left;
+        r.input.strafe_right = out.intents.strafe_right;
+        r.input.forward = out.intents.forward;
+        r.input.backward = out.intents.backward;
+        r.input.click_move_forward = out.intents.click_move_forward;
+        r.input.run = out.intents.run;
+        if out.cam_yaw_delta != 0.0 {
+            r.cam_orbit_yaw = super::update::wrap_angle(r.cam_orbit_yaw + out.cam_yaw_delta);
         }
-        // Derive effective sprint from raw Shift state with gating (forward-only)
-        r.input.run = r.shift_down
-            && r.input.forward
-            && !r.input.backward
-            && !r.input.strafe_left
-            && !r.input.strafe_right;
         r.scene_inputs.apply_input(&r.input);
         // One-shot: clear jump so holding Space does not repeat
         r.input.jump_pressed = false;
