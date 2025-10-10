@@ -3,6 +3,7 @@
 //! Hosts lightweight, testable logic used by the renderer host.
 
 pub mod action_bindings;
+pub mod auto_face;
 pub mod camera;
 pub mod cursor;
 pub mod mouselook;

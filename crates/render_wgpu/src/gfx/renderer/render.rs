@@ -541,37 +541,26 @@ pub fn render_impl(
         {
             let cam_fwd = r.cam_follow.current_look - r.cam_follow.current_pos;
             let cam_yaw = cam_fwd.x.atan2(cam_fwd.z);
-            // Detect camera yaw changes and reset the timer
-            let mut d = cam_yaw - r.cam_yaw_prev;
-            while d > std::f32::consts::PI {
-                d -= std::f32::consts::TAU;
-            }
-            while d < -std::f32::consts::PI {
-                d += std::f32::consts::TAU;
-            }
-            if d.abs() > 0.02 {
-                r.cam_yaw_prev = cam_yaw;
-                r.cam_yaw_changed_at = r.last_time;
-            }
-            // Conditions: significant yaw diff, delay elapsed, not manually turning
+            client_core::systems::auto_face::register_cam_change(
+                &mut r.cam_yaw_prev,
+                &mut r.cam_yaw_changed_at,
+                cam_yaw,
+                r.last_time,
+            );
             let cur_yaw = r.scene_inputs.yaw();
-            let mut diff = cam_yaw - cur_yaw;
-            while diff > std::f32::consts::PI {
-                diff -= std::f32::consts::TAU;
-            }
-            while diff < -std::f32::consts::PI {
-                diff += std::f32::consts::TAU;
-            }
-            let diff_abs = diff.abs();
-            let delay_s = 0.25f32;
-            let allow = (r.last_time - r.cam_yaw_changed_at) >= delay_s
-                && diff_abs > 0.10
-                && !r.input.turn_left
-                && !r.input.turn_right;
-            if allow {
-                let turn_speed = 180.0f32.to_radians();
-                let step = (turn_speed * dt).min(diff_abs);
-                let new_yaw = cur_yaw + diff.signum() * step;
+            let new_yaw = client_core::systems::auto_face::auto_face_step(
+                cur_yaw,
+                cam_yaw,
+                client_core::systems::auto_face::AutoFaceParams {
+                    last_change_at: r.cam_yaw_changed_at,
+                    now: r.last_time,
+                    delay_s: 0.25,
+                    turning: false,
+                    turn_speed_rad_per_s: 180.0f32.to_radians(),
+                    dt,
+                },
+            );
+            if (new_yaw - cur_yaw).abs() > 1e-6 {
                 r.scene_inputs.set_yaw(new_yaw);
             }
         }
