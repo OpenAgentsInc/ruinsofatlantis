@@ -648,27 +648,12 @@ impl Renderer {
     /// Attach or clear zone batches uploaded by the client.
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
         self.zone_batches = z;
-        // Update zone policy based on slug (desktop: try manifest; web: slug mapping)
-        let mut policy = ZonePolicy::default();
-        if let Some(b) = &self.zone_batches {
-            let slug = b.slug.as_str();
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                if let Ok(m) = data_runtime::zone::load_zone_manifest(slug) {
-                    if let Some(ac) = m.allow_casting {
-                        policy.allow_casting = ac;
-                    }
-                    if let Some(h) = m.show_player_hud {
-                        policy.show_player_hud = h;
-                    }
-                }
-            }
-            // Fallbacks for zones without manifests
-            if slug == "cc_demo" {
-                policy.allow_casting = false;
-                policy.show_player_hud = false;
-            }
-        }
+        // Update zone policy based on slug
+        let policy = self
+            .zone_batches
+            .as_ref()
+            .map(|b| compute_zone_policy_for_slug(b.slug.as_str()))
+            .unwrap_or_default();
         self.zone_policy = policy;
     }
 
@@ -4155,7 +4140,7 @@ impl Renderer {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct DestructibleId(pub usize);
 #[derive(Clone, Copy)]
-struct ZonePolicy {
+pub(crate) struct ZonePolicy {
     allow_casting: bool,
     show_player_hud: bool,
 }
@@ -4167,4 +4152,24 @@ impl Default for ZonePolicy {
             show_player_hud: true,
         }
     }
+}
+
+pub(crate) fn compute_zone_policy_for_slug(slug: &str) -> ZonePolicy {
+    let mut policy = ZonePolicy::default();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Ok(m) = data_runtime::zone::load_zone_manifest(slug) {
+            if let Some(ac) = m.allow_casting {
+                policy.allow_casting = ac;
+            }
+            if let Some(h) = m.show_player_hud {
+                policy.show_player_hud = h;
+            }
+        }
+    }
+    if slug == "cc_demo" {
+        policy.allow_casting = false;
+        policy.show_player_hud = false;
+    }
+    policy
 }
