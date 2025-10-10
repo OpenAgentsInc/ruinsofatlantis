@@ -1984,3 +1984,8 @@ pub fn render_impl(
     }
     Ok(())
 }
+
+// Unit tests for WoW-style controller input mapping live in a separate file
+// to keep this file focused on rendering logic.
+#[cfg(test)]
+mod render_input_tests;
