@@ -28,7 +28,7 @@ impl Renderer {
         rpass.set_index_buffer(ib.slice(..), IndexFormat::Uint16);
         rpass.draw_indexed(0..idx, 0, 0..1);
     }
-    pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
+    pub(crate) fn draw_pc_only(&mut self, rpass: &mut wgpu::RenderPass<'_>) {
         let use_debug = std::env::var("RA_PC_DEBUG").as_deref() == Ok("1");
         let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
         rpass.insert_debug_marker("pc:begin");
