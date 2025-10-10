@@ -1212,16 +1212,18 @@ fn detect_zone_slug() -> Option<String> {
     {
         return Some(v);
     }
-    // WASM: parse ?zone=<slug> from the URL.
+    // WASM: parse ?zone=<slug> from the URL (manual parser; avoids extra web-sys features).
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(win) = web_sys::window() {
             if let Ok(search) = win.location().search() {
-                let q = web_sys::UrlSearchParams::new_with_str(&search).ok();
-                if let Some(qs) = q {
-                    if let Some(v) = qs.get("zone") {
-                        if !v.is_empty() {
-                            return Some(v);
+                let s = search.trim_start_matches('?');
+                for pair in s.split('&') {
+                    let mut it = pair.splitn(2, '=');
+                    if let (Some(k), Some(v)) = (it.next(), it.next()) {
+                        if k == "zone" && !v.is_empty() {
+                            // Slugs are plain ASCII; keep as-is
+                            return Some(v.to_string());
                         }
                     }
                 }
@@ -1253,7 +1255,16 @@ impl App {
                             | net_core::command::ClientCmd::MagicMissile { .. }
                     );
                     if rate_limited {
-                        let now = std::time::Instant::now();
+                        let now = {
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                std::time::Instant::now()
+                            }
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                web_time::Instant::now()
+                            }
+                        };
                         if now.duration_since(self.last_sec_start).as_secs_f32() >= 1.0 {
                             self.last_sec_start = now;
                             self.cmds_this_sec = 0;
@@ -1289,8 +1300,17 @@ impl App {
                 }
             }
             let dt = if let Some(t0) = self.last_time.take() {
-                let now = std::time::Instant::now();
-                let d = (now - t0).as_secs_f32();
+                let now = {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        std::time::Instant::now()
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        web_time::Instant::now()
+                    }
+                };
+                let d = now.duration_since(t0).as_secs_f32();
                 self.last_time = Some(now);
                 d.clamp(0.0, 0.1)
             } else {

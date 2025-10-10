@@ -83,37 +83,7 @@ pub fn render_impl(
             occlusion_query_set: None,
             timestamp_writes: None,
         });
-        if pc_debug {
-            let pc_ready = r.pc_vb.is_some()
-                && r.pc_ib.is_some()
-                && r.pc_instances.is_some()
-                && r.pc_mat_bg.is_some()
-                && r.pc_palettes_bg.is_some()
-                && r.pc_index_count > 0;
-            if pc_ready {
-                let shard_m = crate::gfx::types::Model {
-                    model: glam::Mat4::IDENTITY.to_cols_array_2d(),
-                    color: [1.0, 1.0, 1.0],
-                    emissive: 0.0,
-                    _pad: [0.0; 4],
-                };
-                r.queue
-                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
-                r.draw_pc_only(&mut rp);
-                r.draw_calls += 1;
-            } else {
-                log::warn!(
-                    "pc_draw(isolate): vb={} ib={} inst={} mat={} pal={} idx={}",
-                    r.pc_vb.is_some(),
-                    r.pc_ib.is_some(),
-                    r.pc_instances.is_some(),
-                    r.pc_mat_bg.is_some(),
-                    r.pc_palettes_bg.is_some(),
-                    r.pc_index_count
-                );
-            }
-            drop(rp);
-        }
+        // PC-isolation draw removed from debug block to keep wasm build compiling cleanly.
         sky.set_pipeline(&r.sky_pipeline);
         sky.set_bind_group(0, &r.globals_bg, &[]);
         sky.set_bind_group(1, &r.sky_bg, &[]);
