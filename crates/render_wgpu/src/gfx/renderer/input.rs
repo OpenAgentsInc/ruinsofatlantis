@@ -419,20 +419,20 @@ impl Renderer {
                     apply = true;
                 }
                 if apply {
+                    // Update controller camera state for other systems
                     client_core::systems::mouselook::apply_mouse_delta(
                         &self.controller_ml_cfg,
                         &mut self.controller_state,
                         dx,
                         dy,
                     );
-                    // Mirror controller yaw/pitch into existing orbit fields for camera system.
-                    // Positive pitch (mouse up) should tilt the orbit camera UP. Our orbit helper's
-                    // X rotation tilts down for positive angles, so negate the controller pitch here.
-                    // Also invert yaw sign so mouse-right turns camera right in the orbit system.
-                    self.cam_orbit_yaw = wrap_angle(-self.controller_state.camera.yaw);
-                    let orbit_pitch = -self.controller_state.camera.pitch;
-                    self.cam_orbit_pitch = orbit_pitch.clamp(-1.2, 1.2);
-                    // Do not rotate the PC from mouse movement; PC yaw follows movement (camera-relative)
+                    // Directly accumulate orbit yaw/pitch from mouse deltas so RMB drag rotates camera around player
+                    let to_rad = self
+                        .controller_ml_cfg
+                        .sensitivity_deg_per_count
+                        .to_radians();
+                    self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx * to_rad);
+                    self.cam_orbit_pitch = (self.cam_orbit_pitch - dy * to_rad).clamp(-1.2, 1.2);
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));
@@ -458,10 +458,12 @@ impl Renderer {
                 dx,
                 dy,
             );
-            // Mirror controller yaw/pitch into orbit fields
-            self.cam_orbit_yaw = wrap_angle(-self.controller_state.camera.yaw);
-            let orbit_pitch = -self.controller_state.camera.pitch;
-            self.cam_orbit_pitch = orbit_pitch.clamp(-1.2, 1.2);
+            let to_rad = self
+                .controller_ml_cfg
+                .sensitivity_deg_per_count
+                .to_radians();
+            self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx * to_rad);
+            self.cam_orbit_pitch = (self.cam_orbit_pitch - dy * to_rad).clamp(-1.2, 1.2);
         }
     }
 }
