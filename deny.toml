@@ -3,9 +3,11 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 vulnerability = "deny"
 unsound = "deny"
-# Treat these advisory categories as informational warnings rather than failures.
-# This syntax is compatible across recent cargo-deny versions.
-informational = ["unmaintained", "yanked", "notice"]
+# Treat selected advisory categories as warnings rather than failures (cargo-deny v0.14+ schema)
+# See: https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
 ignore = []
 
 [bans]
