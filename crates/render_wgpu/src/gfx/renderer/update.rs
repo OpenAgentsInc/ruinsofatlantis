@@ -1897,6 +1897,16 @@ impl Renderer {
 
     /// Update and render-side state for projectiles/particles
     pub(crate) fn update_fx(&mut self, t: f32, dt: f32) {
+        // If the zone does not allow casting, suppress all projectile FX and spawns.
+        if !self.zone_policy.allow_casting {
+            if !self.projectiles.is_empty() {
+                self.projectiles.clear();
+            }
+            if !self.particles.is_empty() {
+                self.particles.clear();
+            }
+            return;
+        }
         if std::env::var("RA_LOG_PROJECTILES")
             .map(|v| v == "1")
             .unwrap_or(false)

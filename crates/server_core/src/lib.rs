@@ -16,6 +16,7 @@ pub mod ecs;
 pub mod jobs;
 pub mod scene_build;
 pub mod systems;
+pub mod zones;
 // (destructible module disabled)
 
 // ----------------------------------------------------------------------------

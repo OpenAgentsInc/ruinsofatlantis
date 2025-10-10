@@ -208,6 +208,7 @@ fn packs_zones_root() -> std::path::PathBuf {
 
 // Determine whether to spawn demo encounter content (NPC rings, boss, destructible).
 // Keep this whitelist explicit to avoid accidental spawns in authoring/testing zones.
+#[allow(dead_code)]
 fn is_demo_content_zone(slug: &str) -> bool {
     matches!(slug, "wizard_woods")
 }
@@ -441,23 +442,9 @@ impl ApplicationHandler for App {
                     if srv.pc_actor.is_none() {
                         let _ = srv.spawn_pc_at(pc0);
                     }
-                    // Only spawn encounter NPCs for explicit demo content zones
-                    if let BootMode::Running { slug } = &self.boot
-                        && is_demo_content_zone(slug)
-                    {
-                        srv.ring_spawn(8, 15.0, 20);
-                        srv.ring_spawn(12, 30.0, 25);
-                        srv.ring_spawn(15, 45.0, 30);
-                        let wiz_count = 4usize;
-                        let wiz_r = 8.0f32;
-                        for i in 0..wiz_count {
-                            let a = (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
-                            let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
-                            let _ = srv.spawn_wizard_npc(p);
-                        }
-                        let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                        let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                        server_core::scene_build::add_demo_ruins_destructible(&mut srv);
+                    // Delegate zone-specific spawns to server_core::zones
+                    if let BootMode::Running { slug } = &self.boot {
+                        let _ = server_core::zones::boot_with_zone(&mut srv, slug);
                     }
                     self.demo_server = Some(srv);
                 }
@@ -792,24 +779,7 @@ impl ApplicationHandler for App {
                                 #[cfg(feature = "demo_server")]
                                 if let Some(srv) = self.demo_server.as_mut() {
                                     let _ = srv.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
-                                    if is_demo_content_zone(&slug) {
-                                        srv.ring_spawn(8, 15.0, 20);
-                                        srv.ring_spawn(12, 30.0, 25);
-                                        srv.ring_spawn(15, 45.0, 30);
-                                        let wiz_count = 4usize;
-                                        let wiz_r = 8.0f32;
-                                        for i in 0..wiz_count {
-                                            let a = (i as f32) / (wiz_count as f32)
-                                                * std::f32::consts::TAU;
-                                            let p =
-                                                glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
-                                            let _ = srv.spawn_wizard_npc(p);
-                                        }
-                                        let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                                        let _dk =
-                                            srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                                        server_core::scene_build::add_demo_ruins_destructible(srv);
-                                    }
+                                    let _ = server_core::zones::boot_with_zone(srv, &slug);
                                 }
                                 self.boot = BootMode::Running { slug: slug.clone() };
                                 if let Some(win) = &self.window {
@@ -914,20 +884,8 @@ impl ApplicationHandler for App {
                             // Only spawn encounter actors when a zone is explicitly selected,
                             // and skip them for cc_demo. When no zone is selected (Picker), spawn none.
                             let z = detect_zone_slug();
-                            if matches!(z.as_deref(), Some(s) if is_demo_content_zone(s)) {
-                                srv.ring_spawn(8, 15.0, 20);
-                                srv.ring_spawn(12, 30.0, 25);
-                                srv.ring_spawn(15, 45.0, 30);
-                                let wiz_count = 4usize;
-                                let wiz_r = 8.0f32;
-                                for i in 0..wiz_count {
-                                    let a = (i as f32) / (wiz_count as f32) * std::f32::consts::TAU;
-                                    let p = glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
-                                    let _ = srv.spawn_wizard_npc(p);
-                                }
-                                let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
-                                let _dk = srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
-                                server_core::scene_build::add_demo_ruins_destructible(&mut srv);
+                            if let Some(slug) = z {
+                                let _ = server_core::zones::boot_with_zone(&mut srv, slug.as_str());
                             }
                             self.demo_server = Some(srv);
                         }
