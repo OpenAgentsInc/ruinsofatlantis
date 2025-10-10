@@ -67,6 +67,67 @@ pub mod api {
         fs::write(snap.join("colliders_index.bin"), &[] as &[u8])?;
         fs::write(snap.join("logic.bin"), &[] as &[u8])?;
 
+        // Parse scene.json spawns → optional baked trees snapshot (trees.json)
+        #[derive(serde::Deserialize)]
+        struct SceneDoc {
+            #[allow(dead_code)]
+            version: Option<String>,
+            #[allow(dead_code)]
+            seed: Option<i64>,
+            #[allow(dead_code)]
+            layers: Option<serde_json::Value>,
+            #[allow(dead_code)]
+            instances: Option<serde_json::Value>,
+            logic: Option<SceneLogic>,
+        }
+        #[derive(serde::Deserialize)]
+        struct SceneLogic {
+            spawns: Option<Vec<SpawnMarker>>,
+        }
+        #[derive(serde::Deserialize)]
+        struct SpawnMarker {
+            kind: String,
+            pos: [f32; 3],
+            yaw_deg: f32,
+        }
+        #[derive(serde::Serialize)]
+        struct TreesSnapshotJson {
+            models: Vec<[[f32; 4]; 4]>,
+        }
+        let mut trees_models: Vec<[[f32; 4]; 4]> = Vec::new();
+        if !inputs.scene_json.is_empty() {
+            if let Ok(doc) = serde_json::from_str::<SceneDoc>(&inputs.scene_json) {
+                if let Some(logic) = doc.logic {
+                    if let Some(spawns) = logic.spawns {
+                        for s in spawns.into_iter() {
+                            if s.kind.starts_with("tree.") {
+                                let yaw = s.yaw_deg.to_radians();
+                                let (c, snt) = (yaw.cos(), yaw.sin());
+                                let tx = s.pos[0];
+                                let ty = s.pos[1];
+                                let tz = s.pos[2];
+                                // Column-major 4x4 with translation in last column
+                                let model = [
+                                    [c, 0.0, snt, 0.0],
+                                    [0.0, 1.0, 0.0, 0.0],
+                                    [-snt, 0.0, c, 0.0],
+                                    [tx, ty, tz, 1.0],
+                                ];
+                                trees_models.push(model);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !trees_models.is_empty() {
+            let tj = TreesSnapshotJson {
+                models: trees_models,
+            };
+            let txt = serde_json::to_string_pretty(&tj)?;
+            fs::write(snap.join("trees.json"), txt)?;
+        }
+
         let file_hash = |name: &str| -> Result<String> {
             let mut h = Blake3::new();
             let b = fs::read(snap.join(name)).with_context(|| format!("read {}", name))?;
@@ -95,5 +156,49 @@ pub mod api {
         let mj = serde_json::to_string_pretty(&meta)?;
         fs::write(snap.join("meta.json"), mj)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::api::*;
+    use std::fs;
+
+    #[test]
+    fn bake_writes_trees_from_scene_spawns() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let packs = tmp.path().join("packs");
+        fs::create_dir_all(&packs).unwrap();
+        let manifest =
+            r#"{ "slug":"campaign_builder", "display_name":"Campaign Builder", "terrain": {} }"#;
+        let scene = r#"{
+            "version":"1.0.0",
+            "seed":0,
+            "layers":[],
+            "instances":[],
+            "logic":{
+                "triggers":[],
+                "spawns":[
+                    {"id":"m0001","kind":"tree.default","pos":[1.0,0.0,-2.0],"yaw_deg":270.0}
+                ],
+                "waypoints":[],
+                "links":[]
+            }
+        }"#;
+        let inp = BakeInputs {
+            manifest_json: manifest.into(),
+            scene_json: scene.into(),
+            assets_root: tmp.path().to_path_buf(),
+            out_dir: packs.join("zones"),
+            slug: "campaign_builder".into(),
+        };
+        bake_snapshot(&inp).expect("bake");
+        let trees = packs
+            .join("zones/campaign_builder/snapshot.v1/trees.json")
+            .to_string_lossy()
+            .to_string();
+        let txt = fs::read_to_string(&trees).expect("read trees.json");
+        assert!(txt.contains("\"models\""), "trees.json missing models");
+        assert!(txt.contains("-2.0"), "translation Z not present");
     }
 }
