@@ -109,6 +109,7 @@ pub mod controller {
             const WALK_SPEED: f32 = 2.2860; // 2.5 yd/s
             const BACKPEDAL_SPEED: f32 = 4.1148; // 4.5 yd/s
             const TURN_SPEED_DEG: f32 = 180.0; // keyboard turn
+            const SPRINT_MULT: f32 = 1.3; // forward-only speed boost when Shift is held
             const GRAVITY: f32 = 9.81; // m/s^2
             const JUMP_VELOCITY: f32 = 4.6; // m/s
             let turn_speed = TURN_SPEED_DEG.to_radians();
@@ -140,6 +141,8 @@ pub mod controller {
                 BACKPEDAL_SPEED
             } else if self.walk_mode {
                 WALK_SPEED
+            } else if input.run {
+                RUN_SPEED * SPRINT_MULT
             } else {
                 RUN_SPEED
             };

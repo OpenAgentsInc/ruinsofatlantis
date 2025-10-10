@@ -25,7 +25,8 @@ Abilities & Actions
 Autorun & Walk
 - Num Lock — toggle autorun (pressing S cancels autorun).
 - Numpad Divide — toggle walk/run.
- - Shift — run modifier only applies when holding `W` without strafing/backpedaling.
+- Shift — run modifier only applies when holding `W` without strafing/backpedaling.
+  - Boosts forward speed by ~30% (tunable sprint multiplier).
 
 Profiles & Cursor
 - Profiles: `ActionCombat` or `ClassicCursor`.
