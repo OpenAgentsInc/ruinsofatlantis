@@ -1545,6 +1545,11 @@ impl Renderer {
                 self.wizard_last_phase[self.pc_index] = 0.0;
                 self.pc_anim_start = Some(t);
                 self.pc_cast_fired = false;
+                log::info!(
+                    "cast: start {:?} at t={:.3}s",
+                    self.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt),
+                    t
+                );
             }
         }
         if let Some(start) = self.pc_anim_start {
@@ -1588,6 +1593,12 @@ impl Renderer {
                             };
                         match self.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                             super::super::PcCast::FireBolt => {
+                                log::info!(
+                                    "cast: fire FireBolt at ({:.2},{:.2},{:.2})",
+                                    spawn.x,
+                                    spawn.y,
+                                    spawn.z
+                                );
                                 if !can_cast_hud(super::super::PcCast::FireBolt, &self.repl_buf.hud)
                                 {
                                     // Abort: do not send command or spawn local VFX when blocked by HUD
@@ -1634,6 +1645,12 @@ impl Renderer {
                                 );
                             }
                             super::super::PcCast::MagicMissile => {
+                                log::info!(
+                                    "cast: fire MagicMissile at ({:.2},{:.2},{:.2})",
+                                    spawn.x,
+                                    spawn.y,
+                                    spawn.z
+                                );
                                 if !can_cast_hud(
                                     super::super::PcCast::MagicMissile,
                                     &self.repl_buf.hud,
@@ -1671,6 +1688,12 @@ impl Renderer {
                                 self.spawn_magic_missile(spawn, dir_w, t);
                             }
                             super::super::PcCast::Fireball => {
+                                log::info!(
+                                    "cast: fire Fireball at ({:.2},{:.2},{:.2})",
+                                    spawn.x,
+                                    spawn.y,
+                                    spawn.z
+                                );
                                 if !can_cast_hud(super::super::PcCast::Fireball, &self.repl_buf.hud)
                                 {
                                     log::debug!("cast gate: Fireball blocked by HUD (gcd/cd/mana)");
