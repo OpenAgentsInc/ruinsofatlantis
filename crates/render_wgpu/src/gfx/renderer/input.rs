@@ -63,7 +63,9 @@ impl Renderer {
                                 self.pc_cast_kind = Some(super::super::PcCast::FireBolt);
                                 self.pc_cast_time = 0.0; // instant
                                 log::info!("input: key 1 → queue Fire Bolt");
-                                if let Some(tx) = &self.cmd_tx {
+                                if false
+                                /* emit server cmd here? see process_pc_cast */
+                                {
                                     let yaw = self.player.yaw;
                                     let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
                                         .normalize_or_zero();
@@ -81,7 +83,7 @@ impl Renderer {
                                     cmd.encode(&mut payload);
                                     let mut framed = Vec::with_capacity(payload.len() + 8);
                                     net_core::frame::write_msg(&mut framed, &payload);
-                                    let _ = tx.try_send(framed);
+                                    let _ = ();
                                 }
                             } else {
                                 log::info!(
@@ -110,7 +112,9 @@ impl Renderer {
                                     "input: key 2 → queue Magic Missile (cast={:.2}s)",
                                     self.magic_missile_cast_time
                                 );
-                                if let Some(tx) = &self.cmd_tx {
+                                if false
+                                /* emit server cmd here? see process_pc_cast */
+                                {
                                     let yaw = self.player.yaw;
                                     let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
                                         .normalize_or_zero();
@@ -128,7 +132,7 @@ impl Renderer {
                                     cmd.encode(&mut payload);
                                     let mut framed = Vec::with_capacity(payload.len() + 8);
                                     net_core::frame::write_msg(&mut framed, &payload);
-                                    let _ = tx.try_send(framed);
+                                    let _ = ();
                                 }
                             } else {
                                 log::info!(
@@ -157,7 +161,9 @@ impl Renderer {
                                     "input: key 3 → queue Fireball (cast={:.2}s)",
                                     self.fireball_cast_time
                                 );
-                                if let Some(tx) = &self.cmd_tx {
+                                if false
+                                /* emit server cmd here? see process_pc_cast */
+                                {
                                     let yaw = self.player.yaw;
                                     let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
                                         .normalize_or_zero();
@@ -175,7 +181,7 @@ impl Renderer {
                                     cmd.encode(&mut payload);
                                     let mut framed = Vec::with_capacity(payload.len() + 8);
                                     net_core::frame::write_msg(&mut framed, &payload);
-                                    let _ = tx.try_send(framed);
+                                    let _ = ();
                                 }
                             } else {
                                 log::info!(
