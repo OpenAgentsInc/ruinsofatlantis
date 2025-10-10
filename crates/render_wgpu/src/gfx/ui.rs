@@ -1823,6 +1823,7 @@ impl Hud {
     }
 
     /// Append a single-line perf overlay in the top-left corner.
+    #[allow(dead_code)]
     pub fn append_perf_text(&mut self, surface_w: u32, surface_h: u32, text: &str) {
         self.append_perf_text_line(surface_w, surface_h, text, 0);
     }

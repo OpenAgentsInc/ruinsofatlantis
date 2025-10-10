@@ -1891,7 +1891,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         debris_model_bg,
         voxel_grid_initial: voxel_grid,
         recent_impacts: Vec::new(),
-        demo_hint_until: Some(5.0),
+        // demo_hint_until removed (no initial hint overlay)
         impact_id: 0,
         last_repl_projectiles: std::collections::HashMap::new(),
         pc_index: scene_build.pc_index,

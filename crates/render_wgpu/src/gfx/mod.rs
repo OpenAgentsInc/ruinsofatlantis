@@ -466,7 +466,7 @@ pub struct Renderer {
     voxel_grid_initial: Option<VoxelGrid>,
     #[cfg_attr(not(feature = "vox_onepath_demo"), allow(dead_code))]
     recent_impacts: Vec<(glam::DVec3, f64)>,
-    demo_hint_until: Option<f32>,
+    // removed: demo_hint_until (old demo hint timer)
 
     // --- Player/Camera ---
     pc_index: usize,

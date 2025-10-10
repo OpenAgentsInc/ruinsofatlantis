@@ -2069,11 +2069,7 @@ pub fn render_impl(
                 }
             }
         }
-        // Short demo hint for first few seconds
-        if !r.is_vox_onepath() && r.last_time <= r.demo_hint_until.unwrap_or(0.0) {
-            let hint = "Press F to blast (voxel destructible demo)";
-            r.hud.append_perf_text(r.size.width, r.size.height, hint);
-        }
+        // Hint overlay removed for CC demo and general scenes.
     }
     r.hud.queue(&r.device, &r.queue);
     r.hud.draw(&mut encoder, &view);
