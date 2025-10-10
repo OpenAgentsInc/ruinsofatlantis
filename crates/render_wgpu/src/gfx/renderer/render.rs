@@ -510,9 +510,9 @@ pub fn render_impl(
         r.input.turn_right = false;
         r.input.strafe_left = false;
         r.input.strafe_right = false;
-        // Q/E are always strafes
-        r.input.strafe_left |= r.q_down;
-        r.input.strafe_right |= r.e_down;
+        // Q/E are always strafes (reversed per request): Q -> right, E -> left
+        r.input.strafe_left |= r.e_down; // E = left
+        r.input.strafe_right |= r.q_down; // Q = right
         // A/D become strafes under RMB; else turns
         if r.rmb_down {
             r.input.strafe_left |= r.a_down; // A -> left

@@ -108,10 +108,11 @@ mod wow_controller_input_tests {
     #[test]
     fn qe_are_dedicated_strafes_and_preserved() {
         // Q/E must remain strafes regardless of RMB, and not become turns.
+        // Reversed mapping: Q -> right, E -> left
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(false, false, false, true, false);
-        assert!(!tl && !tr && sl && !sr, "Q should strafe left (RMB up)");
+        assert!(!tl && !tr && !sl && sr, "Q should strafe right (RMB up)");
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, false, false, true);
-        assert!(!tl && !tr && !sl && sr, "E should strafe right (RMB down)");
+        assert!(!tl && !tr && sl && !sr, "E should strafe left (RMB down)");
     }
 
     #[test]
