@@ -48,18 +48,12 @@ impl Renderer {
                         }
                     }
                     PhysicalKey::Code(KeyCode::KeyA) if self.pc_alive => {
-                        if self.rmb_down {
-                            self.input.strafe_left = pressed;
-                        } else {
-                            self.input.turn_left = pressed;
-                        }
+                        // Track raw A state; per-frame we resolve to strafe/turn using RMB
+                        self.a_down = pressed;
                     }
                     PhysicalKey::Code(KeyCode::KeyD) if self.pc_alive => {
-                        if self.rmb_down {
-                            self.input.strafe_right = pressed;
-                        } else {
-                            self.input.turn_right = pressed;
-                        }
+                        // Track raw D state; per-frame we resolve to strafe/turn using RMB
+                        self.d_down = pressed;
                     }
                     // Q/E are dedicated strafes (WoW defaults)
                     PhysicalKey::Code(KeyCode::KeyQ) if self.pc_alive => {

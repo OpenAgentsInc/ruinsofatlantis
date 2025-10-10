@@ -493,25 +493,19 @@ pub fn render_impl(
         // Derive per-frame controller flags that depend on mouse buttons
         r.input.mouse_look = r.rmb_down;
         r.input.click_move_forward = r.lmb_down && r.rmb_down;
-        // Remap A/D between turn and strafe depending on RMB state (WoW muscle memory)
+        // Resolve A/D to turn vs. strafe based on RMB, preserving Q/E strafes
+        let q_strafe_left = r.input.strafe_left;
+        let q_strafe_right = r.input.strafe_right;
+        r.input.turn_left = false;
+        r.input.turn_right = false;
+        r.input.strafe_left = q_strafe_left;
+        r.input.strafe_right = q_strafe_right;
         if r.rmb_down {
-            if r.input.turn_left {
-                r.input.strafe_left = true;
-                r.input.turn_left = false;
-            }
-            if r.input.turn_right {
-                r.input.strafe_right = true;
-                r.input.turn_right = false;
-            }
+            r.input.strafe_left |= r.a_down;
+            r.input.strafe_right |= r.d_down;
         } else {
-            if r.input.strafe_left {
-                r.input.turn_left = true;
-                r.input.strafe_left = false;
-            }
-            if r.input.strafe_right {
-                r.input.turn_right = true;
-                r.input.strafe_right = false;
-            }
+            r.input.turn_left |= r.a_down;
+            r.input.turn_right |= r.d_down;
         }
         r.scene_inputs.apply_input(&r.input);
         r.scene_inputs.update(dt, cam_fwd, r.static_index.as_ref());

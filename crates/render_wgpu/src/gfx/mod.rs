@@ -481,6 +481,9 @@ pub struct Renderer {
     cam_look_height: f32,
     rmb_down: bool,
     lmb_down: bool,
+    // Raw A/D key state so we can resolve to turn vs. strafe per-frame based on RMB
+    a_down: bool,
+    d_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
 
     // UI capture helpers
