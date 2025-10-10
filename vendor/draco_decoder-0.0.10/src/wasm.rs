@@ -3,11 +3,7 @@ use std::cell::RefCell;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::window;
-
-use crate::{AttributeDataType, AttributeValues, MeshDecodeConfig};
-
-use web_sys::console;
+use crate::MeshDecodeConfig;
 
 thread_local! {
     static DRACO_DECODE_FUNC_MODULE: RefCell<Option<JsValue>> = RefCell::new(None);

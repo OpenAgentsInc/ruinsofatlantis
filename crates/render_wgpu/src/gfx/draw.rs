@@ -30,7 +30,10 @@ impl Renderer {
     }
     pub(crate) fn draw_pc_only(&mut self, rpass: &mut wgpu::RenderPass<'_>) {
         let use_debug = std::env::var("RA_PC_DEBUG").as_deref() == Ok("1");
+        #[cfg(not(target_arch = "wasm32"))]
         let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+        #[cfg(target_arch = "wasm32")]
+        let _trace = false;
         rpass.insert_debug_marker("pc:begin");
         if use_debug {
             let flat = std::env::var("RA_PC_DEBUG_FLAT")

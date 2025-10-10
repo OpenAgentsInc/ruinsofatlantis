@@ -1243,7 +1243,7 @@ fn detect_zone_slug() -> Option<String> {
     None
 }
 
-#[cfg(feature = "demo_server")]
+#[cfg(all(feature = "demo_server", not(target_arch = "wasm32")))]
 impl App {
     fn pump_demo_server(&mut self) {
         let (Some(srv_xport), Some(state)) = (&self.transport_srv, &mut self.state) else {

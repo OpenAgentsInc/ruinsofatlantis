@@ -3,6 +3,7 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -13,6 +14,7 @@ pub struct PcAnimCfg {
     pub cast: Option<String>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn data_root() -> PathBuf {
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let ws = here.join("../../data");

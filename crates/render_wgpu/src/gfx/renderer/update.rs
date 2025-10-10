@@ -1580,6 +1580,7 @@ impl Renderer {
                         // Gate by replicated HUD (GCD, per-spell cooldowns, mana) to avoid spawning
                         // local VFX when the server would reject the cast. This keeps visuals
                         // consistent and avoids the “first one works, others are eaten” symptom.
+                        #[cfg(not(target_arch = "wasm32"))]
                         let can_cast_hud =
                             |kind: super::super::PcCast,
                              hud: &client_core::replication::HudState| {
