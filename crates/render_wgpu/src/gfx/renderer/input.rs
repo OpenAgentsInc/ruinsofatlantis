@@ -67,12 +67,13 @@ impl Renderer {
                                     let cam_fwd = (self.cam_follow.current_look
                                         - self.cam_follow.current_pos)
                                         .normalize_or_zero();
-                                    let m = self
-                                        .wizard_models
-                                        .get(self.pc_index)
-                                        .copied()
-                                        .unwrap_or(glam::Mat4::IDENTITY);
-                                    let pos = m.transform_point3(glam::Vec3::new(0.0, 1.4, 0.0));
+                                    let (h, _n) = crate::gfx::terrain::height_at(
+                                        &self.terrain_cpu,
+                                        self.player.pos.x,
+                                        self.player.pos.z,
+                                    );
+                                    let pos =
+                                        glam::vec3(self.player.pos.x, h + 1.4, self.player.pos.z);
                                     let cmd = net_core::command::ClientCmd::FireBolt {
                                         pos: [pos.x, pos.y, pos.z],
                                         dir: [cam_fwd.x, cam_fwd.y, cam_fwd.z],
@@ -116,12 +117,13 @@ impl Renderer {
                                     let cam_fwd = (self.cam_follow.current_look
                                         - self.cam_follow.current_pos)
                                         .normalize_or_zero();
-                                    let m = self
-                                        .wizard_models
-                                        .get(self.pc_index)
-                                        .copied()
-                                        .unwrap_or(glam::Mat4::IDENTITY);
-                                    let pos = m.transform_point3(glam::Vec3::new(0.0, 1.4, 0.0));
+                                    let (h, _n) = crate::gfx::terrain::height_at(
+                                        &self.terrain_cpu,
+                                        self.player.pos.x,
+                                        self.player.pos.z,
+                                    );
+                                    let pos =
+                                        glam::vec3(self.player.pos.x, h + 1.4, self.player.pos.z);
                                     let cmd = net_core::command::ClientCmd::MagicMissile {
                                         pos: [pos.x, pos.y, pos.z],
                                         dir: [cam_fwd.x, cam_fwd.y, cam_fwd.z],
@@ -163,12 +165,13 @@ impl Renderer {
                                     let cam_fwd = (self.cam_follow.current_look
                                         - self.cam_follow.current_pos)
                                         .normalize_or_zero();
-                                    let m = self
-                                        .wizard_models
-                                        .get(self.pc_index)
-                                        .copied()
-                                        .unwrap_or(glam::Mat4::IDENTITY);
-                                    let pos = m.transform_point3(glam::Vec3::new(0.0, 1.4, 0.0));
+                                    let (h, _n) = crate::gfx::terrain::height_at(
+                                        &self.terrain_cpu,
+                                        self.player.pos.x,
+                                        self.player.pos.z,
+                                    );
+                                    let pos =
+                                        glam::vec3(self.player.pos.x, h + 1.4, self.player.pos.z);
                                     let cmd = net_core::command::ClientCmd::Fireball {
                                         pos: [pos.x, pos.y, pos.z],
                                         dir: [cam_fwd.x, cam_fwd.y, cam_fwd.z],
