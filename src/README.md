@@ -27,6 +27,7 @@ Workspace crates (added for modularization)
 - Scroll: zoom in/out
 - WASD: move (A/D turn in place)
 - Shift: run
+  - Only when holding W; does not apply while strafing/backpedaling
 - 1/2/3: demo spell triggers (legacy prototype path)
 - Space: Jump (when PC is alive); when dead, toggles sky pause
 - [: scrub time backward a bit; ]: forward a bit
