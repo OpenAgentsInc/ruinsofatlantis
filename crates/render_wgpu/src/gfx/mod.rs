@@ -481,9 +481,11 @@ pub struct Renderer {
     cam_look_height: f32,
     rmb_down: bool,
     lmb_down: bool,
-    // Raw A/D key state so we can resolve to turn vs. strafe per-frame based on RMB
+    // Raw key states; resolved each frame
     a_down: bool,
     d_down: bool,
+    q_down: bool,
+    e_down: bool,
     // Track RMB edges to clear latched inputs when entering/leaving mouselook
     prev_rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,

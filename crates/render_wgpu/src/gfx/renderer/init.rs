@@ -1922,6 +1922,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         lmb_down: false,
         a_down: false,
         d_down: false,
+        q_down: false,
+        e_down: false,
         prev_rmb_down: false,
         last_cursor_pos: None,
         screenshot_start: None,

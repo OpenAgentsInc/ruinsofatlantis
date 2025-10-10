@@ -55,12 +55,12 @@ impl Renderer {
                         // Track raw D state; per-frame we resolve to strafe/turn using RMB
                         self.d_down = pressed;
                     }
-                    // Q/E are dedicated strafes (WoW defaults)
+                    // Q/E tracked as raw strafes; resolved per-frame
                     PhysicalKey::Code(KeyCode::KeyQ) if self.pc_alive => {
-                        self.input.strafe_left = pressed;
+                        self.q_down = pressed;
                     }
                     PhysicalKey::Code(KeyCode::KeyE) if self.pc_alive => {
-                        self.input.strafe_right = pressed;
+                        self.e_down = pressed;
                     }
                     PhysicalKey::Code(KeyCode::ShiftLeft)
                     | PhysicalKey::Code(KeyCode::ShiftRight)
