@@ -1889,6 +1889,12 @@ pub fn render_impl(
     } else {
         0.0
     };
+    // If casting is not allowed in this zone, suppress any cast progress overlay
+    let cast_frac = if r.zone_policy.allow_casting {
+        cast_frac
+    } else {
+        0.0
+    };
     // Hotbar overlays: per-slot cooldown fractions
     let gcd_frac_fb =
         r.scene_inputs
@@ -1916,8 +1922,8 @@ pub fn render_impl(
             "Press R to respawn",
         );
     } else if !overlays_disabled && !r.is_picker_batches() {
-        // Hide hotbar in CC demo scene
-        let is_cc_demo = matches!(r.zone_batches.as_ref(), Some(z) if z.slug.as_str() == "cc_demo");
+        // Zone policy controls whether to show HUD (including hotbar)
+        let show_hud = r.zone_policy.show_player_hud;
         let cast_label = if !r.is_vox_onepath() && cast_frac > 0.0 {
             match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                 super::super::PcCast::FireBolt => Some("Fire Bolt"),
@@ -1932,7 +1938,7 @@ pub fn render_impl(
             let cd1_secs = cd1 * r.firebolt_cd_dur;
             let cd2_secs = cd2 * r.magic_missile_cd_dur;
             let cd3_secs = cd3 * r.fireball_cd_dur;
-            if !is_cc_demo {
+            if show_hud {
                 r.hud.build(
                     r.size.width,
                     r.size.height,
@@ -1950,7 +1956,6 @@ pub fn render_impl(
                     cast_label,
                 );
             } else {
-                // In CC demo, skip hotbar build — leave room for optional perf overlay
                 r.hud.reset();
             }
             // Boss banner (top-center) via replicated cache or server fallback

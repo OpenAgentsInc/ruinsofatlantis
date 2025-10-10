@@ -39,8 +39,9 @@
     },
     "start_time_frac": { "type": "number" },
     "start_paused": { "type": "boolean" },
-    "start_time_scale": { "type": "number", "exclusiveMinimum": 0 }
+    "start_time_scale": { "type": "number", "exclusiveMinimum": 0 },
+    "allow_casting": { "type": "boolean" },
+    "show_player_hud": { "type": "boolean" }
   },
   "additionalProperties": true
 }
-

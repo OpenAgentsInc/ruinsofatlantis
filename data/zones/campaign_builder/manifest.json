@@ -19,5 +19,7 @@
   "start_time_frac": 0.5,
   "start_paused": true,
   "start_time_scale": 6.0
+  ,
+  "allow_casting": false,
+  "show_player_hud": false
 }
-

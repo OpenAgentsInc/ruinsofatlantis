@@ -408,6 +408,9 @@ pub struct Renderer {
     // ALT hold behavior (true = press holds cursor mode; false = toggle)
     controller_alt_hold: bool,
 
+    // Zone UI/controls policy (derived from zone slug or manifest)
+    zone_policy: ZonePolicy,
+
     // --- Destructible (voxel) state ---
     #[cfg(feature = "vox_onepath_demo")]
     destruct_cfg: DestructibleConfig,
@@ -645,6 +648,28 @@ impl Renderer {
     /// Attach or clear zone batches uploaded by the client.
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
         self.zone_batches = z;
+        // Update zone policy based on slug (desktop: try manifest; web: slug mapping)
+        let mut policy = ZonePolicy::default();
+        if let Some(b) = &self.zone_batches {
+            let slug = b.slug.as_str();
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                if let Ok(m) = data_runtime::zone::load_zone_manifest(slug) {
+                    if let Some(ac) = m.allow_casting {
+                        policy.allow_casting = ac;
+                    }
+                    if let Some(h) = m.show_player_hud {
+                        policy.show_player_hud = h;
+                    }
+                }
+            }
+            // Fallbacks for zones without manifests
+            if slug == "cc_demo" {
+                policy.allow_casting = false;
+                policy.show_player_hud = false;
+            }
+        }
+        self.zone_policy = policy;
     }
 
     /// Compute the intersection point of the camera center ray with the horizontal
@@ -4129,3 +4154,17 @@ impl Renderer {
 // Typed id for destructible instances
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct DestructibleId(pub usize);
+#[derive(Clone, Copy)]
+struct ZonePolicy {
+    allow_casting: bool,
+    show_player_hud: bool,
+}
+
+impl Default for ZonePolicy {
+    fn default() -> Self {
+        Self {
+            allow_casting: true,
+            show_player_hud: true,
+        }
+    }
+}

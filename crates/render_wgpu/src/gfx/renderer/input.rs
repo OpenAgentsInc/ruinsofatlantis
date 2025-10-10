@@ -11,10 +11,7 @@ impl Renderer {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
                 let pressed = event.state.is_pressed();
-                let is_cc_demo = matches!(
-                    self.zone_batches.as_ref(),
-                    Some(z) if z.slug.as_str() == "cc_demo"
-                );
+                let allow_casting = self.zone_policy.allow_casting;
                 match event.physical_key {
                     // Cursor toggle/hold (ALT)
                     PhysicalKey::Code(KeyCode::AltLeft) | PhysicalKey::Code(KeyCode::AltRight) => {
@@ -74,7 +71,7 @@ impl Renderer {
                         self.shift_down = pressed;
                     }
                     PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
-                        if self.pc_alive && !is_cc_demo =>
+                        if self.pc_alive && allow_casting =>
                     {
                         if pressed {
                             // Gate by cooldown via client_runtime ability state
@@ -118,7 +115,7 @@ impl Renderer {
                         }
                     }
                     PhysicalKey::Code(KeyCode::Digit2) | PhysicalKey::Code(KeyCode::Numpad2)
-                        if self.pc_alive && !is_cc_demo =>
+                        if self.pc_alive && allow_casting =>
                     {
                         if pressed {
                             // Gate by cooldown via client_runtime ability state
@@ -164,7 +161,7 @@ impl Renderer {
                         }
                     }
                     PhysicalKey::Code(KeyCode::Digit3) | PhysicalKey::Code(KeyCode::Numpad3)
-                        if self.pc_alive && !is_cc_demo =>
+                        if self.pc_alive && allow_casting =>
                     {
                         if pressed {
                             let spell_id = "wiz.fireball.srd521";

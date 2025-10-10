@@ -84,6 +84,12 @@ pub struct ZoneManifest {
     /// Initial time scale multiplier for TOD progression
     #[serde(default)]
     pub start_time_scale: Option<f32>,
+    /// Allow player casting in this zone (controls input gating)
+    #[serde(default)]
+    pub allow_casting: Option<bool>,
+    /// Show player HUD bars/hotbar in this zone
+    #[serde(default)]
+    pub show_player_hud: Option<bool>,
 }
 
 /// Load a Zone manifest from `data/zones/<slug>/manifest.json`.

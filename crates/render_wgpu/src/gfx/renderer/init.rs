@@ -479,6 +479,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         start_time_scale: Some(6.0),
     };
     #[cfg(not(target_arch = "wasm32"))]
+    // For sky/terrain defaults during renderer init (desktop), load a baseline manifest.
+    // This does not control gameplay; platform-selected zones still drive presentation.
     let zone: ZoneManifest =
         load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
     log::debug!(
@@ -2002,6 +2004,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         picker_items: Vec::new(),
         picker_selected: 0,
         picker_chosen_slug: None,
+        zone_policy: Default::default(),
     };
 
     // Apply default input profile from config if provided
