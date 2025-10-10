@@ -3,24 +3,25 @@
 This document describes the current client controls, input profiles, and configuration.
 
 Overview
-- Default profile: Action/Reticle — persistent mouselook with a center reticle.
+- Default profile: third‑person MMO with camera orbit and auto‑face.
 - Classic fallback: Classic Cursor — cursor visible by default; holding RMB engages temporary mouselook; releasing RMB restores the cursor.
 - ALT behavior is configurable (toggle or hold‑to‑hold). In hold mode, pressing ALT releases the cursor and on release returns to mouselook.
 
 Movement & Camera
 - WASD — movement
-  - A/D now swing the camera left/right (orbit); the character auto‑faces the camera’s forward after ~0.25 s.
-  - Q/E are strafes (Q = right, E = left). W/S move relative to the camera’s forward.
-- Q/E — dedicated strafes (Q = left, E = right) regardless of RMB.
-- Space — Jump (when grounded; WoW-like short hop)
+  - A/D swing the camera left/right (orbit). The player auto‑faces the camera forward after a short delay.
+  - Q/E are dedicated strafes (Q = left, E = right).
+  - Basis: when RMB is held (or LMB+RMB chord), movement is relative to the camera’s forward; otherwise movement is relative to the character’s facing (yaw).
+- Space — Jump (when grounded; short hop). Sprinting slightly speeds the jump start animation.
 - Mouse Wheel — camera zoom.
 - RMB drag — orbit the camera around the player while keeping the player as the orbit target.
   - Pointer‑lock is requested only while RMB is held; camera yaw/pitch update from mouse deltas.
   - Zoom and pitch limits are clamped to prevent flipping.
- - Auto‑face (camera → character):
-   - Normal: after rotating the camera, the character smoothly turns to face the camera’s forward after ~0.25 s (turn rate ≈ 180°/s).
-   - Large swings: if the camera deviates by more than 90° from the character’s facing, the character begins turning immediately but trails the camera by ~90°. Once within 90°, the normal ~0.25 s delay applies before finishing the turn to face the camera.
- - Strafing visuals: strafing uses a walk cadence for readability (not a sprint/jog).
+- Auto‑face (camera → character):
+  - Normal: after rotating the camera, the character smoothly turns to face the camera’s forward after ~0.25 s (turn rate ≈ 180°/s).
+  - While mouse‑look is active (RMB held): the delay is halved to ~0.125 s for a snappier feel.
+  - Large swings: if the camera deviates by more than 90° from the character’s facing, the character begins turning immediately but trails just under the 90° threshold to ensure it exits “panic,” then, after the short delay, finishes turning to fully face forward.
+- Strafing visuals: strafing uses a walk cadence for readability (not a sprint/jog).
 
 Abilities & Actions
 - 1 / 2 / 3 — cast bound spells (demo bindings). No other default cast keys.

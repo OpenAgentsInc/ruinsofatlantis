@@ -489,7 +489,9 @@ pub fn render_impl(
 
     // Update player transform (controls + collision) via external scene inputs
     {
-        let cam_fwd = r.cam_follow.current_look - r.cam_follow.current_pos;
+        // Compute camera forward from rig yaw (authoritative for input), not smoothed follow
+        let rig_yaw = r.scene_inputs.rig_yaw();
+        let cam_fwd = glam::vec3(rig_yaw.sin(), 0.0, rig_yaw.cos());
         // Clear latched inputs on RMB edge (pointer-lock transitions can eat key-ups)
         if r.prev_rmb_down != r.rmb_down {
             r.a_down = false;
@@ -541,10 +543,15 @@ pub fn render_impl(
                 r.last_time,
             );
         }
+        // WoW: while RMB is held and moving forward (not back), snap facing to camera yaw
+        let moving_forward = r.rmb_down && r.input.forward && !r.input.backward;
+        if moving_forward {
+            r.scene_inputs.set_yaw(r.scene_inputs.rig_yaw());
+        }
         r.scene_inputs.apply_input(&r.input);
         // One-shot: clear jump so holding Space does not repeat
         r.input.jump_pressed = false;
-        // Use camera basis only when RMB is down; otherwise use character facing (yaw).
+        // Use camera basis (rig yaw) only when RMB is down; otherwise use character facing (yaw).
         let move_fwd = if r.rmb_down {
             cam_fwd
         } else {
@@ -553,8 +560,7 @@ pub fn render_impl(
         r.scene_inputs.update(dt, move_fwd, r.static_index.as_ref());
         // Auto-face camera yaw after a short delay if camera rotated
         {
-            let cam_fwd = r.cam_follow.current_look - r.cam_follow.current_pos;
-            let cam_yaw = cam_fwd.x.atan2(cam_fwd.z);
+            let cam_yaw = r.scene_inputs.rig_yaw(); // use rig yaw, not smoothed follow
             // Note: anchor updates occur only on explicit user input (mouse orbit / A/D swing).
             let cur_yaw = r.scene_inputs.yaw();
             // Compute panic vs normal and update face reset when exiting panic
@@ -575,18 +581,20 @@ pub fn render_impl(
             } else {
                 r.cam_yaw_changed_at.max(r.cam_face_reset_at)
             };
+            let delay = if r.rmb_down { 0.125 } else { 0.25 };
             let new_yaw = client_core::systems::auto_face::auto_face_step(
                 cur_yaw,
                 cam_yaw,
                 client_core::systems::auto_face::AutoFaceParams {
                     last_change_at: last_anchor,
                     now: r.last_time,
-                    delay_s: 0.25,
+                    delay_s: delay,
                     turning: false,
                     turn_speed_rad_per_s: 180.0f32.to_radians(),
                     dt,
                     panic_threshold_rad: std::f32::consts::FRAC_PI_2,
                     trail_by_threshold: true,
+                    hysteresis_rad: 0.15, // ~8.6° inside threshold to guarantee exit
                 },
             );
             if (new_yaw - cur_yaw).abs() > 1e-6 {

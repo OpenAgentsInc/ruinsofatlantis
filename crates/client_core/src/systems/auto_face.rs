@@ -28,6 +28,9 @@ pub struct AutoFaceParams {
     pub panic_threshold_rad: f32,
     /// When panicking, trail the camera by exactly `panic_threshold_rad` while turning.
     pub trail_by_threshold: bool,
+    /// How far inside the threshold we should trail to ensure we leave panic.
+    /// Example: threshold = 90°, hysteresis = 8.5° → trail to 81.5°.
+    pub hysteresis_rad: f32,
 }
 
 /// One step of auto-face behavior: after `delay_s` since last camera change and if not `turning`,
@@ -46,9 +49,10 @@ pub fn auto_face_step(cur_yaw: f32, cam_yaw: f32, p: AutoFaceParams) -> f32 {
     if p.turning || ((!panic) && (p.now - p.last_change_at) < p.delay_s) {
         return cur_yaw;
     }
-    // Choose target yaw: either camera yaw (normal) or trail by threshold when panicking
+    // Choose target yaw: either camera yaw (normal) or trail inside threshold when panicking
     let target_yaw = if panic && p.trail_by_threshold {
-        cam_yaw - p.panic_threshold_rad * diff.signum()
+        let trail = (p.panic_threshold_rad - p.hysteresis_rad).max(0.0);
+        cam_yaw - trail * diff.signum()
     } else {
         cam_yaw
     };
@@ -87,6 +91,7 @@ mod tests {
                 dt: 0.016,
                 panic_threshold_rad: std::f32::consts::FRAC_PI_2,
                 trail_by_threshold: true,
+                hysteresis_rad: 0.15,
             },
         );
         // only 0.1s elapsed < 0.5s delay → unchanged
@@ -115,6 +120,7 @@ mod tests {
                 dt: 0.1,
                 panic_threshold_rad: std::f32::consts::FRAC_PI_2,
                 trail_by_threshold: true,
+                hysteresis_rad: 0.15,
             },
         );
         assert!(yaw > 0.0);
@@ -136,6 +142,7 @@ mod tests {
                 dt: 0.1,
                 panic_threshold_rad: std::f32::consts::FRAC_PI_2,
                 trail_by_threshold: true,
+                hysteresis_rad: 0.15,
             },
         );
         assert!(yaw.abs() > 0.0);

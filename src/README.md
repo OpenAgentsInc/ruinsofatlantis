@@ -18,13 +18,15 @@ Workspace crates (added for modularization)
 - platform_winit.rs — Window/event loop integration using winit 0.30.
 
 ## Controls
-- ALT: toggle cursor ↔ mouselook (Action/Reticle default)
-- RMB hold (Classic profile): temporarily capture pointer for camera look
+- ALT: toggle cursor ↔ mouselook
+- RMB hold: temporarily capture pointer for camera orbit (mouselook)
 - 1/2/3: cast spells (demo bindings)
 - LMB/RMB: no at‑will casting (reserved for look/forward‑chord only)
-- RMB drag (legacy orbit): orbit camera and rotate player facing
 - Scroll: zoom in/out
-- WASD: move (A/D turn in place)
+- WASD: movement
+  - A/D swing the camera left/right; the player auto‑faces the camera after a short delay
+  - Q/E are dedicated strafes (Q = left, E = right)
+  - Basis: with RMB held (or LMB+RMB), movement is camera‑relative; otherwise character‑facing relative
 - Shift: run
   - Only when holding W; does not apply while strafing/backpedaling
   - Increases forward speed by ~30% (tunable)
@@ -36,7 +38,8 @@ Workspace crates (added for modularization)
 - O: 5s automated orbit for screenshots
 
 Notes
-- The default profile is Action/Reticle (Neverwinter‑style). A Classic Cursor profile exists for fallback in browsers or accessibility; RMB hold engages temporary mouselook.
+- Default is third‑person MMO with orbit and auto‑face.
+- Auto‑face (camera → character): normal delay ≈ 0.25 s; while RMB is held, delay ≈ 0.125 s. For large swings (>90°) the player turns immediately, trailing just under 90°, then finishes after the delay.
 - Pointer‑lock may be denied by the OS/browser; when denied, we fall back to cursor mode and keep the UI interactive.
 
 Config (optional)

@@ -37,6 +37,7 @@ fn finishes_turn_after_large_swing_release() {
             dt,
             panic_threshold_rad: std::f32::consts::FRAC_PI_2,
             trail_by_threshold: true,
+            hysteresis_rad: 0.15,
         };
         let next = auto_face_step(cur_yaw, cam_yaw, p);
         cur_yaw = next;
@@ -69,6 +70,7 @@ fn finishes_turn_after_large_swing_release() {
             dt,
             panic_threshold_rad: std::f32::consts::FRAC_PI_2,
             trail_by_threshold: true,
+            hysteresis_rad: 0.15,
         },
     );
     assert!(
@@ -92,6 +94,7 @@ fn finishes_turn_after_large_swing_release() {
                 dt,
                 panic_threshold_rad: std::f32::consts::FRAC_PI_2,
                 trail_by_threshold: true,
+                hysteresis_rad: 0.15,
             },
         );
         now += dt;
@@ -141,6 +144,7 @@ fn anchor_resets_every_frame_causes_stall() {
                 dt,
                 panic_threshold_rad: std::f32::consts::FRAC_PI_2,
                 trail_by_threshold: true,
+                hysteresis_rad: 0.15,
             },
         );
     }
