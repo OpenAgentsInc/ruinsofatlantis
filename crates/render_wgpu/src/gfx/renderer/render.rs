@@ -1031,10 +1031,16 @@ pub fn render_impl(
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
-        // When running the PC debug isolate, we may need depth if using the
-        // normal textured skinned pipeline (which expects a depth attachment).
-        let use_debug = pc_debug;
-        let want_depth = use_debug && !r.is_picker_batches();
+        // Depth is required for the normal scene. In debug-isolate we only
+        // omit depth when the picker is active and we're not drawing the PC.
+        // Otherwise, keep depth so pipelines that expect it are compatible.
+        let want_depth = if pc_debug {
+            // In debug: use depth unless the picker overlay is active.
+            !r.is_picker_batches()
+        } else {
+            // In normal runs: always use depth for the main pass.
+            true
+        };
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
