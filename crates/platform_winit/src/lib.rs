@@ -206,6 +206,12 @@ fn packs_zones_root() -> std::path::PathBuf {
     }
 }
 
+// Determine whether to spawn demo encounter content (NPC rings, boss, destructible).
+// Keep this whitelist explicit to avoid accidental spawns in authoring/testing zones.
+fn is_demo_content_zone(slug: &str) -> bool {
+    matches!(slug, "wizard_woods")
+}
+
 struct App {
     window: Option<Window>,
     state: Option<Renderer>,
@@ -435,9 +441,9 @@ impl ApplicationHandler for App {
                     if srv.pc_actor.is_none() {
                         let _ = srv.spawn_pc_at(pc0);
                     }
-                    // Only spawn encounter NPCs when running a non‑demo zone
+                    // Only spawn encounter NPCs for explicit demo content zones
                     if let BootMode::Running { slug } = &self.boot
-                        && slug.as_str() != "cc_demo"
+                        && is_demo_content_zone(slug)
                     {
                         srv.ring_spawn(8, 15.0, 20);
                         srv.ring_spawn(12, 30.0, 25);
@@ -908,7 +914,7 @@ impl ApplicationHandler for App {
                             // Only spawn encounter actors when a zone is explicitly selected,
                             // and skip them for cc_demo. When no zone is selected (Picker), spawn none.
                             let z = detect_zone_slug();
-                            if z.is_some() && z.as_deref() != Some("cc_demo") {
+                            if matches!(z.as_deref(), Some(s) if is_demo_content_zone(s)) {
                                 srv.ring_spawn(8, 15.0, 20);
                                 srv.ring_spawn(12, 30.0, 25);
                                 srv.ring_spawn(15, 45.0, 30);
