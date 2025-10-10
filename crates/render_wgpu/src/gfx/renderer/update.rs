@@ -1478,9 +1478,14 @@ impl Renderer {
             }
         }
         // Desired names by situation (exact match preferred) if jump didn't take over
+        let strafing_only = (self.input.strafe_left || self.input.strafe_right)
+            && !self.input.forward
+            && !self.input.backward;
         let desired_exact = if chosen_name.is_none() {
             if is_casting {
                 self.pc_anim_cfg.cast.as_deref()
+            } else if strafing_only {
+                self.pc_anim_cfg.strafe.as_deref()
             } else if moving && self.input.run {
                 self.pc_anim_cfg.sprint.as_deref()
             } else if moving {
@@ -1527,6 +1532,8 @@ impl Renderer {
                 None
             } else if is_casting {
                 pick_any(&["spell", "cast"])
+            } else if strafing_only {
+                pick_any(&["strafe", "side", "jog"]).or_else(|| pick_any(&["walk"]))
             } else if moving && self.input.run {
                 pick_any(&["sprint", "run", "jog"])
             } else if moving {

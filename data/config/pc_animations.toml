@@ -4,6 +4,7 @@
 idle = "Idle_Loop"
 walk = "Walk_Loop"
 sprint = "Sprint_Loop"
+strafe = "Jog_Fwd_Loop" # fallback: reuse jog for sideways movement
 cast = "Spell_Simple_Idle_Loop"
 
 # Jump state clips (from assets/anims/universal/AnimationLibrary.glb)

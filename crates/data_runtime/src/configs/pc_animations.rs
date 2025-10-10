@@ -11,6 +11,7 @@ pub struct PcAnimCfg {
     pub idle: Option<String>,
     pub walk: Option<String>,
     pub sprint: Option<String>,
+    pub strafe: Option<String>,
     pub cast: Option<String>,
     pub jump_start: Option<String>,
     pub jump_loop: Option<String>,
@@ -53,6 +54,9 @@ pub fn load_default() -> Result<PcAnimCfg> {
     }
     if let Ok(v) = std::env::var("PC_ANIM_SPRINT") {
         cfg.sprint = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_STRAFE") {
+        cfg.strafe = Some(v);
     }
     if let Ok(v) = std::env::var("PC_ANIM_CAST") {
         cfg.cast = Some(v);
