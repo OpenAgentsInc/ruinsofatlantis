@@ -1601,6 +1601,7 @@ impl Renderer {
                                     spawn.y,
                                     spawn.z
                                 );
+                                #[cfg(not(target_arch = "wasm32"))]
                                 if !can_cast_hud(super::super::PcCast::FireBolt, &self.repl_buf.hud)
                                 {
                                     // Abort: do not send command or spawn local VFX when blocked by HUD
@@ -1653,6 +1654,7 @@ impl Renderer {
                                     spawn.y,
                                     spawn.z
                                 );
+                                #[cfg(not(target_arch = "wasm32"))]
                                 if !can_cast_hud(
                                     super::super::PcCast::MagicMissile,
                                     &self.repl_buf.hud,
@@ -1696,6 +1698,7 @@ impl Renderer {
                                     spawn.y,
                                     spawn.z
                                 );
+                                #[cfg(not(target_arch = "wasm32"))]
                                 if !can_cast_hud(super::super::PcCast::Fireball, &self.repl_buf.hud)
                                 {
                                     log::debug!("cast gate: Fireball blocked by HUD (gcd/cd/mana)");
