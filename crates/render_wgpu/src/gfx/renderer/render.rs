@@ -101,8 +101,6 @@ pub fn render_impl(
                     .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
-                r.hud
-                    .append_perf_text_line(r.size.width, r.size.height, "PC DRAW", 0);
             } else {
                 log::warn!(
                     "pc_draw(isolate): vb={} ib={} inst={} mat={} pal={} idx={}",
@@ -1049,29 +1047,33 @@ pub fn render_impl(
             timestamp_writes: None,
         });
         if pc_debug {
-            // Proactively ensure PC rig assets exist in debug isolate
-            r.ensure_pc_assets();
-            let shard_m = crate::gfx::types::Model {
-                model: glam::Mat4::IDENTITY.to_cols_array_2d(),
-                color: [1.0, 1.0, 1.0],
-                emissive: 0.0,
-                _pad: [0.0; 4],
-            };
-            r.queue
-                .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
-            r.draw_pc_only(&mut rp);
-            drop(rp);
-            r.hud
-                .append_perf_text_line(r.size.width, r.size.height, "PC DRAW", 0);
-            r.hud.queue(&r.device, &r.queue);
-            r.hud.draw(&mut encoder, &view);
-            r.queue.submit(Some(encoder.finish()));
-            frame.present();
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation (main pass): {:?}", e);
+            // If the picker overlay is active, do NOT draw the PC in debug mode.
+            if r.is_picker_batches() {
+                drop(rp);
+            } else {
+                // Proactively ensure PC rig assets exist in debug isolate
+                r.ensure_pc_assets();
+                let shard_m = crate::gfx::types::Model {
+                    model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    emissive: 0.0,
+                    _pad: [0.0; 4],
+                };
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+                r.draw_pc_only(&mut rp);
+                drop(rp);
+                // Present immediately for the isolate path (no HUD perf text)
+                r.hud.queue(&r.device, &r.queue);
+                r.hud.draw(&mut encoder, &view);
+                r.queue.submit(Some(encoder.finish()));
+                frame.present();
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation (main pass): {:?}", e);
+                }
+                return Ok(());
             }
-            return Ok(());
         }
         if !pc_debug {
             // Terrain
@@ -1262,9 +1264,7 @@ pub fn render_impl(
                 if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                     log::error!("validation after PC draw: {:?}", e);
                 }
-                // HUD marker to prove the draw path is running
-                r.hud
-                    .append_perf_text_line(r.size.width, r.size.height, "PC DRAW", 0);
+                // No HUD marker in normal builds; keep logs only
             } else {
                 log::warn!(
                     "pc_draw: vb={} ib={} inst={} mat={} pal={} idx={}",

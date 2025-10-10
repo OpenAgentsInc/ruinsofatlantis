@@ -33,9 +33,17 @@ impl Renderer {
         let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
         rpass.insert_debug_marker("pc:begin");
         if use_debug {
-            if let Some(p) = &self.wizard_pipeline_debug {
-                rpass.set_pipeline(p);
+            let flat = std::env::var("RA_PC_DEBUG_FLAT")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if flat {
+                if let Some(p) = &self.wizard_pipeline_debug {
+                    rpass.set_pipeline(p);
+                } else {
+                    rpass.set_pipeline(&self.wizard_pipeline);
+                }
             } else {
+                // Use normal textured pipeline even in debug, unless RA_PC_DEBUG_FLAT=1
                 rpass.set_pipeline(&self.wizard_pipeline);
             }
         } else {
