@@ -130,6 +130,7 @@ pub struct Renderer {
     ssgi_scene_bgl: wgpu::BindGroupLayout,
     ssr_depth_bgl: wgpu::BindGroupLayout,
     ssr_scene_bgl: wgpu::BindGroupLayout,
+    material_bgl: wgpu::BindGroupLayout,
     palettes_bgl: wgpu::BindGroupLayout,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
@@ -178,6 +179,7 @@ pub struct Renderer {
     pc_vb: Option<wgpu::Buffer>,
     pc_ib: Option<wgpu::Buffer>,
     pc_index_count: u32,
+    pc_index_format: wgpu::IndexFormat,
     pc_instances: Option<wgpu::Buffer>,
     // Zombie skinned geometry
     zombie_vb: wgpu::Buffer,
@@ -267,6 +269,8 @@ pub struct Renderer {
     pc_prev_pos: glam::Vec3,
     pc_anim_cfg: data_runtime::configs::pc_animations::PcAnimCfg,
     pc_anim_missing_warned: HashSet<String>,
+    // Track last seen replicated PC id for logging
+    pc_rep_id_last: Option<u32>,
     // Zombies
     zombie_palettes_buf: wgpu::Buffer,
     zombie_palettes_bg: wgpu::BindGroup,
@@ -300,6 +304,7 @@ pub struct Renderer {
 
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
+    wizard_pipeline_debug: Option<wgpu::RenderPipeline>,
 
     wizard_mat_bg: wgpu::BindGroup,
     _wizard_mat_buf: wgpu::Buffer,
@@ -320,6 +325,8 @@ pub struct Renderer {
 
     // Flags
     wire_enabled: bool,
+    // One-shot gate to avoid spamming logs when PC resources aren't ready in debug
+    pc_debug_warned_not_ready: bool,
 
     // Sky/time-of-day state
     sky: sky::SkyStateCPU,
@@ -485,6 +492,11 @@ pub struct Renderer {
     // Wizard health (including PC at pc_index)
     wizard_hp: Vec<i32>,
     wizard_hp_max: i32,
+
+    // --- Zone Picker UI (minimal overlay) ---
+    picker_items: Vec<(String, String)>, // (slug, display)
+    picker_selected: usize,
+    picker_chosen_slug: Option<String>,
     pc_alive: bool,
     // NPC wizard casting rotation state
     wizard_fire_cycle_count: Vec<u32>,
@@ -609,6 +621,11 @@ impl Renderer {
     #[inline]
     pub fn has_zone_batches(&self) -> bool {
         self.zone_batches.is_some()
+    }
+    /// Returns true if a dummy picker batch is set (used to suppress legacy draws during Picker).
+    #[inline]
+    pub fn is_picker_batches(&self) -> bool {
+        matches!(self.zone_batches.as_ref(), Some(z) if z.slug == "<picker>")
     }
     /// Attach or clear zone batches uploaded by the client.
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
@@ -1019,6 +1036,15 @@ impl Renderer {
             &material_bgl,
             draw_fmt,
         );
+        let wizard_pipeline_debug = Some(pipeline::create_wizard_pipeline_debug(
+            &device,
+            &shader,
+            &globals_bgl,
+            &model_bgl,
+            &palettes_bgl,
+            &material_bgl,
+            draw_fmt,
+        ));
         let particle_pipeline =
             pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
@@ -1774,6 +1800,7 @@ impl Renderer {
             zombie_forward_offsets: vec![zombie_forward_offset; zombie_count as usize],
             wizard_instances_cpu,
             wizard_pipeline,
+            wizard_pipeline_debug,
             // debug pipelines removed
             wizard_mat_bg,
             _wizard_mat_buf,
@@ -1864,17 +1891,20 @@ impl Renderer {
             // Enable bloom by default to accent bright fire bolts
             enable_bloom: true,
             // frame overlay removed
+            picker_items: Vec::new(),
+            picker_selected: 0,
+            picker_chosen_slug: None,
         })
     }
 
     /// Resize the swapchain while preserving aspect and device limits.
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        renderer::resize::resize_impl(self, new_size)
+        renderer::resize::resize_impl(self, new_size);
     }
 
     /// Render one frame (delegate wrapper).
     pub fn render(&mut self) -> Result<(), SurfaceError> {
-        renderer::render::render_impl(self)
+        renderer::render::render_impl(self, None)
     }
 
     /// Recreate swapchain and sized resources using the current window size.
@@ -1885,7 +1915,315 @@ impl Renderer {
 
     /// Back-compat stub for old render body.
     pub fn render_core_legacy(&mut self) -> Result<(), SurfaceError> {
-        renderer::render::render_impl(self)
+        renderer::render::render_impl(self, None)
+    }
+
+    /// Render one frame with access to the host winit Window (needed for egui input).
+    pub fn render_with_window(
+        &mut self,
+        window: &winit::window::Window,
+    ) -> Result<(), SurfaceError> {
+        renderer::render::render_impl(self, Some(window))
+    }
+
+    /// Clear any previously queued HUD overlay content (e.g., loading modal).
+    pub fn hud_reset(&mut self) {
+        self.hud.reset();
+    }
+
+    /// Draw the Zone Picker overlay using HUD text. The platform should call this
+    /// each frame while in Picker mode; the renderer will then queue/draw HUD at
+    /// the end of the frame.
+    pub fn draw_picker_overlay(
+        &mut self,
+        header: &str,
+        help: &str,
+        lines: &[String],
+        selected: usize,
+    ) {
+        // Clear previous HUD and draw a centered modal header
+        self.hud.reset();
+        self.hud
+            .death_overlay(self.size.width, self.size.height, header, help);
+        // Draw list lines (top-left for guaranteed visibility across themes)
+        // Keep to first 16 to avoid overflow
+        let max_show = 16usize;
+        for (row, (idx, disp)) in lines.iter().enumerate().take(max_show).enumerate() {
+            let cursor = if idx == selected { "> " } else { "  " };
+            let txt = format!("{}{}", cursor, disp);
+            self.hud
+                .append_perf_text_line(self.size.width, self.size.height, &txt, row as u32);
+        }
+    }
+
+    /// Ensure the separate PC (UBC) rig is available after a zone is selected.
+    /// Safe to call multiple times; no-ops if already created or if GLTF fails.
+    pub fn ensure_pc_assets(&mut self) {
+        if self.pc_vb.is_some() {
+            return;
+        }
+        use crate::gfx::types::{InstanceSkin, VertexSkinned};
+        use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+        let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
+        let ubc_path = asset_path(ubc_rel);
+        let mut cpu_pc = match load_gltf_skinned(&ubc_path) {
+            Ok(c) => c,
+            Err(e) => {
+                log::debug!("ensure_pc_assets: failed to load {:?}: {:?}", ubc_path, e);
+                return;
+            }
+        };
+        // Merge universal animation library if available
+        let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
+        if lib_path.exists()
+            && let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path)
+        {
+            log::debug!("ensure_pc_assets: merge anim lib failed: {:?}", e);
+        }
+        if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
+            return;
+        }
+        // Build VB/IB
+        let verts: Vec<VertexSkinned> = cpu_pc
+            .vertices
+            .iter()
+            .map(|v| VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                uv: v.uv,
+                joints: [
+                    v.joints[0] as u32,
+                    v.joints[1] as u32,
+                    v.joints[2] as u32,
+                    v.joints[3] as u32,
+                ],
+                weights: v.weights,
+            })
+            .collect();
+        let vb = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-vb"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        let ib = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-ib"),
+                contents: bytemuck::cast_slice(&cpu_pc.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        let index_count = cpu_pc.indices.len() as u32;
+        // Detect index format dynamically based on max index value
+        let needs_u32 = cpu_pc
+            .indices
+            .iter()
+            .any(|&i| u32::from(i) > u16::MAX as u32);
+        self.pc_index_format = if needs_u32 {
+            wgpu::IndexFormat::Uint32
+        } else {
+            wgpu::IndexFormat::Uint16
+        };
+        // Detect index format dynamically based on max index value
+        let needs_u32 = cpu_pc
+            .indices
+            .iter()
+            .any(|&i| u32::from(i) > u16::MAX as u32);
+        self.pc_index_format = if needs_u32 {
+            wgpu::IndexFormat::Uint32
+        } else {
+            wgpu::IndexFormat::Uint16
+        };
+        let joints = cpu_pc.joints_nodes.len() as u32;
+        // Material bind group using the same layout the pipelines expect
+        let pc_mat = material::create_wizard_material(
+            &self.device,
+            &self.queue,
+            &self.material_bgl,
+            &cpu_pc,
+        );
+        // Pin instance near origin so camera sees it (initial camera looks at origin)
+        let m = glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0));
+        let inst_cpu = InstanceSkin {
+            model: m.to_cols_array_2d(),
+            color: [1.0, 1.0, 1.0],
+            selected: 1.0,
+            palette_base: 0,
+            _pad_inst: [0; 3],
+        };
+        let inst_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-instance"),
+                contents: bytemuck::bytes_of(&inst_cpu),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        // Palette buffer (single instance)
+        let pc_pal_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pc-ubc-palettes"),
+            size: ((joints.max(1) as usize) * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let pc_pal_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("pc-ubc-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: pc_pal_buf.as_entire_binding(),
+            }],
+        });
+        if joints > 0 {
+            let id_mats: Vec<[f32; 16]> = (0..joints)
+                .map(|_| glam::Mat4::IDENTITY.to_cols_array())
+                .collect();
+            self.queue
+                .write_buffer(&pc_pal_buf, 0, bytemuck::cast_slice(&id_mats));
+        }
+        // Install
+        self.pc_vb = Some(vb);
+        self.pc_ib = Some(ib);
+        self.pc_index_count = index_count;
+        self.pc_joints = joints;
+        self.pc_mat_bg = Some(pc_mat.bind_group);
+        self.pc_cpu = Some(cpu_pc);
+        self.pc_instances = Some(inst_buf);
+        self.pc_palettes_buf = Some(pc_pal_buf);
+        self.pc_palettes_bg = Some(pc_pal_bg);
+    }
+
+    /// Install a pre-decoded PC CPU rig into GPU resources (called from UI thread
+    /// after decoding on a background thread).
+    pub fn install_pc_cpu(&mut self, mut cpu_pc: SkinnedMeshCPU) {
+        if self.pc_vb.is_some() {
+            return;
+        }
+        use crate::gfx::types::{InstanceSkin, VertexSkinned};
+        // Merge universal animation library if available (idempotent)
+        let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
+        if lib_path.exists()
+            && let Err(e) = roa_assets::skinning::merge_gltf_animations(&mut cpu_pc, &lib_path)
+        {
+            log::debug!("install_pc_cpu: merge anim lib failed: {:?}", e);
+        }
+        if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
+            log::warn!("install_pc_cpu: empty CPU rig; skipping");
+            return;
+        }
+        let verts: Vec<VertexSkinned> = cpu_pc
+            .vertices
+            .iter()
+            .map(|v| VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                uv: v.uv,
+                joints: [
+                    v.joints[0] as u32,
+                    v.joints[1] as u32,
+                    v.joints[2] as u32,
+                    v.joints[3] as u32,
+                ],
+                weights: v.weights,
+            })
+            .collect();
+        let vb = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-vb"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+        let ib = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-ib"),
+                contents: bytemuck::cast_slice(&cpu_pc.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        let index_count = cpu_pc.indices.len() as u32;
+        // Detect index format dynamically based on max index value
+        let needs_u32 = cpu_pc
+            .indices
+            .iter()
+            .any(|&i| u32::from(i) > u16::MAX as u32);
+        self.pc_index_format = if needs_u32 {
+            wgpu::IndexFormat::Uint32
+        } else {
+            wgpu::IndexFormat::Uint16
+        };
+        let joints = cpu_pc.joints_nodes.len() as u32;
+        let pc_mat = material::create_wizard_material(
+            &self.device,
+            &self.queue,
+            &self.material_bgl,
+            &cpu_pc,
+        );
+        let inst_cpu = InstanceSkin {
+            model: glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0)).to_cols_array_2d(),
+            color: [1.0, 1.0, 1.0],
+            selected: 1.0,
+            palette_base: 0,
+            _pad_inst: [0; 3],
+        };
+        let inst_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("pc-ubc-instance"),
+                contents: bytemuck::bytes_of(&inst_cpu),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        let pc_pal_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pc-ubc-palettes"),
+            size: ((joints.max(1) as usize) * 64) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let pc_pal_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("pc-ubc-palettes-bg"),
+            layout: &self.palettes_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: pc_pal_buf.as_entire_binding(),
+            }],
+        });
+        if joints > 0 {
+            let id_mats: Vec<[f32; 16]> = (0..joints)
+                .map(|_| glam::Mat4::IDENTITY.to_cols_array())
+                .collect();
+            self.queue
+                .write_buffer(&pc_pal_buf, 0, bytemuck::cast_slice(&id_mats));
+        }
+        self.pc_vb = Some(vb);
+        self.pc_ib = Some(ib);
+        self.pc_index_count = index_count;
+        self.pc_joints = joints;
+        self.pc_mat_bg = Some(pc_mat.bind_group);
+        self.pc_cpu = Some(cpu_pc);
+        self.pc_instances = Some(inst_buf);
+        self.pc_palettes_buf = Some(pc_pal_buf);
+        self.pc_palettes_bg = Some(pc_pal_bg);
+    }
+
+    /// Take a selected slug from the Picker UI (if any was chosen this frame).
+    pub fn take_picker_selected(&mut self) -> Option<String> {
+        self.picker_chosen_slug.take()
+    }
+
+    /// Update Picker items (slug, display) provided by the platform.
+    pub fn set_picker_items(&mut self, items: Vec<(String, String)>) {
+        self.picker_items = items;
+        self.picker_selected = 0;
+    }
+
+    /// Update which item is selected in the Picker list (platform-driven).
+    pub fn set_picker_selected_index(&mut self, idx: usize) {
+        let len = self.picker_items.len();
+        if len == 0 {
+            self.picker_selected = 0;
+        } else {
+            self.picker_selected = idx.min(len - 1);
+        }
     }
 
     /// Legacy render body (disabled).

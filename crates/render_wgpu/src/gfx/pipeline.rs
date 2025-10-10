@@ -411,6 +411,51 @@ pub fn create_wizard_pipelines(
     (pipeline, wire_pipeline)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn create_wizard_pipeline_debug(
+    device: &wgpu::Device,
+    shader: &ShaderModule,
+    globals_bgl: &BindGroupLayout,
+    model_bgl: &BindGroupLayout,
+    palettes_bgl: &BindGroupLayout,
+    material_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("wizard-pipeline-layout-debug"),
+        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl, material_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wizard-inst-pipeline-debug"),
+        layout: Some(&pipeline_layout),
+        vertex: VertexState {
+            module: shader,
+            entry_point: Some("vs_wizard"),
+            buffers: &[VertexSkinned::LAYOUT, InstanceSkin::LAYOUT],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: shader,
+            entry_point: Some("fs_wizard_debug_flat"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            cull_mode: None,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 pub fn create_particle_pipeline(
     device: &wgpu::Device,
     shader: &ShaderModule,

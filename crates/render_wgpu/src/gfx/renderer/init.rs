@@ -37,6 +37,9 @@ use crate::gfx::{
 };
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
+    // Only load heavy actor/NPC assets up front when a zone is explicitly selected (native).
+    let load_actor_assets = std::env::var("ROA_ZONE").ok().is_some();
+
     // --- Instance + Surface + Adapter (with backend fallback) ---
     fn backend_from_env() -> Option<wgpu::Backends> {
         match std::env::var("RA_BACKEND").ok().as_deref() {
@@ -132,9 +135,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         req_features |= wgpu::Features::POLYGON_MODE_LINE;
     }
     let info = adapter.get_info();
-    log::info!("Adapter: {:?} ({:?})", info.name, info.backend);
-    log::warn!("features: {:?}", adapter.features());
-    log::warn!("limits:   {:?}", adapter.limits());
+    log::debug!("Adapter: {:?} ({:?})", info.name, info.backend);
+    log::debug!("features: {:?}", adapter.features());
+    log::debug!("limits:   {:?}", adapter.limits());
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("wgpu-device"),
@@ -196,7 +199,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let max_dim = device.limits().max_texture_dimension_2d.clamp(1, 2048);
     let (w, h) = util::scale_to_max((size.width, size.height), max_dim);
     if (w, h) != (size.width, size.height) {
-        log::warn!(
+        log::debug!(
             "Clamping surface from {}x{} to {}x{} (max_dim={})",
             size.width,
             size.height,
@@ -216,7 +219,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
-    log::info!(
+    log::debug!(
         "swapchain configured: fmt={:?} srgb={} size={}x{} present={:?}",
         config.format,
         config.format.is_srgb(),
@@ -239,7 +242,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         config.format,
         offscreen_fmt,
     );
-    log::info!(
+    log::debug!(
         "attachments: swapchain={:?} offscreen={:?}",
         config.format,
         offscreen_fmt
@@ -274,12 +277,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     {
         if config.format.is_srgb() {
             direct_present = true;
-            log::warn!(
+            log::debug!(
                 "swapchain {:?} is sRGB; enabling direct-present on web",
                 config.format
             );
         } else {
-            log::warn!(
+            log::debug!(
                 "swapchain {:?} is not sRGB; using offscreen+present for gamma-correct output",
                 config.format
             );
@@ -291,7 +294,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     } else {
         offscreen_fmt
     };
-    log::info!(
+    log::debug!(
         "render path: direct_present={} draw_fmt={:?}",
         direct_present,
         draw_fmt
@@ -335,6 +338,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &material_bgl,
         draw_fmt,
     );
+    let wizard_pipeline_debug = Some(pipeline::create_wizard_pipeline_debug(
+        &device,
+        &shader,
+        &globals_bgl,
+        &model_bgl,
+        &palettes_bgl,
+        &material_bgl,
+        draw_fmt,
+    ));
     let particle_pipeline =
         pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
 
@@ -695,8 +707,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
     // Load wizard GLTF, possibly merging UVs from simple loader for robustness
-    let skinned_cpu = load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
-        .context("load skinned wizard.gltf")?;
+    let skinned_cpu = if load_actor_assets {
+        load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
+            .context("load skinned wizard.gltf")?
+    } else {
+        crate::gfx::Renderer::empty_skinned_cpu()
+    };
     let viewer_uv: Option<Vec<[f32; 2]>> = (|| {
         let (doc, buffers, _images) = gltf::import(asset_path("assets/models/wizard.gltf")).ok()?;
         let mesh = doc.meshes().next()?;
@@ -727,7 +743,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             VertexSkinned {
                 pos: v.pos,
                 nrm: v.nrm,
-                joints: v.joints,
+                joints: [
+                    v.joints[0] as u32,
+                    v.joints[1] as u32,
+                    v.joints[2] as u32,
+                    v.joints[3] as u32,
+                ],
                 weights: v.weights,
                 uv,
             }
@@ -746,11 +767,23 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let wizard_index_count = skinned_cpu.indices.len() as u32;
 
     // Zombie assets (skinned)
-    let zombie_assets = zombies::load_assets(&device).context("load zombie assets")?;
-    let zombie_cpu = zombie_assets.cpu;
-    let zombie_vb = zombie_assets.vb;
-    let zombie_ib = zombie_assets.ib;
-    let zombie_index_count = zombie_assets.index_count;
+    let (zombie_cpu, zombie_vb, zombie_ib, zombie_index_count) = if load_actor_assets {
+        let a = zombies::load_assets(&device).context("load zombie assets")?;
+        (a.cpu, a.vb, a.ib, a.index_count)
+    } else {
+        let b = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("zombie-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (
+            crate::gfx::Renderer::empty_skinned_cpu(),
+            b.clone(),
+            b,
+            0u32,
+        )
+    };
 
     // Scene assembly
     let scene_build = scene::build_demo_scene(
@@ -805,7 +838,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let total_mats = scene_build.wizard_count as usize * scene_build.joints_per_wizard as usize;
     let palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("palettes"),
-        size: (total_mats * 64) as u64,
+        size: ((total_mats.max(1)) * 64) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -846,7 +879,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_instances,
         pc_palettes_buf,
         pc_palettes_bg,
-    ) = {
+    ) = if load_actor_assets {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
         let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
@@ -906,7 +939,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                         pos: v.pos,
                         nrm: v.nrm,
                         uv: v.uv,
-                        joints: v.joints,
+                        joints: [
+                            v.joints[0] as u32,
+                            v.joints[1] as u32,
+                            v.joints[2] as u32,
+                            v.joints[3] as u32,
+                        ],
                         weights: v.weights,
                     })
                     .collect();
@@ -978,21 +1016,59 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             // Disable separate PC rig: yield Nones from this block
             (None, None, 0u32, 0u32, None, None, None, None, None)
         }
+    } else {
+        (None, None, 0u32, 0u32, None, None, None, None, None)
     };
 
     // Death Knight assets (skinned, single instance)
-    let dk_assets =
-        super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
-    let dk_cpu = dk_assets.cpu;
-    let dk_vb = dk_assets.vb;
-    let dk_ib = dk_assets.ib;
-    let dk_index_count = dk_assets.index_count;
-    let dk_joints = dk_cpu.joints_nodes.len() as u32;
-    let dk_mat = material::create_wizard_material(&device, &queue, &material_bgl, &dk_cpu);
-    let dk_mat_bg = dk_mat.bind_group;
-    let _dk_mat_buf = dk_mat.uniform_buf;
-    let _dk_tex_view = dk_mat.texture_view;
-    let _dk_sampler = dk_mat.sampler;
+    let (
+        dk_cpu,
+        dk_vb,
+        dk_ib,
+        dk_index_count,
+        dk_joints,
+        dk_mat_bg,
+        _dk_mat_buf,
+        _dk_tex_view,
+        _dk_sampler,
+    ) = if load_actor_assets {
+        let a =
+            super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
+        let cpu = a.cpu;
+        let joints = cpu.joints_nodes.len() as u32;
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &cpu);
+        (
+            cpu,
+            a.vb,
+            a.ib,
+            a.index_count,
+            joints,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    } else {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("dk-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
+        (
+            empty_cpu,
+            dummy.clone(),
+            dummy,
+            0u32,
+            0u32,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    };
 
     // NPCs and server
     let npcs = npcs::build(&device, terrain_extent);
@@ -1083,7 +1159,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
-    // Sorceress — single idle instance behind the Death Knight (configurable model)
+    // Sorceress — gate under actor assets
+    if !load_actor_assets { /* leave placeholders below */ }
     let sorc_cfg = data_runtime::configs::sorceress::load_default().unwrap_or_default();
     let (
         sorc_cpu,
@@ -1095,7 +1172,27 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _sorc_mat_buf,
         _sorc_tex_view,
         _sorc_sampler,
-    ) = if let Some(model_rel) = sorc_cfg.model.as_deref() {
+    ) = if !load_actor_assets {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sorc-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
+        (
+            empty_cpu,
+            dummy.clone(),
+            dummy,
+            0u32,
+            0u32,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    } else if let Some(model_rel) = sorc_cfg.model.as_deref() {
         if let Ok(sa) = super::super::sorceress::load_assets(&device, model_rel) {
             let mut cpu = sa.cpu;
             // Try to merge the universal animation library so Sorceress can use the same Walk/Idle clips as the PC.
@@ -1618,6 +1715,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ssr_depth_bgl: ssr_depth_bgl.clone(),
         ssr_scene_bgl: ssr_scene_bgl.clone(),
         palettes_bgl: palettes_bgl.clone(),
+        material_bgl: material_bgl.clone(),
         globals_bg,
         post_ao_bg,
         ssgi_globals_bg,
@@ -1657,6 +1755,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_vb,
         pc_ib,
         pc_index_count,
+        pc_index_format: wgpu::IndexFormat::Uint16,
         pc_instances,
         dk_vb,
         dk_ib,
@@ -1716,6 +1815,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_free_slots: (0..wizard_models.len()).collect(),
         wizard_instances_cpu,
         wizard_pipeline,
+        wizard_pipeline_debug,
         wizard_mat_bg,
         _wizard_mat_buf,
         _wizard_tex_view,
@@ -1729,6 +1829,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _zombie_tex_view,
         _zombie_sampler,
         wire_enabled: false,
+        pc_debug_warned_not_ready: false,
         sky: sky_state,
         terrain_cpu,
         start: Instant::now(),
@@ -1849,6 +1950,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_cpu,
         pc_mat_bg,
         pc_prev_pos: pc_initial_pos,
+        pc_rep_id_last: None,
         sorc_palettes_buf,
         sorc_palettes_bg,
         sorc_joints,
@@ -1887,6 +1989,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_anim_cfg,
         pc_anim_missing_warned: Default::default(),
         zone_batches: None,
+        // Picker overlay state
+        picker_items: Vec::new(),
+        picker_selected: 0,
+        picker_chosen_slug: None,
     };
 
     // Apply default input profile from config if provided

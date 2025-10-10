@@ -11,7 +11,11 @@ use crate::gfx::{camera_sys, terrain, types::Model};
 // legacy client AI paths removed; renderer is replication-driven only
 
 /// Full render implementation (moved from gfx/mod.rs).
-pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
+#[allow(unused_variables)]
+pub fn render_impl(
+    r: &mut crate::gfx::Renderer,
+    window: Option<&winit::window::Window>,
+) -> Result<(), SurfaceError> {
     let frame = r.surface.get_current_texture()?;
     let view = frame
         .texture
@@ -79,6 +83,37 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             occlusion_query_set: None,
             timestamp_writes: None,
         });
+        if pc_debug {
+            let pc_ready = r.pc_vb.is_some()
+                && r.pc_ib.is_some()
+                && r.pc_instances.is_some()
+                && r.pc_mat_bg.is_some()
+                && r.pc_palettes_bg.is_some()
+                && r.pc_index_count > 0;
+            if pc_ready {
+                let shard_m = crate::gfx::types::Model {
+                    model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    emissive: 0.0,
+                    _pad: [0.0; 4],
+                };
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+                r.draw_pc_only(&mut rp);
+                r.draw_calls += 1;
+            } else {
+                log::warn!(
+                    "pc_draw(isolate): vb={} ib={} inst={} mat={} pal={} idx={}",
+                    r.pc_vb.is_some(),
+                    r.pc_ib.is_some(),
+                    r.pc_instances.is_some(),
+                    r.pc_mat_bg.is_some(),
+                    r.pc_palettes_bg.is_some(),
+                    r.pc_index_count
+                );
+            }
+            drop(rp);
+        }
         sky.set_pipeline(&r.sky_pipeline);
         sky.set_bind_group(0, &r.globals_bg, &[]);
         sky.set_bind_group(1, &r.sky_bg, &[]);
@@ -86,6 +121,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         drop(sky);
         // 2) Main terrain into offscreen with depth
         {
+            let pc_debug = std::env::var("RA_PC_DEBUG")
+                .map(|v| v == "1")
+                .unwrap_or(false);
             let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wasm-debug-main-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -644,8 +682,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.queue
         .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
 
-    // Handle queued PC cast and update animation state
-    r.process_pc_cast(t);
+    // Handle queued PC cast and update animation state (skip in Picker)
+    if !r.is_picker_batches() {
+        r.process_pc_cast(t);
+    }
     // Sync wizard transforms from replicated positions so overlays/bars and projectile origins
     // align with visuals. Map PC to `pc_index`, then map NPC wizards to remaining instances
     // in order of appearance. Preserve current yaw when available, otherwise use replicated yaw.
@@ -674,6 +714,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // 3) Ensure PC id is pinned to pc_index; if occupied, move that id to a free slot
         if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
             let pc_id = pcw.id;
+            if r.pc_rep_id_last != Some(pc_id) {
+                log::info!("client: local PC replicated id={}", pc_id);
+                r.pc_rep_id_last = Some(pc_id);
+            }
             let mapped = r.wizard_slot_map.get(&pc_id).copied();
             match mapped {
                 Some(slot) if slot == r.pc_index => {}
@@ -772,8 +816,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         // Align draw count with replication (cap to capacity)
         r.wizard_count = r.repl_buf.wizards.len().min(r.wizard_models.len()) as u32;
     }
-    // Update wizard skinning palettes on CPU then upload
-    r.update_wizard_palettes(t);
+    // Update wizard skinning palettes on CPU then upload (skip in Picker)
+    if !r.is_picker_batches() {
+        r.update_wizard_palettes(t);
+    }
     // Default build: rotate NPC wizards to face targets (player or nearest replicated NPC)
     {
         let yaw_rate = 2.5 * dt;
@@ -836,8 +882,10 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             }
         }
     }
-    // Update PC (UBC) palette if separate rig is active
-    r.update_pc_palette(t);
+    // Update PC (UBC) palette if separate rig is active (skip in Picker)
+    if !r.is_picker_batches() {
+        r.update_pc_palette(t);
+    }
     // Zombie AI/movement on server; then update local transforms and palettes
     {
         let mut wiz_pos: Vec<glam::Vec3> = Vec::with_capacity(r.wizard_count as usize);
@@ -946,6 +994,9 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     // Sky-only pass
     log::debug!("pass: sky");
     if !present_only {
+        let pc_debug = std::env::var("RA_PC_DEBUG")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sky-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -974,7 +1025,22 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     }
     // Main pass with depth
     log::debug!("pass: main");
+    // Capture validation across the entire main pass to surface concrete errors
+    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
     if !present_only {
+        let pc_debug = std::env::var("RA_PC_DEBUG")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        // Depth is required for the normal scene. In debug-isolate we only
+        // omit depth when the picker is active and we're not drawing the PC.
+        // Otherwise, keep depth so pipelines that expect it are compatible.
+        let want_depth = if pc_debug {
+            // In debug: use depth unless the picker overlay is active.
+            !r.is_picker_batches()
+        } else {
+            // In normal runs: always use depth for the main pass.
+            true
+        };
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -982,169 +1048,260 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &r.attachments.depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: if want_depth {
+                Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &r.attachments.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                })
+            } else {
+                None
+            },
             occlusion_query_set: None,
             timestamp_writes: None,
         });
-        // Terrain
-        let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
-        if std::env::var("RA_DRAW_TERRAIN")
-            .map(|v| v == "0")
-            .unwrap_or(false)
-        {
-            log::debug!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
-        } else {
-            log::debug!("draw: terrain");
-            if trace {
+        if pc_debug {
+            // If the picker overlay is active, do NOT draw the PC in debug mode.
+            if r.is_picker_batches() {
+                // Keep the pass open but do not draw the PC while the Zone Picker is active.
+            } else {
+                // Proactively ensure PC rig assets exist in debug isolate
+                r.ensure_pc_assets();
+                let shard_m = crate::gfx::types::Model {
+                    model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    emissive: 0.0,
+                    _pad: [0.0; 4],
+                };
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+                r.draw_pc_only(&mut rp);
+                drop(rp);
+                // Present immediately for the isolate path (no HUD perf text)
+                r.hud.queue(&r.device, &r.queue);
+                r.hud.draw(&mut encoder, &view);
+                r.queue.submit(Some(encoder.finish()));
+                frame.present();
                 #[cfg(not(target_arch = "wasm32"))]
-                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-            }
-            rp.set_pipeline(&r.pipeline);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.terrain_model_bg, &[]);
-            rp.set_vertex_buffer(0, r.terrain_vb.slice(..));
-            rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
-            r.draw_calls += 1;
-            #[cfg(not(target_arch = "wasm32"))]
-            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation after terrain: {:?}", e);
+                if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation (main pass): {:?}", e);
+                }
+                return Ok(());
             }
         }
-        // Trees
-        if r.trees_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
-            log::debug!("draw: trees x{}", r.trees_count);
-            if trace {
-                #[cfg(not(target_arch = "wasm32"))]
-                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-            }
-            let inst_pipe = if r.wire_enabled {
-                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-            } else {
-                &r.inst_pipeline
-            };
-            rp.set_pipeline(inst_pipe);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.shard_model_bg, &[]);
-            rp.set_vertex_buffer(0, r.trees_vb.slice(..));
-            rp.set_vertex_buffer(1, r.trees_instances.slice(..));
-            rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rp.draw_indexed(0..r.trees_index_count, 0, 0..r.trees_count);
-            r.draw_calls += 1;
-            #[cfg(not(target_arch = "wasm32"))]
-            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation after trees: {:?}", e);
-            }
-        }
-        // Rocks
-        if r.rocks_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
-            log::debug!("draw: rocks x{}", r.rocks_count);
-            if trace {
-                #[cfg(not(target_arch = "wasm32"))]
-                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-            }
-            let inst_pipe = if r.wire_enabled {
-                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-            } else {
-                &r.inst_pipeline
-            };
-            rp.set_pipeline(inst_pipe);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.shard_model_bg, &[]);
-            rp.set_vertex_buffer(0, r.rocks_vb.slice(..));
-            rp.set_vertex_buffer(1, r.rocks_instances.slice(..));
-            rp.set_index_buffer(r.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rp.draw_indexed(0..r.rocks_index_count, 0, 0..r.rocks_count);
-            r.draw_calls += 1;
-            #[cfg(not(target_arch = "wasm32"))]
-            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation after rocks: {:?}", e);
-            }
-        }
-        // Debris cubes (instanced)
-        if r.debris_count > 0 {
-            let inst_pipe = if r.wire_enabled {
-                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-            } else {
-                &r.inst_pipeline
-            };
-            rp.set_pipeline(inst_pipe);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.debris_model_bg, &[]);
-            rp.set_vertex_buffer(0, r.debris_vb.slice(..));
-            rp.set_vertex_buffer(1, r.debris_instances.slice(..));
-            rp.set_index_buffer(r.debris_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rp.draw_indexed(0..r.debris_index_count, 0, 0..r.debris_count);
-            r.draw_calls += 1;
-        }
-        // Ruins
-        if r.ruins_count > 0 && !r.is_vox_onepath() && !r.has_zone_batches() {
-            log::debug!("draw: ruins x{}", r.ruins_count);
-            if trace {
-                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-            }
-            let inst_pipe = if r.wire_enabled {
-                r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-            } else {
-                &r.inst_pipeline
-            };
-            rp.set_pipeline(inst_pipe);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.shard_model_bg, &[]);
-            rp.set_vertex_buffer(0, r.ruins_vb.slice(..));
-            rp.set_vertex_buffer(1, r.ruins_instances.slice(..));
-            rp.set_index_buffer(r.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rp.draw_indexed(0..r.ruins_index_count, 0, 0..r.ruins_count);
-            r.draw_calls += 1;
-            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation after ruins: {:?}", e);
-            }
-        }
-        // Voxel chunk meshes (if any)
-        if !r.voxel_meshes.is_empty() {
-            log::debug!("[draw] voxel meshes: {} chunks", r.voxel_meshes.len());
+        if !pc_debug {
+            // Terrain
             let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
-            if trace {
+            if std::env::var("RA_DRAW_TERRAIN")
+                .map(|v| v == "0")
+                .unwrap_or(false)
+            {
+                log::debug!("draw: terrain skipped (RA_DRAW_TERRAIN=0)");
+            } else if !r.is_picker_batches() {
+                log::debug!("draw: terrain");
+                if trace {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                rp.set_pipeline(&r.pipeline);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.terrain_model_bg, &[]);
+                rp.set_vertex_buffer(0, r.terrain_vb.slice(..));
+                rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
+                r.draw_calls += 1;
                 #[cfg(not(target_arch = "wasm32"))]
-                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after terrain: {:?}", e);
+                }
             }
-            rp.set_pipeline(&r.pipeline);
-            rp.set_bind_group(0, &r.globals_bg, &[]);
-            rp.set_bind_group(1, &r.voxel_model_bg, &[]);
-            for m in r.voxel_meshes.values() {
-                rp.set_vertex_buffer(0, m.vb.slice(..));
-                rp.set_index_buffer(m.ib.slice(..), wgpu::IndexFormat::Uint32);
-                rp.draw_indexed(0..m.idx, 0, 0..1);
+            // Trees
+            // Show vegetation when not in Picker. Previously this was suppressed when
+            // zone_batches existed; until zone-baked draws land, allow draws here too.
+            if r.trees_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
+                log::debug!("draw: trees x{}", r.trees_count);
+                if trace {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                let inst_pipe = if r.wire_enabled {
+                    r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                } else {
+                    &r.inst_pipeline
+                };
+                rp.set_pipeline(inst_pipe);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                rp.set_vertex_buffer(0, r.trees_vb.slice(..));
+                rp.set_vertex_buffer(1, r.trees_instances.slice(..));
+                rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..r.trees_index_count, 0, 0..r.trees_count);
+                r.draw_calls += 1;
+                #[cfg(not(target_arch = "wasm32"))]
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after trees: {:?}", e);
+                }
+            }
+            // Rocks
+            if r.rocks_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
+                log::debug!("draw: rocks x{}", r.rocks_count);
+                if trace {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                let inst_pipe = if r.wire_enabled {
+                    r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                } else {
+                    &r.inst_pipeline
+                };
+                rp.set_pipeline(inst_pipe);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                rp.set_vertex_buffer(0, r.rocks_vb.slice(..));
+                rp.set_vertex_buffer(1, r.rocks_instances.slice(..));
+                rp.set_index_buffer(r.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..r.rocks_index_count, 0, 0..r.rocks_count);
+                r.draw_calls += 1;
+                #[cfg(not(target_arch = "wasm32"))]
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after rocks: {:?}", e);
+                }
+            }
+            // Debris cubes (instanced)
+            if r.debris_count > 0 {
+                let inst_pipe = if r.wire_enabled {
+                    r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                } else {
+                    &r.inst_pipeline
+                };
+                rp.set_pipeline(inst_pipe);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.debris_model_bg, &[]);
+                rp.set_vertex_buffer(0, r.debris_vb.slice(..));
+                rp.set_vertex_buffer(1, r.debris_instances.slice(..));
+                rp.set_index_buffer(r.debris_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..r.debris_index_count, 0, 0..r.debris_count);
                 r.draw_calls += 1;
             }
-            #[cfg(not(target_arch = "wasm32"))]
-            if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation after voxel meshes: {:?}", e);
+            // Ruins
+            if r.ruins_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
+                log::debug!("draw: ruins x{}", r.ruins_count);
+                if trace {
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                let inst_pipe = if r.wire_enabled {
+                    r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                } else {
+                    &r.inst_pipeline
+                };
+                rp.set_pipeline(inst_pipe);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                rp.set_vertex_buffer(0, r.ruins_vb.slice(..));
+                rp.set_vertex_buffer(1, r.ruins_instances.slice(..));
+                rp.set_index_buffer(r.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..r.ruins_index_count, 0, 0..r.ruins_count);
+                r.draw_calls += 1;
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after ruins: {:?}", e);
+                }
+            }
+            // TEMP: debug cube to prove camera & pass are visible
+            if std::env::var("RA_PC_DEBUG").as_deref() == Ok("1")
+                && r.has_zone_batches()
+                && !r.is_picker_batches()
+            {
+                let m = glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0));
+                r.draw_debug_cube(&mut rp, m);
+            }
+            // Voxel chunk meshes (if any)
+            if !r.voxel_meshes.is_empty() && !pc_debug {
+                log::debug!("[draw] voxel meshes: {} chunks", r.voxel_meshes.len());
+                let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+                if trace {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                rp.set_pipeline(&r.pipeline);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.voxel_model_bg, &[]);
+                for m in r.voxel_meshes.values() {
+                    rp.set_vertex_buffer(0, m.vb.slice(..));
+                    rp.set_index_buffer(m.ib.slice(..), wgpu::IndexFormat::Uint32);
+                    rp.draw_indexed(0..m.idx, 0, 0..1);
+                    r.draw_calls += 1;
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after voxel meshes: {:?}", e);
+                }
             }
         }
         // Skinned: wizards (PC always visible even if hide_wizards)
         if r.is_vox_onepath() {
             // skip wizard visuals entirely in one‑path demo
-        } else if r.has_zone_batches() {
-            // Draw only the PC rig in the demo
-            if r.pc_vb.is_some() {
+        } else if r.has_zone_batches() && !r.is_picker_batches() {
+            // Draw only the PC rig when a real zone is active (not in Picker)
+            let pc_ready = r.pc_vb.is_some()
+                && r.pc_ib.is_some()
+                && r.pc_instances.is_some()
+                && r.pc_mat_bg.is_some()
+                && r.pc_palettes_bg.is_some()
+                && r.pc_index_count > 0;
+            if pc_ready {
+                // Always validate the PC draw pass so encoder errors are surfaced with context.
+                r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+
+                // Ensure the per-draw model UBO (group=1) is valid; identity is fine because
+                // the PC's per-instance matrix carries the actual transform.
+                let shard_m = crate::gfx::types::Model {
+                    model: glam::Mat4::IDENTITY.to_cols_array_2d(),
+                    color: [1.0, 1.0, 1.0],
+                    emissive: 0.0,
+                    _pad: [0.0; 4],
+                };
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+
+                // Extra visibility: record resource readiness
+                log::debug!(
+                    "pc_draw(start): vb={} ib={} inst={} mat={} pal={} idx={}",
+                    r.pc_vb.is_some(),
+                    r.pc_ib.is_some(),
+                    r.pc_instances.is_some(),
+                    r.pc_mat_bg.is_some(),
+                    r.pc_palettes_bg.is_some(),
+                    r.pc_index_count
+                );
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
+                if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after PC draw: {:?}", e);
+                }
+                // No HUD marker in normal builds; keep logs only
+            } else {
+                log::warn!(
+                    "pc_draw: vb={} ib={} inst={} mat={} pal={} idx={}",
+                    r.pc_vb.is_some(),
+                    r.pc_ib.is_some(),
+                    r.pc_instances.is_some(),
+                    r.pc_mat_bg.is_some(),
+                    r.pc_palettes_bg.is_some(),
+                    r.pc_index_count
+                );
             }
-        } else if std::env::var("RA_DRAW_WIZARDS")
-            .map(|v| v != "0")
-            .unwrap_or(true)
+        } else if !r.has_zone_batches()
+            && !pc_debug
+            && std::env::var("RA_DRAW_WIZARDS")
+                .map(|v| v != "0")
+                .unwrap_or(true)
         {
             log::debug!("draw: wizards x{}", r.wizard_count);
             r.draw_wizards(&mut rp);
@@ -1625,13 +1782,8 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
         r.draw_calls += 1;
     }
 
-    // Submit
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-        log::error!("wgpu validation error (skipping frame): {:?}", e);
-        return Ok(());
-    }
-
+    // Zone Picker overlay: drawn by platform via Renderer::draw_picker_overlay()
+    // Submit (defer error-scope pop until AFTER submit to catch pass/encoder errors)
     log::debug!("submit: normal path");
     // legacy BossStatus emission removed; HUD is replication-driven
     // HUD
@@ -1676,7 +1828,7 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
             "You died.",
             "Press R to respawn",
         );
-    } else if !overlays_disabled {
+    } else if !overlays_disabled && !r.is_picker_batches() {
         let cast_label = if !r.is_vox_onepath() && cast_frac > 0.0 {
             match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                 super::super::PcCast::FireBolt => Some("Fire Bolt"),
@@ -1826,5 +1978,12 @@ pub fn render_impl(r: &mut crate::gfx::Renderer) -> Result<(), SurfaceError> {
     r.hud.draw(&mut encoder, &view);
     r.queue.submit(Some(encoder.finish()));
     frame.present();
+    // Pop the validation scope after submit; this captures any errors raised
+    // during encoder.finish() or queue.submit().
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+        log::error!("validation (main pass): {:?}", e);
+        return Ok(());
+    }
     Ok(())
 }

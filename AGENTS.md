@@ -35,7 +35,6 @@
 - `tools/zone-bake` — Bakes terrain + trees snapshot for a Zone slug. Usage: `cargo run -p zone-bake -- <slug>`.
 - `tools/gltf-decompress` — One-time Draco decompressor for GLTFs. Usage: `cargo run -p gltf-decompress -- <in> <out>`.
 - `tools/image-probe` — Simple image stats probe. Usage: `cargo run -p image-probe -- <png>`.
-- `tools/bevy-probe` — Bevy-based material/texture extractor for the wizard asset.
 
 Note: The old `src/core/` facade and `src/assets/` facade were removed. Crates should import `data_runtime`, `sim_core`, and `roa_assets` directly.
 

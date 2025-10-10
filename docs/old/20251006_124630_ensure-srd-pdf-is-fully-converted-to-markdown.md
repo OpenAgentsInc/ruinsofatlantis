@@ -24,7 +24,7 @@ ensure SRD pdf is fully converted to markdown
 - docs/graphics/gltf-animations.md — # glTF Skinning & Animations — What We Fixed
 - docs/issues/0095_ecs_server_authority_plan.md — # Issue 95 — Server‑Authoritative ECS Refactor (Initial Execution Plan)
 - docs/issues/0096_phase0_preflight.md — # Phase 0 — Preflight Hygiene and Feature Gates (Standalone Plan)
-- docs/issues/100_nivita_of_the_undertide_unique_boss.md — # 100: Nivita, Lady of Undertide — Unique Boss NPC
+- docs/issues/100_nivita_lady_of_undertide_unique_boss.md — # 100: Nivita, Lady of Undertide — Unique Boss NPC
 - docs/issues/101_zone_builder_editor.md — # Issue 101 — 3D Zone Builder (Editor + Bake Pipeline)
 - docs/issues/95L_server_scene_build_destructibles.md — # 95L — Scene Build (Server): Data-Driven Destructible Registry
 - docs/issues/95O_client_controller_camera.md — # 95O — Client Controller & Camera in client_core

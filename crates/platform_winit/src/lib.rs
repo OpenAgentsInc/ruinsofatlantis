@@ -17,7 +17,54 @@ use winit::{
 #[allow(dead_code)]
 enum BootMode {
     Picker,
-    Running { slug: String },
+    #[cfg(not(target_arch = "wasm32"))]
+    Loading {
+        slug: String,
+        handle: std::thread::JoinHandle<
+            anyhow::Result<(
+                client_core::zone_client::ZonePresentation,
+                Option<roa_assets::types::SkinnedMeshCPU>,
+            )>,
+        >,
+    },
+    Running {
+        slug: String,
+    },
+}
+
+#[cfg(test)]
+fn can_cast(boot: &BootMode, local_pc: Option<u32>) -> bool {
+    matches!(boot, BootMode::Running { .. }) && local_pc.is_some()
+}
+
+#[cfg(test)]
+mod input_guard_tests {
+    use super::{BootMode, can_cast};
+
+    #[test]
+    fn guard_blocks_when_not_playing() {
+        assert!(!can_cast(&BootMode::Picker, None));
+    }
+
+    #[test]
+    fn guard_blocks_when_no_pc() {
+        assert!(!can_cast(
+            &BootMode::Running {
+                slug: "cc_demo".into()
+            },
+            None
+        ));
+    }
+
+    #[test]
+    fn guard_allows_when_playing_and_pc_present() {
+        assert!(can_cast(
+            &BootMode::Running {
+                slug: "cc_demo".into()
+            },
+            Some(1)
+        ));
+    }
 }
 
 #[derive(Default, Clone)]
@@ -41,23 +88,68 @@ struct ZonePickerModel {
 impl ZonePickerModel {
     fn refresh(&mut self) {
         let root = packs_zones_root();
-        if let Ok(reg) = data_runtime::zone_snapshot::ZoneRegistry::discover(&root) {
-            let mut next: Vec<ZoneEntry> = Vec::new();
-            for slug in reg.slugs.iter() {
-                let disp = reg
-                    .load_meta(slug)
-                    .ok()
-                    .and_then(|m| m.display_name)
-                    .unwrap_or_else(|| slug.to_string());
-                next.push(ZoneEntry {
-                    slug: slug.clone(),
-                    display: disp,
-                });
+        let mut next: Vec<ZoneEntry> = Vec::new();
+        match data_runtime::zone_snapshot::ZoneRegistry::discover(&root) {
+            Ok(reg) => {
+                for slug in reg.slugs.iter() {
+                    let disp = reg
+                        .load_meta(slug)
+                        .ok()
+                        .and_then(|m| m.display_name)
+                        .unwrap_or_else(|| slug.to_string());
+                    next.push(ZoneEntry {
+                        slug: slug.clone(),
+                        display: disp,
+                    });
+                }
             }
-            next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
-            self.items = next;
-            self.selected = 0;
+            Err(e) => {
+                log::warn!("picker: discover() failed at {:?}: {e:?}", root);
+            }
         }
+        if next.is_empty()
+            && let Ok(rd) = std::fs::read_dir(&root)
+        {
+            for e in rd.flatten() {
+                if e.path().join("snapshot.v1").is_dir()
+                    && let Some(os) = e.file_name().to_str()
+                {
+                    let slug = os.to_string();
+                    let disp = match slug.as_str() {
+                        "wizard_woods" => "Wizard Woods".to_string(),
+                        "cc_demo" => "Character Controller Demo".to_string(),
+                        _ => slug.clone(),
+                    };
+                    next.push(ZoneEntry {
+                        slug,
+                        display: disp,
+                    });
+                }
+            }
+        }
+        if next.iter().all(|e| e.slug != "wizard_woods") {
+            next.push(ZoneEntry {
+                slug: "wizard_woods".into(),
+                display: "Wizard Woods".into(),
+            });
+        }
+        if next.iter().all(|e| e.slug != "cc_demo") {
+            next.push(ZoneEntry {
+                slug: "cc_demo".into(),
+                display: "Character Controller Demo".into(),
+            });
+        }
+        next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
+        log::info!(
+            "picker: packs root {:?}; zones: {}",
+            root,
+            next.iter()
+                .map(|z| z.slug.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        self.items = next;
+        self.selected = 0;
     }
     fn select_prev(&mut self) {
         if self.selected > 0 {
@@ -72,6 +164,34 @@ impl ZonePickerModel {
     #[allow(dead_code)]
     fn current_slug(&self) -> Option<String> {
         self.items.get(self.selected).map(|e| e.slug.clone())
+    }
+    fn display_lines(&self) -> Vec<String> {
+        self.items.iter().map(|e| e.display.clone()).collect()
+    }
+    #[cfg(test)]
+    fn refresh_with_root_for_tests(&mut self, root: &std::path::Path) {
+        let mut next: Vec<ZoneEntry> = Vec::new();
+        match data_runtime::zone_snapshot::ZoneRegistry::discover(root) {
+            Ok(reg) => {
+                for slug in reg.slugs.iter() {
+                    let disp = reg
+                        .load_meta(slug)
+                        .ok()
+                        .and_then(|m| m.display_name)
+                        .unwrap_or_else(|| slug.to_string());
+                    next.push(ZoneEntry {
+                        slug: slug.clone(),
+                        display: disp,
+                    });
+                }
+            }
+            Err(e) => {
+                log::warn!("picker: discover() failed at {:?}: {e:?}", root);
+            }
+        }
+        next.sort_by(|a, b| a.display.to_lowercase().cmp(&b.display.to_lowercase()));
+        self.items = next;
+        self.selected = 0;
     }
 }
 
@@ -218,7 +338,16 @@ impl ApplicationHandler for App {
                     BootMode::Picker
                 };
                 if matches!(self.boot, BootMode::Picker) {
+                    // Zone Picker: refresh list and force renderer into "no legacy scene" mode.
+                    // We set a dummy zone-batch so render_wgpu::Renderer::has_zone_batches() is true,
+                    // which suppresses the legacy static scene draws while the picker is shown.
                     self.picker.refresh();
+                    if let Some(st) = self.state.as_mut() {
+                        let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                            slug: "<picker>".to_string(),
+                        };
+                        st.set_zone_batches(Some(gb));
+                    }
                     if let Some(win) = &self.window {
                         win.set_title("Zone Picker — no zone selected — ↑/↓, Enter, Esc");
                     }
@@ -239,8 +368,10 @@ impl ApplicationHandler for App {
                     if srv.pc_actor.is_none() {
                         let _ = srv.spawn_pc_at(pc0);
                     }
-                    // Only spawn encounter actors when running a zone
-                    if let BootMode::Running { .. } = self.boot {
+                    // Only spawn encounter NPCs when running a non‑demo zone
+                    if let BootMode::Running { slug } = &self.boot
+                        && slug.as_str() != "cc_demo"
+                    {
                         srv.ring_spawn(8, 15.0, 20);
                         srv.ring_spawn(12, 30.0, 25);
                         srv.ring_spawn(15, 45.0, 30);
@@ -298,6 +429,99 @@ impl ApplicationHandler for App {
         if window.id() != window_id {
             return;
         }
+        // Zone Picker keyboard handling (native): arrows to change selection; Enter to load
+        if matches!(self.boot, BootMode::Picker) {
+            use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
+            if let WindowEvent::KeyboardInput { event: kev, .. } = &event {
+                // Navigation
+                match (&kev.logical_key, &kev.physical_key) {
+                    (Key::Named(NamedKey::ArrowUp), _)
+                    | (_, PhysicalKey::Code(KeyCode::ArrowUp)) => {
+                        self.picker.select_prev();
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_picker_selected_index(self.picker.selected);
+                        }
+                        let disp = self
+                            .picker
+                            .items
+                            .get(self.picker.selected)
+                            .map(|e| e.display.clone())
+                            .unwrap_or_else(|| "".into());
+                        window.set_title(&format!("Zone Picker — {} — ↑/↓, Enter, Esc", disp));
+                        return;
+                    }
+                    (Key::Named(NamedKey::ArrowDown), _)
+                    | (_, PhysicalKey::Code(KeyCode::ArrowDown)) => {
+                        self.picker.select_next();
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_picker_selected_index(self.picker.selected);
+                        }
+                        let disp = self
+                            .picker
+                            .items
+                            .get(self.picker.selected)
+                            .map(|e| e.display.clone())
+                            .unwrap_or_else(|| "".into());
+                        window.set_title(&format!("Zone Picker — {} — ↑/↓, Enter, Esc", disp));
+                        return;
+                    }
+                    (Key::Named(NamedKey::Enter), _) | (_, PhysicalKey::Code(KeyCode::Enter)) => {
+                        if let Some(slug) = self.picker.current_slug() {
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                if let Ok(zp) =
+                                    client_core::zone_client::ZonePresentation::load(&slug)
+                                {
+                                    let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
+                                        state, &zp,
+                                    );
+                                    state.set_zone_batches(Some(gz));
+                                    state.ensure_pc_assets();
+                                    self.boot = BootMode::Running { slug: slug.clone() };
+                                    window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                } else {
+                                    log::error!(
+                                        "zone picker: failed to load zone '{}': snapshot missing or invalid",
+                                        slug
+                                    );
+                                }
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                let slug_clone = slug.clone();
+                                self.boot = BootMode::Loading {
+                                    slug: slug.clone(),
+                                    handle: std::thread::spawn(move || {
+                                        let zp = client_core::zone_client::ZonePresentation::load(
+                                            &slug_clone,
+                                        )?;
+                                        // Decode UBC rig CPU-side off the UI thread (best-effort)
+                                        let pc_cpu = {
+                                            use roa_assets::skinning::load_gltf_skinned;
+                                            let ubc_path = std::path::Path::new(env!(
+                                                "CARGO_MANIFEST_DIR"
+                                            ))
+                                            .join(
+                                                "../../assets/models/ubc/godot/Superhero_Male.gltf",
+                                            );
+                                            load_gltf_skinned(&ubc_path).ok()
+                                        };
+                                        Ok((zp, pc_cpu))
+                                    }),
+                                };
+                                window.set_title(&format!("Loading — {}", slug));
+                            }
+                        }
+                        return;
+                    }
+                    (Key::Named(NamedKey::Escape), _) | (_, PhysicalKey::Code(KeyCode::Escape)) => {
+                        event_loop.exit();
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+        }
         state.handle_window_event(&event);
         // Apply any pointer-lock request emitted by controller systems.
         if let Some(lock) = state.take_pointer_lock_request() {
@@ -325,7 +549,17 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
-                if let Err(err) = state.render() {
+                // In Picker, draw overlay lines from platform before rendering.
+                if let BootMode::Picker = self.boot {
+                    let lines = self.picker.display_lines();
+                    state.draw_picker_overlay(
+                        "Choose a Zone",
+                        "Use ↑/↓ to select   Enter to load   Esc to quit",
+                        &lines,
+                        self.picker.selected,
+                    );
+                }
+                if let Err(err) = state.render_with_window(window) {
                     match err {
                         SurfaceError::Lost | SurfaceError::Outdated => {
                             state.recreate_surface_current_size(window)
@@ -334,12 +568,113 @@ impl ApplicationHandler for App {
                         e => eprintln!("render error: {e:?}"),
                     }
                 }
+                if let BootMode::Picker = self.boot
+                    && let Some(slug) = state.take_picker_selected()
+                {
+                    if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
+                        let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
+                        state.set_zone_batches(Some(gz));
+                        self.boot = BootMode::Running { slug: slug.clone() };
+                        window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                    } else {
+                        log::error!(
+                            "zone picker: failed to load zone '{}': snapshot missing or invalid",
+                            slug
+                        );
+                    }
+                }
             }
             _ => {}
         }
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Poll background zone loader (if any) without blocking the UI thread.
+            let mut restore: Option<BootMode> = None;
+            let cur = std::mem::replace(&mut self.boot, BootMode::Picker);
+            match cur {
+                BootMode::Loading { slug, handle } => {
+                    if handle.is_finished() {
+                        match handle.join() {
+                            Ok(Ok((zp, pc_cpu_opt))) => {
+                                if let Some(st) = self.state.as_mut() {
+                                    let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
+                                        st, &zp,
+                                    );
+                                    st.set_zone_batches(Some(gz));
+                                    if let Some(cpu) = pc_cpu_opt {
+                                        st.install_pc_cpu(cpu);
+                                    } else {
+                                        st.ensure_pc_assets();
+                                    }
+                                    // Dismiss any HUD loading modal drawn during Loading
+                                    st.hud_reset();
+                                }
+                                #[cfg(feature = "demo_server")]
+                                if let Some(srv) = self.demo_server.as_mut() {
+                                    let _ = srv.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
+                                    if slug.as_str() != "cc_demo" {
+                                        srv.ring_spawn(8, 15.0, 20);
+                                        srv.ring_spawn(12, 30.0, 25);
+                                        srv.ring_spawn(15, 45.0, 30);
+                                        let wiz_count = 4usize;
+                                        let wiz_r = 8.0f32;
+                                        for i in 0..wiz_count {
+                                            let a = (i as f32) / (wiz_count as f32)
+                                                * std::f32::consts::TAU;
+                                            let p =
+                                                glam::vec3(wiz_r * a.cos(), 0.6, wiz_r * a.sin());
+                                            let _ = srv.spawn_wizard_npc(p);
+                                        }
+                                        let _ = srv.spawn_nivita_unique(glam::vec3(0.0, 0.6, 0.0));
+                                        let _dk =
+                                            srv.spawn_death_knight(glam::vec3(60.0, 0.6, 0.0));
+                                        server_core::scene_build::add_demo_ruins_destructible(srv);
+                                    }
+                                }
+                                self.boot = BootMode::Running { slug: slug.clone() };
+                                if let Some(win) = &self.window {
+                                    win.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                log::error!("zone load failed: {:?}", e);
+                                if let Some(st) = self.state.as_mut() {
+                                    st.hud_reset();
+                                }
+                                self.boot = BootMode::Picker;
+                            }
+                            Err(_) => {
+                                log::error!("zone load thread panicked");
+                                if let Some(st) = self.state.as_mut() {
+                                    st.hud_reset();
+                                }
+                                self.boot = BootMode::Picker;
+                            }
+                        }
+                    } else {
+                        // Not finished yet; restore state and draw loading overlay
+                        restore = Some(BootMode::Loading {
+                            slug: slug.clone(),
+                            handle,
+                        });
+                        if let (Some(win), Some(st)) = (&self.window, &mut self.state) {
+                            st.draw_picker_overlay("Loading…", "Please wait", &[], 0);
+                            let _ = st.render_with_window(win);
+                        }
+                    }
+                }
+                other => {
+                    // Not loading; restore the previous mode
+                    restore = Some(other);
+                }
+            }
+            if let Some(b) = restore.take() {
+                self.boot = b;
+            }
+        }
         #[cfg(target_arch = "wasm32")]
         {
             // If the async init finished, move Renderer into self.
@@ -347,7 +682,8 @@ impl ApplicationHandler for App {
                 RENDERER_CELL.with(|cell| {
                     if let Some((win, mut state)) = cell.borrow_mut().take() {
                         self.window = Some(win);
-                        // Load Zone batches if a zone slug is provided (env/URL)
+                        // Load Zone batches if a zone slug is provided (env/URL);
+                        // otherwise, set a dummy batch so legacy static draws are suppressed
                         if let Some(slug) = detect_zone_slug() {
                             if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug)
                             {
@@ -358,6 +694,11 @@ impl ApplicationHandler for App {
                             } else {
                                 log::warn!("zone: failed to load snapshot for slug='{}'", slug);
                             }
+                        } else {
+                            let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                                slug: "<picker>".to_string(),
+                            };
+                            state.set_zone_batches(Some(gb));
                         }
                         self.state = Some(state);
                         // Wire loopback transport and seed demo server on wasm when enabled
@@ -384,10 +725,10 @@ impl ApplicationHandler for App {
                             if srv.pc_actor.is_none() {
                                 let _ = srv.spawn_pc_at(pc0);
                             }
-                            // If a Zone is selected and it's a minimal controller demo,
-                            // do not spawn encounter actors. Otherwise, spawn demo content.
+                            // Only spawn encounter actors when a zone is explicitly selected,
+                            // and skip them for cc_demo. When no zone is selected (Picker), spawn none.
                             let z = detect_zone_slug();
-                            if z.as_deref() != Some("cc_demo") {
+                            if z.is_some() && z.as_deref() != Some("cc_demo") {
                                 srv.ring_spawn(8, 15.0, 20);
                                 srv.ring_spawn(12, 30.0, 25);
                                 srv.ring_spawn(15, 45.0, 30);
@@ -884,11 +1225,6 @@ fn detect_zone_slug() -> Option<String> {
             }
         }
     }
-    // Back-compat: allow legacy RA_ZONE if present
-    if let Ok(v) = std::env::var("RA_ZONE")
-        && !v.is_empty()
-    {
-        return Some(v);
-    }
+    // No back-compat for RA_ZONE
     None
 }

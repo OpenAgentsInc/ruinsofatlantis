@@ -3,15 +3,70 @@
 use wgpu::IndexFormat;
 
 use super::Renderer;
+use crate::gfx::mesh;
+use crate::gfx::types::Model;
 
 impl Renderer {
-    pub(crate) fn draw_pc_only(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if self.wizard_index_count == 0 {
-            return;
-        }
-        rpass.set_pipeline(&self.wizard_pipeline);
+    /// Debug helper: draw a solid cube at a given model transform using the
+    /// non‑skinned pipeline. Intended for visibility diagnostics.
+    pub(crate) fn draw_debug_cube(&self, rpass: &mut wgpu::RenderPass<'_>, model_m: glam::Mat4) {
+        // Create a tiny cube VB/IB on the fly (debug only)
+        let (vb, ib, idx) = mesh::create_cube(&self.device);
+        // Update the model uniform buffer used by shard_model_bg
+        let m = Model {
+            model: model_m.to_cols_array_2d(),
+            color: [1.0, 0.1, 0.2],
+            emissive: 0.0,
+            _pad: [0.0; 4],
+        };
+        self.queue
+            .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&m));
+        rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        rpass.set_vertex_buffer(0, vb.slice(..));
+        rpass.set_index_buffer(ib.slice(..), IndexFormat::Uint16);
+        rpass.draw_indexed(0..idx, 0, 0..1);
+    }
+    pub(crate) fn draw_pc_only(&mut self, rpass: &mut wgpu::RenderPass<'_>) {
+        let use_debug = std::env::var("RA_PC_DEBUG").as_deref() == Ok("1");
+        let trace = std::env::var("RA_TRACE").map(|v| v == "1").unwrap_or(false);
+        rpass.insert_debug_marker("pc:begin");
+        if use_debug {
+            let flat = std::env::var("RA_PC_DEBUG_FLAT")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if flat {
+                if let Some(p) = &self.wizard_pipeline_debug {
+                    rpass.set_pipeline(p);
+                } else {
+                    rpass.set_pipeline(&self.wizard_pipeline);
+                }
+            } else {
+                // Use normal textured pipeline even in debug, unless RA_PC_DEBUG_FLAT=1
+                rpass.set_pipeline(&self.wizard_pipeline);
+            }
+        } else {
+            rpass.set_pipeline(&self.wizard_pipeline);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if trace {
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("pc:set_pipeline validation: {:?}", e);
+                return;
+            }
+        }
+        rpass.set_bind_group(0, &self.globals_bg, &[]);
+        rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+        #[cfg(not(target_arch = "wasm32"))]
+        if trace {
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                log::error!("pc:set_bind_group(0/1) validation: {:?}", e);
+                return;
+            }
+        }
         // Prefer PC (UBC) resources when available
         if let (Some(pc_pal_bg), Some(pc_mat_bg), Some(pc_vb), Some(pc_ib), Some(pc_inst)) = (
             self.pc_palettes_bg.as_ref(),
@@ -24,16 +79,53 @@ impl Renderer {
             rpass.set_bind_group(3, pc_mat_bg, &[]);
             rpass.set_vertex_buffer(0, pc_vb.slice(..));
             rpass.set_vertex_buffer(1, pc_inst.slice(..));
-            rpass.set_index_buffer(pc_ib.slice(..), IndexFormat::Uint16);
+            #[cfg(not(target_arch = "wasm32"))]
+            if trace {
+                self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("pc:set_vertex_buffers validation: {:?}", e);
+                    return;
+                }
+            }
+            rpass.set_index_buffer(pc_ib.slice(..), self.pc_index_format);
+            #[cfg(not(target_arch = "wasm32"))]
+            if trace {
+                self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                if let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
+                    log::error!("pc:set_index_buffer validation: {:?}", e);
+                    return;
+                }
+            }
             rpass.draw_indexed(0..self.pc_index_count, 0, 0..1);
+            // Debug HUD line to prove the pass ran (will be queued by caller)
         } else {
+            // Fallbacks when PC (UBC) resources aren't ready
+            if use_debug {
+                // In debug isolate, avoid spamming logs and draw a placeholder so the frame isn't black
+                if !self.pc_debug_warned_not_ready {
+                    log::warn!("pc: resources not ready in debug; drawing placeholder");
+                    self.pc_debug_warned_not_ready = true;
+                }
+                let m = glam::Mat4::from_translation(glam::vec3(0.0, 1.6, 0.0));
+                self.draw_debug_cube(rpass, m);
+                return;
+            }
             // Fallback: draw PC from wizard rig
             let stride = std::mem::size_of::<crate::gfx::types::InstanceSkin>() as u64;
             let offset = (self.pc_index as u64) * stride;
             rpass.set_bind_group(2, &self.palettes_bg, &[]);
             rpass.set_bind_group(3, &self.wizard_mat_bg, &[]);
+            if self.wizard_index_count == 0 {
+                return;
+            }
             rpass.set_vertex_buffer(0, self.wizard_vb.slice(..));
-            rpass.set_vertex_buffer(1, self.wizard_instances.slice(offset..offset + stride));
+            // Clamp slice to buffer length to avoid empty slice panics
+            let total = (self.wizard_count as u64).saturating_mul(stride);
+            let end = (offset + stride).min(total);
+            if end <= offset {
+                return;
+            }
+            rpass.set_vertex_buffer(1, self.wizard_instances.slice(offset..end));
             rpass.set_index_buffer(self.wizard_ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.wizard_index_count, 0, 0..1);
         }

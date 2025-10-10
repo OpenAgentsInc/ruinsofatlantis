@@ -1359,6 +1359,18 @@ impl Renderer {
             return;
         }
         let joints = self.joints_per_wizard as usize;
+        if self.skinned_cpu.animations.is_empty() {
+            let count = self.wizard_count as usize * joints;
+            if count > 0 {
+                let mut raw: Vec<[f32; 16]> = Vec::with_capacity(count);
+                for _ in 0..count {
+                    raw.push(glam::Mat4::IDENTITY.to_cols_array());
+                }
+                self.queue
+                    .write_buffer(&self.palettes_buf, 0, bytemuck::cast_slice(&raw));
+            }
+            return;
+        }
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wizard_count as usize * joints);
         for i in 0..(self.wizard_count as usize) {
             // If the PC uses a separate rig, keep the PC's wizard palette identity to avoid junk
@@ -1512,10 +1524,15 @@ impl Renderer {
             .animations
             .values()
             .next()
-            .expect("at least one animation clip present")
+            .expect("at least one animation clip present (not Picker)")
     }
 
     pub(crate) fn process_pc_cast(&mut self, t: f32) {
+        // If no animation clips are available (e.g., demo Picker or stripped build),
+        // skip casting timeline to avoid clip selection panics.
+        if self.skinned_cpu.animations.is_empty() {
+            return;
+        }
         if !self.pc_alive || self.pc_index >= self.wizard_count as usize {
             return;
         }
