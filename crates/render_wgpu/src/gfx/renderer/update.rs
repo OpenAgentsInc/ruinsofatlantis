@@ -1907,7 +1907,9 @@ impl Renderer {
             );
         }
         // 1) Spawn firebolts for PortalOpen phase crossing (NPC wizards only).
-        if self.wizard_count > 0 {
+        // If no wizard animation clips are available (e.g., asset load failed),
+        // skip FX that depend on bone sampling to avoid panics in `select_clip`.
+        if self.wizard_count > 0 && !self.skinned_cpu.animations.is_empty() {
             let zombies_alive = self.any_zombies_alive();
             // If zombies have (re)appeared and we are not hostile to the player, ensure
             // NPC wizards re-enter the PortalOpen casting loop.
