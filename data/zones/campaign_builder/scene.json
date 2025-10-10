@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "seed": 0,
+  "layers": [],
+  "instances": [],
+  "logic": {
+    "triggers": [],
+    "spawns": [],
+    "waypoints": [],
+    "links": []
+  }
+}
+

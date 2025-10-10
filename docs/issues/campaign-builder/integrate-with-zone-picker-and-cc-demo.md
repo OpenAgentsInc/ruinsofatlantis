@@ -1,8 +1,9 @@
 # Campaign Builder V1 — Integrate With Zone Picker + CC Demo
 
 Context
-- The earlier start.md assumed a generic engine and client-side gameplay. This issue anchors a concrete V1 on our codebase: server-authoritative ECS, Zone snapshots, the existing Zone Picker, and the `cc_demo` slug.
-- Goals: a) ship a minimal in-app “Builder” overlay reachable from the Zone Picker when `cc_demo` is selected; b) export authoring data to our Zone pipeline (`data/zones/<slug>/scene.json` → `tools/zone-bake` → `packs/zones/<slug>/snapshot.v1/logic.bin`); c) keep the client presentation-only (no gameplay mutation).
+- The earlier start.md assumed a generic engine and client-side gameplay. This issue anchors a concrete V1 on our codebase: server-authoritative ECS, Zone snapshots, and the existing Zone Picker.
+- We introduce a new Zone: `campaign_builder` (separate from `cc_demo`). Use `cc_demo` as a UI/input baseline, but authoring/export lives under its own slug.
+- Goals: a) ship a minimal in-app “Builder” overlay reachable when `campaign_builder` is selected from the Zone Picker; b) export authoring data to our Zone pipeline (`data/zones/<slug>/scene.json` → `tools/zone-bake` → `packs/zones/<slug>/snapshot.v1/logic.bin`); c) keep the client presentation-only (no gameplay mutation).
 
 Out of Scope (V1)
 - No live spawn of NPCs from the client; no network/replication changes.
@@ -16,8 +17,8 @@ Integration Points (code today)
 - Zone bake tool: `tools/zone-bake` writes `packs/zones/<slug>/snapshot.v1/*` including `logic.bin`.
 
 What We’re Building (V1)
-- “Builder Mode” for `cc_demo`:
-  - Toggle with `B` after loading `cc_demo` (also enable when `RA_BUILDER=1`).
+- “Builder Mode” for `campaign_builder`:
+  - Toggle with `B` after loading `campaign_builder` (also enable when `RA_BUILDER=1`).
   - Place simple “logic spawn markers” at the screen-center ground plane (Y=0) with yaw steps (`Q/E` ±15°, `Ctrl+Wheel` ±1°).
   - Export the session to `data/zones/cc_demo/scene.json` under a `logic.spawns[]` array that zone-bake packs into `snapshot.v1/logic.bin`.
   - Import existing `scene.json` to continue editing.
@@ -28,7 +29,7 @@ Design Constraints (align to ECS guide)
 - Deterministic pipeline: zone-bake remains the single path to snapshots; no ad-hoc runtime saves in `packs/`.
 
 User Flow
-1) Launch app → Zone Picker. Select “Character Controller Demo (cc_demo)”.
+1) Launch app → Zone Picker. Select “Campaign Builder (campaign_builder)”.
 2) In `cc_demo`, press `B` to enter Builder Mode. Overlay shows instructions and current yaw/placement count.
 3) Aim with camera; press `Enter` to add a spawn marker at the screen-center ray intersecting plane Y=0 (V1). Rotate with `Q/E` or wheel.
 4) Press `X` to Export → writes/updates `data/zones/cc_demo/scene.json` (creates dirs if missing).
@@ -107,10 +108,8 @@ Follow-ups (post-V1)
 - Logic application: server reads `logic.bin` and spawns/links entities on boot in `server_core::zones`.
 - Scene assets: allow choosing `kind` from a small catalog (`npc.wizard`, `npc.zombie`, etc.) via number keys; bake as data, never branched in systems.
 
-References
-- Zone Picker and `cc_demo`: crates/platform_winit/src/lib.rs:72, crates/platform_winit/src/lib.rs:168, crates/platform_winit/src/lib.rs:320
+- Zone Picker and `campaign_builder`: crates/platform_winit/src/lib.rs:72, crates/platform_winit/src/lib.rs:168, crates/platform_winit/src/lib.rs:320
 - Zone client loader: crates/client_core/src/zone_client.rs:14
 - Snapshot loader: crates/data_runtime/src/zone_snapshot.rs:28
 - Renderer overlays: crates/render_wgpu/src/gfx/renderer/render.rs:1872
 - Zone bake tool: tools/zone-bake/src/main.rs:1, tools/zone-bake/src/lib.rs:1
-

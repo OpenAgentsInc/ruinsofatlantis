@@ -1,0 +1,23 @@
+{
+  "zone_id": 1101,
+  "slug": "campaign_builder",
+  "display_name": "Campaign Builder",
+  "plane": "Material",
+  "terrain": {
+    "size": 129,
+    "extent": 150.0,
+    "seed": 424242
+  },
+  "vegetation": {
+    "tree_count": 0,
+    "tree_seed": 20251010
+  },
+  "weather": {
+    "turbidity": 3.0,
+    "ground_albedo": [0.10, 0.10, 0.10]
+  },
+  "start_time_frac": 0.5,
+  "start_paused": true,
+  "start_time_scale": 6.0
+}
+
