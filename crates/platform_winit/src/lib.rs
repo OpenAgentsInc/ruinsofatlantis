@@ -792,7 +792,7 @@ impl ApplicationHandler for App {
                                 #[cfg(feature = "demo_server")]
                                 if let Some(srv) = self.demo_server.as_mut() {
                                     let _ = srv.spawn_pc_at(glam::vec3(0.0, 0.6, 0.0));
-                                    if slug.as_str() != "cc_demo" {
+                                    if is_demo_content_zone(&slug) {
                                         srv.ring_spawn(8, 15.0, 20);
                                         srv.ring_spawn(12, 30.0, 25);
                                         srv.ring_spawn(15, 45.0, 30);
