@@ -64,19 +64,17 @@ impl Renderer {
                                 self.pc_cast_time = 0.0; // instant
                                 log::info!("input: key 1 → queue Fire Bolt");
                                 if let Some(tx) = &self.cmd_tx {
-                                    let cam_fwd = (self.cam_follow.current_look
-                                        - self.cam_follow.current_pos)
-                                        .normalize_or_zero();
-                                    let (h, _n) = crate::gfx::terrain::height_at(
-                                        &self.terrain_cpu,
-                                        self.player.pos.x,
-                                        self.player.pos.z,
-                                    );
-                                    let pos =
-                                        glam::vec3(self.player.pos.x, h + 1.4, self.player.pos.z);
+                                    // Use the character's facing (controller yaw), not camera forward.
+                                    let yaw = self.scene_inputs.yaw();
+                                    let fwd = glam::vec3(yaw.sin(), 0.0, yaw.cos());
+                                    let p = self.scene_inputs.pos();
+                                    let (h, _n) =
+                                        crate::gfx::terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                                    // Chest-ish origin, nudged forward slightly
+                                    let pos = glam::vec3(p.x, h + 1.4, p.z) + fwd * 0.25;
                                     let cmd = net_core::command::ClientCmd::FireBolt {
                                         pos: [pos.x, pos.y, pos.z],
-                                        dir: [cam_fwd.x, cam_fwd.y, cam_fwd.z],
+                                        dir: [fwd.x, fwd.y, fwd.z],
                                     };
                                     let mut payload = Vec::new();
                                     cmd.encode(&mut payload);
@@ -114,19 +112,15 @@ impl Renderer {
                                     self.magic_missile_cast_time
                                 );
                                 if let Some(tx) = &self.cmd_tx {
-                                    let cam_fwd = (self.cam_follow.current_look
-                                        - self.cam_follow.current_pos)
-                                        .normalize_or_zero();
-                                    let (h, _n) = crate::gfx::terrain::height_at(
-                                        &self.terrain_cpu,
-                                        self.player.pos.x,
-                                        self.player.pos.z,
-                                    );
-                                    let pos =
-                                        glam::vec3(self.player.pos.x, h + 1.4, self.player.pos.z);
+                                    let yaw = self.scene_inputs.yaw();
+                                    let fwd = glam::vec3(yaw.sin(), 0.0, yaw.cos());
+                                    let p = self.scene_inputs.pos();
+                                    let (h, _n) =
+                                        crate::gfx::terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                                    let pos = glam::vec3(p.x, h + 1.4, p.z) + fwd * 0.25;
                                     let cmd = net_core::command::ClientCmd::MagicMissile {
                                         pos: [pos.x, pos.y, pos.z],
-                                        dir: [cam_fwd.x, cam_fwd.y, cam_fwd.z],
+                                        dir: [fwd.x, fwd.y, fwd.z],
                                     };
                                     let mut payload = Vec::new();
                                     cmd.encode(&mut payload);
@@ -162,19 +156,15 @@ impl Renderer {
                                     self.fireball_cast_time
                                 );
                                 if let Some(tx) = &self.cmd_tx {
-                                    let cam_fwd = (self.cam_follow.current_look
-                                        - self.cam_follow.current_pos)
-                                        .normalize_or_zero();
-                                    let (h, _n) = crate::gfx::terrain::height_at(
-                                        &self.terrain_cpu,
-                                        self.player.pos.x,
-                                        self.player.pos.z,
-                                    );
-                                    let pos =
-                                        glam::vec3(self.player.pos.x, h + 1.4, self.player.pos.z);
+                                    let yaw = self.scene_inputs.yaw();
+                                    let fwd = glam::vec3(yaw.sin(), 0.0, yaw.cos());
+                                    let p = self.scene_inputs.pos();
+                                    let (h, _n) =
+                                        crate::gfx::terrain::height_at(&self.terrain_cpu, p.x, p.z);
+                                    let pos = glam::vec3(p.x, h + 1.4, p.z) + fwd * 0.25;
                                     let cmd = net_core::command::ClientCmd::Fireball {
                                         pos: [pos.x, pos.y, pos.z],
-                                        dir: [cam_fwd.x, cam_fwd.y, cam_fwd.z],
+                                        dir: [fwd.x, fwd.y, fwd.z],
                                     };
                                     let mut payload = Vec::new();
                                     cmd.encode(&mut payload);
