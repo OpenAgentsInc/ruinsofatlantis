@@ -1113,12 +1113,8 @@ pub fn render_impl(
                 rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
                 r.draw_calls += 1;
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    if trace {
-                        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                            log::error!("validation after terrain: {:?}", e);
-                        }
-                    }
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after terrain: {:?}", e);
                 }
             }
             // Trees
@@ -1169,12 +1165,8 @@ pub fn render_impl(
                 rp.draw_indexed(0..r.rocks_index_count, 0, 0..r.rocks_count);
                 r.draw_calls += 1;
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    if trace {
-                        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                            log::error!("validation after rocks: {:?}", e);
-                        }
-                    }
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after rocks: {:?}", e);
                 }
             }
             // Debris cubes (instanced)
@@ -1213,12 +1205,8 @@ pub fn render_impl(
                 rp.draw_indexed(0..r.ruins_index_count, 0, 0..r.ruins_count);
                 r.draw_calls += 1;
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    if trace {
-                        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                            log::error!("validation after ruins: {:?}", e);
-                        }
-                    }
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after ruins: {:?}", e);
                 }
             }
             // TEMP: debug cube to prove camera & pass are visible
@@ -1247,12 +1235,8 @@ pub fn render_impl(
                     r.draw_calls += 1;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    if trace {
-                        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                            log::error!("validation after voxel meshes: {:?}", e);
-                        }
-                    }
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after voxel meshes: {:?}", e);
                 }
             }
         }

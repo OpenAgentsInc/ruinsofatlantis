@@ -1853,9 +1853,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hud,
         hud_model: Default::default(),
         controller_state: Default::default(),
-        // Start in mouselook by default: request pointer-lock so the OS cursor is hidden.
-        // platform_winit applies this on the next window event.
-        pointer_lock_request: Some(true),
+        // Do not auto-lock the pointer; WoW-style mouselook occurs while RMB is held.
+        pointer_lock_request: None,
         pointer_locked: false,
         controller_ml_cfg: ml_cfg,
         controller_alt_hold: alt_hold,
@@ -1999,6 +1998,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Apply default input profile from config if provided
     let prof = crate::gfx::renderer::controls::parse_profile_name(icfg.profile.as_deref());
     renderer.controller_state.profile = prof;
+    // Start in Cursor mode (no mouselook) to match WoW default
+    renderer.controller_state.mode = ecs_core::components::ControllerMode::Cursor;
 
     // If a demo voxel grid was created, enqueue all chunks once so it renders immediately
     #[cfg(feature = "vox_onepath_demo")]

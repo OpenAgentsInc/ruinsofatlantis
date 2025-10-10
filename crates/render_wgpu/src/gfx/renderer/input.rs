@@ -61,6 +61,13 @@ impl Renderer {
                             self.input.turn_right = pressed;
                         }
                     }
+                    // Q/E are dedicated strafes (WoW defaults)
+                    PhysicalKey::Code(KeyCode::KeyQ) if self.pc_alive => {
+                        self.input.strafe_left = pressed;
+                    }
+                    PhysicalKey::Code(KeyCode::KeyE) if self.pc_alive => {
+                        self.input.strafe_right = pressed;
+                    }
                     PhysicalKey::Code(KeyCode::ShiftLeft)
                     | PhysicalKey::Code(KeyCode::ShiftRight)
                         if self.pc_alive =>
@@ -201,10 +208,8 @@ impl Renderer {
                             }
                         }
                     }
-                    // Neverwinter-style action bindings: Q/E/R, Shift, Tab
-                    PhysicalKey::Code(KeyCode::KeyQ)
-                    | PhysicalKey::Code(KeyCode::KeyE)
-                    | PhysicalKey::Code(KeyCode::KeyR)
+                    // Action bindings: R, Shift, Tab (Q/E reserved for movement)
+                    PhysicalKey::Code(KeyCode::KeyR)
                     | PhysicalKey::Code(KeyCode::ShiftLeft)
                     | PhysicalKey::Code(KeyCode::ShiftRight)
                     | PhysicalKey::Code(KeyCode::Tab) => {
@@ -220,8 +225,6 @@ impl Renderer {
                             use client_core::systems::action_bindings::{Bindings, ButtonSnapshot};
                             let mut snap = ButtonSnapshot::default();
                             match event.physical_key {
-                                PhysicalKey::Code(KeyCode::KeyQ) => snap.q_pressed = true,
-                                PhysicalKey::Code(KeyCode::KeyE) => snap.e_pressed = true,
                                 PhysicalKey::Code(KeyCode::KeyR) => snap.r_pressed = true,
                                 PhysicalKey::Code(KeyCode::ShiftLeft)
                                 | PhysicalKey::Code(KeyCode::ShiftRight) => {
@@ -366,6 +369,8 @@ impl Renderer {
                         let client_core::systems::cursor::HostEvent::PointerLockRequest(b) = ev;
                         self.pointer_lock_request = Some(b);
                     }
+                    // WoW-style: request pointer lock only while RMB is held
+                    self.pointer_lock_request = Some(self.rmb_down);
                     // In mouselook, treat RMB as an action press
                     if self.controller_state.mode()
                         == ecs_core::components::ControllerMode::Mouselook
