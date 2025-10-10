@@ -10,11 +10,32 @@ use collision_static::{Aabb, Capsule, StaticIndex};
 use glam::Vec3;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Copy)]
+pub struct PlayerCameraRig {
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub lift: f32,
+    pub look_height: f32,
+}
+impl Default for PlayerCameraRig {
+    fn default() -> Self {
+        Self {
+            yaw: 0.0,
+            pitch: 0.2,
+            distance: 8.5,
+            lift: 3.5,
+            look_height: 1.6,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SceneInputs {
     controller: PlayerController,
     input: InputState,
     ability: AbilityState,
+    cam_rig: PlayerCameraRig,
 }
 
 impl SceneInputs {
@@ -23,6 +44,7 @@ impl SceneInputs {
             controller: PlayerController::new(initial_pos),
             input: InputState::default(),
             ability: AbilityState::default(),
+            cam_rig: PlayerCameraRig::default(),
         }
     }
     pub fn apply_input(&mut self, input: &InputState) {
@@ -47,6 +69,55 @@ impl SceneInputs {
     /// controller remain in sync when the player drags to rotate.
     pub fn set_yaw(&mut self, yaw: f32) {
         self.controller.yaw = yaw;
+    }
+
+    // --- Camera rig helpers (orbit yaw/pitch/distance updates) ---
+    pub fn rig_add_yaw(&mut self, dyaw: f32) {
+        let mut y = self.cam_rig.yaw + dyaw;
+        while y > std::f32::consts::PI {
+            y -= std::f32::consts::TAU;
+        }
+        while y < -std::f32::consts::PI {
+            y += std::f32::consts::TAU;
+        }
+        self.cam_rig.yaw = y;
+    }
+    pub fn rig_set_yaw(&mut self, yaw: f32) {
+        self.cam_rig.yaw = yaw;
+    }
+    pub fn rig_apply_mouse_orbit(
+        &mut self,
+        dx: f32,
+        dy: f32,
+        sens_rad: f32,
+        pitch_min: f32,
+        pitch_max: f32,
+    ) {
+        self.rig_add_yaw(-dx * sens_rad);
+        let p = (self.cam_rig.pitch + dy * sens_rad).clamp(pitch_min, pitch_max);
+        self.cam_rig.pitch = p;
+    }
+    pub fn rig_zoom(&mut self, step: f32) {
+        let d = (self.cam_rig.distance - step).clamp(1.6, 25.0);
+        self.cam_rig.distance = d;
+    }
+    pub fn rig_values(&self) -> (f32, f32, f32, f32, f32) {
+        (
+            self.cam_rig.yaw,
+            self.cam_rig.pitch,
+            self.cam_rig.distance,
+            self.cam_rig.lift,
+            self.cam_rig.look_height,
+        )
+    }
+    pub fn rig_yaw(&self) -> f32 {
+        self.cam_rig.yaw
+    }
+    pub fn rig_pitch(&self) -> f32 {
+        self.cam_rig.pitch
+    }
+    pub fn rig_distance(&self) -> f32 {
+        self.cam_rig.distance
     }
 
     /// True while the controller is off the ground (jumping/falling).

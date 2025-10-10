@@ -533,7 +533,8 @@ pub fn render_impl(
         r.input.click_move_forward = out.intents.click_move_forward;
         r.input.run = out.intents.run;
         if out.cam_yaw_delta != 0.0 {
-            r.cam_orbit_yaw = super::update::wrap_angle(r.cam_orbit_yaw + out.cam_yaw_delta);
+            r.scene_inputs.rig_add_yaw(out.cam_yaw_delta);
+            r.cam_orbit_yaw = r.scene_inputs.rig_yaw();
         }
         r.scene_inputs.apply_input(&r.input);
         // One-shot: clear jump so holding Space does not repeat

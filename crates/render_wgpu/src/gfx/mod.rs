@@ -2298,6 +2298,7 @@ impl Renderer {
             if elapsed <= 5.0 {
                 let speed = 0.6; // rad/s
                 self.cam_orbit_yaw = Self::wrap_angle(self.cam_orbit_yaw + dt * speed);
+                self.scene_inputs.rig_set_yaw(self.cam_orbit_yaw);
             } else {
                 self.screenshot_start = None;
             }

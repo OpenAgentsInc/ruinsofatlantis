@@ -3,7 +3,6 @@
 use winit::event::WindowEvent;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-use super::update::wrap_angle;
 use crate::gfx::Renderer;
 
 impl Renderer {
@@ -318,9 +317,8 @@ impl Renderer {
                     step = 0.0;
                 }
                 if step != 0.0 {
-                    // Allow a closer near-zoom so the camera can sit just
-                    // behind and slightly above the wizard's head.
-                    self.cam_distance = (self.cam_distance - step).clamp(1.6, 25.0);
+                    self.scene_inputs.rig_zoom(step);
+                    self.cam_distance = self.scene_inputs.rig_distance();
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -374,14 +372,15 @@ impl Renderer {
                         dx,
                         dy,
                     );
-                    // Directly accumulate orbit yaw/pitch from mouse deltas so RMB drag rotates camera around player
+                    // Accumulate orbit yaw/pitch from mouse deltas so RMB drag rotates camera around player
                     let to_rad = self
                         .controller_ml_cfg
                         .sensitivity_deg_per_count
                         .to_radians();
-                    self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx * to_rad);
-                    // Flip vertical: moving mouse up increases pitch (camera tilts up)
-                    self.cam_orbit_pitch = (self.cam_orbit_pitch + dy * to_rad).clamp(-1.2, 1.2);
+                    self.scene_inputs
+                        .rig_apply_mouse_orbit(dx, dy, to_rad, -1.2, 1.2);
+                    self.cam_orbit_yaw = self.scene_inputs.rig_yaw();
+                    self.cam_orbit_pitch = self.scene_inputs.rig_pitch();
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));
@@ -411,9 +410,10 @@ impl Renderer {
                 .controller_ml_cfg
                 .sensitivity_deg_per_count
                 .to_radians();
-            self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx * to_rad);
-            // Flip vertical: moving mouse up increases pitch (camera tilts up)
-            self.cam_orbit_pitch = (self.cam_orbit_pitch + dy * to_rad).clamp(-1.2, 1.2);
+            self.scene_inputs
+                .rig_apply_mouse_orbit(dx, dy, to_rad, -1.2, 1.2);
+            self.cam_orbit_yaw = self.scene_inputs.rig_yaw();
+            self.cam_orbit_pitch = self.scene_inputs.rig_pitch();
         }
     }
 }

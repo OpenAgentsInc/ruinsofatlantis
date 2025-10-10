@@ -3144,6 +3144,8 @@ impl Renderer {
 }
 
 // Small helpers used by input/update
+#[allow(dead_code)]
+#[inline]
 pub(super) fn wrap_angle(a: f32) -> f32 {
     let mut x = a;
     while x > std::f32::consts::PI {
