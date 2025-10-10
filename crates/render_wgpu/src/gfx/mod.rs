@@ -354,6 +354,8 @@ pub struct Renderer {
     hand_right_node: Option<usize>,
     #[allow(dead_code)]
     root_node: Option<usize>,
+    // Raw Shift state; we derive effective sprint per-frame
+    shift_down: bool,
 
     // Projectile + particle pools
     projectiles: Vec<Projectile>,

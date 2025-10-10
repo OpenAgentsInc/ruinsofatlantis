@@ -66,7 +66,9 @@ impl Renderer {
                     | PhysicalKey::Code(KeyCode::ShiftRight)
                         if self.pc_alive =>
                     {
-                        self.input.run = pressed
+                        // Track raw Shift state; per-frame we derive effective run
+                        // based on forward-only gating in render loop
+                        self.shift_down = pressed;
                     }
                     PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
                         if self.pc_alive =>

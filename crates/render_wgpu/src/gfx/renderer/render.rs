@@ -522,11 +522,12 @@ pub fn render_impl(
             r.input.turn_left |= r.a_down; // A -> turn left
             r.input.turn_right |= r.d_down; // D -> turn right
         }
-        // Only allow Shift "run" while holding W without strafing/backpedal
-        if !(r.input.forward && !r.input.backward && !r.input.strafe_left && !r.input.strafe_right)
-        {
-            r.input.run = false;
-        }
+        // Derive effective sprint from raw Shift state with gating (forward-only)
+        r.input.run = r.shift_down
+            && r.input.forward
+            && !r.input.backward
+            && !r.input.strafe_left
+            && !r.input.strafe_right;
         r.scene_inputs.apply_input(&r.input);
         // One-shot: clear jump so holding Space does not repeat
         r.input.jump_pressed = false;
