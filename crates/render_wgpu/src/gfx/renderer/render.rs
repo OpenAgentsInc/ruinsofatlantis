@@ -1916,6 +1916,8 @@ pub fn render_impl(
             "Press R to respawn",
         );
     } else if !overlays_disabled && !r.is_picker_batches() {
+        // Hide hotbar in CC demo scene
+        let is_cc_demo = matches!(r.zone_batches.as_ref(), Some(z) if z.slug.as_str() == "cc_demo");
         let cast_label = if !r.is_vox_onepath() && cast_frac > 0.0 {
             match r.pc_cast_kind.unwrap_or(super::super::PcCast::FireBolt) {
                 super::super::PcCast::FireBolt => Some("Fire Bolt"),
@@ -1930,22 +1932,27 @@ pub fn render_impl(
             let cd1_secs = cd1 * r.firebolt_cd_dur;
             let cd2_secs = cd2 * r.magic_missile_cd_dur;
             let cd3_secs = cd3 * r.fireball_cd_dur;
-            r.hud.build(
-                r.size.width,
-                r.size.height,
-                pc_hp,
-                r.wizard_hp_max,
-                r.repl_buf.hud.mana as i32,
-                r.repl_buf.hud.mana_max as i32,
-                cast_frac,
-                cd1,
-                cd2,
-                cd3,
-                cd1_secs,
-                cd2_secs,
-                cd3_secs,
-                cast_label,
-            );
+            if !is_cc_demo {
+                r.hud.build(
+                    r.size.width,
+                    r.size.height,
+                    pc_hp,
+                    r.wizard_hp_max,
+                    r.repl_buf.hud.mana as i32,
+                    r.repl_buf.hud.mana_max as i32,
+                    cast_frac,
+                    cd1,
+                    cd2,
+                    cd3,
+                    cd1_secs,
+                    cd2_secs,
+                    cd3_secs,
+                    cast_label,
+                );
+            } else {
+                // In CC demo, skip hotbar build — leave room for optional perf overlay
+                r.hud.reset();
+            }
             // Boss banner (top-center) via replicated cache or server fallback
             let mut boss_line: Option<String> = None;
             if let Some(bs) = r.repl_buf.boss_status.as_ref() {
