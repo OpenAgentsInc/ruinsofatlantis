@@ -88,7 +88,10 @@ impl Renderer {
                                 self.pc_cast_kind = Some(super::super::PcCast::MagicMissile);
                                 // Use SpecDb-provided cast time captured at init
                                 self.pc_cast_time = self.magic_missile_cast_time.max(0.0);
-                                log::info!("input: key 2 → queue Magic Missile (cast={:.2}s)");
+                                log::info!(
+                                    "input: key 2 → queue Magic Missile (cast={:.2}s)",
+                                    self.magic_missile_cast_time
+                                );
                             } else {
                                 log::info!(
                                     "input: Magic Missile cooldown {:.0} ms remaining",
@@ -112,7 +115,10 @@ impl Renderer {
                                 self.pc_cast_queued = true;
                                 self.pc_cast_kind = Some(super::super::PcCast::Fireball);
                                 self.pc_cast_time = self.fireball_cast_time.max(0.0);
-                                log::info!("input: key 3 → queue Fireball (cast={:.2}s)");
+                                log::info!(
+                                    "input: key 3 → queue Fireball (cast={:.2}s)",
+                                    self.fireball_cast_time
+                                );
                             } else {
                                 log::info!(
                                     "input: Fireball cooldown {:.0} ms remaining",
