@@ -44,7 +44,7 @@ pub struct ResolveOutput {
 /// Rules:
 /// - Q/E are strafes: Q → right, E → left.
 /// - A/D swing the camera when RMB is not held.
-/// - When RMB is held, A/D become strafes (A → left, D → right).
+/// - When RMB is held, A/D become strafes (A → right, D → left).
 /// - Shift (sprint) applies only while holding W without S/Q/E/A/D strafing flags.
 /// - Click-move-forward requires LMB+RMB.
 #[must_use]
@@ -59,13 +59,13 @@ pub fn resolve(raw: RawButtons, p: ResolveParams) -> ResolveOutput {
         run: false,
     };
 
-    // Under RMB, A/D become strafes (natural mapping: A→left, D→right)
+    // Under RMB, A/D become strafes (A→right, D→left) to match in-game expectation
     if raw.rmb {
         if raw.a {
-            intents.strafe_left = true;
+            intents.strafe_right = true;
         }
         if raw.d {
-            intents.strafe_right = true;
+            intents.strafe_left = true;
         }
     }
 

@@ -16,13 +16,13 @@ mod wow_controller_input_tests {
         // Flipped mapping: Q -> right, E -> left
         let mut strafe_left = q_strafe_right; // E
         let mut strafe_right = q_strafe_left; // Q
-        // With RMB held, A/D become strafes (natural mapping A→left, D→right)
+        // With RMB held, A/D become strafes (A→right, D→left)
         if rmb_down {
             if a_down {
-                strafe_left = true;
+                strafe_right = true;
             }
             if d_down {
-                strafe_right = true;
+                strafe_left = true;
             }
         }
         (turn_left, turn_right, strafe_left, strafe_right)
@@ -96,9 +96,9 @@ mod wow_controller_input_tests {
     #[test]
     fn ad_strafe_when_rmb_held() {
         let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, true, false, false, false);
-        assert!(!tl && !tr && sl && !sr);
-        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, true, false, false);
         assert!(!tl && !tr && !sl && sr);
+        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, true, false, false);
+        assert!(!tl && !tr && sl && !sr);
     }
 
     #[test]
