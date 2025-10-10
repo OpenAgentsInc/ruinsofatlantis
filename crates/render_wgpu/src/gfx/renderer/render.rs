@@ -567,6 +567,8 @@ pub fn render_impl(
                     turning: false,
                     turn_speed_rad_per_s: 180.0f32.to_radians(),
                     dt,
+                    panic_threshold_rad: std::f32::consts::FRAC_PI_2,
+                    trail_by_threshold: true,
                 },
             );
             if (new_yaw - cur_yaw).abs() > 1e-6 {
@@ -581,15 +583,16 @@ pub fn render_impl(
     // Compute local orbit offsets (relative to PC orientation)
     let near_d = 1.6f32;
     let far_d = 25.0f32;
-    let zoom_t = ((r.cam_distance - near_d) / (far_d - near_d)).clamp(0.0, 1.0);
+    let (_, _, dist, lift_base, look_base) = r.scene_inputs.rig_values();
+    let zoom_t = ((dist - near_d) / (far_d - near_d)).clamp(0.0, 1.0);
     let near_lift = 0.5f32; // meters above anchor when fully zoomed-in
     let near_look = 0.5f32; // aim point above anchor when fully zoomed-in
-    let eff_lift = near_lift * (1.0 - zoom_t) + r.cam_lift * zoom_t;
-    let eff_look = near_look * (1.0 - zoom_t) + r.cam_look_height * zoom_t;
+    let eff_lift = near_lift * (1.0 - zoom_t) + lift_base * zoom_t;
+    let eff_look = near_look * (1.0 - zoom_t) + look_base * zoom_t;
     let (off_local, look_local) = camera_sys::compute_local_orbit_offsets(
-        r.cam_distance,
-        r.cam_orbit_yaw,
-        r.cam_orbit_pitch,
+        dist,
+        r.scene_inputs.rig_yaw(),
+        r.scene_inputs.rig_pitch(),
         eff_lift,
         eff_look,
     );

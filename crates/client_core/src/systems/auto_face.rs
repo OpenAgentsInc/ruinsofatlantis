@@ -24,16 +24,35 @@ pub struct AutoFaceParams {
     pub turning: bool,
     pub turn_speed_rad_per_s: f32,
     pub dt: f32,
+    /// If the camera deviates more than this, ignore delay and begin turning.
+    pub panic_threshold_rad: f32,
+    /// When panicking, trail the camera by exactly `panic_threshold_rad` while turning.
+    pub trail_by_threshold: bool,
 }
 
 /// One step of auto-face behavior: after `delay_s` since last camera change and if not `turning`,
 /// rotate `cur_yaw` toward `cam_yaw` by at most `turn_speed_rad_per_s * dt`.
 #[must_use]
 pub fn auto_face_step(cur_yaw: f32, cam_yaw: f32, p: AutoFaceParams) -> f32 {
-    if p.turning || (p.now - p.last_change_at) < p.delay_s {
+    let mut diff = cam_yaw - cur_yaw;
+    while diff > std::f32::consts::PI {
+        diff -= std::f32::consts::TAU;
+    }
+    while diff < -std::f32::consts::PI {
+        diff += std::f32::consts::TAU;
+    }
+    let diff_abs = diff.abs();
+    let panic = p.panic_threshold_rad > 0.0 && diff_abs > p.panic_threshold_rad;
+    if p.turning || ((!panic) && (p.now - p.last_change_at) < p.delay_s) {
         return cur_yaw;
     }
-    let mut diff = cam_yaw - cur_yaw;
+    // Choose target yaw: either camera yaw (normal) or trail by threshold when panicking
+    let target_yaw = if panic && p.trail_by_threshold {
+        cam_yaw - p.panic_threshold_rad * diff.signum()
+    } else {
+        cam_yaw
+    };
+    let mut diff = target_yaw - cur_yaw;
     while diff > std::f32::consts::PI {
         diff -= std::f32::consts::TAU;
     }
@@ -66,6 +85,8 @@ mod tests {
                 turning: false,
                 turn_speed_rad_per_s: 3.1415926,
                 dt: 0.016,
+                panic_threshold_rad: std::f32::consts::FRAC_PI_2,
+                trail_by_threshold: true,
             },
         );
         // only 0.1s elapsed < 0.5s delay → unchanged
@@ -92,8 +113,31 @@ mod tests {
                 turning: false,
                 turn_speed_rad_per_s: 3.1415926,
                 dt: 0.1,
+                panic_threshold_rad: std::f32::consts::FRAC_PI_2,
+                trail_by_threshold: true,
             },
         );
         assert!(yaw > 0.0);
+    }
+
+    #[test]
+    fn panic_triggers_rotation_without_delay() {
+        let cur = 0.0f32; // facing +Z
+        let cam = std::f32::consts::PI; // camera 180° behind
+        let yaw = auto_face_step(
+            cur,
+            cam,
+            AutoFaceParams {
+                last_change_at: 0.0,
+                now: 0.1,
+                delay_s: 0.5,
+                turning: false,
+                turn_speed_rad_per_s: 3.1415926,
+                dt: 0.1,
+                panic_threshold_rad: std::f32::consts::FRAC_PI_2,
+                trail_by_threshold: true,
+            },
+        );
+        assert!(yaw.abs() > 0.0);
     }
 }

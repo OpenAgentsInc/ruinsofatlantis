@@ -2312,15 +2312,16 @@ impl Renderer {
         // sits just behind and slightly above the wizard's head.
         let near_d = 1.6f32;
         let far_d = 25.0f32;
-        let zoom_t = ((self.cam_distance - near_d) / (far_d - near_d)).clamp(0.0, 1.0);
+        let (_, _, dist, lift_base, look_base) = self.scene_inputs.rig_values();
+        let zoom_t = ((dist - near_d) / (far_d - near_d)).clamp(0.0, 1.0);
         let near_lift = 0.5f32; // meters above anchor when fully zoomed-in
         let near_look = 0.5f32; // aim point above anchor when fully zoomed-in
-        let eff_lift = near_lift * (1.0 - zoom_t) + self.cam_lift * zoom_t;
-        let eff_look = near_look * (1.0 - zoom_t) + self.cam_look_height * zoom_t;
+        let eff_lift = near_lift * (1.0 - zoom_t) + lift_base * zoom_t;
+        let eff_look = near_look * (1.0 - zoom_t) + look_base * zoom_t;
         let (off_local, look_local) = camera_sys::compute_local_orbit_offsets(
-            self.cam_distance,
-            self.cam_orbit_yaw,
-            self.cam_orbit_pitch,
+            dist,
+            self.scene_inputs.rig_yaw(),
+            self.scene_inputs.rig_pitch(),
             eff_lift,
             eff_look,
         );

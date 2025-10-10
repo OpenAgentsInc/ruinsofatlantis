@@ -331,11 +331,11 @@ impl ApplicationHandler for App {
                             // Aim from camera forward and carve once
                             let aspect = state.size.width as f32 / state.size.height.max(1) as f32;
                             let (off, look) = camera_sys::compute_local_orbit_offsets(
-                                state.cam_distance,
-                                state.cam_orbit_yaw,
-                                state.cam_orbit_pitch,
-                                state.cam_lift,
-                                state.cam_look_height,
+                                state.scene_inputs.rig_distance(),
+                                state.scene_inputs.rig_yaw(),
+                                state.scene_inputs.rig_pitch(),
+                                state.scene_inputs.rig_values().3,
+                                state.scene_inputs.rig_values().4,
                             );
                             let (cam, _g) = camera_sys::third_person_follow(
                                 &mut state.cam_follow,
@@ -694,11 +694,11 @@ impl ApplicationHandler for App {
                                 let aspect =
                                     state.size.width as f32 / state.size.height.max(1) as f32;
                                 let (off, look) = camera_sys::compute_local_orbit_offsets(
-                                    state.cam_distance,
-                                    state.cam_orbit_yaw,
-                                    state.cam_orbit_pitch,
-                                    state.cam_lift,
-                                    state.cam_look_height,
+                                    state.scene_inputs.rig_distance(),
+                                    state.scene_inputs.rig_yaw(),
+                                    state.scene_inputs.rig_pitch(),
+                                    state.scene_inputs.rig_values().3,
+                                    state.scene_inputs.rig_values().4,
                                 );
                                 let (cam, _g) = camera_sys::third_person_follow(
                                     &mut state.cam_follow,
