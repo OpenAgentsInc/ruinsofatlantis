@@ -236,10 +236,14 @@ impl Renderer {
                             );
                         }
                     }
-                    // Sky controls (pause/scrub/speed)
+                    // Space: Jump when PC is alive; otherwise toggle sky pause (legacy)
                     PhysicalKey::Code(KeyCode::Space) => {
                         if pressed {
-                            self.sky.toggle_pause();
+                            if self.pc_alive {
+                                self.input.jump_pressed = true;
+                            } else {
+                                self.sky.toggle_pause();
+                            }
                         }
                     }
 

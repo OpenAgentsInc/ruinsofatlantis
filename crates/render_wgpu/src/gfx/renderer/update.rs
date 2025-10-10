@@ -1334,9 +1334,17 @@ impl Renderer {
         }
         // Update CPU model matrix and upload only the PC instance
         let rot = glam::Quat::from_rotation_y(self.player.yaw);
-        // Project player onto terrain height
+        // Terrain height at current XZ; feed into controller as ground height and
+        // allow jump by retaining Y when above ground.
         let (h, _n) = terrain::height_at(&self.terrain_cpu, self.player.pos.x, self.player.pos.z);
-        let pos = glam::vec3(self.player.pos.x, h, self.player.pos.z);
+        // Keep SceneInputs' ground in sync so landing detection matches terrain
+        self.scene_inputs.set_ground_height(h);
+        // Respect jump height: clamp to max(current Y, ground)
+        let pos = glam::vec3(
+            self.player.pos.x,
+            self.player.pos.y.max(h),
+            self.player.pos.z,
+        );
         let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);
         self.wizard_models[self.pc_index] = m;
         // Keep wizard instance CPU/model updated for UI and compatibility

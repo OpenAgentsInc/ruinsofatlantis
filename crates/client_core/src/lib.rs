@@ -29,6 +29,10 @@ pub mod input {
         pub turn_right: bool,
         pub click_move_forward: bool,
         pub mouse_look: bool,
+        /// One-shot jump press for this frame. The renderer should set this
+        /// to true on key-press and clear it after passing the snapshot to
+        /// `SceneInputs` so holding Space does not repeat-jump.
+        pub jump_pressed: bool,
         // Legacy: not used by WoW controller (run is default); retained for compatibility
         pub run: bool,
     }
@@ -50,6 +54,10 @@ pub mod controller {
         // WoW-style toggles
         pub autorun: bool,
         pub walk_mode: bool,
+        // Simple vertical motion state for jump/gravity
+        vel_y: f32,
+        ground_y: f32,
+        airborne: bool,
     }
     impl PlayerController {
         #[must_use]
@@ -59,6 +67,9 @@ pub mod controller {
                 yaw: 0.0,
                 autorun: false,
                 walk_mode: false,
+                vel_y: 0.0,
+                ground_y: initial_pos.y,
+                airborne: false,
             }
         }
         /// Toggle autorun (behaves like holding `W` until canceled).
@@ -74,6 +85,23 @@ pub mod controller {
             self.walk_mode = !self.walk_mode;
         }
 
+        /// Provide latest ground height under the controller (terrain or collider).
+        /// - If grounded, snaps the character to this height and updates current ground.
+        /// - If airborne, raises the ground plane only (landing on raised terrain works).
+        pub fn set_ground_height(&mut self, h: f32) {
+            if self.airborne {
+                // Only allow the floor to rise underneath while jumping (e.g., over a slope)
+                if h > self.ground_y {
+                    self.ground_y = h;
+                }
+            } else {
+                self.ground_y = h;
+                if self.pos.y < h {
+                    self.pos.y = h;
+                }
+            }
+        }
+
         /// Update WoW-style character controller: turn/strafe/autorun.
         pub fn update(&mut self, input: &InputState, dt: f32, _cam_forward: Vec3) {
             // Constants converted from yards/sec
@@ -81,6 +109,8 @@ pub mod controller {
             const WALK_SPEED: f32 = 2.2860; // 2.5 yd/s
             const BACKPEDAL_SPEED: f32 = 4.1148; // 4.5 yd/s
             const TURN_SPEED_DEG: f32 = 180.0; // keyboard turn
+            const GRAVITY: f32 = 9.81; // m/s^2
+            const JUMP_VELOCITY: f32 = 4.6; // m/s
             let turn_speed = TURN_SPEED_DEG.to_radians();
 
             // 1) Modes & modifiers
@@ -151,6 +181,28 @@ pub mod controller {
                     v = v.normalize();
                 }
                 self.pos += v * base_speed * dt;
+            }
+
+            // 6) Jump/gravity vertical integration
+            if self.airborne {
+                // Apply gravity and integrate vertical position
+                self.vel_y -= GRAVITY * dt;
+                self.pos.y += self.vel_y * dt;
+                // Land on ground plane
+                if self.pos.y <= self.ground_y {
+                    self.pos.y = self.ground_y;
+                    self.vel_y = 0.0;
+                    self.airborne = false;
+                }
+            } else {
+                // Snap fully to the current ground height
+                self.pos.y = self.ground_y;
+                // Start jump if requested
+                if input.jump_pressed {
+                    self.airborne = true;
+                    self.vel_y = JUMP_VELOCITY;
+                    self.pos.y += self.vel_y * dt; // immediate lift so it feels responsive
+                }
             }
         }
     }

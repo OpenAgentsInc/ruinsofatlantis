@@ -49,6 +49,11 @@ impl SceneInputs {
         self.controller.yaw = yaw;
     }
 
+    /// Provide the latest ground height from terrain/collision to the controller.
+    pub fn set_ground_height(&mut self, h: f32) {
+        self.controller.set_ground_height(h);
+    }
+
     /// Advance the client controller and resolve against static colliders (capsule slide).
     /// The Y component is left untouched; caller may project to terrain height separately.
     pub fn update(&mut self, dt: f32, cam_forward: Vec3, static_index: Option<&StaticIndex>) {

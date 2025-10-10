@@ -12,6 +12,7 @@ Movement & Camera
   - RMB held: A/D become strafes; W/S move relative to camera forward.
   - RMB released: A/D turn the character; W/S move relative to the character’s facing (no camera drift).
 - Q/E — dedicated strafes (Q = left, E = right) regardless of RMB.
+- Space — Jump (when grounded; WoW-like short hop)
 - Mouse Wheel — camera zoom.
 - RMB drag — orbit the camera around the player while keeping the player as the orbit target.
   - Pointer‑lock is requested only while RMB is held; camera yaw/pitch update from mouse deltas.

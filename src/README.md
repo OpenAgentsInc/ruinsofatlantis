@@ -28,7 +28,7 @@ Workspace crates (added for modularization)
 - WASD: move (A/D turn in place)
 - Shift: run
 - 1/2/3: demo spell triggers (legacy prototype path)
-- Space: toggle sky pause (also active when PC is dead)
+- Space: Jump (when PC is alive); when dead, toggles sky pause
 - [: scrub time backward a bit; ]: forward a bit
 - - / =: halve / double time scale
 - P: toggle perf overlay (frametime, FPS, draw calls)

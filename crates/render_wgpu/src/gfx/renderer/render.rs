@@ -523,6 +523,8 @@ pub fn render_impl(
             r.input.turn_right |= r.d_down; // D -> turn right
         }
         r.scene_inputs.apply_input(&r.input);
+        // One-shot: clear jump so holding Space does not repeat
+        r.input.jump_pressed = false;
         // Use camera basis only when RMB is down; otherwise use character facing (yaw).
         let move_fwd = if r.rmb_down {
             cam_fwd
