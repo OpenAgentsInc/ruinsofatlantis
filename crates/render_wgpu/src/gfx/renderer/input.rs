@@ -63,26 +63,7 @@ impl Renderer {
                                 self.pc_cast_kind = Some(super::super::PcCast::FireBolt);
                                 self.pc_cast_time = 0.0; // instant
                                 log::info!("input: key 1 → queue Fire Bolt");
-                                if false
-                                /* emit server cmd here? see process_pc_cast */
-                                {
-                                    let yaw = self.player.yaw;
-                                    let dir = glam::Vec3::new(yaw.sin(), 0.0, yaw.cos())
-                                        .normalize_or_zero();
-                                    let m = self
-                                        .wizard_models
-                                        .get(self.pc_index)
-                                        .copied()
-                                        .unwrap_or(glam::Mat4::IDENTITY);
-                                    let pos = m.transform_point3(glam::Vec3::new(0.0, 1.2, 0.0));
-                                    let cmd = net_core::command::ClientCmd::FireBolt {
-                                        pos: [pos.x, pos.y, pos.z],
-                                        dir: [dir.x, dir.y, dir.z],
-                                    };
-                                    let mut payload = Vec::new();
-                                    cmd.encode(&mut payload);
-                                    let mut framed = Vec::with_capacity(payload.len() + 8);
-                                    net_core::frame::write_msg(&mut framed, &payload);
+                                if let Some(tx) = &self.cmd_tx {
                                     let cam_fwd = (self.cam_follow.current_look
                                         - self.cam_follow.current_pos)
                                         .normalize_or_zero();
