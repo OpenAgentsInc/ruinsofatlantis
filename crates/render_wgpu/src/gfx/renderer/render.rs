@@ -510,9 +510,9 @@ pub fn render_impl(
         r.input.turn_right = false;
         r.input.strafe_left = false;
         r.input.strafe_right = false;
-        // Q/E are always strafes (reversed per request): Q -> right, E -> left
-        r.input.strafe_left |= r.e_down; // E = left
-        r.input.strafe_right |= r.q_down; // Q = right
+        // Q/E are always strafes: Q -> left, E -> right
+        r.input.strafe_left |= r.q_down; // Q = left
+        r.input.strafe_right |= r.e_down; // E = right
         // A/D become strafes under RMB; else turns
         if r.rmb_down {
             r.input.strafe_left |= r.a_down; // A -> left
@@ -522,7 +522,13 @@ pub fn render_impl(
             r.input.turn_right |= r.d_down; // D -> turn right
         }
         r.scene_inputs.apply_input(&r.input);
-        r.scene_inputs.update(dt, cam_fwd, r.static_index.as_ref());
+        // Use camera basis only when RMB is down; otherwise use character facing (yaw).
+        let move_fwd = if r.rmb_down {
+            cam_fwd
+        } else {
+            glam::vec3(r.player.yaw.sin(), 0.0, r.player.yaw.cos())
+        };
+        r.scene_inputs.update(dt, move_fwd, r.static_index.as_ref());
         r.player.pos = r.scene_inputs.pos();
         r.player.yaw = r.scene_inputs.yaw();
         r.apply_pc_transform();
