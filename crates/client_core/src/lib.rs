@@ -122,24 +122,24 @@ pub mod controller {
 
             // 5) Orientation rules
             if input.mouse_look {
-                // Character yaw follows camera yaw every frame (CCW-positive)
-                let cam_yaw = (-cam_forward.x).atan2(cam_forward.z);
+                // Character yaw follows camera yaw every frame
+                let cam_yaw = cam_forward.x.atan2(cam_forward.z);
                 self.yaw = wrap_angle(cam_yaw);
             } else {
-                // Keyboard turn: CCW-positive => left increases yaw, right decreases yaw
+                // Keyboard turn: left decreases yaw, right increases yaw
                 if input.turn_left {
-                    self.yaw = wrap_angle(self.yaw + turn_speed * dt);
+                    self.yaw = wrap_angle(self.yaw - turn_speed * dt);
                 }
                 if input.turn_right {
-                    self.yaw = wrap_angle(self.yaw - turn_speed * dt);
+                    self.yaw = wrap_angle(self.yaw + turn_speed * dt);
                 }
             }
 
-            // 6) Rotate local velocity by yaw and integrate (CCW-positive yaw)
+            // 6) Rotate local velocity by yaw and integrate
             if v_local.length_squared() > 0.0 {
                 let cy = self.yaw;
-                let world_x = v_local.x * cy.cos() - v_local.z * cy.sin();
-                let world_z = v_local.x * cy.sin() + v_local.z * cy.cos();
+                let world_x = v_local.x * cy.cos() + v_local.z * cy.sin();
+                let world_z = -v_local.x * cy.sin() + v_local.z * cy.cos();
                 let v_world = glam::Vec3::new(world_x, 0.0, world_z);
                 self.pos += v_world * dt;
                 // Stop conditions are immediate; no inertia (handled by inputs above)
