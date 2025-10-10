@@ -68,7 +68,7 @@ impl Default for Specs {
                 },
                 fireball: SpellSpec {
                     cost: 5,
-                    cd_s: 4.00,
+                    cd_s: 2.00,
                     gcd_s: 0.50,
                 },
                 magic_missile: SpellSpec {

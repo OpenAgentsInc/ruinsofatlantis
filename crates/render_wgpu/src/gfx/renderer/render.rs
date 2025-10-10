@@ -1839,6 +1839,10 @@ pub fn render_impl(
             None
         };
         if !r.is_vox_onepath() {
+            // Compute seconds remaining for numeric cooldown labels
+            let cd1_secs = cd1 * r.firebolt_cd_dur;
+            let cd2_secs = cd2 * r.magic_missile_cd_dur;
+            let cd3_secs = cd3 * r.fireball_cd_dur;
             r.hud.build(
                 r.size.width,
                 r.size.height,
@@ -1850,6 +1854,9 @@ pub fn render_impl(
                 cd1,
                 cd2,
                 cd3,
+                cd1_secs,
+                cd2_secs,
+                cd3_secs,
                 cast_label,
             );
             // Boss banner (top-center) via replicated cache or server fallback

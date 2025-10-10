@@ -3125,6 +3125,9 @@ impl Renderer {
                     gcd_frac,
                     0.0,
                     0.0,
+                    gcd_frac * self.firebolt_cd_dur,
+                    0.0,
+                    0.0,
                     cast_label,
                 );
                 if self.hud_model.perf_enabled() {

@@ -1382,6 +1382,9 @@ impl Hud {
         cd1_frac: f32,
         cd2_frac: f32,
         cd3_frac: f32,
+        cd1_remain_s: f32,
+        cd2_remain_s: f32,
+        cd3_remain_s: f32,
         cast_label: Option<&str>,
     ) {
         self.bars_verts.clear();
@@ -1592,6 +1595,32 @@ impl Hud {
                     y0 + overlay_h,
                     [0.0, 0.0, 0.0, 0.45],
                 );
+                // Numeric countdown overlay (seconds remaining). Use 1 decimal for < 10s.
+                let secs = if i == 0 {
+                    cd1_remain_s
+                } else if i == 1 {
+                    cd2_remain_s
+                } else {
+                    cd3_remain_s
+                };
+                if secs > 0.05 {
+                    let text = if secs < 10.0 {
+                        format!("{:.1}", secs)
+                    } else {
+                        format!("{:.0}", secs.ceil())
+                    };
+                    // Center the text in the slot (approximate; bitmap font spacing)
+                    let tx = x0 + slot_px * 0.5 - (text.len() as f32) * 4.0;
+                    let ty = y0 + slot_px * 0.5 + 6.0;
+                    self.push_text_line(
+                        surface_w,
+                        surface_h,
+                        tx,
+                        ty,
+                        &text,
+                        [0.95, 0.95, 0.95, 0.95],
+                    );
+                }
             }
             x += slot_px + gap;
         }

@@ -1002,12 +1002,36 @@ fn projectile_collision_ecs(srv: &mut ServerState, ctx: &mut Ctx) {
             let mid = (seg_a + seg_b) * 0.5;
             let seg_half = (seg_b - seg_a).length() * 0.5;
             let query_r = seg_half + r2.sqrt() + 1.0;
+            // Additional safety: avoid self-detonation near the caster. Skip the owner actor
+            // and require a brief extra delay before proximity checks so the projectile has
+            // traveled away from the caster bubble.
+            // Note: collisions are already gated by arming_delay; this adds a small margin
+            // specifically for proximity explosion.
+            let min_prox_delay_s: f32 = 0.20;
+            if age_s < min_prox_delay_s {
+                continue;
+            }
             for aid in ctx.spatial.query_circle(mid, query_r) {
                 let Some(act) = srv.ecs.get(aid) else {
                     continue;
                 };
                 if !act.hp.alive() {
                     continue;
+                }
+                if let Some(owner_id) = owner {
+                    if act.id == owner_id {
+                        // Never proximity-explode on the caster
+                        continue;
+                    }
+                    // Also avoid proximity exploding on actors of the same faction as the caster.
+                    let owner_team = srv
+                        .ecs
+                        .get(owner_id)
+                        .map(|a| a.faction)
+                        .unwrap_or(crate::actor::Faction::Pc);
+                    if act.faction == owner_team {
+                        continue;
+                    }
                 }
                 let c = Vec2::new(act.tr.pos.x, act.tr.pos.z);
                 let t = if len2 <= 1e-12 {
