@@ -378,6 +378,12 @@ impl Renderer {
                         .to_radians();
                     self.scene_inputs
                         .rig_apply_mouse_orbit(dx, dy, to_rad, -1.2, 1.2);
+                    client_core::systems::auto_face::register_cam_change(
+                        &mut self.cam_yaw_prev,
+                        &mut self.cam_yaw_changed_at,
+                        self.scene_inputs.rig_yaw(),
+                        self.last_time,
+                    );
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));
@@ -409,6 +415,12 @@ impl Renderer {
                 .to_radians();
             self.scene_inputs
                 .rig_apply_mouse_orbit(dx, dy, to_rad, -1.2, 1.2);
+            client_core::systems::auto_face::register_cam_change(
+                &mut self.cam_yaw_prev,
+                &mut self.cam_yaw_changed_at,
+                self.scene_inputs.rig_yaw(),
+                self.last_time,
+            );
         }
     }
 }

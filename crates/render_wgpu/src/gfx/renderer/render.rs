@@ -534,6 +534,12 @@ pub fn render_impl(
         r.input.run = out.intents.run;
         if out.cam_yaw_delta != 0.0 {
             r.scene_inputs.rig_add_yaw(out.cam_yaw_delta);
+            client_core::systems::auto_face::register_cam_change(
+                &mut r.cam_yaw_prev,
+                &mut r.cam_yaw_changed_at,
+                r.scene_inputs.rig_yaw(),
+                r.last_time,
+            );
         }
         r.scene_inputs.apply_input(&r.input);
         // One-shot: clear jump so holding Space does not repeat
@@ -549,12 +555,7 @@ pub fn render_impl(
         {
             let cam_fwd = r.cam_follow.current_look - r.cam_follow.current_pos;
             let cam_yaw = cam_fwd.x.atan2(cam_fwd.z);
-            client_core::systems::auto_face::register_cam_change(
-                &mut r.cam_yaw_prev,
-                &mut r.cam_yaw_changed_at,
-                cam_yaw,
-                r.last_time,
-            );
+            // Note: anchor updates occur only on explicit user input (mouse orbit / A/D swing).
             let cur_yaw = r.scene_inputs.yaw();
             // Compute panic vs normal and update face reset when exiting panic
             let mut d = cam_yaw - cur_yaw;
@@ -572,7 +573,7 @@ pub fn render_impl(
             let last_anchor = if in_panic {
                 r.cam_yaw_changed_at
             } else {
-                r.cam_face_reset_at
+                r.cam_yaw_changed_at.max(r.cam_face_reset_at)
             };
             let new_yaw = client_core::systems::auto_face::auto_face_step(
                 cur_yaw,

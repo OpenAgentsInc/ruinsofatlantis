@@ -1440,6 +1440,7 @@ impl Renderer {
         let mut chosen_name: Option<String> = None;
         let mut chosen_time: Option<f32> = None;
         if airborne_now {
+            let jump_speed_mul = if self.input.run { 1.3 } else { 1.0 };
             // While airborne, play Jump_Start for its duration, then Jump_Loop
             let js = self
                 .pc_anim_cfg
@@ -1451,12 +1452,13 @@ impl Renderer {
                 && let Some(clip) = pc_cpu.animations.get(js)
             {
                 let elapsed = (time_global - start).max(0.0);
-                if elapsed < clip.duration.max(0.0001) {
+                let elapsed_scaled = elapsed * jump_speed_mul;
+                if elapsed_scaled < clip.duration.max(0.0001) {
                     chosen_name = Some(js.to_string());
-                    chosen_time = Some(elapsed);
+                    chosen_time = Some(elapsed_scaled);
                 } else if pc_cpu.animations.contains_key(jl) {
                     chosen_name = Some(jl.to_string());
-                    chosen_time = Some(elapsed);
+                    chosen_time = Some(elapsed_scaled);
                 }
             } else if pc_cpu.animations.contains_key(jl) {
                 chosen_name = Some(jl.to_string());
