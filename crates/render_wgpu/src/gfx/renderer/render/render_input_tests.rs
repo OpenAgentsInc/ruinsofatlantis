@@ -15,9 +15,9 @@ mod wow_controller_input_tests {
         // returns (turn_left, turn_right, strafe_left, strafe_right)
         let mut turn_left = false;
         let mut turn_right = false;
-        // Mirror production mapping with reversed Q/E: Q -> right, E -> left
-        let mut strafe_left = q_strafe_right;
-        let mut strafe_right = q_strafe_left;
+        // Mirror production mapping: Q -> left, E -> right
+        let mut strafe_left = q_strafe_left;
+        let mut strafe_right = q_strafe_right;
         if rmb_down {
             strafe_left |= a_down;
             strafe_right |= d_down;
