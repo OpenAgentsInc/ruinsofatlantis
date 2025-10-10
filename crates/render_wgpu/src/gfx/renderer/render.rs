@@ -490,6 +490,16 @@ pub fn render_impl(
     // Update player transform (controls + collision) via external scene inputs
     {
         let cam_fwd = r.cam_follow.current_look - r.cam_follow.current_pos;
+        // Clear latched inputs on RMB edge (pointer-lock transitions can eat key-ups)
+        if r.prev_rmb_down != r.rmb_down {
+            r.a_down = false;
+            r.d_down = false;
+            r.input.turn_left = false;
+            r.input.turn_right = false;
+            r.input.strafe_left = false;
+            r.input.strafe_right = false;
+        }
+        r.prev_rmb_down = r.rmb_down;
         // Derive per-frame controller flags that depend on mouse buttons
         r.input.mouse_look = r.rmb_down;
         r.input.click_move_forward = r.lmb_down && r.rmb_down;
@@ -603,37 +613,37 @@ pub fn render_impl(
 
     // Send authoritative Move/Aim intents each frame when command TX is present
     if let Some(tx) = &r.cmd_tx {
-        // Compute camera-relative movement on XZ
+        // Compute movement basis (XZ) like WoW:
+        // - RMB held    -> camera forward/right basis
+        // - RMB not held -> character yaw basis
+        let basis_fwd_xz = if r.rmb_down {
+            let cam_fwd =
+                (r.cam_follow.current_look - r.cam_follow.current_pos).normalize_or_zero();
+            glam::vec2(cam_fwd.x, cam_fwd.z).normalize_or_zero()
+        } else {
+            glam::vec2(r.player.yaw.sin(), r.player.yaw.cos())
+        };
+        let basis_right_xz = glam::vec2(basis_fwd_xz.y, -basis_fwd_xz.x);
         let mut mx = 0.0f32;
         let mut mz = 0.0f32;
-        if r.input.forward {
-            mz += 1.0;
-        }
-        if r.input.backward {
-            mz -= 1.0;
-        }
         if r.input.strafe_right {
             mx += 1.0;
         }
         if r.input.strafe_left {
             mx -= 1.0;
         }
-        let mut dx = 0.0f32;
-        let mut dz = 0.0f32;
-        if mx != 0.0 || mz != 0.0 {
-            let cam_fwd =
-                (r.cam_follow.current_look - r.cam_follow.current_pos).normalize_or_zero();
-            let fwd_xz = glam::vec2(cam_fwd.x, cam_fwd.z).normalize_or_zero();
-            let right_xz = glam::vec2(fwd_xz.y, -fwd_xz.x); // rotate 90° CW on XZ
-            let v = right_xz * mx + fwd_xz * mz;
-            let v = if v.length_squared() > 1.0 {
-                v.normalize()
-            } else {
-                v
-            };
-            dx = v.x;
-            dz = v.y;
+        if r.input.forward {
+            mz += 1.0;
         }
+        if r.input.backward {
+            mz -= 1.0;
+        }
+        let mut v = basis_right_xz * mx + basis_fwd_xz * mz;
+        if v.length_squared() > 1.0 {
+            v = v.normalize();
+        }
+        let dx = v.x;
+        let dz = v.y;
         // Move intent
         {
             let cmd = net_core::command::ClientCmd::Move {

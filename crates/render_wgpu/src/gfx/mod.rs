@@ -484,6 +484,8 @@ pub struct Renderer {
     // Raw A/D key state so we can resolve to turn vs. strafe per-frame based on RMB
     a_down: bool,
     d_down: bool,
+    // Track RMB edges to clear latched inputs when entering/leaving mouselook
+    prev_rmb_down: bool,
     last_cursor_pos: Option<(f64, f64)>,
 
     // UI capture helpers

@@ -123,7 +123,7 @@ pub mod controller {
             // 5) Orientation rules (CCW-positive yaw)
             if input.mouse_look {
                 // Character yaw follows camera yaw every frame; CCW-positive
-                let cam_yaw = (-cam_forward.x).atan2(cam_forward.z);
+                let cam_yaw = cam_forward.x.atan2(cam_forward.z);
                 self.yaw = wrap_angle(cam_yaw);
             } else {
                 // Keyboard turn: A turns left (increase yaw), D turns right (decrease yaw)
