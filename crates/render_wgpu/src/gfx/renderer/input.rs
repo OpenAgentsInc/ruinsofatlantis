@@ -62,10 +62,10 @@ impl Renderer {
                                 self.pc_cast_queued = true;
                                 self.pc_cast_kind = Some(super::super::PcCast::FireBolt);
                                 self.pc_cast_time = 0.0; // instant
-                                log::debug!("PC cast queued: Fire Bolt");
+                                log::info!("input: key 1 → queue Fire Bolt");
                             } else {
-                                log::debug!(
-                                    "Fire Bolt on cooldown: {:.0} ms remaining",
+                                log::info!(
+                                    "input: Fire Bolt cooldown {:.0} ms remaining",
                                     ((self.scene_inputs.cooldown_frac(
                                         spell_id,
                                         self.last_time,
@@ -88,10 +88,10 @@ impl Renderer {
                                 self.pc_cast_kind = Some(super::super::PcCast::MagicMissile);
                                 // Use SpecDb-provided cast time captured at init
                                 self.pc_cast_time = self.magic_missile_cast_time.max(0.0);
-                                log::debug!("PC cast queued: Magic Missile");
+                                log::info!("input: key 2 → queue Magic Missile (cast={:.2}s)");
                             } else {
-                                log::debug!(
-                                    "Magic Missile on cooldown: {:.0} ms remaining",
+                                log::info!(
+                                    "input: Magic Missile cooldown {:.0} ms remaining",
                                     ((self.scene_inputs.cooldown_frac(
                                         spell_id,
                                         self.last_time,
@@ -112,10 +112,10 @@ impl Renderer {
                                 self.pc_cast_queued = true;
                                 self.pc_cast_kind = Some(super::super::PcCast::Fireball);
                                 self.pc_cast_time = self.fireball_cast_time.max(0.0);
-                                log::debug!("PC cast queued: Fireball");
+                                log::info!("input: key 3 → queue Fireball (cast={:.2}s)");
                             } else {
-                                log::debug!(
-                                    "Fireball on cooldown: {:.0} ms remaining",
+                                log::info!(
+                                    "input: Fireball cooldown {:.0} ms remaining",
                                     ((self.scene_inputs.cooldown_frac(
                                         spell_id,
                                         self.last_time,
