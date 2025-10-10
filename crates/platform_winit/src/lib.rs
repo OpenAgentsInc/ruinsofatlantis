@@ -1238,6 +1238,13 @@ fn detect_zone_slug() -> Option<String> {
                 }
             }
         }
+        // Build-time default: if set, fall back to ROA_ZONE_DEFAULT compiled into the Wasm.
+        // This lets versioned snapshots boot a specific zone without needing a query param.
+        if let Some(def) = option_env!("ROA_ZONE_DEFAULT") {
+            if !def.is_empty() {
+                return Some(def.to_string());
+            }
+        }
     }
     // No back-compat for RA_ZONE
     None
