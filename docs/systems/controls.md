@@ -62,3 +62,4 @@ Logging
 Notes
 - The client only emits `InputCommand` events. Server remains authoritative for gameplay.
 - On platforms where pointer‑lock is denied (browser/OS), the client falls back to cursor mode automatically.
+- Animation details for the PC rig (locomotion, jump, cast phases) are documented in `docs/graphics/pc_animations.md`.

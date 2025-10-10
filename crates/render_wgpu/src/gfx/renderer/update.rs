@@ -1477,12 +1477,76 @@ impl Renderer {
                 self.pc_land_start_time = None;
             }
         }
-        // Desired names by situation (exact match preferred) if jump didn't take over
+        // Cast override: Enter → Loop while channeling → Shoot → Exit
+        if self.pc_cpu.is_some() {
+            if let Some(start) = self.pc_anim_start {
+                // While casting, choose enter briefly then loop
+                let enter = self
+                    .pc_anim_cfg
+                    .cast_enter
+                    .as_deref()
+                    .unwrap_or("Spell_Simple_Enter");
+                let loopn = self
+                    .pc_anim_cfg
+                    .cast_loop
+                    .as_deref()
+                    .unwrap_or("Spell_Simple_Idle_Loop");
+                if let Some(clip) = pc_cpu.animations.get(enter) {
+                    let elapsed = (time_global - start).max(0.0);
+                    if elapsed < clip.duration.max(0.0001) {
+                        chosen_name = Some(enter.to_string());
+                        chosen_time = Some(elapsed);
+                    } else if pc_cpu.animations.contains_key(loopn) {
+                        chosen_name = Some(loopn.to_string());
+                        chosen_time = Some(elapsed - clip.duration);
+                    }
+                }
+            } else if let Some(sh) = self.pc_cast_shoot_time {
+                let shoot = self
+                    .pc_anim_cfg
+                    .cast_shoot
+                    .as_deref()
+                    .unwrap_or("Spell_Simple_Shoot");
+                if let Some(clip) = pc_cpu.animations.get(shoot) {
+                    let elapsed = (time_global - sh).max(0.0);
+                    if elapsed < clip.duration.max(0.0001) {
+                        chosen_name = Some(shoot.to_string());
+                        chosen_time = Some(elapsed);
+                    } else {
+                        self.pc_cast_shoot_time = None;
+                        // Begin exit phase immediately after shoot
+                        self.pc_cast_end_time = Some(time_global);
+                    }
+                } else {
+                    self.pc_cast_shoot_time = None;
+                }
+            } else if let Some(end) = self.pc_cast_end_time {
+                let exitn = self
+                    .pc_anim_cfg
+                    .cast_exit
+                    .as_deref()
+                    .unwrap_or("Spell_Simple_Exit");
+                if let Some(clip) = pc_cpu.animations.get(exitn) {
+                    let elapsed = (time_global - end).max(0.0);
+                    if elapsed < clip.duration.max(0.0001) {
+                        chosen_name = Some(exitn.to_string());
+                        chosen_time = Some(elapsed);
+                    } else {
+                        self.pc_cast_end_time = None;
+                    }
+                } else {
+                    self.pc_cast_end_time = None;
+                }
+            }
+        }
+
+        // Desired names by situation (exact match preferred) if jump/cast didn't take over
         let strafing_only = (self.input.strafe_left || self.input.strafe_right)
             && !self.input.forward
             && !self.input.backward;
         let desired_exact = if chosen_name.is_none() {
             if is_casting {
+                // Back-compat single-cast name; not used when phase-specific mapping set above
                 self.pc_anim_cfg.cast.as_deref()
             } else if strafing_only {
                 self.pc_anim_cfg.strafe.as_deref()
@@ -1816,6 +1880,8 @@ impl Renderer {
                             }
                         }
                         self.pc_cast_fired = true;
+                        // Trigger shoot phase for PC rig animations
+                        self.pc_cast_shoot_time = Some(t);
                     }
                     // End cast animation and start cooldown window
                     self.wizard_anim_index[self.pc_index] = 1;

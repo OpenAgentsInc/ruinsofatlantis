@@ -12,7 +12,13 @@ pub struct PcAnimCfg {
     pub walk: Option<String>,
     pub sprint: Option<String>,
     pub strafe: Option<String>,
+    // Back-compat single cast name
     pub cast: Option<String>,
+    // Phase-specific cast clips
+    pub cast_enter: Option<String>,
+    pub cast_loop: Option<String>,
+    pub cast_shoot: Option<String>,
+    pub cast_exit: Option<String>,
     pub jump_start: Option<String>,
     pub jump_loop: Option<String>,
     pub jump_land: Option<String>,
@@ -60,6 +66,18 @@ pub fn load_default() -> Result<PcAnimCfg> {
     }
     if let Ok(v) = std::env::var("PC_ANIM_CAST") {
         cfg.cast = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_CAST_ENTER") {
+        cfg.cast_enter = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_CAST_LOOP") {
+        cfg.cast_loop = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_CAST_SHOOT") {
+        cfg.cast_shoot = Some(v);
+    }
+    if let Ok(v) = std::env::var("PC_ANIM_CAST_EXIT") {
+        cfg.cast_exit = Some(v);
     }
     if let Ok(v) = std::env::var("PC_ANIM_JUMP_START") {
         cfg.jump_start = Some(v);

@@ -5,7 +5,13 @@ idle = "Idle_Loop"
 walk = "Walk_Loop"
 sprint = "Sprint_Loop"
 strafe = "Jog_Fwd_Loop" # fallback: reuse jog for sideways movement
-cast = "Spell_Simple_Idle_Loop"
+cast = "Spell_Simple_Idle_Loop" # back-compat; phase-specific overrides below
+
+# Cast phase clips
+cast_enter = "Spell_Simple_Enter"
+cast_loop  = "Spell_Simple_Idle_Loop"
+cast_shoot = "Spell_Simple_Shoot"
+cast_exit  = "Spell_Simple_Exit"
 
 # Jump state clips (from assets/anims/universal/AnimationLibrary.glb)
 jump_start = "Jump_Start"

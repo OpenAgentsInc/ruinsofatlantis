@@ -273,6 +273,9 @@ pub struct Renderer {
     pc_prev_airborne: bool,
     pc_jump_start_time: Option<f32>,
     pc_land_start_time: Option<f32>,
+    // Cast phase moments for PC rig
+    pc_cast_shoot_time: Option<f32>,
+    pc_cast_end_time: Option<f32>,
     // Track last seen replicated PC id for logging
     pc_rep_id_last: Option<u32>,
     // Zombies
@@ -730,6 +733,8 @@ impl Renderer {
         self.pc_prev_airborne = false;
         self.pc_jump_start_time = None;
         self.pc_land_start_time = None;
+        self.pc_cast_shoot_time = None;
+        self.pc_cast_end_time = None;
         self.pc_cast_fired = false;
 
         // Reset HP and alive flag
