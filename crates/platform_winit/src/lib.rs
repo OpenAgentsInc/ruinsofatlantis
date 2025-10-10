@@ -591,6 +591,9 @@ impl ApplicationHandler for App {
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         #[cfg(not(target_arch = "wasm32"))]
         {
+            #[cfg(feature = "demo_server")]
+            self.pump_demo_server();
+
             // Poll background zone loader (if any) without blocking the UI thread.
             let mut restore: Option<BootMode> = None;
             let cur = std::mem::replace(&mut self.boot, BootMode::Picker);
@@ -1227,4 +1230,190 @@ fn detect_zone_slug() -> Option<String> {
     }
     // No back-compat for RA_ZONE
     None
+}
+
+#[cfg(feature = "demo_server")]
+impl App {
+    fn pump_demo_server(&mut self) {
+        let (Some(srv_xport), Some(state)) = (&self.transport_srv, &mut self.state) else {
+            return;
+        };
+        if let Some(srv) = &mut self.demo_server {
+            while let Some(bytes) = srv_xport.try_recv() {
+                let payload = match net_core::frame::read_msg(&bytes) {
+                    Ok(p) => p,
+                    Err(_) => &bytes,
+                };
+                let mut slice: &[u8] = payload;
+                if let Ok(cmd) = net_core::command::ClientCmd::decode(&mut slice) {
+                    let rate_limited = matches!(
+                        cmd,
+                        net_core::command::ClientCmd::FireBolt { .. }
+                            | net_core::command::ClientCmd::Fireball { .. }
+                            | net_core::command::ClientCmd::MagicMissile { .. }
+                    );
+                    if rate_limited {
+                        let now = std::time::Instant::now();
+                        if now.duration_since(self.last_sec_start).as_secs_f32() >= 1.0 {
+                            self.last_sec_start = now;
+                            self.cmds_this_sec = 0;
+                        }
+                        if self.cmds_this_sec >= 20 {
+                            continue;
+                        }
+                        self.cmds_this_sec += 1;
+                    }
+                    match cmd {
+                        net_core::command::ClientCmd::FireBolt { pos, dir } => {
+                            let p = glam::vec3(pos[0], pos[1], pos[2]);
+                            let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
+                            srv.enqueue_cast(p, d, server_core::SpellId::Firebolt);
+                        }
+                        net_core::command::ClientCmd::Fireball { pos, dir } => {
+                            let p = glam::vec3(pos[0], pos[1], pos[2]);
+                            let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
+                            srv.enqueue_cast(p, d, server_core::SpellId::Fireball);
+                        }
+                        net_core::command::ClientCmd::MagicMissile { pos, dir } => {
+                            let p = glam::vec3(pos[0], pos[1], pos[2]);
+                            let d = glam::vec3(dir[0], dir[1], dir[2]).normalize_or_zero();
+                            srv.enqueue_cast(p, d, server_core::SpellId::MagicMissile);
+                        }
+                        net_core::command::ClientCmd::Move { dx, dz, run } => {
+                            srv.apply_move_intent(dx, dz, run != 0);
+                        }
+                        net_core::command::ClientCmd::Aim { yaw } => {
+                            srv.apply_aim_intent(yaw);
+                        }
+                    }
+                }
+            }
+            let dt = if let Some(t0) = self.last_time.take() {
+                let now = std::time::Instant::now();
+                let d = (now - t0).as_secs_f32();
+                self.last_time = Some(now);
+                d.clamp(0.0, 0.1)
+            } else {
+                1.0 / 60.0
+            };
+            let _wiz_pos: Vec<glam::Vec3> = state.wizard_positions();
+            srv.step_authoritative(dt);
+            let tick64 = self.tick as u64;
+            let asnap = srv.tick_snapshot_actors(tick64);
+            let center = if let Some(pc_id) = srv.pc_actor
+                && let Some(pc) = srv.ecs.get(pc_id)
+            {
+                pc.tr.pos
+            } else {
+                state
+                    .wizard_positions()
+                    .first()
+                    .copied()
+                    .unwrap_or(glam::vec3(0.0, 0.0, 0.0))
+            };
+            let r2 = self.interest_radius_m * self.interest_radius_m;
+            let mut cur = std::collections::HashMap::new();
+            for a in asnap.actors {
+                let dx = a.pos[0] - center.x;
+                let dz = a.pos[2] - center.z;
+                if dx * dx + dz * dz <= r2 {
+                    cur.insert(a.id, a);
+                }
+            }
+            let mut spawns = Vec::new();
+            let mut removals = Vec::new();
+            let mut updates = Vec::new();
+            for (id, a) in &cur {
+                if let Some(b) = self.baseline.get(id) {
+                    let mut flags = 0u8;
+                    let mut rec = net_core::snapshot::ActorDeltaRec {
+                        id: *id,
+                        flags: 0,
+                        qpos: [0; 3],
+                        qyaw: 0,
+                        hp: 0,
+                        alive: 0,
+                    };
+                    let qpx = net_core::snapshot::qpos(a.pos[0]);
+                    let qpy = net_core::snapshot::qpos(a.pos[1]);
+                    let qpz = net_core::snapshot::qpos(a.pos[2]);
+                    if net_core::snapshot::qpos(b.pos[0]) != qpx
+                        || net_core::snapshot::qpos(b.pos[1]) != qpy
+                        || net_core::snapshot::qpos(b.pos[2]) != qpz
+                    {
+                        flags |= 1;
+                        rec.qpos = [qpx, qpy, qpz];
+                    }
+                    let qy = net_core::snapshot::qyaw(a.yaw);
+                    if net_core::snapshot::qyaw(b.yaw) != qy {
+                        flags |= 2;
+                        rec.qyaw = qy;
+                    }
+                    if b.hp != a.hp {
+                        flags |= 4;
+                        rec.hp = a.hp;
+                    }
+                    if b.alive != a.alive {
+                        flags |= 8;
+                        rec.alive = u8::from(a.alive);
+                    }
+                    if flags != 0 {
+                        rec.flags = flags;
+                        updates.push(rec);
+                    }
+                } else {
+                    spawns.push(a.clone());
+                }
+            }
+            for id in self.baseline.keys() {
+                if !cur.contains_key(id) {
+                    removals.push(*id);
+                }
+            }
+            let mut projectiles = Vec::new();
+            for c in srv.ecs.iter() {
+                if let (Some(proj), Some(vel)) = (c.projectile.as_ref(), c.velocity.as_ref()) {
+                    let dx = c.tr.pos.x - center.x;
+                    let dz = c.tr.pos.z - center.z;
+                    if dx * dx + dz * dz <= r2 {
+                        projectiles.push(net_core::snapshot::ProjectileRep {
+                            id: c.id.0,
+                            kind: match proj.kind {
+                                server_core::ProjKind::Firebolt => 0,
+                                server_core::ProjKind::Fireball => 1,
+                                server_core::ProjKind::MagicMissile => 2,
+                            },
+                            pos: [c.tr.pos.x, c.tr.pos.y, c.tr.pos.z],
+                            vel: [vel.v.x, vel.v.y, vel.v.z],
+                        });
+                    }
+                }
+            }
+            let delta = net_core::snapshot::ActorSnapshotDelta {
+                v: 4,
+                tick: tick64,
+                baseline: self.baseline_tick,
+                spawns,
+                updates,
+                removals,
+                projectiles,
+                hits: {
+                    let mut v = Vec::new();
+                    std::mem::swap(&mut v, &mut srv.fx_hits);
+                    v
+                },
+            };
+            let mut p4 = Vec::new();
+            delta.encode(&mut p4);
+            let mut f4 = Vec::with_capacity(p4.len() + 8);
+            net_core::frame::write_msg(&mut f4, &p4);
+            let _ = srv_xport.try_send(f4);
+            self.baseline = cur;
+            self.baseline_tick = tick64;
+            self.tick = self.tick.wrapping_add(1);
+            if let Some(win) = &self.window {
+                win.request_redraw();
+            }
+        }
+    }
 }
