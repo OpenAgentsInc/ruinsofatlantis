@@ -43,7 +43,8 @@ pub struct ResolveOutput {
 ///
 /// Rules:
 /// - Q/E are strafes: Q → right, E → left.
-/// - A/D swing the camera (no direct turn/strafe); if both are down, cancel.
+/// - A/D swing the camera when RMB is not held.
+/// - When RMB is held, A/D become strafes (A → left, D → right).
 /// - Shift (sprint) applies only while holding W without S/Q/E/A/D strafing flags.
 /// - Click-move-forward requires LMB+RMB.
 #[must_use]
@@ -51,20 +52,30 @@ pub fn resolve(raw: RawButtons, p: ResolveParams) -> ResolveOutput {
     let mut intents = ResolvedIntents {
         forward: raw.w,
         backward: raw.s,
-        // Flipped strafes to match current renderer mapping
+        // Flipped strafes to match current renderer mapping (Q→right, E→left)
         strafe_right: raw.q,
         strafe_left: raw.e,
         click_move_forward: raw.lmb && raw.rmb,
         run: false,
     };
 
+    // Under RMB, A/D become strafes (natural mapping: A→left, D→right)
+    if raw.rmb {
+        if raw.a {
+            intents.strafe_left = true;
+        }
+        if raw.d {
+            intents.strafe_right = true;
+        }
+    }
+
     // Sprint gating: only forward, without back or strafes; Shift held
     let strafing = intents.strafe_left || intents.strafe_right;
     intents.run = raw.shift && intents.forward && !intents.backward && !strafing;
 
-    // Camera swing from A/D (exclusive)
+    // Camera swing from A/D (exclusive) only when RMB is NOT held
     let mut cam_yaw_delta = 0.0f32;
-    if raw.a ^ raw.d {
+    if !raw.rmb && (raw.a ^ raw.d) {
         let dir = if raw.a { 1.0 } else { -1.0 };
         cam_yaw_delta = dir * p.turn_speed_rad_per_s * p.dt;
     }

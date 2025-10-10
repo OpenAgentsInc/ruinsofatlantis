@@ -2,7 +2,7 @@
 mod wow_controller_input_tests {
     use glam::{Vec2, vec2};
 
-    /// New mapping: A/D swing the camera; Q/E are strafes; no direct turns from A/D.
+    /// Mapping: A/D swing the camera normally; with RMB held, A/D become strafes.
     fn resolve_ad_to_turn_or_strafe(
         rmb_down: bool,
         a_down: bool,
@@ -13,9 +13,18 @@ mod wow_controller_input_tests {
         // returns (turn_left, turn_right, strafe_left, strafe_right)
         let turn_left = false;
         let turn_right = false;
-        // Flipped mapping: Q -> right, E -> left; A/D do not affect strafes directly
-        let strafe_left = q_strafe_right; // E
-        let strafe_right = q_strafe_left; // Q
+        // Flipped mapping: Q -> right, E -> left
+        let mut strafe_left = q_strafe_right; // E
+        let mut strafe_right = q_strafe_left; // Q
+        // With RMB held, A/D become strafes (natural mapping A→left, D→right)
+        if rmb_down {
+            if a_down {
+                strafe_left = true;
+            }
+            if d_down {
+                strafe_right = true;
+            }
+        }
         (turn_left, turn_right, strafe_left, strafe_right)
     }
 
@@ -83,7 +92,14 @@ mod wow_controller_input_tests {
         assert!(!tl && !tr && !sl && !sr);
     }
 
-    // A/D strafing under RMB no longer applies; Q/E still strafe (kept by next test)
+    // Under RMB, A/D become strafes
+    #[test]
+    fn ad_strafe_when_rmb_held() {
+        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, true, false, false, false);
+        assert!(!tl && !tr && sl && !sr);
+        let (tl, tr, sl, sr) = resolve_ad_to_turn_or_strafe(true, false, true, false, false);
+        assert!(!tl && !tr && !sl && sr);
+    }
 
     #[test]
     fn qe_are_dedicated_strafes_and_preserved() {

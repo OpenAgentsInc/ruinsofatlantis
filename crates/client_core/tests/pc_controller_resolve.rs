@@ -31,6 +31,32 @@ fn ad_swing_camera_not_strafe_or_turn() {
 }
 
 #[test]
+fn ad_become_strafes_when_rmb_held() {
+    // A with RMB → strafe left, no camera swing
+    let out = resolve(
+        RawButtons {
+            rmb: true,
+            a: true,
+            ..Default::default()
+        },
+        params(),
+    );
+    assert!(out.intents.strafe_left && !out.intents.strafe_right);
+    assert_eq!(out.cam_yaw_delta, 0.0);
+    // D with RMB → strafe right, no camera swing
+    let out = resolve(
+        RawButtons {
+            rmb: true,
+            d: true,
+            ..Default::default()
+        },
+        params(),
+    );
+    assert!(out.intents.strafe_right && !out.intents.strafe_left);
+    assert_eq!(out.cam_yaw_delta, 0.0);
+}
+
+#[test]
 fn sprint_requires_forward_only() {
     let out = resolve(
         RawButtons {
