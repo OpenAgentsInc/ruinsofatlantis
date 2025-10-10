@@ -646,6 +646,18 @@ impl Renderer {
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
         self.zone_batches = z;
     }
+
+    /// Compute the intersection point of the camera center ray with the horizontal
+    /// plane y=0 (if in front of the camera). Returns `[x,y,z]` on success.
+    pub fn center_ray_hit_y0(&self) -> Option<[f32; 3]> {
+        let eye = self.cam_follow.current_pos;
+        let look = self.cam_follow.current_look;
+        let dir = (look - eye).normalize_or_zero();
+        if dir.length_squared() < 1e-8 {
+            return None;
+        }
+        crate::gfx::camera_sys::ray_intersect_y_plane(eye, dir, 0.0).map(|p| [p.x, p.y, p.z])
+    }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs
     fn respawn(&mut self) {

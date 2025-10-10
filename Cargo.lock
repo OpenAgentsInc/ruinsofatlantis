@@ -3139,6 +3139,8 @@ dependencies = [
  "pollster",
  "render_wgpu",
  "roa-assets",
+ "serde",
+ "serde_json",
  "server_core",
  "tempfile",
  "wasm-bindgen-futures",

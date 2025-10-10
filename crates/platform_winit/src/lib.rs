@@ -234,6 +234,8 @@ struct App {
     boot: BootMode,
     #[allow(dead_code)]
     picker: ZonePickerModel,
+    // Builder mode state (campaign_builder only)
+    builder: BuilderState,
 }
 
 impl Default for App {
@@ -260,8 +262,73 @@ impl Default for App {
             sent_destr_instances: std::collections::HashSet::new(),
             boot: BootMode::Picker,
             picker: Default::default(),
+            builder: Default::default(),
         }
     }
+}
+
+#[derive(Default, Clone)]
+struct BuilderState {
+    active: bool,
+    yaw_deg: f32,
+    markers: Vec<SpawnMarker>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SpawnMarker {
+    id: String,
+    kind: String,
+    pos: [f32; 3],
+    yaw_deg: f32,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SceneDoc {
+    version: String,
+    seed: i64,
+    layers: Vec<serde_json::Value>,
+    instances: Vec<serde_json::Value>,
+    logic: SceneLogic,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SceneLogic {
+    triggers: Vec<serde_json::Value>,
+    spawns: Vec<SpawnMarker>,
+    waypoints: Vec<serde_json::Value>,
+    links: Vec<serde_json::Value>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn data_scene_path(slug: &str) -> std::path::PathBuf {
+    let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let data = here.join("../../data");
+    data.join("zones").join(slug).join("scene.json")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn ensure_scene_parent(path: &std::path::Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn load_scene(path: &std::path::Path) -> Option<SceneDoc> {
+    let txt = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&txt).ok()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_scene(path: &std::path::Path, mut doc: SceneDoc) -> anyhow::Result<()> {
+    if doc.version.is_empty() {
+        doc.version = "1.0.0".into();
+    }
+    let json = serde_json::to_string_pretty(&doc)?;
+    std::fs::write(path, json)?;
+    Ok(())
 }
 
 impl ApplicationHandler for App {
@@ -559,6 +626,39 @@ impl ApplicationHandler for App {
                         self.picker.selected,
                     );
                 }
+                // Builder overlay when running the Campaign Builder zone
+                if let BootMode::Running { slug } = &self.boot
+                    && slug.as_str() == "campaign_builder"
+                    && self.builder.active
+                {
+                    let mut lines: Vec<String> = Vec::new();
+                    lines.push(format!(
+                        "Markers: {}   Yaw: {:.0}°",
+                        self.builder.markers.len(),
+                        self.builder.yaw_deg
+                    ));
+                    lines.push(
+                        "Enter: place   Q/E or Wheel: rotate   X: export   I: import   B: exit"
+                            .into(),
+                    );
+                    for (i, m) in self.builder.markers.iter().enumerate().take(10) {
+                        lines.push(format!(
+                            "#{:02} {} [{:.1},{:.1},{:.1}] yaw={:.0}°",
+                            i + 1,
+                            m.kind,
+                            m.pos[0],
+                            m.pos[1],
+                            m.pos[2],
+                            m.yaw_deg
+                        ));
+                    }
+                    state.draw_picker_overlay(
+                        "Campaign Builder",
+                        "B toggle   Enter place   Q/E rotate   I import   X export",
+                        &lines,
+                        0,
+                    );
+                }
                 if let Err(err) = state.render_with_window(window) {
                     match err {
                         SurfaceError::Lost | SurfaceError::Outdated => {
@@ -581,6 +681,80 @@ impl ApplicationHandler for App {
                             "zone picker: failed to load zone '{}': snapshot missing or invalid",
                             slug
                         );
+                    }
+                }
+            }
+            // Builder key handling (Campaign Builder zone only)
+            WindowEvent::KeyboardInput { event: kev, .. } => {
+                if let BootMode::Running { slug } = &self.boot {
+                    if slug.as_str() == "campaign_builder" {
+                        use winit::event::ElementState;
+                        use winit::keyboard::KeyCode as KC;
+                        let pressed = matches!(kev.state, ElementState::Pressed);
+                        if let winit::keyboard::PhysicalKey::Code(code) = kev.physical_key {
+                            match code {
+                                KC::KeyB if pressed => {
+                                    self.builder.active = !self.builder.active;
+                                    return;
+                                }
+                                KC::Enter if pressed && self.builder.active => {
+                                    if let Some(pos) = state.center_ray_hit_y0() {
+                                        let m = SpawnMarker {
+                                            id: format!("m{:04}", self.builder.markers.len() + 1),
+                                            kind: "tree.default".into(),
+                                            pos,
+                                            yaw_deg: self.builder.yaw_deg.rem_euclid(360.0),
+                                            tags: Vec::new(),
+                                        };
+                                        self.builder.markers.push(m);
+                                    }
+                                    return;
+                                }
+                                KC::KeyQ if pressed && self.builder.active => {
+                                    self.builder.yaw_deg =
+                                        (self.builder.yaw_deg - 15.0).rem_euclid(360.0);
+                                    return;
+                                }
+                                KC::KeyE if pressed && self.builder.active => {
+                                    self.builder.yaw_deg =
+                                        (self.builder.yaw_deg + 15.0).rem_euclid(360.0);
+                                    return;
+                                }
+                                KC::KeyX if pressed && self.builder.active => {
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        let path = data_scene_path(slug);
+                                        ensure_scene_parent(&path);
+                                        let mut doc = load_scene(&path).unwrap_or(SceneDoc {
+                                            version: "1.0.0".into(),
+                                            seed: 0,
+                                            layers: vec![],
+                                            instances: vec![],
+                                            logic: SceneLogic {
+                                                triggers: vec![],
+                                                spawns: vec![],
+                                                waypoints: vec![],
+                                                links: vec![],
+                                            },
+                                        });
+                                        doc.logic.spawns = self.builder.markers.clone();
+                                        let _ = save_scene(&path, doc);
+                                    }
+                                    return;
+                                }
+                                KC::KeyI if pressed && self.builder.active => {
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        let path = data_scene_path(slug);
+                                        if let Some(doc) = load_scene(&path) {
+                                            self.builder.markers = doc.logic.spawns;
+                                        }
+                                    }
+                                    return;
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                 }
             }

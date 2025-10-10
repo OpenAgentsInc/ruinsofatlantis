@@ -111,6 +111,25 @@ pub fn compute_local_orbit_offsets(
     (off, look_off)
 }
 
+/// Intersect a ray `(origin + t*dir)` with a horizontal plane at `y = y_plane`.
+/// Returns the intersection point if `t > 0` (in front of the origin).
+pub fn ray_intersect_y_plane(
+    origin: glam::Vec3,
+    dir: glam::Vec3,
+    y_plane: f32,
+) -> Option<glam::Vec3> {
+    let dy = dir.y;
+    if dy.abs() < 1e-6 {
+        return None;
+    }
+    let t = (y_plane - origin.y) / dy;
+    if t > 0.0 {
+        Some(origin + dir * t)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +183,21 @@ mod tests {
         // It should move, but not equal the new ideal immediately
         assert_ne!(prev, newp);
         assert!(newp.distance(off1) > 0.01);
+    }
+
+    #[test]
+    fn ray_hits_y0_in_front() {
+        let o = glam::vec3(0.0, 5.0, 0.0);
+        let d = glam::vec3(0.0, -1.0, 0.0);
+        let p = ray_intersect_y_plane(o, d, 0.0).expect("hit");
+        assert!((p.y - 0.0).abs() < 1e-5);
+        assert!((p.x.abs() + p.z.abs()) < 1e-5);
+    }
+
+    #[test]
+    fn ray_parallel_no_hit() {
+        let o = glam::vec3(0.0, 5.0, 0.0);
+        let d = glam::vec3(1.0, 0.0, 0.0);
+        assert!(ray_intersect_y_plane(o, d, 0.0).is_none());
     }
 }
