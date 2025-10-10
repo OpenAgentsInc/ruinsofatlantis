@@ -432,7 +432,8 @@ impl Renderer {
                         .sensitivity_deg_per_count
                         .to_radians();
                     self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx * to_rad);
-                    self.cam_orbit_pitch = (self.cam_orbit_pitch - dy * to_rad).clamp(-1.2, 1.2);
+                    // Flip vertical: moving mouse up increases pitch (camera tilts up)
+                    self.cam_orbit_pitch = (self.cam_orbit_pitch + dy * to_rad).clamp(-1.2, 1.2);
                 }
                 // Track last cursor position
                 self.last_cursor_pos = Some((position.x, position.y));
@@ -463,7 +464,8 @@ impl Renderer {
                 .sensitivity_deg_per_count
                 .to_radians();
             self.cam_orbit_yaw = wrap_angle(self.cam_orbit_yaw - dx * to_rad);
-            self.cam_orbit_pitch = (self.cam_orbit_pitch - dy * to_rad).clamp(-1.2, 1.2);
+            // Flip vertical: moving mouse up increases pitch (camera tilts up)
+            self.cam_orbit_pitch = (self.cam_orbit_pitch + dy * to_rad).clamp(-1.2, 1.2);
         }
     }
 }
