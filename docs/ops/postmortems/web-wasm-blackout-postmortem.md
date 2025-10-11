@@ -63,5 +63,4 @@ Action items (owner → status)
 - Re‑enable tonemap (linear ACES approx) → pending (stage 2)
 - Re‑enable gentle grade → pending (stage 3)
 - Consider behind‑the‑scenes feature flag to flip between “simple present” and “full present” without source edits → pending
-- Add a short “present path” page under `docs/systems/` → pending
-
+- Add a short “present path” page under `docs/gdd/11-technical/graphics/` → pending

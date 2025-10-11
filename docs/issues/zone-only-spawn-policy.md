@@ -40,7 +40,7 @@ Work Items
 
 6) Picker + docs
    - Ensure Zone Picker displays only baked zones (no implicit demo). Wizard Woods remains a demo by virtue of its zone logic.
-   - Update `docs/systems/zones.md` with the “zone‑only spawns” contract and the authoritative apply path.
+- Update `docs/gdd/08-zones-cosmology/zones-system.md` with the “zone‑only spawns” contract and the authoritative apply path.
 
 7) Tests & Gates
    - Add unit tests under `server_core` for `boot_with_zone()` applying logic deterministically.
@@ -66,6 +66,5 @@ Acceptance Criteria
 References
 - platform_winit demo spawns: crates/platform_winit/src/lib.rs
 - renderer demo FX path: crates/render_wgpu/src/gfx/renderer/update.rs (PortalOpen loop)
-- zones pipeline: docs/systems/zones.md, crates/data_runtime/src/zone_snapshot.rs, tools/zone-bake
+- zones pipeline: docs/gdd/08-zones-cosmology/zones-system.md, crates/data_runtime/src/zone_snapshot.rs, tools/zone-bake
 - Architecture: docs/architecture/ECS_ARCHITECTURE_GUIDE.md (server‑auth, presentation‑only client)
-

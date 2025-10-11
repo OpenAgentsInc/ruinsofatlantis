@@ -89,7 +89,7 @@ Risks & Mitigations
 
 Docs & Ownership
 - Update `src/README.md` to mention clothing composition under gfx.
-- Add a short `docs/systems/clothing.md` for skeleton compatibility, masking policy, and performance guidance.
+- Add a short `docs/gdd/11-technical/graphics/clothing.md` for skeleton compatibility, masking policy, and performance guidance.
 - Owners: Graphics (render_wgpu), Assets (LFS), Tools team (viewer toggles).
 
 Out of Scope / Future
@@ -360,7 +360,7 @@ Our UBC‑based characters currently render as a single skinned body with no wea
 
 ### Docs & Ownership
 
-* [ ] `docs/systems/clothing.md` (assets, sockets, hide rules, inflate).
+* [ ] `docs/gdd/11-technical/graphics/clothing.md` (assets, sockets, hide rules, inflate).
 * **Owners:** Graphics (render_wgpu), Tools (viewer), Content (assets).
 
 ### Out of Scope (Future)

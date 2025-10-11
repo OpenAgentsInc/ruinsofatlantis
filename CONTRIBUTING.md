@@ -5,12 +5,12 @@ Thanks for helping build Ruins of Atlantis.
 - Branch from `main` using `area/summary` (e.g., `gfx/fix-bottom-ghost`).
 - Keep changes focused. One PR per logical change.
 - Always run `cargo xtask ci` locally before pushing.
-- Update GDD and `docs/systems/*.md` when design‑level behavior changes.
+- Update GDD and `docs/gdd/**` when design‑level behavior changes.
 - Include screenshots for rendering/UI changes; perf note if GPU cost changed ≥0.5 ms.
 
 ## PR checklist
 - [ ] `cargo xtask ci` passes (fmt, clippy -D warnings, tests, schema)
-- [ ] Updated docs (GDD, docs/systems)
+- [ ] Updated docs (GDD, docs/gdd)
 - [ ] Added/updated tests (unit + golden if packs changed)
 - [ ] SRD attribution in `NOTICE` if needed
 
@@ -20,4 +20,3 @@ Thanks for helping build Ruins of Atlantis.
 
 ## Ownership
 See `CODEOWNERS` for auto‑requested reviewers per path.
-

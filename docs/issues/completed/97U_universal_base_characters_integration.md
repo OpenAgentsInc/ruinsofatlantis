@@ -69,7 +69,7 @@ Acceptance
 - Assets resolve via relative paths when the app is run from repo root.
 
 References
-- Loader details and viewer tips: `docs/systems/model_loading.md`.
+- Loader details and viewer tips: `docs/gdd/11-technical/graphics/model-loading.md`.
 
 Notes
 - File size / LFS: add `*.gltf`, `*.bin`, and textures to LFS if they exceed thresholds; preserve vendor folder structure.

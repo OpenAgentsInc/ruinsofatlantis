@@ -78,7 +78,7 @@ Here are the practical options to automatically generate Rust-based documentatio
   Recommended plan
 
   - Short term (low friction, Rust-native):
-      - Add a “docs aggregator” crate (dev_docs) to include key docs from docs/systems/** and top-level README.
+      - Add a “docs aggregator” crate (dev_docs) to include key docs from docs/gdd/** and top-level README.
       - Add an xtask command xtask docs to run cargo doc -p dev_docs --no-deps.
       - Optional: add #![doc = include_str!("../README.md")] to crates with useful top-level context; start adding /// to public APIs we rely on (renderer, ECS
   components, data_runtime loaders).

@@ -4,7 +4,7 @@ Log start: committing incremental changes with pre-push checks green. This file 
 
 Read/Context
 - Read gh issue #112 (plan includes data model, schedule wiring, replication, tests).
-- Skimmed docs: `docs/ECS.md`, `docs/ECS_ARCHITECTURE_GUIDE.md`, `docs/systems/voxel_destruction_status.md`, `docs/research/hybrid-voxel-system.md`.
+- Skimmed docs: `docs/ECS.md`, `docs/ECS_ARCHITECTURE_GUIDE.md`, `docs/gdd/11-technical/destructibles/status.md`, `docs/research/hybrid-voxel-system.md`.
 - Repo already has: voxel grid (`crates/voxel_proxy`), greedy mesher (`crates/voxel_mesh`), server destructible helpers (`crates/server_core/src/destructible.rs`), an orchestrator for a single grid (`crates/server_core/src/tick.rs`), projectile collision producing `CarveRequest` (`crates/server_core/src/systems/projectiles.rs`), net types for `ChunkMeshDelta` and `DestructibleInstance` (`crates/net_core/src/snapshot.rs`), and client buffer applying chunk-mesh deltas (`crates/client_core/src/replication.rs`).
 
 Plan (incremental)

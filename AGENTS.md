@@ -78,7 +78,7 @@ IMPORTANT: Keep `src/README.md` current
   - Environment/World → `docs/gdd/12-environment/*`
   - Rules: Spell & Ability System → `docs/gdd/13-rules/spell-ability-system.md`
 - When asked to “update the GDD”, edit the specific `docs/gdd/**` file. Only adjust `GDD.md` if adding a new top‑level index entry or changing link targets.
-- Cross‑link to `docs/systems/**` and `docs/graphics/**` instead of duplicating implementation details in the GDD.
+- Systems docs now live under `docs/gdd/11-technical/**`. Cross‑link within `docs/gdd` (e.g., from `11-technical/overview.md`) and to `docs/graphics/**` where shader/graphics specifics apply.
 - SRD changes: if scope/terminology/attribution is affected, update `docs/gdd/03-srd/scope-implementation.md` and ensure `NOTICE` is correct.
 - Searching: use ripgrep to find headings quickly (e.g., `rg -n "^## .*Zones" docs/gdd`).
 - New topics: add a focused file under the closest folder and include a brief intro; update `docs/gdd/README.md` (and `GDD.md` if it’s a new index item).
@@ -89,7 +89,7 @@ IMPORTANT: Keep `src/README.md` current
 - Never commit uncompiled packs under `/packs` without running `cargo xtask build-packs`.
 - Never add binary assets outside LFS. Track large binaries via git‑lfs.
 - Always keep the repo compiling with tests green before handoff.
-- Always update GDD and `docs/systems/*.md` when design behavior changes.
+- Always update GDD and `docs/gdd/**` when design behavior changes.
 
 ## Input & Keybinding Policy
 - Do not bind default gameplay or debug actions to function keys (F1–F12). Browsers and OSes often reserve these; they are unreliable on the web.
@@ -258,7 +258,7 @@ Rule: If a PR changes GPU cost by ≥0.5 ms, include a perf note + capture.
 ### Data Change Checklist
 - [ ] Updated `/data/**` and validated (`cargo xtask schema-check`)
 - [ ] Rebuilt packs (`cargo xtask build-packs`) and committed `/packs/**`
-- [ ] Updated docs in `/docs/systems/*.md` or `GDD.md`
+- [ ] Updated docs in `docs/gdd/**` and/or `GDD.md`
 - [ ] Added/updated tests (unit + golden)
 - [ ] Updated `NOTICE` for SRD attribution when needed
 
@@ -286,4 +286,4 @@ Rule: If a PR changes GPU cost by ≥0.5 ms, include a perf note + capture.
 ## Security & Configuration Tips
 - Never commit secrets. Use env vars and a `.env.example`; ignore real `.env` files.
 - Prefer local config under `config/` with sample defaults; document required vars in `README.md`.
-- Telemetry: See `docs/systems/telemetry.md` for how to use logs/metrics/traces. Enable it when working on server systems or perf/observability tasks. Configure via `data/config/telemetry.toml` or env (`LOG_LEVEL`, `METRICS_ADDR`, etc.). Client dev typically uses pretty console logs only.
+- Telemetry: See `docs/gdd/11-technical/telemetry.md` for how to use logs/metrics/traces. Enable it when working on server systems or perf/observability tasks. Configure via `data/config/telemetry.toml` or env (`LOG_LEVEL`, `METRICS_ADDR`, etc.). Client dev typically uses pretty console logs only.

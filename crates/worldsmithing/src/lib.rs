@@ -220,6 +220,12 @@ impl WorldsmithingState {
     }
 }
 
+impl Default for WorldsmithingState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum PlaceError {
     #[error("zone cap reached ({0})")]
@@ -249,18 +255,10 @@ pub struct Rules {
     pub allowed_kinds: std::collections::HashSet<String>,
 }
 
+#[derive(Default)]
 pub struct Builder {
     caps: Caps,
     rules: Rules,
-}
-
-impl Default for Builder {
-    fn default() -> Self {
-        Self {
-            caps: Caps::default(),
-            rules: Rules::default(),
-        }
-    }
 }
 
 impl Builder {
