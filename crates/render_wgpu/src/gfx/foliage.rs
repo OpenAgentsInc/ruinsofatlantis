@@ -31,26 +31,6 @@ pub fn build_trees(
     zone_slug: &str,
     vegetation: Option<(usize, u32)>,
 ) -> Result<TreesGpu> {
-    // Hard disable when manifest requests zero trees.
-    if let Some((count, _)) = vegetation
-        && count == 0
-    {
-        log::debug!("trees disabled by manifest (count=0)");
-        let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("trees-instances"),
-            contents: &[],
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        // Create a small dummy mesh (cube) that will never be drawn since count=0.
-        let (vb, ib, index_count) = super::mesh::create_cube(device);
-        return Ok(TreesGpu {
-            instances,
-            count: 0,
-            vb,
-            ib,
-            index_count,
-        });
-    }
     // Prefer baked instances if available and sane, else scatter using vegetation params.
     let mut trees_models_opt = if std::env::var("RA_TREES_PROCEDURAL")
         .map(|v| v == "1")
@@ -70,6 +50,28 @@ pub fn build_trees(
             models.len()
         );
         trees_models_opt = None;
+    }
+    // If no baked snapshot is present and vegetation explicitly sets tree_count=0,
+    // disable trees. Otherwise, use baked snapshot (if any), falling back to procedural.
+    if trees_models_opt.is_none()
+        && let Some((count, _)) = vegetation
+        && count == 0
+    {
+        log::debug!("trees disabled by manifest (count=0) and no baked snapshot present");
+        let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("trees-instances"),
+            contents: &[],
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        // Create a small dummy mesh (cube) that will never be drawn since count=0.
+        let (vb, ib, index_count) = super::mesh::create_cube(device);
+        return Ok(TreesGpu {
+            instances,
+            count: 0,
+            vb,
+            ib,
+            index_count,
+        });
     }
     let mut trees_instances_cpu: Vec<super::types::Instance> =
         if let Some(models) = &trees_models_opt {

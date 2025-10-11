@@ -5,9 +5,15 @@
   "instances": [],
   "logic": {
     "triggers": [],
-    "spawns": [],
+    "spawns": [
+      {
+        "id": "t0001",
+        "kind": "tree.default",
+        "pos": [4.0, 0.0, -6.0],
+        "yaw_deg": 45.0
+      }
+    ],
     "waypoints": [],
     "links": []
   }
 }
-

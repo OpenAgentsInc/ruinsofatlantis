@@ -179,10 +179,26 @@ pub fn load_terrain_snapshot(slug: &str) -> Option<TerrainCPU> {
 }
 
 pub fn load_trees_snapshot(slug: &str) -> Option<Vec<[[f32; 4]; 4]>> {
-    let path = snap_dir(slug).join("trees.json");
-    let txt = fs::read_to_string(&path).ok()?;
-    let tj: TreesSnapshotJson = serde_json::from_str(&txt).ok()?;
-    Some(tj.models)
+    // 1) workspace data/zones/<slug>/snapshot.v1/trees.json
+    let primary = snap_dir(slug).join("trees.json");
+    if let Ok(txt) = fs::read_to_string(&primary)
+        && let Ok(tj) = serde_json::from_str::<TreesSnapshotJson>(&txt)
+    {
+        return Some(tj.models);
+    }
+    // 2) packs/zones/<slug>/snapshot.v1/trees.json (fallback)
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let packs = here
+        .join("../../packs/zones")
+        .join(slug)
+        .join("snapshot.v1")
+        .join("trees.json");
+    if let Ok(txt) = fs::read_to_string(&packs)
+        && let Ok(tj) = serde_json::from_str::<TreesSnapshotJson>(&txt)
+    {
+        return Some(tj.models);
+    }
+    None
 }
 
 pub fn write_terrain_snapshot(slug: &str, cpu: &TerrainCPU, seed: u32) -> Result<()> {
