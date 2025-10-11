@@ -555,8 +555,13 @@ impl ApplicationHandler for App {
                                         let zp = client_core::zone_client::ZonePresentation::load(
                                             &slug_clone,
                                         )?;
-                                        // Decode UBC rig CPU-side off the UI thread (best-effort)
-                                        let pc_cpu = {
+                                        // Decode UBC rig CPU-side off the UI thread (best-effort),
+                                        // but skip for authoring/demo zones that should not load actors.
+                                        let pc_cpu = if slug_clone == "campaign_builder"
+                                            || slug_clone == "cc_demo"
+                                        {
+                                            None
+                                        } else {
                                             use roa_assets::skinning::load_gltf_skinned;
                                             let ubc_path = std::path::Path::new(env!(
                                                 "CARGO_MANIFEST_DIR"
