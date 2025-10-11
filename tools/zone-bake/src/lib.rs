@@ -49,6 +49,7 @@ pub mod api {
         #[derive(serde::Deserialize)]
         struct ManifestMin {
             slug: String,
+            #[allow(dead_code)]
             display_name: String,
             #[allow(dead_code)]
             terrain: serde_json::Value,
