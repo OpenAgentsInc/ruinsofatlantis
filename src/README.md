@@ -37,6 +37,14 @@ Workspace crates (added for modularization)
 - H: hide/show HUD
 - O: 5s automated orbit for screenshots
 
+Worldsmithing (Campaign Builder zone)
+- 1: select Place Tree
+- B: toggle builder overlay (help + counts)
+- Enter / Left Click: confirm placement
+- Q/E or Mouse Wheel: rotate ±15° (Ctrl + Wheel: ±1°)
+- X / I: export / import authoring data
+- Z: undo last placement (single step)
+
 Notes
 - Default is third‑person MMO with orbit and auto‑face.
 - Auto‑face (camera → character): normal delay ≈ 0.25 s; while RMB is held, delay ≈ 0.125 s. For large swings (>90°) the player turns immediately, trailing just under 90°, then finishes after the delay.
