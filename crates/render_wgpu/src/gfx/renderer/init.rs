@@ -38,18 +38,13 @@ use crate::gfx::{
 };
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
-    // Only load heavy actor/NPC assets for combat/demo zones. For lightweight
-    // zones like `campaign_builder` and `cc_demo`, skip skinned rigs entirely.
-    let load_actor_assets = match std::env::var("ROA_ZONE") {
-        Ok(slug) => {
-            // Derive per-zone UI/controls policy and use it as a proxy for whether
-            // actor rigs (PC/NPCs/wizards) are needed.
-            let pol = compute_zone_policy_for_slug(slug.as_str());
-            // Load actors only when casting or HUD/gameplay are enabled (e.g., wizard_woods)
-            pol.allow_casting || pol.show_player_hud
-        }
-        Err(_) => false,
-    };
+    // Decide what to load:
+    // - PC rig: always load (third-person camera), regardless of HUD/casting.
+    // - NPC/demo actors (wizard ring, zombies, DK, Sorceress): only for combat/demo zones.
+    let zone_slug = std::env::var("ROA_ZONE").unwrap_or_default();
+    let pol = compute_zone_policy_for_slug(zone_slug.as_str());
+    let load_pc_assets = true;
+    let load_npc_assets = pol.allow_casting || pol.show_player_hud;
 
     // --- Instance + Surface + Adapter (with backend fallback) ---
     fn backend_from_env() -> Option<wgpu::Backends> {
@@ -169,7 +164,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     log::info!(
         "init: zone='{}' policy allow_casting={} show_hud={}",
         std::env::var("ROA_ZONE").unwrap_or_else(|_| "<picker>".into()),
-        load_actor_assets,
+        load_npc_assets,
         compute_zone_policy_for_slug(&std::env::var("ROA_ZONE").unwrap_or_else(|_| "".into()))
             .show_player_hud
     );
@@ -807,7 +802,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         (ruins_gpu.vb, ruins_gpu.ib, ruins_gpu.index_count);
 
     // Load wizard GLTF, possibly merging UVs from simple loader for robustness
-    let skinned_cpu = if load_actor_assets {
+    let skinned_cpu = if load_npc_assets {
         load_gltf_skinned(&asset_path("assets/models/wizard.gltf"))
             .context("load skinned wizard.gltf")?
     } else {
@@ -867,7 +862,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let wizard_index_count = skinned_cpu.indices.len() as u32;
 
     // Zombie assets (skinned)
-    let (zombie_cpu, zombie_vb, zombie_ib, zombie_index_count) = if load_actor_assets {
+    let (zombie_cpu, zombie_vb, zombie_ib, zombie_index_count) = if load_npc_assets {
         let a = zombies::load_assets(&device).context("load zombie assets")?;
         (a.cpu, a.vb, a.ib, a.index_count)
     } else {
@@ -979,7 +974,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_instances,
         pc_palettes_buf,
         pc_palettes_bg,
-    ) = if load_actor_assets {
+    ) = if load_pc_assets {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
         let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
@@ -1131,7 +1126,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _dk_mat_buf,
         _dk_tex_view,
         _dk_sampler,
-    ) = if load_actor_assets {
+    ) = if load_npc_assets {
         let a =
             super::super::deathknight::load_assets(&device).context("load deathknight assets")?;
         let cpu = a.cpu;
@@ -1260,7 +1255,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     });
 
     // Sorceress — gate under actor assets
-    if !load_actor_assets { /* leave placeholders below */ }
+    if !load_npc_assets { /* leave placeholders below */ }
     let sorc_cfg = data_runtime::configs::sorceress::load_default().unwrap_or_default();
     let (
         sorc_cpu,
@@ -1272,7 +1267,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _sorc_mat_buf,
         _sorc_tex_view,
         _sorc_sampler,
-    ) = if !load_actor_assets {
+    ) = if !load_npc_assets {
         let dummy = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("sorc-empty"),
             size: 4,
