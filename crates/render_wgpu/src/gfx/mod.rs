@@ -655,6 +655,36 @@ impl Renderer {
             .map(|b| compute_zone_policy_for_slug(b.slug.as_str()))
             .unwrap_or_default();
         self.zone_policy = policy;
+
+        // Rebuild zone-dependent instancing (trees, rocks) when a real zone is attached.
+        if let Some(b) = &self.zone_batches
+            && b.slug != "<picker>"
+        {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Trees: prefer baked snapshot for slug; fall back to procedural using manifest vegetation
+                let veg = data_runtime::zone::load_zone_manifest(&b.slug)
+                    .ok()
+                    .and_then(|m| m.vegetation)
+                    .map(|v| (v.tree_count as usize, v.tree_seed));
+                if let Ok(tg) = foliage::build_trees(&self.device, &self.terrain_cpu, &b.slug, veg)
+                {
+                    self.trees_instances = tg.instances;
+                    self.trees_count = tg.count;
+                    self.trees_vb = tg.vb;
+                    self.trees_ib = tg.ib;
+                    self.trees_index_count = tg.index_count;
+                }
+                // Rocks: rebuild too so distribution is deterministic per-zone
+                if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &b.slug, None) {
+                    self.rocks_instances = rg.instances;
+                    self.rocks_count = rg.count;
+                    self.rocks_vb = rg.vb;
+                    self.rocks_ib = rg.ib;
+                    self.rocks_index_count = rg.index_count;
+                }
+            }
+        }
     }
 
     // Placeholder: tree instancing is built at init via foliage module.
