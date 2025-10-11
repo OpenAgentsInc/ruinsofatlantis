@@ -178,6 +178,9 @@ fn snapshot_is_collapsed(models: &[[[f32; 4]; 4]]) -> bool {
     if models.is_empty() {
         return true;
     }
+    if models.len() == 1 {
+        return false;
+    }
     let mut min = [f32::INFINITY; 3];
     let mut max = [f32::NEG_INFINITY; 3];
     for m in models {
