@@ -18,4 +18,5 @@ pub mod upload_adapter;
 pub mod voxel_upload;
 pub(crate) use attachments::Attachments;
 mod input;
+#[path = "update/mod.rs"]
 mod update;

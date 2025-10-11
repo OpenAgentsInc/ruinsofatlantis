@@ -39,6 +39,7 @@ mod scene;
 mod sky;
 mod sorceress;
 pub mod terrain;
+#[path = "ui/mod.rs"]
 mod ui;
 mod util;
 #[cfg(feature = "vox_onepath_demo")]

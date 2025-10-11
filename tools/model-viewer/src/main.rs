@@ -11,6 +11,14 @@
 )]
 // Developer tool: relax noisy pedantic lints for readability.
 
+// Phase-one scaffolding: compile split modules (no behavior change)
+mod cli {}
+mod app {}
+mod viewer {}
+mod panels {}
+mod loader {}
+mod utils {}
+
 use std::path::PathBuf;
 
 use anyhow::Result;
