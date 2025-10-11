@@ -322,6 +322,13 @@ pub struct Renderer {
     // Sorceress
     sorc_palettes_buf: wgpu::Buffer,
     sorc_palettes_bg: wgpu::BindGroup,
+
+    // Ghost preview (worldsmithing): single-instance cube drawn with instanced pipeline
+    ghost_vb: wgpu::Buffer,
+    ghost_ib: wgpu::Buffer,
+    ghost_index_count: u32,
+    ghost_inst: wgpu::Buffer,
+    ghost_present: bool,
     sorc_joints: u32,
     #[allow(dead_code)]
     sorc_models: Vec<glam::Mat4>,
@@ -872,6 +879,28 @@ impl Renderer {
     pub fn terrain_height_at(&self, x: f32, z: f32) -> f32 {
         let (h, _n) = terrain::height_at(&self.terrain_cpu, x, z);
         h
+    }
+
+    /// Set a single ghost instance to draw (unit cube), with a world transform and tint color.
+    /// Pass None to clear the ghost.
+    pub fn set_ghost_instance(&mut self, inst: Option<crate::gfx::types::Instance>) {
+        if let Some(i) = inst {
+            self.queue
+                .write_buffer(&self.ghost_inst, 0, bytemuck::bytes_of(&i));
+            self.ghost_present = true;
+        } else {
+            self.ghost_present = false;
+        }
+    }
+
+    /// Convenience: set ghost from a model matrix and RGB color.
+    pub fn set_ghost_transform(&mut self, model: [[f32; 4]; 4], color: [f32; 3]) {
+        let inst = crate::gfx::types::Instance {
+            model,
+            color,
+            selected: 0.0,
+        };
+        self.set_ghost_instance(Some(inst));
     }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs

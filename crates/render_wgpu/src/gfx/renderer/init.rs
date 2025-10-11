@@ -1778,6 +1778,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Load explicit PC animation name mapping (optional)
     let pc_anim_cfg = data_runtime::configs::pc_animations::load_default().unwrap_or_default();
 
+    // Ghost preview buffers (unit cube + single-instance buffer)
+    let (ghost_vb, ghost_ib, ghost_index_count) = crate::gfx::mesh::create_cube(&device);
+    let ghost_inst = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("ghost-inst"),
+        size: std::mem::size_of::<crate::gfx::types::Instance>() as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
     let mut renderer = crate::gfx::Renderer {
         surface,
         device,
@@ -2060,6 +2069,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_rep_id_last: None,
         sorc_palettes_buf,
         sorc_palettes_bg,
+        ghost_vb,
+        ghost_ib,
+        ghost_index_count,
+        ghost_inst,
+        ghost_present: false,
         sorc_joints,
         sorc_models: sorc_models.clone(),
         sorc_cpu,

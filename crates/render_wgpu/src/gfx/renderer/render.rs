@@ -1206,6 +1206,30 @@ pub fn render_impl(
                     log::error!("validation after terrain: {:?}", e);
                 }
             }
+            // Ghost preview (worldsmithing): draw a single cube instance if present
+            if r.ghost_present {
+                if trace {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                }
+                let inst_pipe = if r.wire_enabled {
+                    r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                } else {
+                    &r.inst_pipeline
+                };
+                rp.set_pipeline(inst_pipe);
+                rp.set_bind_group(0, &r.globals_bg, &[]);
+                rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                rp.set_vertex_buffer(0, r.ghost_vb.slice(..));
+                rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                rp.set_index_buffer(r.ghost_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..r.ghost_index_count, 0, 0..1);
+                r.draw_calls += 1;
+                #[cfg(not(target_arch = "wasm32"))]
+                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after ghost: {:?}", e);
+                }
+            }
             // Trees
             // Show vegetation when not in Picker. Previously this was suppressed when
             // zone_batches existed; until zone-baked draws land, allow draws here too.

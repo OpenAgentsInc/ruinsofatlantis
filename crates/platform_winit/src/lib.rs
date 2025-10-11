@@ -653,6 +653,22 @@ impl ApplicationHandler for App {
                     && slug.as_str() == "campaign_builder"
                     && self.builder.active
                 {
+                    if let Some(mut pos) = state.center_ray_hit_y0() {
+                        // Snap Y to terrain height and visualize a ghost cube at placement pose
+                        let y = state.terrain_height_at(pos[0], pos[2]);
+                        pos[1] = y;
+                        let yaw = self.builder.yaw_deg.rem_euclid(360.0).to_radians();
+                        let (c, s) = (yaw.cos(), yaw.sin());
+                        let model = [
+                            [c, 0.0, s, 0.0],
+                            [0.0, 1.0, 0.0, 0.0],
+                            [-s, 0.0, c, 0.0],
+                            [pos[0], pos[1], pos[2], 1.0],
+                        ];
+                        state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
+                    } else {
+                        state.set_ghost_instance(None);
+                    }
                     let mut lines: Vec<String> = Vec::new();
                     let util = (self.builder.ws.cap_utilization() * 100.0).round();
                     lines.push(format!(
@@ -695,6 +711,8 @@ impl ApplicationHandler for App {
                 if let BootMode::Picker = self.boot
                     && let Some(slug) = state.take_picker_selected()
                 {
+                    // Clear any placement ghost when leaving builder overlay
+                    state.set_ghost_instance(None);
                     if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
                         let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
                         state.set_zone_batches(Some(gz));
