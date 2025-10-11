@@ -14,12 +14,12 @@ Here are the practical options to automatically generate Rust-based documentatio
   - How to run: cargo doc --workspace --all-features --no-deps
   - Pros:
       - Zero extra deps; integrates with doctests; supports intra-doc links.
-      - Can include Markdown files directly into docs: #![doc = include_str!("../README.md")] or #[doc = include_str!("../../docs/systems/zones.md")].
+      - Can include Markdown files directly into docs: #![doc = include_str!("../README.md")] or #[doc = include_str!("../../docs/gdd/08-zones-cosmology/zones-system.md")].
   - Cons:
       - Best for API and code-adjacent docs; not ideal for large design books.
   - What we’d add:
       - Add crate-level docs: #![doc = include_str!("../README.md")] per crate where useful.
-      - Sprinkle #[doc = include_str!(...)] modules to surface key docs from docs/systems/** (e.g., frame_graph, zones).
+      - Sprinkle #[doc = include_str!(...)] modules to surface key docs from docs/gdd/11-technical/** (e.g., frame graph, model loading, telemetry) and zones.
       - Optional: enforce docs on APIs with #![deny(missing_docs)] in crates ready for it.
       - Optional: add an xtask target: cargo xtask docs → runs cargo doc with flags and writes to dist/docs.
 
@@ -28,7 +28,7 @@ Here are the practical options to automatically generate Rust-based documentatio
   - What it is: A small workspace crate (e.g., dev_docs) whose sole purpose is to publish a rustdoc site composed of our Markdown files.
   - How it works: lib.rs contains modules like:
       - #![doc = include_str!("../../docs/README.md")]
-      - pub mod zones { #![doc = include_str!("../../docs/systems/zones.md")] }
+      - pub mod zones { #![doc = include_str!("../../docs/gdd/08-zones-cosmology/zones-system.md")] }
       - Repeat for other docs you want in the rustdoc site.
   - Pros:
       - Keeps one docs build tool (rustdoc).
@@ -104,10 +104,10 @@ What’s implemented now
 - Added a short‑term Rustdoc aggregator crate: `crates/dev_docs`.
   - Aggregates key Markdown docs via `include_str!` into a browsable Rustdoc site.
   - Wired into the workspace. Build locally with: `cargo doc -p dev_docs --no-deps --open`.
-  - Included docs: `docs/README.md`, `docs/gdd/README.md`, GDD Mechanics (overview, destructibility), and `docs/systems/**` (zones, telemetry, frame graph, model loading, sky/weather, terrain/biomes, controls, voxel destruction status, spells MVP), plus `docs/architecture/ECS_ARCHITECTURE_GUIDE.md`.
+  - Included docs: `docs/README.md`, `docs/gdd/README.md`, GDD Mechanics (overview, destructibility), and `docs/gdd/**` (zones, telemetry, frame graph, model loading, sky/weather, terrain/biomes, controls, voxel destruction status, spells), plus `docs/architecture/ECS_ARCHITECTURE_GUIDE.md`.
 - Cleaned up docs structure and links:
-  - Canonical Zones spec: `docs/systems/zones.md` (removed older duplicates).
-  - Telemetry moved to `docs/systems/telemetry.md` (removed `observability/` references).
+  - Canonical Zones spec: `docs/gdd/08-zones-cosmology/zones-system.md` (removed older duplicates).
+  - Telemetry is under `docs/gdd/11-technical/telemetry.md`.
   - GDD split linked and up to date; added “Destructibility” mechanics page.
 - Agent guidance updated (`AGENTS.md`) to use `docs/gdd/README.md` and keep work on `main` by default.
 

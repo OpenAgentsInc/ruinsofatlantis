@@ -1,8 +1,8 @@
-* Precompute SH/mitigation tables, area samplers, string interning → numeric IDs only at runtime.
-* Fixed timestep sim; seeded RNG streams; golden tests per spell.
+# Terrain & Biomes (Phase 1)
 
-**Future Work.**
+Deterministic CPU heightmap: size/extent/seed from `ZoneManifest`.
 
-* Class features/metamagic, item‑granted spells, aura stacking policies, network protocol finalization.
+- Normals computed on load; mesh uploaded once.
+- Tree scatter: slope/height filtered, seeded.
+- Optional baked snapshots under `packs/zones/<slug>/snapshot.v1/*`.
 
----

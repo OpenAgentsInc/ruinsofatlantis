@@ -62,6 +62,8 @@ Concrete recommendation
 
 * Volumetric clouds and aerial perspective; precipitation; moon/stars; cascaded shadows.
 
+See: `docs/gdd/12-environment/sky-weather.md` for the authoritative system doc.
+
 ---
 
 ## World: Terrain & Biomes
@@ -83,6 +85,8 @@ Concrete recommendation
   * **Trees** from GLB prototypes placed via **Poisson‑disk** (baked, instanced).
   * **Grass** as GPU‑instanced cards with density masks per chunk (baked).
 * Bake tool writes `snapshot.terrain.bin`, `snapshot.instances.bin`, masks, meta.
+
+See: `docs/gdd/12-environment/terrain-biomes.md` for the authoritative system doc.
 ---
 
 ## Tools: Worldsmithing (Authoring Pipeline)
@@ -91,4 +95,4 @@ Concrete recommendation
 - Authoring JSON (`scene.json`) lists `logic.spawns[]` for kinds like `tree.default`.
 - Bake writes grouped matrices per kind to `snapshot.v1/trees.json` for instanced rendering.
 - Renderer must bind complete groups even when assets are missing; use DefaultMaterial/DefaultMesh fallbacks.
-- See worldsmithing.md for technical details and crate boundaries.
+- See `docs/gdd/11-technical/worldsmithing.md` for technical details and crate boundaries.

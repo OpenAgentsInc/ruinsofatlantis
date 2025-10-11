@@ -94,9 +94,19 @@ pub mod api {
         use std::collections::HashMap;
         #[derive(serde::Serialize)]
         struct TreesSnapshotJson {
+            // legacy flat array (kept for compatibility)
             models: Vec<[[f32; 4]; 4]>,
             #[serde(skip_serializing_if = "HashMap::is_empty")]
             by_kind: HashMap<String, Vec<[[f32; 4]; 4]>>,
+            // grouped shape for instanced batching
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            kinds: Vec<TreesKindGroup>,
+            schema: &'static str,
+        }
+        #[derive(serde::Serialize)]
+        struct TreesKindGroup {
+            kind: String,
+            instances: Vec<[[f32; 4]; 4]>,
         }
         let mut trees_models: Vec<[[f32; 4]; 4]> = Vec::new();
         let mut by_kind: HashMap<String, Vec<[[f32; 4]; 4]>> = HashMap::new();
@@ -132,9 +142,18 @@ pub mod api {
             }
         }
         if !trees_models.is_empty() {
+            let kinds: Vec<TreesKindGroup> = by_kind
+                .iter()
+                .map(|(k, v)| TreesKindGroup {
+                    kind: k.clone(),
+                    instances: v.clone(),
+                })
+                .collect();
             let tj = TreesSnapshotJson {
                 models: trees_models,
                 by_kind,
+                kinds,
+                schema: "rua.snapshot.trees.v1",
             };
             let txt = serde_json::to_string_pretty(&tj)?;
             fs::write(snap.join("trees.json"), txt)?;
@@ -211,6 +230,10 @@ mod tests {
             .to_string();
         let txt = fs::read_to_string(&trees).expect("read trees.json");
         assert!(txt.contains("\"models\""), "trees.json missing models");
+        assert!(
+            txt.contains("\"kinds\""),
+            "trees.json missing grouped kinds"
+        );
         assert!(txt.contains("-2.0"), "translation Z not present");
     }
 

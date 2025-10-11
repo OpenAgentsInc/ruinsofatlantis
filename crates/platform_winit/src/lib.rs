@@ -224,6 +224,10 @@ struct App {
     last_time: Option<std::time::Instant>,
     #[cfg(target_arch = "wasm32")]
     last_time: Option<web_time::Instant>,
+    #[cfg(not(target_arch = "wasm32"))]
+    t0: std::time::Instant,
+    #[cfg(target_arch = "wasm32")]
+    t0: web_time::Instant,
     tick: u32,
     // Delta baseline for interest/deltas (per local client)
     baseline_tick: u64,
@@ -265,6 +269,10 @@ impl Default for App {
             last_sec_start: std::time::Instant::now(),
             #[cfg(target_arch = "wasm32")]
             last_sec_start: web_time::Instant::now(),
+            #[cfg(not(target_arch = "wasm32"))]
+            t0: std::time::Instant::now(),
+            #[cfg(target_arch = "wasm32")]
+            t0: web_time::Instant::now(),
             cmds_this_sec: 0,
             sent_destr_instances: std::collections::HashSet::new(),
             boot: BootMode::Picker,
@@ -274,11 +282,27 @@ impl Default for App {
     }
 }
 
-#[derive(Default, Clone)]
 struct BuilderState {
     active: bool,
     yaw_deg: f32,
-    markers: Vec<SpawnMarker>,
+    ws: worldsmithing::WorldsmithingState,
+}
+
+impl Default for BuilderState {
+    fn default() -> Self {
+        let mut rules = worldsmithing::Rules::default();
+        rules.allowed_kinds.insert("tree.default".into());
+        let caps = worldsmithing::Caps::default();
+        let ws = worldsmithing::Builder::new()
+            .caps(caps)
+            .rules(rules)
+            .build();
+        Self {
+            active: false,
+            yaw_deg: 0.0,
+            ws,
+        }
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -630,16 +654,18 @@ impl ApplicationHandler for App {
                     && self.builder.active
                 {
                     let mut lines: Vec<String> = Vec::new();
+                    let util = (self.builder.ws.cap_utilization() * 100.0).round();
                     lines.push(format!(
-                        "Markers: {}   Yaw: {:.0}°",
-                        self.builder.markers.len(),
-                        self.builder.yaw_deg
+                        "Placed: {}   Yaw: {:.0}°   Cap: {:.0}%",
+                        self.builder.ws.placed.len(),
+                        self.builder.yaw_deg,
+                        util
                     ));
                     lines.push(
-                        "Enter: place   Q/E or Wheel: rotate   X: export   I: import   B: exit"
+                        "Enter: place   Q/E or Wheel: rotate   X: export   I: import   Z: undo   B: exit"
                             .into(),
                     );
-                    for (i, m) in self.builder.markers.iter().enumerate().take(10) {
+                    for (i, m) in self.builder.ws.placed.iter().enumerate().take(10) {
                         lines.push(format!(
                             "#{:02} {} [{:.1},{:.1},{:.1}] yaw={:.0}°",
                             i + 1,
@@ -652,7 +678,7 @@ impl ApplicationHandler for App {
                     }
                     state.draw_picker_overlay(
                         "Campaign Builder",
-                        "B toggle   Enter place   Q/E rotate   I import   X export",
+                        "B toggle   Enter place   Q/E rotate   I import   X export   Z undo",
                         &lines,
                         0,
                     );
@@ -694,29 +720,43 @@ impl ApplicationHandler for App {
                         match code {
                             KC::KeyB if pressed => {
                                 self.builder.active = !self.builder.active;
+                                self.builder.ws.set_active(self.builder.active);
                             }
                             KC::Enter if pressed && self.builder.active => {
                                 if let Some(mut pos) = state.center_ray_hit_y0() {
                                     // Snap Y to terrain height at XZ so placed trees sit on ground.
                                     let y = state.terrain_height_at(pos[0], pos[2]);
                                     pos[1] = y;
-                                    let m = SpawnMarker {
-                                        id: format!("m{:04}", self.builder.markers.len() + 1),
-                                        kind: "tree.default".into(),
-                                        pos,
-                                        yaw_deg: self.builder.yaw_deg.rem_euclid(360.0),
-                                        tags: Vec::new(),
+                                    let yaw = self.builder.yaw_deg.rem_euclid(360.0);
+                                    let now_ms = {
+                                        #[cfg(not(target_arch = "wasm32"))]
+                                        {
+                                            self.t0.elapsed().as_millis() as u64
+                                        }
+                                        #[cfg(target_arch = "wasm32")]
+                                        {
+                                            self.t0.elapsed().as_millis() as u64
+                                        }
                                     };
-                                    self.builder.markers.push(m);
+                                    if let Err(e) =
+                                        self.builder.ws.place("tree.default", pos, yaw, now_ms)
+                                    {
+                                        log::warn!("builder: place rejected: {e}");
+                                    }
                                 }
                             }
                             KC::KeyQ if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
                                     (self.builder.yaw_deg - 15.0).rem_euclid(360.0);
+                                self.builder.ws.current_yaw_deg = self.builder.yaw_deg;
                             }
                             KC::KeyE if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
                                     (self.builder.yaw_deg + 15.0).rem_euclid(360.0);
+                                self.builder.ws.current_yaw_deg = self.builder.yaw_deg;
+                            }
+                            KC::KeyZ if pressed && self.builder.active => {
+                                let _ = self.builder.ws.undo_last();
                             }
                             KC::KeyX if pressed && self.builder.active => {
                                 #[cfg(not(target_arch = "wasm32"))]
@@ -735,7 +775,20 @@ impl ApplicationHandler for App {
                                             links: vec![],
                                         },
                                     });
-                                    doc.logic.spawns = self.builder.markers.clone();
+                                    let r3 = |x: f32| (x * 1000.0).round() / 1000.0;
+                                    doc.logic.spawns = self
+                                        .builder
+                                        .ws
+                                        .placed
+                                        .iter()
+                                        .map(|p| SpawnMarker {
+                                            id: p.id.clone(),
+                                            kind: p.kind.clone(),
+                                            pos: [r3(p.pos[0]), r3(p.pos[1]), r3(p.pos[2])],
+                                            yaw_deg: r3(p.yaw_deg),
+                                            tags: Vec::new(),
+                                        })
+                                        .collect();
                                     let _ = save_scene(&path, doc);
                                 }
                             }
@@ -744,7 +797,17 @@ impl ApplicationHandler for App {
                                 {
                                     let path = data_scene_path(slug);
                                     if let Some(doc) = load_scene(&path) {
-                                        self.builder.markers = doc.logic.spawns;
+                                        self.builder.ws.placed = doc
+                                            .logic
+                                            .spawns
+                                            .into_iter()
+                                            .map(|m| worldsmithing::PlacedTreeV1 {
+                                                id: m.id,
+                                                kind: m.kind,
+                                                pos: m.pos,
+                                                yaw_deg: m.yaw_deg,
+                                            })
+                                            .collect();
                                     }
                                 }
                             }

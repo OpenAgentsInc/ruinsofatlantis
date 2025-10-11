@@ -50,6 +50,7 @@ pub struct WorldsmithingState {
     pub current_yaw_deg: f32,
     pub placed: Vec<PlacedTreeV1>,
     caps: Caps,
+    rules: Rules,
     // simple rate limiter: store timestamps (ms since epoch or session start) of recent placements
     recent_ms: Vec<u64>,
 }
@@ -61,6 +62,7 @@ impl WorldsmithingState {
             current_yaw_deg: 0.0,
             placed: Vec::new(),
             caps: Caps::default(),
+            rules: Rules::default(),
             recent_ms: Vec::new(),
         }
     }
@@ -68,6 +70,14 @@ impl WorldsmithingState {
     pub fn with_caps(caps: Caps) -> Self {
         Self {
             caps,
+            ..Self::new()
+        }
+    }
+
+    pub fn with_rules(caps: Caps, rules: Rules) -> Self {
+        Self {
+            caps,
+            rules,
             ..Self::new()
         }
     }
@@ -100,6 +110,14 @@ impl WorldsmithingState {
         self.placed.len() * 100 / cap >= 80
     }
 
+    pub fn cap_utilization(&self) -> f32 {
+        if self.caps.max_trees_per_zone == 0 {
+            0.0
+        } else {
+            (self.placed.len() as f32) / (self.caps.max_trees_per_zone as f32)
+        }
+    }
+
     fn cleanup_rate_window(&mut self, now_ms: u64) {
         let window_start = now_ms.saturating_sub(1000);
         self.recent_ms.retain(|&t| t >= window_start);
@@ -116,6 +134,10 @@ impl WorldsmithingState {
         Ok(())
     }
 
+    fn kind_allowed(&self, k: &str) -> bool {
+        self.rules.allowed_kinds.is_empty() || self.rules.allowed_kinds.contains(k)
+    }
+
     pub fn place(
         &mut self,
         kind: &str,
@@ -123,6 +145,9 @@ impl WorldsmithingState {
         yaw_deg: f32,
         now_ms: u64,
     ) -> Result<&PlacedTreeV1, PlaceError> {
+        if !self.kind_allowed(kind) {
+            return Err(PlaceError::KindNotAllowed(kind.into()));
+        }
         self.can_place(now_ms)?;
         let id = Uuid::new_v4().to_string();
         let rec = PlacedTreeV1 {
@@ -136,18 +161,33 @@ impl WorldsmithingState {
         Ok(self.placed.last().unwrap())
     }
 
+    pub fn undo_last(&mut self) -> Option<PlacedTreeV1> {
+        self.placed.pop()
+    }
+
     pub fn export_json(
         &self,
         map_id: &str,
         engine_version: &str,
         now_iso8601: &str,
     ) -> Result<String, serde_json::Error> {
+        let r3 = |x: f32| (x * 1000.0).round() / 1000.0;
+        let objects: Vec<PlacedTreeV1> = self
+            .placed
+            .iter()
+            .map(|p| PlacedTreeV1 {
+                id: p.id.clone(),
+                kind: p.kind.clone(),
+                pos: [r3(p.pos[0]), r3(p.pos[1]), r3(p.pos[2])],
+                yaw_deg: r3(p.yaw_deg),
+            })
+            .collect();
         let file = PlantingFileV1 {
             schema: "rua.plantings.v1".into(),
             map_id: map_id.into(),
             coordinate_space: "world".into(),
             unit: "meters".into(),
-            objects: self.placed.clone(),
+            objects,
             created_at: now_iso8601.into(),
             engine_version: engine_version.into(),
         };
@@ -186,6 +226,8 @@ pub enum PlaceError {
     ZoneCapReached(u32),
     #[error("rate limited ({0}/s)")]
     RateLimited(u32),
+    #[error("kind not allowed: {0}")]
+    KindNotAllowed(String),
 }
 
 #[derive(Debug, Error)]
@@ -200,6 +242,42 @@ pub enum ImportError {
 pub struct ImportResult {
     pub placed: usize,
     pub map_id_mismatch: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Rules {
+    pub allowed_kinds: std::collections::HashSet<String>,
+}
+
+pub struct Builder {
+    caps: Caps,
+    rules: Rules,
+}
+
+impl Default for Builder {
+    fn default() -> Self {
+        Self {
+            caps: Caps::default(),
+            rules: Rules::default(),
+        }
+    }
+}
+
+impl Builder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn caps(mut self, c: Caps) -> Self {
+        self.caps = c;
+        self
+    }
+    pub fn rules(mut self, r: Rules) -> Self {
+        self.rules = r;
+        self
+    }
+    pub fn build(self) -> WorldsmithingState {
+        WorldsmithingState::with_rules(self.caps, self.rules)
+    }
 }
 
 #[cfg(test)]
@@ -276,5 +354,38 @@ mod tests {
         assert_eq!(res.placed, 1);
         assert!(res.map_id_mismatch);
         assert_eq!(t.placed.len(), 1);
+    }
+
+    #[test]
+    fn undo_last_removes_last() {
+        let mut s = WorldsmithingState::new();
+        s.place("tree.default", [0.0, 0.0, 0.0], 0.0, 0).unwrap();
+        s.place("tree.default", [1.0, 0.0, 0.0], 45.0, 1).unwrap();
+        let last = s.undo_last().unwrap();
+        assert_eq!(last.pos, [1.0, 0.0, 0.0]);
+        assert_eq!(s.placed.len(), 1);
+    }
+
+    #[test]
+    fn rules_disallow_non_allowed_kinds() {
+        let mut rules = Rules::default();
+        rules.allowed_kinds.insert("tree.default".into());
+        let mut s = Builder::new().rules(rules).build();
+        assert!(s.place("tree.default", [0.0, 0.0, 0.0], 0.0, 0).is_ok());
+        let e = s.place("tree.pine", [0.0, 0.0, 0.0], 0.0, 1).unwrap_err();
+        assert!(matches!(e, PlaceError::KindNotAllowed(_)));
+    }
+
+    #[test]
+    fn export_rounds_to_3dp() {
+        let mut s = WorldsmithingState::new();
+        s.place("tree.default", [1.23456, 0.0, -2.98765], 270.12345, 0)
+            .unwrap();
+        let json = s
+            .export_json("campaign_builder", "0.1.0", "2025-10-11T00:00:00Z")
+            .unwrap();
+        assert!(json.contains("1.235") || json.contains("1.234"));
+        assert!(json.contains("-2.988") || json.contains("-2.987"));
+        assert!(json.contains("270.123") || json.contains("270.124") || json.contains("270.122"));
     }
 }

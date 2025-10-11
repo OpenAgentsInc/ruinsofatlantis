@@ -53,5 +53,5 @@ Testing and feedback
 - Structured playtests to calibrate “how much is fun” for ambient vs. siege‑level destruction.
 
 Related systems
-- Tech notes: see `docs/systems/voxel_destruction_status.md` for current pipeline status and plans.
-- Zones: see `docs/systems/zones.md` for authoring, bake, and runtime loading.
+- Tech notes: see `docs/gdd/11-technical/destructibles/status.md` for current pipeline status and plans.
+- Zones: see `docs/gdd/08-zones-cosmology/zones-system.md` for authoring, bake, and runtime loading.

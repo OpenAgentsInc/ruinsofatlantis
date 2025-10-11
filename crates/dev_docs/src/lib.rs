@@ -25,31 +25,31 @@ pub mod gdd {
 
 pub mod systems {
     pub mod zones {
-        #![doc = include_str!("../../../docs/systems/zones.md")]
+        #![doc = include_str!("../../../docs/gdd/08-zones-cosmology/zones-system.md")]
     }
     pub mod telemetry {
-        #![doc = include_str!("../../../docs/systems/telemetry.md")]
+        #![doc = include_str!("../../../docs/gdd/11-technical/telemetry.md")]
     }
     pub mod frame_graph {
-        #![doc = include_str!("../../../docs/systems/frame_graph.md")]
+        #![doc = include_str!("../../../docs/gdd/11-technical/graphics/frame-graph.md")]
     }
     pub mod model_loading {
-        #![doc = include_str!("../../../docs/systems/model_loading.md")]
+        #![doc = include_str!("../../../docs/gdd/11-technical/graphics/model-loading.md")]
     }
     pub mod sky_weather {
-        #![doc = include_str!("../../../docs/systems/sky_weather.md")]
+        #![doc = include_str!("../../../docs/gdd/12-environment/sky-weather.md")]
     }
     pub mod terrain_biomes {
-        #![doc = include_str!("../../../docs/systems/terrain_biomes.md")]
+        #![doc = include_str!("../../../docs/gdd/12-environment/terrain-biomes.md")]
     }
     pub mod controls {
-        #![doc = include_str!("../../../docs/systems/controls.md")]
+        #![doc = include_str!("../../../docs/gdd/11-technical/input-controls.md")]
     }
     pub mod voxel_destruction_status {
-        #![doc = include_str!("../../../docs/systems/voxel_destruction_status.md")]
+        #![doc = include_str!("../../../docs/gdd/11-technical/destructibles/status.md")]
     }
     pub mod spells_mvp {
-        #![doc = include_str!("../../../docs/systems/spell_ability_system.md")]
+        #![doc = include_str!("../../../docs/gdd/13-rules/spell-ability-system.md")]
     }
 }
 
