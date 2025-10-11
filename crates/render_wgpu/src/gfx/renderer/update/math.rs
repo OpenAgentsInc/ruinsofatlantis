@@ -1,3 +1,4 @@
+#![allow(dead_code, clippy::manual_clamp)]
 //! Small math helpers and unit tests (scaffold).
 
 /// Clamp a value to [0, 1].
