@@ -113,6 +113,40 @@ impl VertexPosUv {
     };
 }
 
+// Position + Normal + UV (for textured static meshes)
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct VertexPosNrmUv {
+    pub pos: [f32; 3],
+    pub nrm: [f32; 3],
+    pub uv: [f32; 2],
+}
+
+impl VertexPosNrmUv {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<VertexPosNrmUv>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        // Use 0=pos, 1=nrm, 11=uv to avoid colliding with instance attributes 2..7
+        attributes: &[
+            wgpu::VertexAttribute {
+                shader_location: 0,
+                offset: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 1,
+                offset: 12,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            wgpu::VertexAttribute {
+                shader_location: 11,
+                offset: 24,
+                format: wgpu::VertexFormat::Float32x2,
+            },
+        ],
+    };
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Instance {

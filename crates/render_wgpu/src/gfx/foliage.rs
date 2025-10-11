@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 
+use crate::gfx::types::VertexPosNrmUv;
 use roa_assets::gltf::load_gltf_mesh;
 use wgpu::util::DeviceExt;
 
@@ -21,6 +22,8 @@ pub struct TreesGpu {
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub index_count: u32,
+    #[allow(dead_code)]
+    pub material_bg: Option<wgpu::BindGroup>,
 }
 
 /// Build trees for a zone, using a baked snapshot when available, otherwise
@@ -71,6 +74,7 @@ pub fn build_trees(
             vb,
             ib,
             index_count,
+            material_bg: None,
         });
     }
     let mut trees_instances_cpu: Vec<super::types::Instance> =
@@ -161,10 +165,11 @@ pub fn build_trees(
         vb,
         ib,
         index_count,
+        material_bg: None,
     })
 }
 
-fn path_for_kind(kind: &str) -> std::path::PathBuf {
+pub(crate) fn path_for_kind(kind: &str) -> std::path::PathBuf {
     // Support explicit Quaternius model names via kind="quaternius.<Model>"
     if let Some(rest) = kind.strip_prefix("quaternius.") {
         fn map_base(base: &str) -> String {
@@ -219,11 +224,12 @@ fn path_for_kind(kind: &str) -> std::path::PathBuf {
 /// Returns None if the snapshot has no kind grouping.
 pub fn build_trees_by_kind(
     device: &wgpu::Device,
+    _queue: &wgpu::Queue,
     terrain_cpu: &terrain::TerrainCPU,
     zone_slug: &str,
-) -> Option<Vec<TreesGpu>> {
+) -> Option<Vec<(String, TreesGpu)>> {
     let map = terrain::load_trees_snapshot_by_kind(zone_slug)?;
-    let mut out: Vec<TreesGpu> = Vec::new();
+    let mut out: Vec<(String, TreesGpu)> = Vec::new();
     for (kind, models) in map {
         // Convert models to Instances and snap Y to terrain
         let mut inst = terrain::instances_from_models(&models);
@@ -240,36 +246,120 @@ pub fn build_trees_by_kind(
             usage: wgpu::BufferUsages::VERTEX,
         });
         let mesh_path = path_for_kind(&kind);
-        let (vb, ib, index_count) = match load_gltf_mesh(&mesh_path) {
-            Ok(cpu) => {
+        // Load mesh with UVs via gltf::import
+        let (vb, ib, index_count) = match gltf::import(&mesh_path) {
+            Ok((doc, buffers, images)) => {
+                // Build VertexPosNrmUv and indices from all primitives
+                let mut verts: Vec<VertexPosNrmUv> = Vec::new();
+                let mut indices: Vec<u16> = Vec::new();
+                let mut base_tex: Option<(Vec<u8>, u32, u32)> = None;
+                for mesh in doc.meshes() {
+                    for prim in mesh.primitives() {
+                        let reader =
+                            prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                        let pos = reader
+                            .read_positions()
+                            .map(|it| it.collect::<Vec<_>>())
+                            .unwrap_or_default();
+                        let nrm = reader
+                            .read_normals()
+                            .map(|it| it.collect::<Vec<_>>())
+                            .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+                        let uv = reader
+                            .read_tex_coords(0)
+                            .map(|c| c.into_f32().collect::<Vec<_>>())
+                            .unwrap_or_else(|| vec![[0.0, 0.0]; pos.len()]);
+                        let base = verts.len() as u32;
+                        for i in 0..pos.len() {
+                            verts.push(VertexPosNrmUv {
+                                pos: pos[i],
+                                nrm: nrm[i],
+                                uv: uv[i],
+                            });
+                        }
+                        let idx_u32: Vec<u32> = match reader.read_indices() {
+                            Some(gltf::mesh::util::ReadIndices::U16(it)) => {
+                                it.map(|v| v as u32).collect()
+                            }
+                            Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                            Some(gltf::mesh::util::ReadIndices::U8(it)) => {
+                                it.map(|v| v as u32).collect()
+                            }
+                            None => (0..pos.len() as u32).collect(),
+                        };
+                        for v in idx_u32 {
+                            let rb = v + base;
+                            if rb > u16::MAX as u32 {
+                                continue;
+                            }
+                            indices.push(rb as u16);
+                        }
+                        // capture a plausible base color texture
+                        if base_tex.is_none()
+                            && let Some(texinfo) = prim
+                                .material()
+                                .pbr_metallic_roughness()
+                                .base_color_texture()
+                        {
+                            let img_idx = texinfo.texture().source().index();
+                            if let Some(img) = images.get(img_idx) {
+                                let (w, h) = (img.width, img.height);
+                                let pixels = match img.format {
+                                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                    gltf::image::Format::R8G8B8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for c in img.pixels.chunks_exact(3) {
+                                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                        }
+                                        out
+                                    }
+                                    gltf::image::Format::R8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for &r in &img.pixels {
+                                            out.extend_from_slice(&[r, r, r, 255]);
+                                        }
+                                        out
+                                    }
+                                    _ => img.pixels.clone(),
+                                };
+                                base_tex = Some((pixels, w, h));
+                            }
+                        }
+                    }
+                }
                 let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("trees-vb"),
-                    contents: bytemuck::cast_slice(&cpu.vertices),
+                    label: Some("trees-uv-vb"),
+                    contents: bytemuck::cast_slice(&verts),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
                 let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("trees-ib"),
-                    contents: bytemuck::cast_slice(&cpu.indices),
+                    label: Some("trees-uv-ib"),
+                    contents: bytemuck::cast_slice(&indices),
                     usage: wgpu::BufferUsages::INDEX,
                 });
-                (vb, ib, cpu.indices.len() as u32)
+                (vb, ib, indices.len() as u32)
             }
             Err(e) => {
                 log::warn!(
-                    "failed to load GLTF tree mesh for kind '{}' ({}): falling back to cube",
+                    "gltf import failed for kind '{}': {}; falling back to cube",
                     kind,
                     e
                 );
-                super::mesh::create_cube(device)
+                let (vb, ib, ic) = super::mesh::create_cube(device);
+                (vb, ib, ic)
             }
         };
-        out.push(TreesGpu {
-            instances,
-            count: inst.len() as u32,
-            vb,
-            ib,
-            index_count,
-        });
+        out.push((
+            kind,
+            TreesGpu {
+                instances,
+                count: inst.len() as u32,
+                vb,
+                ib,
+                index_count,
+                material_bg: None,
+            },
+        ));
     }
     Some(out)
 }

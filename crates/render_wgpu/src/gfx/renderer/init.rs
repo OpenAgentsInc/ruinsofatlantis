@@ -301,6 +301,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     );
     let (pipeline, inst_pipeline, wire_pipeline) =
         pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
+    let inst_tex_pipeline = pipeline::create_textured_inst_pipeline(
+        &device,
+        &shader,
+        &globals_bgl,
+        &model_bgl,
+        &material_bgl,
+        draw_fmt,
+    );
     // Sky background
     let sky_bgl = pipeline::create_sky_bgl(&device);
     let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
@@ -1697,6 +1705,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         hiz: Some(hiz),
         pipeline,
         inst_pipeline,
+        inst_tex_pipeline,
         wire_pipeline,
         particle_pipeline,
         sky_pipeline,

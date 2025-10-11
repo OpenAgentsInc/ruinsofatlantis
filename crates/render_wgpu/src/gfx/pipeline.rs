@@ -256,6 +256,56 @@ pub fn create_pipelines(
     (pipeline, inst_pipeline, wire_pipeline)
 }
 
+pub fn create_textured_inst_pipeline(
+    device: &wgpu::Device,
+    shader: &ShaderModule,
+    globals_bgl: &BindGroupLayout,
+    model_bgl: &BindGroupLayout,
+    material_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("inst-tex-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl, model_bgl, material_bgl],
+        push_constant_ranges: &[],
+    });
+    let depth_format = wgpu::TextureFormat::Depth32Float;
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("inst-tex-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module: shader,
+            entry_point: Some("vs_inst_tex"),
+            buffers: &[
+                crate::gfx::types::VertexPosNrmUv::LAYOUT,
+                crate::gfx::types::Instance::LAYOUT,
+            ],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: shader,
+            entry_point: Some("fs_inst_tex"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: depth_format,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 // Sky background pipeline (fullscreen triangle)
 pub fn create_sky_bgl(device: &wgpu::Device) -> BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

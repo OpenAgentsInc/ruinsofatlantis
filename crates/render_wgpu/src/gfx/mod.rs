@@ -83,6 +83,7 @@ pub struct TreeBatch {
     pub vb: wgpu::Buffer,
     pub ib: wgpu::Buffer,
     pub index_count: u32,
+    pub material_bg: Option<wgpu::BindGroup>,
 }
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
@@ -118,6 +119,7 @@ pub struct Renderer {
     // --- Pipelines & BGLs ---
     pipeline: wgpu::RenderPipeline,
     inst_pipeline: wgpu::RenderPipeline,
+    inst_tex_pipeline: wgpu::RenderPipeline,
     wire_pipeline: Option<wgpu::RenderPipeline>,
     particle_pipeline: wgpu::RenderPipeline,
     sky_pipeline: wgpu::RenderPipeline,
@@ -678,17 +680,148 @@ impl Renderer {
                     .ok()
                     .and_then(|m| m.vegetation)
                     .map(|v| (v.tree_count as usize, v.tree_seed));
-                if let Some(groups) =
-                    foliage::build_trees_by_kind(&self.device, &self.terrain_cpu, &b.slug)
-                {
+                if let Some(groups) = foliage::build_trees_by_kind(
+                    &self.device,
+                    &self.queue,
+                    &self.terrain_cpu,
+                    &b.slug,
+                ) {
+                    // Create material bind groups per kind by sampling baseColor from GLTF
+                    let make_bg = |mesh_path: std::path::PathBuf| -> Option<wgpu::BindGroup> {
+                        if let Ok((doc, _buffers, images)) = gltf::import(&mesh_path) {
+                            for mesh in doc.meshes() {
+                                for prim in mesh.primitives() {
+                                    if let Some(texinfo) = prim
+                                        .material()
+                                        .pbr_metallic_roughness()
+                                        .base_color_texture()
+                                    {
+                                        let img_idx = texinfo.texture().source().index();
+                                        if let Some(img) = images.get(img_idx) {
+                                            let (w, h) = (img.width, img.height);
+                                            let pixels = match img.format {
+                                                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                                gltf::image::Format::R8G8B8 => {
+                                                    let mut out =
+                                                        Vec::with_capacity((w * h * 4) as usize);
+                                                    for c in img.pixels.chunks_exact(3) {
+                                                        out.extend_from_slice(&[
+                                                            c[0], c[1], c[2], 255,
+                                                        ]);
+                                                    }
+                                                    out
+                                                }
+                                                gltf::image::Format::R8 => {
+                                                    let mut out =
+                                                        Vec::with_capacity((w * h * 4) as usize);
+                                                    for &r in &img.pixels {
+                                                        out.extend_from_slice(&[r, r, r, 255]);
+                                                    }
+                                                    out
+                                                }
+                                                _ => img.pixels.clone(),
+                                            };
+                                            let size3 = wgpu::Extent3d {
+                                                width: w,
+                                                height: h,
+                                                depth_or_array_layers: 1,
+                                            };
+                                            let tex_obj = self.device.create_texture(
+                                                &wgpu::TextureDescriptor {
+                                                    label: Some("trees-albedo"),
+                                                    size: size3,
+                                                    mip_level_count: 1,
+                                                    sample_count: 1,
+                                                    dimension: wgpu::TextureDimension::D2,
+                                                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                                    usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                                        | wgpu::TextureUsages::COPY_DST,
+                                                    view_formats: &[],
+                                                },
+                                            );
+                                            self.queue.write_texture(
+                                                wgpu::TexelCopyTextureInfo {
+                                                    texture: &tex_obj,
+                                                    mip_level: 0,
+                                                    origin: wgpu::Origin3d::ZERO,
+                                                    aspect: wgpu::TextureAspect::All,
+                                                },
+                                                &pixels,
+                                                wgpu::TexelCopyBufferLayout {
+                                                    offset: 0,
+                                                    bytes_per_row: Some(4 * w),
+                                                    rows_per_image: Some(h),
+                                                },
+                                                size3,
+                                            );
+                                            let view = tex_obj.create_view(
+                                                &wgpu::TextureViewDescriptor::default(),
+                                            );
+                                            let sampler = self.device.create_sampler(
+                                                &wgpu::SamplerDescriptor {
+                                                    label: Some("trees-sampler"),
+                                                    mag_filter: wgpu::FilterMode::Linear,
+                                                    min_filter: wgpu::FilterMode::Linear,
+                                                    mipmap_filter: wgpu::FilterMode::Nearest,
+                                                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                                    ..Default::default()
+                                                },
+                                            );
+                                            let mat_xf_buf = self.device.create_buffer_init(
+                                                &wgpu::util::BufferInitDescriptor {
+                                                    label: Some("material-xf"),
+                                                    contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                                                    usage: wgpu::BufferUsages::UNIFORM,
+                                                },
+                                            );
+                                            let bg =
+                                                self.device
+                                                    .create_bind_group(&wgpu::BindGroupDescriptor {
+                                                    label: Some("trees-material-bg"),
+                                                    layout: &self.material_bgl,
+                                                    entries: &[
+                                                        wgpu::BindGroupEntry {
+                                                            binding: 0,
+                                                            resource:
+                                                                wgpu::BindingResource::TextureView(
+                                                                    &view,
+                                                                ),
+                                                        },
+                                                        wgpu::BindGroupEntry {
+                                                            binding: 1,
+                                                            resource:
+                                                                wgpu::BindingResource::Sampler(
+                                                                    &sampler,
+                                                                ),
+                                                        },
+                                                        wgpu::BindGroupEntry {
+                                                            binding: 2,
+                                                            resource: mat_xf_buf
+                                                                .as_entire_binding(),
+                                                        },
+                                                    ],
+                                                });
+                                            return Some(bg);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        None
+                    };
                     self.trees_groups = groups
                         .into_iter()
-                        .map(|g| TreeBatch {
-                            instances: g.instances,
-                            count: g.count,
-                            vb: g.vb,
-                            ib: g.ib,
-                            index_count: g.index_count,
+                        .map(|(kind_key, g)| {
+                            let kind_mesh = foliage::path_for_kind(&kind_key);
+                            TreeBatch {
+                                instances: g.instances,
+                                count: g.count,
+                                vb: g.vb,
+                                ib: g.ib,
+                                index_count: g.index_count,
+                                material_bg: make_bg(kind_mesh),
+                            }
                         })
                         .collect();
                     if let Some(g0) = self.trees_groups.first() {

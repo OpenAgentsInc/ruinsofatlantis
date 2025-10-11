@@ -1222,17 +1222,16 @@ pub fn render_impl(
                         #[cfg(not(target_arch = "wasm32"))]
                         r.device.push_error_scope(wgpu::ErrorFilter::Validation);
                     }
-                    let inst_pipe = if r.wire_enabled {
-                        r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-                    } else {
-                        &r.inst_pipeline
-                    };
+                    let inst_pipe = &r.inst_tex_pipeline;
                     rp.set_pipeline(inst_pipe);
                     rp.set_bind_group(0, &r.globals_bg, &[]);
                     rp.set_bind_group(1, &r.shard_model_bg, &[]);
                     for g in &r.trees_groups {
                         if g.count == 0 {
                             continue;
+                        }
+                        if let Some(bg) = &g.material_bg {
+                            rp.set_bind_group(2, bg, &[]);
                         }
                         rp.set_vertex_buffer(0, g.vb.slice(..));
                         rp.set_vertex_buffer(1, g.instances.slice(..));
