@@ -3,6 +3,7 @@
 //! - `new_core` contains the full constructor body (moved here).
 //! - `new_renderer` remains a thin wrapper used by `gfx::Renderer::new`.
 
+use crate::compute_zone_policy_for_slug;
 use crate::gfx::asset_path;
 use anyhow::Context;
 #[cfg(not(target_arch = "wasm32"))]
@@ -37,8 +38,18 @@ use crate::gfx::{
 };
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
-    // Only load heavy actor/NPC assets up front when a zone is explicitly selected (native).
-    let load_actor_assets = std::env::var("ROA_ZONE").ok().is_some();
+    // Only load heavy actor/NPC assets for combat/demo zones. For lightweight
+    // zones like `campaign_builder` and `cc_demo`, skip skinned rigs entirely.
+    let load_actor_assets = match std::env::var("ROA_ZONE") {
+        Ok(slug) => {
+            // Derive per-zone UI/controls policy and use it as a proxy for whether
+            // actor rigs (PC/NPCs/wizards) are needed.
+            let pol = compute_zone_policy_for_slug(slug.as_str());
+            // Load actors only when casting or HUD/gameplay are enabled (e.g., wizard_woods)
+            pol.allow_casting || pol.show_player_hud
+        }
+        Err(_) => false,
+    };
 
     // --- Instance + Surface + Adapter (with backend fallback) ---
     fn backend_from_env() -> Option<wgpu::Backends> {
