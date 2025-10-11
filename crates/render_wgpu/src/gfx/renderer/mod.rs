@@ -5,7 +5,9 @@
 //! - update.rs: CPU-side updates (AI, palettes, FX)
 
 mod attachments;
+pub mod config;
 pub mod controls;
+pub mod device;
 pub mod graph;
 pub mod init;
 pub mod passes;
@@ -15,5 +17,8 @@ pub mod resize;
 pub mod upload_adapter;
 pub mod voxel_upload;
 pub(crate) use attachments::Attachments;
+pub use attachments::Attachments as RenderAttachments;
+pub use config::*;
+pub use device::{GpuCtx, Samplers, SurfaceCtx};
 mod input;
 mod update;

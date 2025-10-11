@@ -50,6 +50,18 @@ impl FrameGraph {
             }
         }
     }
+
+    /// Forwarder skeleton: execute the current render function unchanged.
+    /// The encoder/view parameters are accepted for future pass routing.
+    #[allow(unused_variables)]
+    pub fn run(
+        renderer: &mut crate::gfx::Renderer,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) {
+        // Forward to existing render path (no reordering yet)
+        let _ = super::render::render_impl(renderer, None);
+    }
 }
 
 // Static pass specs for the prototype
