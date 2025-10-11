@@ -893,6 +893,15 @@ impl Renderer {
         [p.x, p.y, p.z]
     }
 
+    /// Returns a point `dist` meters in front of the PLAYER facing (yaw), snapped to terrain.
+    pub fn forward_point_from_player(&self, dist: f32) -> [f32; 3] {
+        let fwd = glam::Vec3::new(self.player.yaw.sin(), 0.0, self.player.yaw.cos());
+        let mut p = self.player.pos + fwd * dist.max(0.0);
+        let (y, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+        p.y = y;
+        [p.x, p.y, p.z]
+    }
+
     /// Set a single ghost instance to draw (unit cube), with a world transform and tint color.
     /// Pass None to clear the ghost.
     pub fn set_ghost_instance(&mut self, inst: Option<crate::gfx::types::Instance>) {

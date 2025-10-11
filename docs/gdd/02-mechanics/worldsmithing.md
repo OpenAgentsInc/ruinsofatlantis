@@ -28,6 +28,7 @@ Roadmap
 
 Profession & Reputation (Design Summary)
 - Worldsmithing is a player profession with level and reputation. Level unlocks creative power; reputation governs trust and distribution.
+- Entry unlock: Apprentice Worldsmith is gated by a difficult, multi‑step initiation quest (solo or small‑party). Completing it grants access to the most basic worldsmithing tools. No currency or shortcut bypass.
 - How you level: publish spaces and earn XP from real engagement signals (unique plays, completion quality, return visits, lightweight reactions). Strong anti‑farm guardrails apply; fast‑fail sessions and bot loops don’t count.
 - What you unlock: larger budgets (instance caps, map count), new verbs (from decor → triggers → NPCs/quests), and wider distribution (private → local → global). Titles/tier names are TBD; we’ll tune bands by testing.
 - Reputation: slower, 90‑day rolling quality signal used for gates and visibility. Reports upheld reduce rep; rep decays slowly without fresh engagement.

@@ -782,7 +782,8 @@ impl ApplicationHandler for App {
                                 self.builder.ws.set_active(self.builder.active);
                             }
                             KC::Enter | KC::NumpadEnter if pressed && self.builder.active => {
-                                let pos = state.forward_point_on_terrain(6.0);
+                                // Place ~10ft ahead of player facing
+                                let pos = state.forward_point_from_player(3.048);
                                 let yaw = self.builder.yaw_deg.rem_euclid(360.0);
                                 let now_ms = {
                                     #[cfg(not(target_arch = "wasm32"))]
@@ -800,8 +801,21 @@ impl ApplicationHandler for App {
                                     .get(self.builder.kind_idx)
                                     .cloned()
                                     .unwrap_or_else(|| "tree.default".into());
-                                if let Err(e) = self.builder.ws.place(&k, pos, yaw, now_ms) {
-                                    log::warn!("builder: place rejected: {e}");
+                                log::info!(
+                                    "builder: Enter pressed; kind='{}' pos=({:.2},{:.2},{:.2}) yaw={:.1}",
+                                    k,
+                                    pos[0],
+                                    pos[1],
+                                    pos[2],
+                                    yaw
+                                );
+                                match self.builder.ws.place(&k, pos, yaw, now_ms) {
+                                    Ok(_) => log::info!(
+                                        "builder: placed '{}' (total={})",
+                                        k,
+                                        self.builder.ws.placed.len()
+                                    ),
+                                    Err(e) => log::warn!("builder: place rejected: {e}"),
                                 }
                             }
                             // Select kind with number keys 1..9
