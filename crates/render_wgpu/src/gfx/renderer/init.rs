@@ -310,6 +310,74 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &material_bgl,
         draw_fmt,
     );
+    // Create a default 1x1 white material BG for textured pipelines (trees fallback)
+    let mat_xf_zero = [0.0f32; 8];
+    let default_mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("material-xform(default)"),
+        contents: bytemuck::bytes_of(&mat_xf_zero),
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let white_tex = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("white-1x1"),
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &white_tex,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &[255, 255, 255, 255],
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4),
+            rows_per_image: Some(1),
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+    );
+    let white_view = white_tex.create_view(&wgpu::TextureViewDescriptor::default());
+    let white_sam = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("white-sampler"),
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        ..Default::default()
+    });
+    let default_material_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("default-material-bg"),
+        layout: &material_bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&white_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&white_sam),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: default_mat_buf.as_entire_binding(),
+            },
+        ],
+    });
     // Sky background
     let sky_bgl = pipeline::create_sky_bgl(&device);
     let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
@@ -1728,6 +1796,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ssr_scene_bgl: ssr_scene_bgl.clone(),
         palettes_bgl: palettes_bgl.clone(),
         material_bgl: material_bgl.clone(),
+        default_material_bg,
         globals_bg,
         post_ao_bg,
         ssgi_globals_bg,

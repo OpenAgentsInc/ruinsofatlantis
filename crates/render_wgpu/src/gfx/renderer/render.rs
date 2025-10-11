@@ -1230,10 +1230,10 @@ pub fn render_impl(
                         if g.count == 0 {
                             continue;
                         }
-                        if let Some(bg) = &g.material_bg {
-                            // Material lives at group(3) for textured instanced pipeline
-                            rp.set_bind_group(3, bg, &[]);
-                        }
+                        // Always bind a material BG; fall back to default if group has none
+                        let mat_bg = g.material_bg.as_ref().unwrap_or(&r.default_material_bg);
+                        // Material lives at group(3) for textured instanced pipeline
+                        rp.set_bind_group(3, mat_bg, &[]);
                         rp.set_vertex_buffer(0, g.vb.slice(..));
                         rp.set_vertex_buffer(1, g.instances.slice(..));
                         rp.set_index_buffer(g.ib.slice(..), wgpu::IndexFormat::Uint16);

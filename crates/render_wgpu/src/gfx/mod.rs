@@ -143,6 +143,8 @@ pub struct Renderer {
     ssr_scene_bgl: wgpu::BindGroupLayout,
     material_bgl: wgpu::BindGroupLayout,
     palettes_bgl: wgpu::BindGroupLayout,
+    // Default material BG (1x1 white) used when a draw lacks a specific texture
+    default_material_bg: wgpu::BindGroup,
     globals_bg: wgpu::BindGroup,
     post_ao_bg: wgpu::BindGroup,
     ssgi_globals_bg: wgpu::BindGroup,
