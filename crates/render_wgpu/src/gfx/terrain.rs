@@ -137,6 +137,8 @@ struct TerrainSnapshotJson {
 #[derive(Serialize, Deserialize)]
 struct TreesSnapshotJson {
     models: Vec<[[f32; 4]; 4]>,
+    #[serde(default)]
+    by_kind: std::collections::HashMap<String, Vec<[[f32; 4]; 4]>>,
 }
 
 fn zones_dir() -> PathBuf {
@@ -201,6 +203,33 @@ pub fn load_trees_snapshot(slug: &str) -> Option<Vec<[[f32; 4]; 4]>> {
     None
 }
 
+pub fn load_trees_snapshot_by_kind(
+    slug: &str,
+) -> Option<std::collections::HashMap<String, Vec<[[f32; 4]; 4]>>> {
+    // 1) workspace
+    let primary = snap_dir(slug).join("trees.json");
+    if let Ok(txt) = fs::read_to_string(&primary)
+        && let Ok(tj) = serde_json::from_str::<TreesSnapshotJson>(&txt)
+        && !tj.by_kind.is_empty()
+    {
+        return Some(tj.by_kind);
+    }
+    // 2) packs fallback
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let packs = here
+        .join("../../packs/zones")
+        .join(slug)
+        .join("snapshot.v1")
+        .join("trees.json");
+    if let Ok(txt) = fs::read_to_string(&packs)
+        && let Ok(tj) = serde_json::from_str::<TreesSnapshotJson>(&txt)
+        && !tj.by_kind.is_empty()
+    {
+        return Some(tj.by_kind);
+    }
+    None
+}
+
 pub fn write_terrain_snapshot(slug: &str, cpu: &TerrainCPU, seed: u32) -> Result<()> {
     let dir = snap_dir(slug);
     fs::create_dir_all(&dir).with_context(|| format!("mkdir {}", dir.display()))?;
@@ -221,6 +250,7 @@ pub fn write_trees_snapshot(slug: &str, models: &[[[f32; 4]; 4]]) -> Result<()> 
     fs::create_dir_all(&dir).with_context(|| format!("mkdir {}", dir.display()))?;
     let sj = TreesSnapshotJson {
         models: models.to_vec(),
+        by_kind: std::collections::HashMap::new(),
     };
     let path = dir.join("trees.json");
     let txt = serde_json::to_string_pretty(&sj)?;

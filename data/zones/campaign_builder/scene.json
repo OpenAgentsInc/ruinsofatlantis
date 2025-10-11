@@ -6,9 +6,9 @@
   "logic": {
     "triggers": [],
     "spawns": [
-      { "id": "t0001", "kind": "tree.default", "pos": [4.0, 0.0, -6.0],  "yaw_deg": 45.0 },
-      { "id": "t0002", "kind": "tree.default", "pos": [1.5, 0.0, -2.0], "yaw_deg": 270.0 },
-      { "id": "t0003", "kind": "tree.default", "pos": [-3.0, 0.0, -5.0], "yaw_deg": 120.0 }
+      { "id": "t0001", "kind": "tree.common", "pos": [4.0, 0.0, -6.0],  "yaw_deg": 45.0 },
+      { "id": "t0002", "kind": "tree.birch",  "pos": [1.5, 0.0, -2.0], "yaw_deg": 270.0 },
+      { "id": "t0003", "kind": "tree.common", "pos": [-3.0, 0.0, -5.0], "yaw_deg": 120.0 }
     ],
     "waypoints": [],
     "links": []

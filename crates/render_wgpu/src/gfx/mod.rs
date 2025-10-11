@@ -76,6 +76,15 @@ use voxel_mesh::MeshBuffers;
 use voxel_proxy::VoxelGrid;
 use winit::window::Window;
 
+/// Batch of instanced trees for a single kind/model.
+pub struct TreeBatch {
+    pub instances: wgpu::Buffer,
+    pub count: u32,
+    pub vb: wgpu::Buffer,
+    pub ib: wgpu::Buffer,
+    pub index_count: u32,
+}
+
 fn asset_path(rel: &str) -> std::path::PathBuf {
     // Prefer workspace-level assets so this crate works when built inside a workspace.
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -213,6 +222,8 @@ pub struct Renderer {
     trees_vb: wgpu::Buffer,
     trees_ib: wgpu::Buffer,
     trees_index_count: u32,
+    // Multiple tree kinds support: when present, draws override the single buffers above
+    trees_groups: Vec<TreeBatch>,
 
     // Rocks (instanced static mesh)
     rocks_instances: wgpu::Buffer,
@@ -662,13 +673,35 @@ impl Renderer {
         {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                // Trees: prefer baked snapshot for slug; fall back to procedural using manifest vegetation
+                // Trees: prefer baked snapshot (by_kind) for slug; fall back to procedural using manifest vegetation
                 let veg = data_runtime::zone::load_zone_manifest(&b.slug)
                     .ok()
                     .and_then(|m| m.vegetation)
                     .map(|v| (v.tree_count as usize, v.tree_seed));
-                if let Ok(tg) = foliage::build_trees(&self.device, &self.terrain_cpu, &b.slug, veg)
+                if let Some(groups) =
+                    foliage::build_trees_by_kind(&self.device, &self.terrain_cpu, &b.slug)
                 {
+                    self.trees_groups = groups
+                        .into_iter()
+                        .map(|g| TreeBatch {
+                            instances: g.instances,
+                            count: g.count,
+                            vb: g.vb,
+                            ib: g.ib,
+                            index_count: g.index_count,
+                        })
+                        .collect();
+                    if let Some(g0) = self.trees_groups.first() {
+                        self.trees_instances = g0.instances.clone();
+                        self.trees_count = g0.count;
+                        self.trees_vb = g0.vb.clone();
+                        self.trees_ib = g0.ib.clone();
+                        self.trees_index_count = g0.index_count;
+                    }
+                } else if let Ok(tg) =
+                    foliage::build_trees(&self.device, &self.terrain_cpu, &b.slug, veg)
+                {
+                    self.trees_groups.clear();
                     self.trees_instances = tg.instances;
                     self.trees_count = tg.count;
                     self.trees_vb = tg.vb;

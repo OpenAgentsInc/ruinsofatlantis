@@ -90,17 +90,26 @@ pub mod api {
             pos: [f32; 3],
             yaw_deg: f32,
         }
+        use std::collections::HashMap;
         #[derive(serde::Serialize)]
         struct TreesSnapshotJson {
             models: Vec<[[f32; 4]; 4]>,
+            #[serde(skip_serializing_if = "HashMap::is_empty")]
+            by_kind: HashMap<String, Vec<[[f32; 4]; 4]>>,
         }
         let mut trees_models: Vec<[[f32; 4]; 4]> = Vec::new();
+        let mut by_kind: HashMap<String, Vec<[[f32; 4]; 4]>> = HashMap::new();
         if !inputs.scene_json.is_empty() {
             if let Ok(doc) = serde_json::from_str::<SceneDoc>(&inputs.scene_json) {
                 if let Some(logic) = doc.logic {
                     if let Some(spawns) = logic.spawns {
                         for s in spawns.into_iter() {
                             if s.kind.starts_with("tree.") {
+                                let kind_slug = s
+                                    .kind
+                                    .strip_prefix("tree.")
+                                    .unwrap_or("default")
+                                    .to_lowercase();
                                 let yaw = s.yaw_deg.to_radians();
                                 let (c, snt) = (yaw.cos(), yaw.sin());
                                 let tx = s.pos[0];
@@ -114,6 +123,7 @@ pub mod api {
                                     [tx, ty, tz, 1.0],
                                 ];
                                 trees_models.push(model);
+                                by_kind.entry(kind_slug).or_default().push(model);
                             }
                         }
                     }
@@ -123,6 +133,7 @@ pub mod api {
         if !trees_models.is_empty() {
             let tj = TreesSnapshotJson {
                 models: trees_models,
+                by_kind,
             };
             let txt = serde_json::to_string_pretty(&tj)?;
             fs::write(snap.join("trees.json"), txt)?;

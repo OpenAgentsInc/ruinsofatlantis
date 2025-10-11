@@ -1209,28 +1209,64 @@ pub fn render_impl(
             // Trees
             // Show vegetation when not in Picker. Previously this was suppressed when
             // zone_batches existed; until zone-baked draws land, allow draws here too.
-            if r.trees_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
-                log::debug!("draw: trees x{}", r.trees_count);
-                if trace {
+            if !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
+                // Prefer drawing per-kind groups when present; otherwise fall back to single batch
+                if !r.trees_groups.is_empty() {
+                    let total: u32 = r.trees_groups.iter().map(|g| g.count).sum();
+                    log::debug!(
+                        "draw: trees groups x{} (total {})",
+                        r.trees_groups.len(),
+                        total
+                    );
+                    if trace {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                    }
+                    let inst_pipe = if r.wire_enabled {
+                        r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                    } else {
+                        &r.inst_pipeline
+                    };
+                    rp.set_pipeline(inst_pipe);
+                    rp.set_bind_group(0, &r.globals_bg, &[]);
+                    rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                    for g in &r.trees_groups {
+                        if g.count == 0 {
+                            continue;
+                        }
+                        rp.set_vertex_buffer(0, g.vb.slice(..));
+                        rp.set_vertex_buffer(1, g.instances.slice(..));
+                        rp.set_index_buffer(g.ib.slice(..), wgpu::IndexFormat::Uint16);
+                        rp.draw_indexed(0..g.index_count, 0, 0..g.count);
+                        r.draw_calls += 1;
+                    }
                     #[cfg(not(target_arch = "wasm32"))]
-                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-                }
-                let inst_pipe = if r.wire_enabled {
-                    r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-                } else {
-                    &r.inst_pipeline
-                };
-                rp.set_pipeline(inst_pipe);
-                rp.set_bind_group(0, &r.globals_bg, &[]);
-                rp.set_bind_group(1, &r.shard_model_bg, &[]);
-                rp.set_vertex_buffer(0, r.trees_vb.slice(..));
-                rp.set_vertex_buffer(1, r.trees_instances.slice(..));
-                rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
-                rp.draw_indexed(0..r.trees_index_count, 0, 0..r.trees_count);
-                r.draw_calls += 1;
-                #[cfg(not(target_arch = "wasm32"))]
-                if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                    log::error!("validation after trees: {:?}", e);
+                    if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                        log::error!("validation after trees: {:?}", e);
+                    }
+                } else if r.trees_count > 0 {
+                    log::debug!("draw: trees x{}", r.trees_count);
+                    if trace {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+                    }
+                    let inst_pipe = if r.wire_enabled {
+                        r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                    } else {
+                        &r.inst_pipeline
+                    };
+                    rp.set_pipeline(inst_pipe);
+                    rp.set_bind_group(0, &r.globals_bg, &[]);
+                    rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                    rp.set_vertex_buffer(0, r.trees_vb.slice(..));
+                    rp.set_vertex_buffer(1, r.trees_instances.slice(..));
+                    rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
+                    rp.draw_indexed(0..r.trees_index_count, 0, 0..r.trees_count);
+                    r.draw_calls += 1;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                        log::error!("validation after trees: {:?}", e);
+                    }
                 }
             }
             // Rocks

@@ -164,6 +164,81 @@ pub fn build_trees(
     })
 }
 
+fn path_for_kind(kind: &str) -> std::path::PathBuf {
+    match kind {
+        "birch" => asset_path("assets/trees/Birch_4GLB.glb"),
+        "common" => asset_path("assets/models/trees/CommonTree_3/CommonTree_3.gltf"),
+        _ => {
+            // Default fallback chain
+            let birch = asset_path("assets/trees/Birch_4GLB.glb");
+            if birch.exists() {
+                birch
+            } else {
+                asset_path("assets/models/trees/CommonTree_3/CommonTree_3.gltf")
+            }
+        }
+    }
+}
+
+/// Build trees grouped by kind when the baked snapshot provides a by_kind map.
+/// Returns None if the snapshot has no kind grouping.
+pub fn build_trees_by_kind(
+    device: &wgpu::Device,
+    terrain_cpu: &terrain::TerrainCPU,
+    zone_slug: &str,
+) -> Option<Vec<TreesGpu>> {
+    let map = terrain::load_trees_snapshot_by_kind(zone_slug)?;
+    let mut out: Vec<TreesGpu> = Vec::new();
+    for (kind, models) in map {
+        // Convert models to Instances and snap Y to terrain
+        let mut inst = terrain::instances_from_models(&models);
+        for m in &mut inst {
+            let x = m.model[3][0];
+            let z = m.model[3][2];
+            let (y, _n) = terrain::height_at(terrain_cpu, x, z);
+            m.model[3][1] = y;
+            m.selected = 0.25;
+        }
+        let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("trees-instances"),
+            contents: bytemuck::cast_slice(&inst),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let mesh_path = path_for_kind(&kind);
+        let (vb, ib, index_count) = match load_gltf_mesh(&mesh_path) {
+            Ok(cpu) => {
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("trees-vb"),
+                    contents: bytemuck::cast_slice(&cpu.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("trees-ib"),
+                    contents: bytemuck::cast_slice(&cpu.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+                (vb, ib, cpu.indices.len() as u32)
+            }
+            Err(e) => {
+                log::warn!(
+                    "failed to load GLTF tree mesh for kind '{}' ({}): falling back to cube",
+                    kind,
+                    e
+                );
+                super::mesh::create_cube(device)
+            }
+        };
+        out.push(TreesGpu {
+            instances,
+            count: inst.len() as u32,
+            vb,
+            ib,
+            index_count,
+        });
+    }
+    Some(out)
+}
+
 fn asset_path(rel: &str) -> std::path::PathBuf {
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let ws = here.join("../../").join(rel);
