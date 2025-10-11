@@ -324,6 +324,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &material_bgl,
         draw_fmt,
     );
+    let inst_tex_ghost_pipeline = pipeline::create_textured_inst_ghost_pipeline(
+        &device,
+        &shader,
+        &globals_bgl,
+        &model_bgl,
+        &palettes_bgl,
+        &material_bgl,
+        draw_fmt,
+    );
     // Create a default 1x1 white material BG for textured pipelines (trees fallback)
     let mat_xf_zero = [0.0f32; 8];
     let default_mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1800,6 +1809,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pipeline,
         inst_pipeline,
         inst_tex_pipeline,
+        inst_tex_ghost_pipeline,
         wire_pipeline,
         particle_pipeline,
         sky_pipeline,

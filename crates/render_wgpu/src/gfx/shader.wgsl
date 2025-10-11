@@ -286,6 +286,36 @@ fn fs_inst_tex(in: TexInstOut) -> @location(0) vec4<f32> {
   return vec4<f32>(base, 1.0);
 }
 
+// Ghost variant (semi-transparent) for worldsmithing preview
+@fragment
+fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
+  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
+  let light_dir = normalize(globals.sunDirTime.xyz);
+  let ndl = max(dot(in.nrm, light_dir), 0.0);
+  // SH ambient
+  let n = in.nrm;
+  let shb = array<f32,9>(
+    0.282095,
+    0.488603 * n.y,
+    0.488603 * n.z,
+    0.488603 * n.x,
+    1.092548 * n.x * n.y,
+    1.092548 * n.y * n.z,
+    0.315392 * (3.0 * n.z * n.z - 1.0),
+    1.092548 * n.x * n.z,
+    0.546274 * (n.x * n.x - n.y * n.y)
+  );
+  var amb = vec3<f32>(0.0);
+  for (var i:u32=0u; i<9u; i++) { amb += globals.sh[i].xyz * shb[i]; }
+  let amb_int = max(dot(amb, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
+  let nf = smoothstep(0.0, 0.2, -globals.sunDirTime.y);
+  let base_term = mix(0.2, 0.02, nf);
+  let amb_term = mix(0.5, 0.05, nf) * amb_int;
+  var base = albedo * (base_term + amb_term + 0.8 * ndl);
+  // No dynamic lights; keep preview cheap
+  return vec4<f32>(base, 0.35);
+}
+
 // Wizard material lighting uses the same lights buffer
 @fragment
 fn fs_wizard(in: WizOut) -> @location(0) vec4<f32> {

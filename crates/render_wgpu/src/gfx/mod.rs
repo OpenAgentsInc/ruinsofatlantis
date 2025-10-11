@@ -120,6 +120,7 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     inst_pipeline: wgpu::RenderPipeline,
     inst_tex_pipeline: wgpu::RenderPipeline,
+    inst_tex_ghost_pipeline: wgpu::RenderPipeline,
     wire_pipeline: Option<wgpu::RenderPipeline>,
     particle_pipeline: wgpu::RenderPipeline,
     sky_pipeline: wgpu::RenderPipeline,

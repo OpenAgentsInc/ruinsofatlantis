@@ -1214,7 +1214,7 @@ pub fn render_impl(
                 }
                 if !r.trees_groups.is_empty() {
                     // Textured path with material; bind palettes (group 2) and material (group 3)
-                    rp.set_pipeline(&r.inst_tex_pipeline);
+                    rp.set_pipeline(&r.inst_tex_ghost_pipeline);
                     rp.set_bind_group(0, &r.globals_bg, &[]);
                     rp.set_bind_group(1, &r.shard_model_bg, &[]);
                     rp.set_bind_group(2, &r.palettes_bg, &[]);

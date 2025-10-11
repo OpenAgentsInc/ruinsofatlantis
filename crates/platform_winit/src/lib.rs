@@ -286,6 +286,8 @@ struct BuilderState {
     active: bool,
     yaw_deg: f32,
     ws: worldsmithing::WorldsmithingState,
+    kinds: Vec<String>,
+    kind_idx: usize,
 }
 
 impl Default for BuilderState {
@@ -301,6 +303,8 @@ impl Default for BuilderState {
             active: false,
             yaw_deg: 0.0,
             ws,
+            kinds: vec!["tree.default".into()],
+            kind_idx: 0,
         }
     }
 }
@@ -666,8 +670,15 @@ impl ApplicationHandler for App {
                     state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
                     let mut lines: Vec<String> = Vec::new();
                     let util = (self.builder.ws.cap_utilization() * 100.0).round();
+                    let cur_kind = self
+                        .builder
+                        .kinds
+                        .get(self.builder.kind_idx)
+                        .cloned()
+                        .unwrap_or_else(|| "tree.default".into());
                     lines.push(format!(
-                        "Placed: {}   Yaw: {:.0}°   Cap: {:.0}%",
+                        "Kind: {}   Placed: {}   Yaw: {:.0}°   Cap: {:.0}%",
+                        cur_kind,
                         self.builder.ws.placed.len(),
                         self.builder.yaw_deg,
                         util
@@ -719,13 +730,16 @@ impl ApplicationHandler for App {
                         {
                             let mut rules = worldsmithing::Rules::default();
                             let mut caps = worldsmithing::Caps::default();
+                            let mut kinds: Vec<String> = vec![];
                             if let Some(wsp) = man.worldsmithing {
                                 if !wsp.kinds.is_empty() {
                                     for k in wsp.kinds {
-                                        rules.allowed_kinds.insert(k);
+                                        rules.allowed_kinds.insert(k.clone());
+                                        kinds.push(k);
                                     }
                                 } else {
                                     rules.allowed_kinds.insert("tree.default".into());
+                                    kinds.push("tree.default".into());
                                 }
                                 if let Some(c) = wsp.caps {
                                     if let Some(t) = c.trees {
@@ -742,6 +756,8 @@ impl ApplicationHandler for App {
                                 .caps(caps)
                                 .rules(rules)
                                 .build();
+                            self.builder.kinds = kinds;
+                            self.builder.kind_idx = 0;
                         }
                     } else {
                         log::error!(
@@ -765,7 +781,7 @@ impl ApplicationHandler for App {
                                 self.builder.active = !self.builder.active;
                                 self.builder.ws.set_active(self.builder.active);
                             }
-                            KC::Enter if pressed && self.builder.active => {
+                            KC::Enter | KC::NumpadEnter if pressed && self.builder.active => {
                                 let pos = state.forward_point_on_terrain(6.0);
                                 let yaw = self.builder.yaw_deg.rem_euclid(360.0);
                                 let now_ms = {
@@ -778,11 +794,24 @@ impl ApplicationHandler for App {
                                         self.t0.elapsed().as_millis() as u64
                                     }
                                 };
-                                if let Err(e) =
-                                    self.builder.ws.place("tree.default", pos, yaw, now_ms)
-                                {
+                                let k = self
+                                    .builder
+                                    .kinds
+                                    .get(self.builder.kind_idx)
+                                    .cloned()
+                                    .unwrap_or_else(|| "tree.default".into());
+                                if let Err(e) = self.builder.ws.place(&k, pos, yaw, now_ms) {
                                     log::warn!("builder: place rejected: {e}");
                                 }
+                            }
+                            // Select kind with number keys 1..9
+                            KC::Digit1 if pressed && self.builder.active => {
+                                self.builder.kind_idx =
+                                    0.min(self.builder.kinds.len().saturating_sub(1));
+                            }
+                            KC::Digit2 if pressed && self.builder.active => {
+                                self.builder.kind_idx =
+                                    1.min(self.builder.kinds.len().saturating_sub(1));
                             }
                             KC::Comma if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
