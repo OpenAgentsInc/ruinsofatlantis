@@ -1,5 +1,7 @@
 # Worldsmithing — In‑World Building Capabilities (Unified Spec)
 
+Design overview (profession & reputation): see `docs/gdd/02-mechanics/worldsmithing.md`.
+
 Purpose
 - Worldsmithing is the in‑game capability to place, arrange, and persist world elements using the same runtime (camera, renderer, input) as regular play. It is not a separate editor; it’s a set of player/creator verbs gated by zone policy and permissions.
 
@@ -128,4 +130,3 @@ Acceptance Checklist (Creator POV)
 - Export → data/zones/campaign_builder/scene.json updated.
 - Bake → packs/zones/campaign_builder/snapshot.v1/trees.json emitted and meta updated.
 - Reload zone → trees render with textures; missing assets degrade safely; no HUD/casting regressions in other zones.
-

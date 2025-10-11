@@ -653,22 +653,17 @@ impl ApplicationHandler for App {
                     && slug.as_str() == "campaign_builder"
                     && self.builder.active
                 {
-                    if let Some(mut pos) = state.center_ray_hit_y0() {
-                        // Snap Y to terrain height and visualize a ghost cube at placement pose
-                        let y = state.terrain_height_at(pos[0], pos[2]);
-                        pos[1] = y;
-                        let yaw = self.builder.yaw_deg.rem_euclid(360.0).to_radians();
-                        let (c, s) = (yaw.cos(), yaw.sin());
-                        let model = [
-                            [c, 0.0, s, 0.0],
-                            [0.0, 1.0, 0.0, 0.0],
-                            [-s, 0.0, c, 0.0],
-                            [pos[0], pos[1], pos[2], 1.0],
-                        ];
-                        state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
-                    } else {
-                        state.set_ghost_instance(None);
-                    }
+                    // Place the ghost ~3.5m in front of the camera, snapped to terrain
+                    let pos = state.forward_point_on_terrain(3.5);
+                    let yaw = self.builder.yaw_deg.rem_euclid(360.0).to_radians();
+                    let (c, s) = (yaw.cos(), yaw.sin());
+                    let model = [
+                        [c, 0.0, s, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [-s, 0.0, c, 0.0],
+                        [pos[0], pos[1], pos[2], 1.0],
+                    ];
+                    state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
                     let mut lines: Vec<String> = Vec::new();
                     let util = (self.builder.ws.cap_utilization() * 100.0).round();
                     lines.push(format!(
@@ -678,7 +673,7 @@ impl ApplicationHandler for App {
                         util
                     ));
                     lines.push(
-                        "Enter: place   Q/E or Wheel: rotate   X: export   I: import   Z: undo   B: exit"
+                        "Enter: place   ,/. rotate   X: export   I: import   Z: undo   B: exit"
                             .into(),
                     );
                     for (i, m) in self.builder.ws.placed.iter().enumerate().take(10) {
@@ -694,7 +689,7 @@ impl ApplicationHandler for App {
                     }
                     state.draw_picker_overlay(
                         "Campaign Builder",
-                        "B toggle   Enter place   Q/E rotate   I import   X export   Z undo",
+                        "B toggle   Enter place   ,/. rotate   I import   X export   Z undo",
                         &lines,
                         0,
                     );
@@ -719,34 +714,34 @@ impl ApplicationHandler for App {
                         self.boot = BootMode::Running { slug: slug.clone() };
                         window.set_title(&format!("RuinsofAtlantis — {}", slug));
                         // Configure worldsmithing rules/caps from manifest (if any)
-                        if slug.as_str() == "campaign_builder" {
-                            if let Ok(man) = data_runtime::zone::load_zone_manifest(&slug) {
-                                let mut rules = worldsmithing::Rules::default();
-                                let mut caps = worldsmithing::Caps::default();
-                                if let Some(wsp) = man.worldsmithing {
-                                    if !wsp.kinds.is_empty() {
-                                        for k in wsp.kinds {
-                                            rules.allowed_kinds.insert(k);
-                                        }
-                                    } else {
-                                        rules.allowed_kinds.insert("tree.default".into());
-                                    }
-                                    if let Some(c) = wsp.caps {
-                                        if let Some(t) = c.trees {
-                                            caps.max_trees_per_zone = t;
-                                        }
-                                        if let Some(p) = c.place_per_second {
-                                            caps.max_place_per_second = p;
-                                        }
+                        if slug.as_str() == "campaign_builder"
+                            && let Ok(man) = data_runtime::zone::load_zone_manifest(&slug)
+                        {
+                            let mut rules = worldsmithing::Rules::default();
+                            let mut caps = worldsmithing::Caps::default();
+                            if let Some(wsp) = man.worldsmithing {
+                                if !wsp.kinds.is_empty() {
+                                    for k in wsp.kinds {
+                                        rules.allowed_kinds.insert(k);
                                     }
                                 } else {
                                     rules.allowed_kinds.insert("tree.default".into());
                                 }
-                                self.builder.ws = worldsmithing::Builder::new()
-                                    .caps(caps)
-                                    .rules(rules)
-                                    .build();
+                                if let Some(c) = wsp.caps {
+                                    if let Some(t) = c.trees {
+                                        caps.max_trees_per_zone = t;
+                                    }
+                                    if let Some(p) = c.place_per_second {
+                                        caps.max_place_per_second = p;
+                                    }
+                                }
+                            } else {
+                                rules.allowed_kinds.insert("tree.default".into());
                             }
+                            self.builder.ws = worldsmithing::Builder::new()
+                                .caps(caps)
+                                .rules(rules)
+                                .build();
                         }
                     } else {
                         log::error!(
@@ -771,34 +766,30 @@ impl ApplicationHandler for App {
                                 self.builder.ws.set_active(self.builder.active);
                             }
                             KC::Enter if pressed && self.builder.active => {
-                                if let Some(mut pos) = state.center_ray_hit_y0() {
-                                    // Snap Y to terrain height at XZ so placed trees sit on ground.
-                                    let y = state.terrain_height_at(pos[0], pos[2]);
-                                    pos[1] = y;
-                                    let yaw = self.builder.yaw_deg.rem_euclid(360.0);
-                                    let now_ms = {
-                                        #[cfg(not(target_arch = "wasm32"))]
-                                        {
-                                            self.t0.elapsed().as_millis() as u64
-                                        }
-                                        #[cfg(target_arch = "wasm32")]
-                                        {
-                                            self.t0.elapsed().as_millis() as u64
-                                        }
-                                    };
-                                    if let Err(e) =
-                                        self.builder.ws.place("tree.default", pos, yaw, now_ms)
+                                let pos = state.forward_point_on_terrain(6.0);
+                                let yaw = self.builder.yaw_deg.rem_euclid(360.0);
+                                let now_ms = {
+                                    #[cfg(not(target_arch = "wasm32"))]
                                     {
-                                        log::warn!("builder: place rejected: {e}");
+                                        self.t0.elapsed().as_millis() as u64
                                     }
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        self.t0.elapsed().as_millis() as u64
+                                    }
+                                };
+                                if let Err(e) =
+                                    self.builder.ws.place("tree.default", pos, yaw, now_ms)
+                                {
+                                    log::warn!("builder: place rejected: {e}");
                                 }
                             }
-                            KC::KeyQ if pressed && self.builder.active => {
+                            KC::Comma if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
                                     (self.builder.yaw_deg - 15.0).rem_euclid(360.0);
                                 self.builder.ws.current_yaw_deg = self.builder.yaw_deg;
                             }
-                            KC::KeyE if pressed && self.builder.active => {
+                            KC::Period if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
                                     (self.builder.yaw_deg + 15.0).rem_euclid(360.0);
                                 self.builder.ws.current_yaw_deg = self.builder.yaw_deg;

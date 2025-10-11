@@ -6,53 +6,72 @@
   "logic": {
     "triggers": [],
     "spawns": [
-      { "id": "t0101", "kind": "tree.quaternius.Birch_1",         "pos": [-40.0, 0.0, -20.0],  "yaw_deg":  0.0 },
-      { "id": "t0102", "kind": "tree.quaternius.Birch_2",         "pos": [-20.0, 0.0, -20.0],  "yaw_deg": 45.0 },
-      { "id": "t0103", "kind": "tree.quaternius.Birch_3",         "pos": [  0.0, 0.0, -20.0],  "yaw_deg": 90.0 },
-      { "id": "t0104", "kind": "tree.quaternius.Birch_4",         "pos": [ 20.0, 0.0, -20.0],  "yaw_deg": 135.0 },
-      { "id": "t0105", "kind": "tree.quaternius.Birch_5",         "pos": [ 40.0, 0.0, -20.0],  "yaw_deg": 180.0 },
-
-      { "id": "t0201", "kind": "tree.quaternius.CherryBlossom_1", "pos": [-40.0, 0.0, -40.0],  "yaw_deg":  0.0 },
-      { "id": "t0202", "kind": "tree.quaternius.CherryBlossom_2", "pos": [-20.0, 0.0, -40.0],  "yaw_deg": 45.0 },
-      { "id": "t0203", "kind": "tree.quaternius.CherryBlossom_3", "pos": [  0.0, 0.0, -40.0],  "yaw_deg": 90.0 },
-      { "id": "t0204", "kind": "tree.quaternius.CherryBlossom_4", "pos": [ 20.0, 0.0, -40.0],  "yaw_deg": 135.0 },
-      { "id": "t0205", "kind": "tree.quaternius.CherryBlossom_5", "pos": [ 40.0, 0.0, -40.0],  "yaw_deg": 180.0 },
-
-      { "id": "t0301", "kind": "tree.quaternius.CommonTree_1",    "pos": [-40.0, 0.0, -60.0],  "yaw_deg":  0.0 },
-      { "id": "t0302", "kind": "tree.quaternius.CommonTree_2",    "pos": [-20.0, 0.0, -60.0],  "yaw_deg": 45.0 },
-      { "id": "t0303", "kind": "tree.quaternius.CommonTree_3",    "pos": [  0.0, 0.0, -60.0],  "yaw_deg": 90.0 },
-      { "id": "t0304", "kind": "tree.quaternius.CommonTree_4",    "pos": [ 20.0, 0.0, -60.0],  "yaw_deg": 135.0 },
-      { "id": "t0305", "kind": "tree.quaternius.CommonTree_5",    "pos": [ 40.0, 0.0, -60.0],  "yaw_deg": 180.0 },
-
-      { "id": "t0401", "kind": "tree.quaternius.DeadTree_1",      "pos": [-40.0, 0.0, -80.0],  "yaw_deg":  0.0 },
-      { "id": "t0402", "kind": "tree.quaternius.DeadTree_2",      "pos": [-20.0, 0.0, -80.0],  "yaw_deg": 45.0 },
-      { "id": "t0403", "kind": "tree.quaternius.DeadTree_3",      "pos": [  0.0, 0.0, -80.0],  "yaw_deg": 90.0 },
-      { "id": "t0404", "kind": "tree.quaternius.DeadTree_4",      "pos": [ 20.0, 0.0, -80.0],  "yaw_deg": 135.0 },
-      { "id": "t0405", "kind": "tree.quaternius.DeadTree_5",      "pos": [ 40.0, 0.0, -80.0],  "yaw_deg": 180.0 },
-
-      { "id": "t0501", "kind": "tree.quaternius.GiantPine_1",     "pos": [-40.0, 0.0, -100.0], "yaw_deg":  0.0 },
-      { "id": "t0502", "kind": "tree.quaternius.GiantPine_2",     "pos": [-20.0, 0.0, -100.0], "yaw_deg": 45.0 },
-      { "id": "t0503", "kind": "tree.quaternius.GiantPine_3",     "pos": [  0.0, 0.0, -100.0], "yaw_deg": 90.0 },
-      { "id": "t0504", "kind": "tree.quaternius.GiantPine_4",     "pos": [ 20.0, 0.0, -100.0], "yaw_deg": 135.0 },
-      { "id": "t0505", "kind": "tree.quaternius.GiantPine_5",     "pos": [ 40.0, 0.0, -100.0], "yaw_deg": 180.0 },
-
-      { "id": "t0601", "kind": "tree.quaternius.Pine_1",          "pos": [-40.0, 0.0, -120.0], "yaw_deg":  0.0 },
-      { "id": "t0602", "kind": "tree.quaternius.Pine_2",          "pos": [-20.0, 0.0, -120.0], "yaw_deg": 45.0 },
-      { "id": "t0603", "kind": "tree.quaternius.Pine_3",          "pos": [  0.0, 0.0, -120.0], "yaw_deg": 90.0 },
-      { "id": "t0604", "kind": "tree.quaternius.Pine_4",          "pos": [ 20.0, 0.0, -120.0], "yaw_deg": 135.0 },
-      { "id": "t0605", "kind": "tree.quaternius.Pine_5",          "pos": [ 40.0, 0.0, -120.0], "yaw_deg": 180.0 },
-
-      { "id": "t0701", "kind": "tree.quaternius.TallThick_1",     "pos": [-40.0, 0.0, -140.0], "yaw_deg":  0.0 },
-      { "id": "t0702", "kind": "tree.quaternius.TallThick_2",     "pos": [-20.0, 0.0, -140.0], "yaw_deg": 45.0 },
-      { "id": "t0703", "kind": "tree.quaternius.TallThick_3",     "pos": [  0.0, 0.0, -140.0], "yaw_deg": 90.0 },
-      { "id": "t0704", "kind": "tree.quaternius.TallThick_4",     "pos": [ 20.0, 0.0, -140.0], "yaw_deg": 135.0 },
-      { "id": "t0705", "kind": "tree.quaternius.TallThick_5",     "pos": [ 40.0, 0.0, -140.0], "yaw_deg": 180.0 },
-
-      { "id": "t0801", "kind": "tree.quaternius.TwistedTree_1",   "pos": [-40.0, 0.0, -160.0], "yaw_deg":  0.0 },
-      { "id": "t0802", "kind": "tree.quaternius.TwistedTree_2",   "pos": [-20.0, 0.0, -160.0], "yaw_deg": 45.0 },
-      { "id": "t0803", "kind": "tree.quaternius.TwistedTree_3",   "pos": [  0.0, 0.0, -160.0], "yaw_deg": 90.0 },
-      { "id": "t0804", "kind": "tree.quaternius.TwistedTree_4",   "pos": [ 20.0, 0.0, -160.0], "yaw_deg": 135.0 },
-      { "id": "t0805", "kind": "tree.quaternius.TwistedTree_5",   "pos": [ 40.0, 0.0, -160.0], "yaw_deg": 180.0 }
+      {
+        "id": "32dbb4af-5c3e-45b6-a966-2d513b28333b",
+        "kind": "tree.default",
+        "pos": [
+          -33.68,
+          2.419,
+          -33.913
+        ],
+        "yaw_deg": 210.0,
+        "tags": []
+      },
+      {
+        "id": "2ea8eb84-b956-4500-bf88-5970772d5fa3",
+        "kind": "tree.default",
+        "pos": [
+          -32.675,
+          2.529,
+          -24.954
+        ],
+        "yaw_deg": 210.0,
+        "tags": []
+      },
+      {
+        "id": "7ebc7ed4-69d3-4f42-8454-aaf02f6efdca",
+        "kind": "tree.default",
+        "pos": [
+          -43.193,
+          2.485,
+          -26.253
+        ],
+        "yaw_deg": 210.0,
+        "tags": []
+      },
+      {
+        "id": "8f3a6132-5171-4843-b6fd-a88e7baf15c3",
+        "kind": "tree.default",
+        "pos": [
+          -43.228,
+          2.51,
+          -25.376
+        ],
+        "yaw_deg": 210.0,
+        "tags": []
+      },
+      {
+        "id": "c62acf02-1cba-49dc-8027-1252f4c86b5b",
+        "kind": "tree.default",
+        "pos": [
+          -20.507,
+          2.492,
+          -25.762
+        ],
+        "yaw_deg": 210.0,
+        "tags": []
+      },
+      {
+        "id": "7b9900a1-f42f-46c3-90b6-6681d6f5d74f",
+        "kind": "tree.default",
+        "pos": [
+          -21.584,
+          2.511,
+          -25.359
+        ],
+        "yaw_deg": 210.0,
+        "tags": []
+      }
     ],
     "waypoints": [],
     "links": []

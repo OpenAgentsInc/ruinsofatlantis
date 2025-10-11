@@ -881,6 +881,17 @@ impl Renderer {
         h
     }
 
+    /// Returns a point `dist` meters in front of the camera, snapped to terrain height.
+    pub fn forward_point_on_terrain(&self, dist: f32) -> [f32; 3] {
+        let eye = self.cam_follow.current_pos;
+        let look = self.cam_follow.current_look;
+        let dir = (look - eye).normalize_or_zero();
+        let mut p = eye + dir * dist.max(0.0);
+        let (y, _n) = terrain::height_at(&self.terrain_cpu, p.x, p.z);
+        p.y = y;
+        [p.x, p.y, p.z]
+    }
+
     /// Set a single ghost instance to draw (unit cube), with a world transform and tint color.
     /// Pass None to clear the ghost.
     pub fn set_ghost_instance(&mut self, inst: Option<crate::gfx::types::Instance>) {
