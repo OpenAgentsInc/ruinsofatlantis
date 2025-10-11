@@ -173,7 +173,9 @@ fn asset_path(rel: &str) -> std::path::PathBuf {
 /// Heuristic: detect a broken/degenerate bake where all instance transforms
 /// share (nearly) the same translation, causing trees to stack into one.
 fn snapshot_is_collapsed(models: &[[[f32; 4]; 4]]) -> bool {
-    if models.len() <= 1 {
+    // One instance is valid; consider collapsed only when there are zero instances
+    // or when multiple instances occupy nearly the same spot.
+    if models.is_empty() {
         return true;
     }
     let mut min = [f32::INFINITY; 3];
@@ -219,7 +221,7 @@ mod tests {
             [0.0, 0.0, 1.0, 0.0],
             [10.0, 2.0, 10.0, 1.0],
         ]];
-        // Repeated at exactly same spot
+        // Repeated at exactly same spot (many)
         let models: Vec<[[f32; 4]; 4]> = vec![m[0]; 50];
         assert!(snapshot_is_collapsed(&models));
     }
@@ -232,12 +234,16 @@ mod tests {
             [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ];
-        let mut models: Vec<[[f32; 4]; 4]> = Vec::new();
+        // Single instance should be considered valid (not collapsed)
+        let models_one: Vec<[[f32; 4]; 4]> = vec![base];
+        assert!(!snapshot_is_collapsed(&models_one));
+        // Multiple spread-out instances are not collapsed
+        let mut models_many: Vec<[[f32; 4]; 4]> = Vec::new();
         for i in 0..20 {
             let mut m = base;
             m[3][0] = i as f32 * 2.0; // spread out in X
-            models.push(m);
+            models_many.push(m);
         }
-        assert!(!snapshot_is_collapsed(&models));
+        assert!(!snapshot_is_collapsed(&models_many));
     }
 }
