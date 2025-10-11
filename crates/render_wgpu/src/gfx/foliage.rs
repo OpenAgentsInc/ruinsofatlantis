@@ -90,9 +90,25 @@ pub fn build_trees(
         usage: wgpu::BufferUsages::VERTEX,
     });
 
-    // Load a static tree mesh (GLTF) and upload. We vendor a specific tree asset
-    // under assets/models so referenced images/buffers resolve via relative paths.
-    let tree_mesh_path = asset_path("assets/models/trees/CommonTree_3/CommonTree_3.gltf");
+    // Load a static tree mesh and upload. Resolution order:
+    // 1) RA_TREE_PATH (absolute or workspace-relative) if set
+    // 2) assets/trees/Birch_4GLB.glb (embedded textures, convenient for tests)
+    // 3) assets/models/trees/CommonTree_3/CommonTree_3.gltf (repo default)
+    let tree_mesh_path = if let Ok(p) = std::env::var("RA_TREE_PATH") {
+        let pb = std::path::PathBuf::from(p);
+        if pb.exists() {
+            pb
+        } else {
+            asset_path("assets/models/trees/CommonTree_3/CommonTree_3.gltf")
+        }
+    } else {
+        let birch = asset_path("assets/trees/Birch_4GLB.glb");
+        if birch.exists() {
+            birch
+        } else {
+            asset_path("assets/models/trees/CommonTree_3/CommonTree_3.gltf")
+        }
+    };
     // Default to cube fallback if GLTF fails for any reason.
     let (vb, ib, index_count) = match load_gltf_mesh(&tree_mesh_path) {
         Ok(cpu) => {
