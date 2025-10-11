@@ -231,6 +231,11 @@ pub fn build_trees_by_kind(
     let map = terrain::load_trees_snapshot_by_kind(zone_slug)?;
     let mut out: Vec<(String, TreesGpu)> = Vec::new();
     for (kind, models) in map {
+        // Skip problematic kinds per request (e.g., Quaternius Pine_* missing assets)
+        if should_skip_kind(&kind) {
+            log::info!("trees: skipping kind '{}' (policy)", kind);
+            continue;
+        }
         // Convert models to Instances and snap Y to terrain
         let mut inst = terrain::instances_from_models(&models);
         for m in &mut inst {
@@ -471,6 +476,13 @@ pub fn build_trees_by_kind(
         ));
     }
     Some(out)
+}
+
+#[inline]
+fn should_skip_kind(kind: &str) -> bool {
+    // Keys are lowercased in snapshot. Skip pine family from Quaternius and generic 'pine'.
+    let k = kind.to_ascii_lowercase();
+    k == "pine" || k.starts_with("quaternius.pine_")
 }
 
 fn asset_path(rel: &str) -> std::path::PathBuf {
