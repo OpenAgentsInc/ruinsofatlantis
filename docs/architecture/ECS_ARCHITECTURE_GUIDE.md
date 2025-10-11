@@ -19,6 +19,11 @@
    * **net_core/platform** frames commands & snapshots.
    * **client_core** applies snapshots into a replication buffer.
    * **renderer** visualizes replicated state; no gameplay logic.
+   * **worldsmithing (authoring, client‑side)** owns authoring state and export/import logic; the platform only routes inputs and the renderer only draws an ephemeral preview.
+
+> Authoring/Worldsmithing Layering
+> - Keep authoring logic (placement state, caps/rate limit, export/import) out of `platform_winit` and the renderer. `platform_winit` should only orchestrate the window/event loop and forward inputs to the worldsmithing crate; `render_wgpu` remains presentation‑only (instancing + a ghost preview draw).
+> - Zone policy and caps live in data (manifest/catalog); no hard‑coded scene checks in platform or renderer.
 
 ---
 

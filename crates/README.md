@@ -6,6 +6,11 @@ Note: Shared libraries that aren’t under `crates/` (e.g., `shared/assets` as `
 
 ## Crates
 
+### worldsmithing
+- In‑world authoring logic for V1 “Place Tree”. Pure, UI/renderer‑agnostic crate that owns placement state, yaw rotation, caps/rate‑limit, and export/import (serde) of authoring files.
+- Intended usage: platform routes inputs to this crate; renderer provides an ephemeral ghost draw; tools/zone‑bake consumes exported `scene.json` to produce grouped `trees.json` for instancing.
+- Keeps authoring decisions out of the renderer and platform; data‑driven via a small catalog (global with per‑zone overrides in `data/`).
+
 ### render_wgpu
 - WGPU renderer. Hosts the full renderer under `src/gfx/**` (camera, pipelines, shaders, UI overlays, scene assembly, terrain, sky, temporal, helpers).
 - Exposes `gfx::Renderer` used by the app/platform. Integrates with `client_core` (input/controller facade), `ecs_core` (components), `ux_hud`, `data_runtime` (zone/TOD), and replication from `net_core`.
@@ -73,6 +78,10 @@ Note: Shared libraries that aren’t under `crates/` (e.g., `shared/assets` as `
 ### voxel_mesh
 - CPU‑only greedy meshing over `voxel_proxy::VoxelGrid`.
 - Generates triangle buffers from solid→empty boundaries; per‑chunk meshing helpers for dirty sets.
+
+### dev_docs
+- Rustdoc aggregator for developer documentation. Builds a browsable docs site from Markdown using `cargo doc -p dev_docs --no-deps`.
+- Short‑term convenience until we stand up mdBook or a site; no runtime dependencies.
 
 ---
 
