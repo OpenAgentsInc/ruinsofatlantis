@@ -1,40 +1,42 @@
-# Campaign Builder V1 — Integrate With Zone Picker + CC Demo
+# Campaign Builder V1 — Integrated Builder (Hotbar + Ghost Placement)
 
 Context
-- The earlier start.md assumed a generic engine and client-side gameplay. This issue anchors a concrete V1 on our codebase: server-authoritative ECS, Zone snapshots, and the existing Zone Picker.
-- We introduce a new Zone: `campaign_builder` (separate from `cc_demo`). Use `cc_demo` as a UI/input baseline, but authoring/export lives under its own slug.
-- Goals: a) ship a minimal in-app “Builder” overlay reachable when `campaign_builder` is selected from the Zone Picker; b) export authoring data to our Zone pipeline (`data/zones/<slug>/scene.json` → `tools/zone-bake` → `packs/zones/<slug>/snapshot.v1/logic.bin`); c) keep the client presentation-only (no gameplay mutation).
+- This doc updates the older world‑builder notes to match our current direction: the “builder” is an in‑world capability, not a separate app. It uses the same client/runtime with per‑zone policy gating.
+- Primary Zone: `campaign_builder` (separate from `cc_demo`). Use `cc_demo` as a starting reference only; authoring/export lives under its own slug and policy.
+- Goals: a) show the standard hotbar in `campaign_builder` with slot 1 = Place Tree; b) when active, the ability enters a ghost placement mode; c) export placements into the zone pipeline (`data/zones/<slug>/scene.json` → `tools/zone-bake` → `packs/zones/<slug>/snapshot.v1/trees.json`). Client remains presentation‑only.
 
 Out of Scope (V1)
 - No live spawn of NPCs from the client; no network/replication changes.
-- No 3D ghost mesh previews; V1 uses a simple screen-center placement with text overlay and optional flat gizmo ring later.
-- No scene editing for time-of-day/weather (those live in `manifest.json`).
+- No non‑tree authoring (props/NPCs/triggers come later). Focus is trees only.
+- No terrain sculpt/time‑of‑day editing (those remain in `manifest.json`).
 
 Integration Points (code today)
 - Zone selection and boot: `crates/platform_winit/src/lib.rs` (Zone Picker model, boot modes, input routing).
 - Zone client loader: `crates/client_core/src/zone_client.rs` and snapshot reader `crates/data_runtime/src/zone_snapshot.rs`.
-- Renderer overlay hooks: `render_wgpu::gfx::Renderer::draw_picker_overlay(...)` and HUD overlay in `crates/render_wgpu/src/gfx/renderer/render.rs`.
-- Zone bake tool: `tools/zone-bake` writes `packs/zones/<slug>/snapshot.v1/*` including `logic.bin`.
+- Renderer overlays + foliage: `crates/render_wgpu/src/gfx/renderer/render.rs` and `crates/render_wgpu/src/gfx/foliage.rs` (ghost/instancing/textures).
+- Zone bake tool: `tools/zone-bake` writes `packs/zones/<slug>/snapshot.v1/trees.json` (plus meta).
 
 What We’re Building (V1)
-- “Builder Mode” for `campaign_builder`:
-  - Toggle with `B` after loading `campaign_builder` (also enable when `RA_BUILDER=1`).
-  - Place simple “logic spawn markers” at the screen-center ground plane (Y=0) with yaw steps (`Q/E` ±15°, `Ctrl+Wheel` ±1°).
-  - Export the session to `data/zones/campaign_builder/scene.json` under a `logic.spawns[]` array that zone-bake packs into `snapshot.v1/logic.bin`.
-  - Import existing `scene.json` to continue editing.
+- Integrated “Place Tree” ability in `campaign_builder`:
+  - Hotbar is visible in `campaign_builder`; slot 1 = Place Tree. Casting remains disabled by policy.
+  - Activating Place Tree enters a ghost placement mode: a semi‑transparent tree follows the ground under the crosshair. Valid = green tint; invalid = red.
+  - Rotate yaw with `Q/E` (±15°) and `Ctrl+Wheel` (±1°). Confirm placement with Left Click or `Enter`.
+  - Export to `data/zones/campaign_builder/scene.json` under `logic.spawns[]` with `kind: "tree.*"`. The bake step emits `snapshot.v1/trees.json` used by the renderer’s instanced foliage path.
+  - Import existing `scene.json` to resume editing and pre‑populate placements.
 
 Design Constraints (align to ECS guide)
-- Server-authoritative: Builder never mutates gameplay entities. It writes authoring data only.
-- Client presentation-only: Any in-app visuals are overlays/gizmos; no replicated state changes.
-- Deterministic pipeline: zone-bake remains the single path to snapshots; no ad-hoc runtime saves in `packs/`.
+- Server‑authoritative: Builder does not mutate gameplay entities; it writes authoring data only.
+- Client presentation‑only: Ghosts and overlays are local; runtime world edits are not replicated.
+- Deterministic pipeline: zone‑bake remains the one source of truth for snapshots; no ad‑hoc writes to `packs/`.
+- Per‑zone policy: `campaign_builder` shows the hotbar but keeps casting disabled. `cc_demo` may share the same policy (HUD visible, casting off).
 
 User Flow
 1) Launch app → Zone Picker. Select “Campaign Builder (campaign_builder)”.
-2) In `cc_demo`, press `B` to enter Builder Mode. Overlay shows instructions and current yaw/placement count.
-3) Aim with camera; press `Enter` to add a spawn marker at the screen-center ray intersecting plane Y=0 (V1). Rotate with `Q/E` or wheel.
-4) Press `X` to Export → writes/updates `data/zones/cc_demo/scene.json` (creates dirs if missing).
-5) Optionally press `I` to Import → loads `scene.json` and lists N existing markers; overlay shows them as text rows (V1).
-6) Run `cargo run -p zone-bake -- cc_demo` to bake `packs/zones/cc_demo/snapshot.v1/logic.bin`.
+2) Activate hotbar slot 1 “Place Tree” (or press `B` to toggle a helper overlay).
+3) Aim with camera; a ghost tree snaps to ground. Rotate with `Q/E` or wheel. Confirm with Left Click or `Enter`.
+4) Press `X` to Export → writes/updates `data/zones/campaign_builder/scene.json` (creates dirs if missing).
+5) Press `I` to Import → loads `scene.json` and lists existing spawns; overlay shows count and last few entries.
+6) Run `cargo run -p zone-bake -- campaign_builder` to bake `packs/zones/campaign_builder/snapshot.v1/trees.json` (and update `meta.json`).
 
 Data Contract (authoring → snapshot)
 - Authoring file: `data/zones/<slug>/scene.json`
@@ -48,68 +50,49 @@ Data Contract (authoring → snapshot)
       "logic": {
         "triggers": [],
         "spawns": [
-          { "id": "uuid-v4", "kind": "npc.wizard", "pos": [x,y,z], "yaw_deg": 270.0, "tags": ["wave1"] }
+          { "id": "uuid-v4", "kind": "tree.default", "pos": [x,y,z], "yaw_deg": 270.0, "tags": [] }
         ],
         "waypoints": [],
         "links": []
       }
     }
     ```
-- Bake output: `packs/zones/<slug>/snapshot.v1/logic.bin` contains a compacted form of `logic` (V1: JSON bytes passthrough is acceptable). `meta.json.counts.logic_spawns` reflects the count.
+- Bake output: `packs/zones/<slug>/snapshot.v1/trees.json` encodes model transforms (column‑major 4×4) optionally grouped by kind. `meta.json.counts.trees` reflects instance count.
 
 Work Items (specific and staged)
 
-Stage 1 — Builder overlay plumbing
-- platform_winit: Add Builder state and inputs
-  - Add `RA_BUILDER=1` env toggle. When set and zone=`cc_demo`, auto-enable Builder Mode after load.
-  - Add key handling when boot mode is Running:
-    - `B` → toggle Builder Mode.
-    - `Q/E` and `Wheel` (±15°) with `Ctrl+Wheel` (±1°) → adjust yaw while in Builder.
-    - `Enter` → confirm a marker at screen-center plane Y=0 with current yaw.
-    - `I` → import from `data/zones/<slug>/scene.json` (if exists).
-    - `X` → export to `data/zones/<slug>/scene.json` (create parent dirs).
-  - File path helper (native only): mirror `tools/zone-bake` logic for workspace roots using `CARGO_MANIFEST_DIR` to resolve `../../data/zones/<slug>/scene.json`.
-  - Draw overlay using `Renderer::draw_picker_overlay(title, subtitle, &lines, selected_idx=0)` with:
-    - Title: `Campaign Builder`
-    - Subtitle: `B toggle   Enter place   Q/E rotate   I import   X export   Esc back`
-    - Lines: last N markers like `#12  npc.wizard  [10.2,0.0,-3.7]  yaw=270°  wave1`.
+Stage 1 — Hotbar + ghost placement (docs-only planning)
+- Hotbar: Show in `campaign_builder`; slot 1 label “Place Tree”. Casting remains disabled by zone policy.
+- Ability flow: Activate → ghost on ground, rotate `Q/E` or wheel; confirm with Left Click/`Enter`.
+- Overlay: Optional helper overlay (`B`) with controls legend and placement count.
 
-- renderer: Expose camera forward for simple plane pick
-  - Add a tiny helper to compute a world-space ray from camera center and intersect plane Y=0; expose via a method on `gfx::Renderer` that returns `(pos: glam::Vec3, yaw: f32)` suggestion for placement. Keep this CPU-only and free of gameplay coupling.
-  - Alternatively (minimal): compute the hit in platform_winit with a copy of the current view-proj from `Globals` via an accessor, and perform ray-plane intersection there.
+Stage 2 — Authoring I/O and bake
+- Export/import: Read/write `data/zones/<slug>/scene.json` (`logic.spawns[]` entries with `tree.*` kinds).
+- Bake: Convert spawns to `snapshot.v1/trees.json` (and update `meta.json.counts.trees`).
+- Schema: Ensure `schemas/zone_scene.schema.json` includes `logic.spawns[].kind` = `tree.*`.
 
-Stage 2 — Zone bake path for logic
-- tools/zone-bake
-  - Parse `scene_json` to count `logic.spawns.len()` and set `meta.counts.logic_spawns` accordingly (currently hardcoded to 0).
-  - Write `logic.bin` as the compacted encoding of `logic` (V1: write JSON bytes; future: binary).
-  - Update `hashes.logic` to reflect actual `logic.bin` bytes.
-
-- data_runtime
-  - Add `schemas/zone_scene.schema.json` describing the `scene.json` shape above. Wire into `cargo xtask schema-check`.
-  - No loader changes needed for V1 (snapshot reader already surfaces `logic.bin`).
-
-Stage 3 — Server-side placeholder (non-blocking for V1 export)
-- server_core (follow-up PR)
-  - Add a tiny `zones::logic` module with a deserializer for `logic.bin` (JSON V1) and a no-op apply that logs found spawns on boot for the selected zone. Do not spawn entities yet.
+Stage 3 — Runtime render (already wired, docs alignment)
+- Renderer: Consume `trees.json` and draw via textured instanced pipeline. Missing textures/models degrade gracefully to a safe placeholder.
 
 Keybinding Notes (repo policy)
-- Avoid function keys; use letters/digits. Proposed: `B` (toggle Builder), `Enter` (place), `Q/E` and Wheel (rotate), `Ctrl+Wheel` (fine rotate), `I` (import), `X` (export).
+- Avoid function keys; use letters/digits.
+- Proposed: `1` = Place Tree (hotbar), `B` toggle overlay, `Enter`/Left Click place, `Q/E` and Wheel rotate, `Ctrl+Wheel` fine rotate, `I` import, `X` export.
 - Document these briefly in `src/README.md` under “Controls” when the feature lands.
 
 Testing & Validation
-- platform_winit unit test: simulate a minimal packs dir and loading `cc_demo`, ensure Builder export writes `data/zones/cc_demo/scene.json` with at least one `logic.spawns[]` entry.
-- zone-bake test: given a `scene.json` with N spawns, `meta.json.counts.logic_spawns == N` and `hashes.logic` matches `logic.bin`.
-- client_core no tests needed in V1 (all builder state local to platform), but keep logic small and isolated.
-- Manual run: select `cc_demo` → place 3 markers → export → run `cargo run -p zone-bake -- cc_demo` → verify `packs/zones/cc_demo/snapshot.v1/logic.bin` non-empty and `meta.json` counts updated.
+- platform_winit test: load `campaign_builder`, simulate ability activation + confirm → export produces `data/zones/campaign_builder/scene.json` with ≥1 `tree.*` spawn.
+- zone-bake test: given a `scene.json` with N `tree.*` spawns, output `trees.json` has N matrices; `meta.json.counts.trees == N`.
+- Manual run: select `campaign_builder` → place 3 trees → export → run `cargo run -p zone-bake -- campaign_builder` → verify `packs/zones/campaign_builder/snapshot.v1/trees.json` and updated meta.
 
 Follow-ups (post-V1)
-- Visual gizmo: draw a small flat ring or cross at the placement point. Candidate: add a tiny “debug ring” draw in `gfx::fx`.
-- Tooling: `tools/campaign-builder` wrapper that boots `platform_winit` with `ROA_ZONE=cc_demo` and `RA_BUILDER=1` for content authors.
-- Logic application: server reads `logic.bin` and spawns/links entities on boot in `server_core::zones`.
-- Scene assets: allow choosing `kind` from a small catalog (`npc.wizard`, `npc.zombie`, etc.) via number keys; bake as data, never branched in systems.
+- Visual gizmo polish: debug ring/grid snap; align to terrain slope.
+- Tooling: `tools/campaign-builder` wrapper that boots with `ROA_ZONE=campaign_builder` and builder overlay on.
+- Additional kinds: allow choosing multiple tree kinds via number keys and bake by‑kind groups.
+- Triggers/NPCs: extend authoring to non‑tree kinds; keep server‑authoritative.
 
-- Zone Picker and `campaign_builder`: crates/platform_winit/src/lib.rs:72, crates/platform_winit/src/lib.rs:168, crates/platform_winit/src/lib.rs:320
-- Zone client loader: crates/client_core/src/zone_client.rs:14
-- Snapshot loader: crates/data_runtime/src/zone_snapshot.rs:28
-- Renderer overlays: crates/render_wgpu/src/gfx/renderer/render.rs:1872
-- Zone bake tool: tools/zone-bake/src/main.rs:1, tools/zone-bake/src/lib.rs:1
+- Zone Picker and `campaign_builder`: `crates/platform_winit/src/lib.rs:72`, `crates/platform_winit/src/lib.rs:168`, `crates/platform_winit/src/lib.rs:320`
+- Zone client loader: `crates/client_core/src/zone_client.rs:14`
+- Snapshot loader: `crates/data_runtime/src/zone_snapshot.rs:28`
+- Foliage/textured instancing: `crates/render_wgpu/src/gfx/foliage.rs:1`
+- Renderer overlays: `crates/render_wgpu/src/gfx/renderer/render.rs:1872`
+- Zone bake tool: `tools/zone-bake/src/main.rs:1`, `tools/zone-bake/src/lib.rs:1`

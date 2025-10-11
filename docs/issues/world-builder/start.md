@@ -1,14 +1,17 @@
-Below is a practical **V1 product + technical spec** for adding “move + plant a tree + export/import placements” to the **Ruins of Atlantis** Rust codebase.
+Below is a practical **V1 product + technical spec** for adding an integrated “Place Tree” ability (move + plant + export/import placements) to the **Ruins of Atlantis** Rust codebase.
+
+Note on naming
+- “World Builder” is acceptable as an internal feature label. For public‑facing naming (site/blog/trailers), prefer a more distinctive term (e.g., Atlas Forge, Aethyr Forge, Campaign Studio). See `docs/issues/world-builder/naming-and-branding.md` for rationale and options.
 
 ---
 
 ## 1) Problem & Goals
 
-**Goal:** Let a player walk around the existing scene, enter a simple “Plant Mode,” place a *single* tree type onto valid ground, rotate it (yaw), and **export** those placements to a shareable file that another user can **import** and see the exact same trees in their scene.
+**Goal:** Let a player walk around the existing scene, activate a hotbar ability (“Place Tree”), see a ghost preview that snaps to ground, place a tree with yaw, and **export** those placements to a shareable file that another user can **import** and see the exact same trees in their scene.
 
 **Success criteria (V1):**
 
-* Player can toggle Plant Mode.
+* Player can activate Place Tree from the hotbar (slot 1 in `campaign_builder`).
 * A ghost/preview tree follows the ground under the crosshair/mouse.
 * Player can rotate the preview around the vertical (yaw only).
 * Player confirms placement; a solid tree spawns at that transform.
@@ -31,9 +34,10 @@ Below is a practical **V1 product + technical spec** for adding “move + plant 
 **Default controls (configurable via input map):**
 
 * **WASD / Left stick** – move character (already present).
-* **T** – toggle Plant Mode on/off.
+* **1** – select Place Tree (hotbar slot 1; `campaign_builder` shows hotbar, casting off).
+* **B** – toggle a simple Builder overlay with controls help (optional, not required to place).
 * **Mouse** (or right stick) – look.
-* **Left Click / RT** – confirm placement when Plant Mode is ON.
+* **Left Click / Enter / RT** – confirm placement when Place Tree is active.
 * **Q/E or Mouse Wheel** – rotate preview tree yaw in ±15° steps.
 * **CTRL+Mouse Wheel** – fine rotation (±1° steps). *(Optional but easy)*
 * **F5** – Export placements to file.
@@ -42,7 +46,7 @@ Below is a practical **V1 product + technical spec** for adding “move + plant 
 
 **HUD feedback:**
 
-* When Plant Mode is ON:
+* When Place Tree is active:
 
   * Small “Plant Mode” chip in a corner with: current yaw angle, “Valid/Invalid” location, control hints.
   * Preview tree: tinted **green** when valid, **red** when invalid.
@@ -56,6 +60,7 @@ Below is a practical **V1 product + technical spec** for adding “move + plant 
 * Ground is represented by one or more static meshes flagged as **Ground** for raycast targeting.
 * Coordinate system is right-handed with **Y up** and world units in **meters**.
 * Scene ID (string) is known at runtime (e.g., `"tutorial_beach_01"`). It’s embedded in export files to warn on mismatched imports.
+* Per‑zone policy controls HUD/casting. `campaign_builder` shows the hotbar to expose the Place Tree ability but keeps casting disabled.
 
 ---
 
@@ -140,18 +145,18 @@ struct PlacedTreeV1 {
 
 ## 5) Systems & Logic
 
-### 5.1 Enter/Exit Plant Mode
+### 5.1 Activate/Deactivate Place Tree
 
-* **TogglePlantModeSystem**
+* **PlaceTreeAbilitySystem**
 
-  * On `T`:
+  * On `1` (hotbar select) or via click on slot 1:
 
-    * If off → set `active = true`; spawn preview (ghost) entity:
+    * If inactive → set `active = true`; spawn preview (ghost) entity:
 
       * Mesh/scene uses the default tree prefab with *preview material* (semi-transparent).
       * Add `PlacementPreview { yaw_deg: state.current_yaw_deg, is_valid:false }`.
       * Initialize at camera center raycast hit (if any).
-    * If on → set `active = false`; despawn preview.
+    * If already active → set `active = false`; despawn preview.
   * Ensure input focus doesn’t block character movement; both should work.
 
 ### 5.2 Preview Update
@@ -180,7 +185,7 @@ struct PlacedTreeV1 {
 
 * **ConfirmPlacementSystem**
 
-  * On **Left Click/RT** and `PlantModeState.active`:
+  * On **Left Click/Enter/RT** and `PlantModeState.active`:
 
     * If preview `is_valid`:
 
@@ -217,12 +222,9 @@ struct PlacedTreeV1 {
     * Show warning toast: “File is for `<map_id>`; you are on `<current>`; import anyway?”
     * For V1 (no modals), simply proceed and place in world coordinates; the warning is informational.
   * For each object:
-
-    * Validate `kind == "tree.default"`.
+    * Validate `kind` starts with `"tree."` (V1 default is `tree.default`).
     * Spawn **Tree** entity with `Transform` from pos + yaw.
-    * Add/replace entries in `PlacedTreesBuffer`:
-
-      * If an `id` already exists in buffer, skip or duplicate? **V1 behavior:** always append (duplicates allowed).
+    * Append to `PlacedTreesBuffer` (duplicates allowed in V1).
   * Emit toast: “Imported N trees”.
 
 **Error handling:** if file missing, malformed, wrong schema → toast error; no crash.
@@ -301,7 +303,7 @@ struct TreeAssets { default_tree: Handle<Scene> }
 
 **Spawning:**
 
-* Preview: spawn a `SceneBundle` with default tree scene; override material to a transparent green or use a shader param; disable shadow casting for the preview.
+* Preview: spawn a `SceneBundle` with default tree scene; override material to a transparent green/red or use a shader param; disable shadow casting for the preview.
 * Confirm: spawn another `SceneBundle` with the same scene; set transform; add `Tree { kind: Default }`.
 
 ---
