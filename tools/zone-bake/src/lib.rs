@@ -201,4 +201,40 @@ mod tests {
         assert!(txt.contains("\"models\""), "trees.json missing models");
         assert!(txt.contains("-2.0"), "translation Z not present");
     }
+
+    #[test]
+    fn non_tree_kinds_are_ignored() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let packs = tmp.path().join("packs");
+        fs::create_dir_all(&packs).unwrap();
+        let manifest =
+            r#"{ "slug":"campaign_builder", "display_name":"Campaign Builder", "terrain": {} }"#;
+        let scene = r#"{
+            "version":"1.0.0",
+            "seed":0,
+            "layers":[],
+            "instances":[],
+            "logic":{
+                "triggers":[],
+                "spawns":[
+                    {"id":"m0001","kind":"npc.wizard","pos":[0.0,0.0,0.0],"yaw_deg":0.0}
+                ],
+                "waypoints":[],
+                "links":[]
+            }
+        }"#;
+        let inp = BakeInputs {
+            manifest_json: manifest.into(),
+            scene_json: scene.into(),
+            assets_root: tmp.path().to_path_buf(),
+            out_dir: packs.join("zones"),
+            slug: "campaign_builder".into(),
+        };
+        bake_snapshot(&inp).expect("bake");
+        let trees_path = packs.join("zones/campaign_builder/snapshot.v1/trees.json");
+        assert!(
+            !trees_path.exists(),
+            "should not emit trees.json when no tree.* spawns exist"
+        );
+    }
 }

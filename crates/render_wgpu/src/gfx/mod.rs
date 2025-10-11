@@ -4154,6 +4154,25 @@ impl Default for ZonePolicy {
     }
 }
 
+#[cfg(test)]
+mod zone_policy_tests {
+    use super::compute_zone_policy_for_slug;
+
+    #[test]
+    fn cc_demo_disables_casting_and_hud() {
+        let p = compute_zone_policy_for_slug("cc_demo");
+        assert!(!p.allow_casting);
+        assert!(!p.show_player_hud);
+    }
+
+    #[test]
+    fn unknown_zone_defaults_allow() {
+        let p = compute_zone_policy_for_slug("unknown_zone_slug_123");
+        assert!(p.allow_casting);
+        assert!(p.show_player_hud);
+    }
+}
+
 pub(crate) fn compute_zone_policy_for_slug(slug: &str) -> ZonePolicy {
     let mut policy = ZonePolicy::default();
     #[cfg(not(target_arch = "wasm32"))]
