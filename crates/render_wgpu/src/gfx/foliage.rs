@@ -341,11 +341,11 @@ pub fn build_trees_by_kind(
             }
             Err(e) => {
                 log::warn!(
-                    "gltf import failed for kind '{}': {}; falling back to cube",
+                    "gltf import failed for kind '{}': {}; falling back to uv-cube",
                     kind,
                     e
                 );
-                let (vb, ib, ic) = super::mesh::create_cube(device);
+                let (vb, ib, ic) = super::mesh::create_uv_cube(device);
                 (vb, ib, ic)
             }
         };
