@@ -90,6 +90,29 @@ pub struct ZoneManifest {
     /// Show player HUD bars/hotbar in this zone
     #[serde(default)]
     pub show_player_hud: Option<bool>,
+    /// Optional worldsmithing policy block (authoring caps and allowed kinds)
+    #[serde(default)]
+    pub worldsmithing: Option<WorldsmithingPolicy>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldsmithingPolicy {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub kinds: Vec<String>,
+    #[serde(default)]
+    pub caps: Option<WorldsmithingCaps>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldsmithingCaps {
+    #[serde(default)]
+    pub trees: Option<u32>,
+    #[serde(default)]
+    pub place_per_second: Option<u32>,
 }
 
 /// Load a Zone manifest from `data/zones/<slug>/manifest.json`.

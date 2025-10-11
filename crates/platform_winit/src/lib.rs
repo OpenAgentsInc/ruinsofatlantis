@@ -718,6 +718,36 @@ impl ApplicationHandler for App {
                         state.set_zone_batches(Some(gz));
                         self.boot = BootMode::Running { slug: slug.clone() };
                         window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                        // Configure worldsmithing rules/caps from manifest (if any)
+                        if slug.as_str() == "campaign_builder" {
+                            if let Ok(man) = data_runtime::zone::load_zone_manifest(&slug) {
+                                let mut rules = worldsmithing::Rules::default();
+                                let mut caps = worldsmithing::Caps::default();
+                                if let Some(wsp) = man.worldsmithing {
+                                    if !wsp.kinds.is_empty() {
+                                        for k in wsp.kinds {
+                                            rules.allowed_kinds.insert(k);
+                                        }
+                                    } else {
+                                        rules.allowed_kinds.insert("tree.default".into());
+                                    }
+                                    if let Some(c) = wsp.caps {
+                                        if let Some(t) = c.trees {
+                                            caps.max_trees_per_zone = t;
+                                        }
+                                        if let Some(p) = c.place_per_second {
+                                            caps.max_place_per_second = p;
+                                        }
+                                    }
+                                } else {
+                                    rules.allowed_kinds.insert("tree.default".into());
+                                }
+                                self.builder.ws = worldsmithing::Builder::new()
+                                    .caps(caps)
+                                    .rules(rules)
+                                    .build();
+                            }
+                        }
                     } else {
                         log::error!(
                             "zone picker: failed to load zone '{}': snapshot missing or invalid",
