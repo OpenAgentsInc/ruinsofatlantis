@@ -22,4 +22,10 @@
   ,
   "allow_casting": false,
   "show_player_hud": false
+  ,
+  "worldsmithing": {
+    "enabled": true,
+    "kinds": ["quaternius.birch_4", "quaternius.pine_3"],
+    "caps": { "trees": 5000, "place_per_second": 5 }
+  }
 }

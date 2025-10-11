@@ -1897,6 +1897,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         trees_ib,
         trees_index_count,
         trees_groups: Vec::new(),
+        session_trees: Vec::new(),
         rocks_instances,
         rocks_count,
         rocks_vb,

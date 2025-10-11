@@ -657,8 +657,8 @@ impl ApplicationHandler for App {
                     && slug.as_str() == "campaign_builder"
                     && self.builder.active
                 {
-                    // Place the ghost ~3.5m in front of the camera, snapped to terrain
-                    let pos = state.forward_point_on_terrain(3.5);
+                    // Place the ghost ~10 ft (3.048 m) in front of the PLAYER facing
+                    let pos = state.forward_point_from_player(3.048);
                     let yaw = self.builder.yaw_deg.rem_euclid(360.0).to_radians();
                     let (c, s) = (yaw.cos(), yaw.sin());
                     let model = [
@@ -667,6 +667,7 @@ impl ApplicationHandler for App {
                         [-s, 0.0, c, 0.0],
                         [pos[0], pos[1], pos[2], 1.0],
                     ];
+                    // Semi-transparent green ghost
                     state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
                     let mut lines: Vec<String> = Vec::new();
                     let util = (self.builder.ws.cap_utilization() * 100.0).round();
@@ -810,11 +811,29 @@ impl ApplicationHandler for App {
                                     yaw
                                 );
                                 match self.builder.ws.place(&k, pos, yaw, now_ms) {
-                                    Ok(_) => log::info!(
-                                        "builder: placed '{}' (total={})",
-                                        k,
-                                        self.builder.ws.placed.len()
-                                    ),
+                                    Ok(_) => {
+                                        // Immediately append to renderer session draws
+                                        let yawr = yaw.to_radians();
+                                        let (c, s) = (yawr.cos(), yawr.sin());
+                                        let model = [
+                                            [c, 0.0, s, 0.0],
+                                            [0.0, 1.0, 0.0, 0.0],
+                                            [-s, 0.0, c, 0.0],
+                                            [pos[0], pos[1], pos[2], 1.0],
+                                        ];
+                                        // Map kind -> renderer key (strip optional "tree.")
+                                        let kk = if let Some(rest) = k.strip_prefix("tree.") {
+                                            rest.to_ascii_lowercase()
+                                        } else {
+                                            k.to_ascii_lowercase()
+                                        };
+                                        log::info!(
+                                            "builder: placed '{}' (total={})",
+                                            k,
+                                            self.builder.ws.placed.len()
+                                        );
+                                        state.add_session_tree(&kk, model);
+                                    }
                                     Err(e) => log::warn!("builder: place rejected: {e}"),
                                 }
                             }

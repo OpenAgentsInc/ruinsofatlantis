@@ -110,34 +110,32 @@ pub mod api {
         }
         let mut trees_models: Vec<[[f32; 4]; 4]> = Vec::new();
         let mut by_kind: HashMap<String, Vec<[[f32; 4]; 4]>> = HashMap::new();
-        if !inputs.scene_json.is_empty() {
-            if let Ok(doc) = serde_json::from_str::<SceneDoc>(&inputs.scene_json) {
-                if let Some(logic) = doc.logic {
-                    if let Some(spawns) = logic.spawns {
-                        for s in spawns.into_iter() {
-                            if s.kind.starts_with("tree.") {
-                                let kind_slug = s
-                                    .kind
-                                    .strip_prefix("tree.")
-                                    .unwrap_or("default")
-                                    .to_lowercase();
-                                let yaw = s.yaw_deg.to_radians();
-                                let (c, snt) = (yaw.cos(), yaw.sin());
-                                let tx = s.pos[0];
-                                let ty = s.pos[1];
-                                let tz = s.pos[2];
-                                // Column-major 4x4 with translation in last column
-                                let model = [
-                                    [c, 0.0, snt, 0.0],
-                                    [0.0, 1.0, 0.0, 0.0],
-                                    [-snt, 0.0, c, 0.0],
-                                    [tx, ty, tz, 1.0],
-                                ];
-                                trees_models.push(model);
-                                by_kind.entry(kind_slug).or_default().push(model);
-                            }
-                        }
-                    }
+        if !inputs.scene_json.is_empty()
+            && let Ok(doc) = serde_json::from_str::<SceneDoc>(&inputs.scene_json)
+            && let Some(logic) = doc.logic
+            && let Some(spawns) = logic.spawns
+        {
+            for s in spawns.into_iter() {
+                if s.kind.starts_with("tree.") {
+                    let kind_slug = s
+                        .kind
+                        .strip_prefix("tree.")
+                        .unwrap_or("default")
+                        .to_lowercase();
+                    let yaw = s.yaw_deg.to_radians();
+                    let (c, snt) = (yaw.cos(), yaw.sin());
+                    let tx = s.pos[0];
+                    let ty = s.pos[1];
+                    let tz = s.pos[2];
+                    // Column-major 4x4 with translation in last column
+                    let model = [
+                        [c, 0.0, snt, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [-snt, 0.0, c, 0.0],
+                        [tx, ty, tz, 1.0],
+                    ];
+                    trees_models.push(model);
+                    by_kind.entry(kind_slug).or_default().push(model);
                 }
             }
         }

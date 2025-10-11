@@ -480,9 +480,14 @@ pub fn build_trees_by_kind(
 
 #[inline]
 fn should_skip_kind(kind: &str) -> bool {
-    // Keys are lowercased in snapshot. Skip pine family from Quaternius and generic 'pine'.
+    // Keys are lowercased in snapshot. Historically we skipped the pine family due to
+    // missing assets. If the resolved mesh path exists locally, do NOT skip.
     let k = kind.to_ascii_lowercase();
-    k == "pine" || k.starts_with("quaternius.pine_")
+    if k == "pine" || k.starts_with("quaternius.pine_") {
+        let p = path_for_kind(kind);
+        return !p.exists();
+    }
+    false
 }
 
 fn asset_path(rel: &str) -> std::path::PathBuf {

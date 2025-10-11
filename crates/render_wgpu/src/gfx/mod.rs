@@ -86,6 +86,18 @@ pub struct TreeBatch {
     pub material_bg: Option<wgpu::BindGroup>,
 }
 
+/// Ephemeral draw batch for session-placed trees (per kind).
+pub struct SessionBatch {
+    pub kind: String,
+    pub instances: wgpu::Buffer,
+    pub cpu: Vec<crate::gfx::types::Instance>,
+    pub count: u32,
+    pub vb: wgpu::Buffer,
+    pub ib: wgpu::Buffer,
+    pub index_count: u32,
+    pub material_bg: Option<wgpu::BindGroup>,
+}
+
 fn asset_path(rel: &str) -> std::path::PathBuf {
     // Prefer workspace-level assets so this crate works when built inside a workspace.
     let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -229,6 +241,8 @@ pub struct Renderer {
     trees_index_count: u32,
     // Multiple tree kinds support: when present, draws override the single buffers above
     trees_groups: Vec<TreeBatch>,
+    // Ephemeral, client-session trees placed via worldsmithing
+    session_trees: Vec<SessionBatch>,
 
     // Rocks (instanced static mesh)
     rocks_instances: wgpu::Buffer,
@@ -683,6 +697,8 @@ impl Renderer {
         if let Some(b) = &self.zone_batches
             && b.slug != "<picker>"
         {
+            // Clear any session-placed trees when switching zones
+            self.session_trees.clear();
             #[cfg(not(target_arch = "wasm32"))]
             {
                 // Trees: prefer baked snapshot (by_kind) for slug; fall back to procedural using manifest vegetation
@@ -922,6 +938,235 @@ impl Renderer {
             selected: 0.0,
         };
         self.set_ghost_instance(Some(inst));
+    }
+
+    /// Append a single session tree instance for a given kind key.
+    /// Kind keys should match foliage::path_for_kind expectations, e.g. "birch",
+    /// "quaternius.pine_3", or a family alias.
+    pub fn add_session_tree(&mut self, kind_key: &str, model: [[f32; 4]; 4]) {
+        // Find existing batch
+        if let Some(b) = self
+            .session_trees
+            .iter_mut()
+            .find(|b| b.kind.as_str() == kind_key)
+        {
+            let inst = crate::gfx::types::Instance {
+                model,
+                color: [1.0, 1.0, 1.0],
+                selected: 0.25,
+            };
+            b.cpu.push(inst);
+            b.count = b.cpu.len() as u32;
+            // Recreate/resize and upload instances buffer (small N; OK for V1)
+            b.instances = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("session-trees-instances"),
+                    contents: bytemuck::cast_slice(&b.cpu),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+            return;
+        }
+        // Create a new batch: load mesh & optional material for this kind.
+        let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
+        let (vb, ib, index_count, material_bg) = match gltf::import(&mesh_path) {
+            Ok((doc, buffers, images)) => {
+                // Build VertexPosNrmUv + indices
+                // We'll accumulate into Vecs then build buffers.
+                let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
+                let mut idx: Vec<u16> = Vec::new();
+                let mut mat_bg: Option<wgpu::BindGroup> = None;
+                for mesh in doc.meshes() {
+                    for prim in mesh.primitives() {
+                        let reader =
+                            prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                        let pos = reader
+                            .read_positions()
+                            .map(|it| it.collect::<Vec<_>>())
+                            .unwrap_or_default();
+                        let nrm = reader
+                            .read_normals()
+                            .map(|it| it.collect::<Vec<_>>())
+                            .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+                        let uv = reader
+                            .read_tex_coords(0)
+                            .map(|c| c.into_f32().collect::<Vec<_>>())
+                            .unwrap_or_else(|| vec![[0.0, 0.0]; pos.len()]);
+                        let base = vtx.len() as u32;
+                        for i in 0..pos.len() {
+                            vtx.push(crate::gfx::types::VertexPosNrmUv {
+                                pos: pos[i],
+                                nrm: nrm[i],
+                                uv: uv[i],
+                            });
+                        }
+                        let idx_u32: Vec<u32> = match reader.read_indices() {
+                            Some(gltf::mesh::util::ReadIndices::U16(it)) => {
+                                it.map(|v| v as u32).collect()
+                            }
+                            Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                            Some(gltf::mesh::util::ReadIndices::U8(it)) => {
+                                it.map(|v| v as u32).collect()
+                            }
+                            None => (0..pos.len() as u32).collect(),
+                        };
+                        for v in idx_u32 {
+                            if v + base <= u16::MAX as u32 {
+                                idx.push((v + base) as u16);
+                            }
+                        }
+                        if mat_bg.is_none()
+                            && let Some(texinfo) = prim
+                                .material()
+                                .pbr_metallic_roughness()
+                                .base_color_texture()
+                        {
+                            let img_idx = texinfo.texture().source().index();
+                            if let Some(img) = images.get(img_idx) {
+                                let (w, h) = (img.width, img.height);
+                                let pixels = match img.format {
+                                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                    gltf::image::Format::R8G8B8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for c in img.pixels.chunks_exact(3) {
+                                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                        }
+                                        out
+                                    }
+                                    gltf::image::Format::R8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for &r in &img.pixels {
+                                            out.extend_from_slice(&[r, r, r, 255]);
+                                        }
+                                        out
+                                    }
+                                    _ => img.pixels.clone(),
+                                };
+                                let size3 = wgpu::Extent3d {
+                                    width: w,
+                                    height: h,
+                                    depth_or_array_layers: 1,
+                                };
+                                let tex_obj =
+                                    self.device.create_texture(&wgpu::TextureDescriptor {
+                                        label: Some("session-tree-tex"),
+                                        size: size3,
+                                        mip_level_count: 1,
+                                        sample_count: 1,
+                                        dimension: wgpu::TextureDimension::D2,
+                                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                            | wgpu::TextureUsages::COPY_DST,
+                                        view_formats: &[],
+                                    });
+                                self.queue.write_texture(
+                                    wgpu::TexelCopyTextureInfo {
+                                        texture: &tex_obj,
+                                        mip_level: 0,
+                                        origin: wgpu::Origin3d::ZERO,
+                                        aspect: wgpu::TextureAspect::All,
+                                    },
+                                    &pixels,
+                                    wgpu::TexelCopyBufferLayout {
+                                        offset: 0,
+                                        bytes_per_row: Some(4 * w),
+                                        rows_per_image: Some(h),
+                                    },
+                                    size3,
+                                );
+                                let view =
+                                    tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+                                let sampler =
+                                    self.device.create_sampler(&wgpu::SamplerDescriptor {
+                                        label: Some("session-tree-sampler"),
+                                        mag_filter: wgpu::FilterMode::Linear,
+                                        min_filter: wgpu::FilterMode::Linear,
+                                        mipmap_filter: wgpu::FilterMode::Nearest,
+                                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                        ..Default::default()
+                                    });
+                                let mat_xf_buf = self.device.create_buffer_init(
+                                    &wgpu::util::BufferInitDescriptor {
+                                        label: Some("session-material-xf"),
+                                        contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                                        usage: wgpu::BufferUsages::UNIFORM,
+                                    },
+                                );
+                                mat_bg = Some(self.device.create_bind_group(
+                                    &wgpu::BindGroupDescriptor {
+                                        label: Some("session-trees-material-bg"),
+                                        layout: &self.material_bgl,
+                                        entries: &[
+                                            wgpu::BindGroupEntry {
+                                                binding: 0,
+                                                resource: wgpu::BindingResource::TextureView(&view),
+                                            },
+                                            wgpu::BindGroupEntry {
+                                                binding: 1,
+                                                resource: wgpu::BindingResource::Sampler(&sampler),
+                                            },
+                                            wgpu::BindGroupEntry {
+                                                binding: 2,
+                                                resource: mat_xf_buf.as_entire_binding(),
+                                            },
+                                        ],
+                                    },
+                                ));
+                            }
+                        }
+                    }
+                }
+                let vb = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("session-trees-vb"),
+                        contents: bytemuck::cast_slice(&vtx),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+                let ib = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("session-trees-ib"),
+                        contents: bytemuck::cast_slice(&idx),
+                        usage: wgpu::BufferUsages::INDEX,
+                    });
+                (vb, ib, idx.len() as u32, mat_bg)
+            }
+            Err(_) => {
+                // Fallback to cube
+                let (vb, ib, ic) = crate::gfx::mesh::create_uv_cube(&self.device);
+                (vb, ib, ic, None)
+            }
+        };
+        let inst = crate::gfx::types::Instance {
+            model,
+            color: [1.0, 1.0, 1.0],
+            selected: 0.25,
+        };
+        let cpu = vec![inst];
+        let instances = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("session-trees-instances"),
+                contents: bytemuck::cast_slice(&cpu),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        self.session_trees.push(SessionBatch {
+            kind: kind_key.to_string(),
+            instances,
+            cpu,
+            count: 1,
+            vb,
+            ib,
+            index_count,
+            material_bg,
+        });
+    }
+
+    /// Remove all session-placed trees (used when switching zones).
+    pub fn clear_session_trees(&mut self) {
+        self.session_trees.clear();
     }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs
