@@ -26,9 +26,10 @@ pub fn build_rocks(
     // Simple procedural placement for now: moderate count, deterministic seed.
     let (count, seed) = config.unwrap_or((80usize, 0xA5F00Du32));
     let mut inst = place_rocks(terrain_cpu, count, seed);
-    // Tint rocks light gray
+    // Tint rocks dark gray (previous look)
     for i in &mut inst {
-        i.color = [0.58, 0.58, 0.60];
+        // Darker neutral to avoid looking like bright white chalk in daylight
+        i.color = [0.28, 0.30, 0.32];
         i.selected = 0.0;
     }
     let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -101,7 +102,7 @@ fn place_rocks(cpu: &terrain::TerrainCPU, count: usize, seed: u32) -> Vec<super:
         );
         out.push(super::types::Instance {
             model: model.to_cols_array_2d(),
-            color: [0.6, 0.6, 0.62],
+            color: [0.28, 0.30, 0.32],
             selected: 0.0,
         });
     }
