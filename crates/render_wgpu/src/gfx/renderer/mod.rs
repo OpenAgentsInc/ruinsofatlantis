@@ -18,7 +18,8 @@ pub mod upload_adapter;
 pub mod voxel_upload;
 pub(crate) use attachments::Attachments;
 // Re-export PcCast here so legacy update code can refer to `super::super::PcCast`.
-pub use crate::gfx::PcCast;
+#[allow(unused_imports)]
+use crate::gfx::PcCast;
 mod input;
 #[path = "update/mod.rs"]
 mod update;
