@@ -83,4 +83,12 @@ Concrete recommendation
   * **Trees** from GLB prototypes placed via **Poisson‑disk** (baked, instanced).
   * **Grass** as GPU‑instanced cards with density masks per chunk (baked).
 * Bake tool writes `snapshot.terrain.bin`, `snapshot.instances.bin`, masks, meta.
+---
 
+## Tools: Worldsmithing (Authoring Pipeline)
+
+- In‑world authoring persists through data → bake → snapshot.
+- Authoring JSON (`scene.json`) lists `logic.spawns[]` for kinds like `tree.default`.
+- Bake writes grouped matrices per kind to `snapshot.v1/trees.json` for instanced rendering.
+- Renderer must bind complete groups even when assets are missing; use DefaultMaterial/DefaultMesh fallbacks.
+- See worldsmithing.md for technical details and crate boundaries.

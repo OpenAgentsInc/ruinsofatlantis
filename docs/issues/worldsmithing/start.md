@@ -1,7 +1,7 @@
 Below is a practical **V1 product + technical spec** for adding an integrated “Place Tree” ability (move + plant + export/import placements) to the **Ruins of Atlantis** Rust codebase.
 
 Note on naming
-- “World Builder” is acceptable as an internal feature label. For public‑facing naming (site/blog/trailers), prefer a more distinctive term (e.g., Atlas Forge, Aethyr Forge, Campaign Studio). See `docs/issues/world-builder/naming-and-branding.md` for rationale and options.
+- We use “Worldsmithing” internally for this capability. No public‑facing brand separate from the game.
 
 ---
 
@@ -40,9 +40,9 @@ Note on naming
 * **Left Click / Enter / RT** – confirm placement when Place Tree is active.
 * **Q/E or Mouse Wheel** – rotate preview tree yaw in ±15° steps.
 * **CTRL+Mouse Wheel** – fine rotation (±1° steps). *(Optional but easy)*
-* **F5** – Export placements to file.
-* **F9** – Import placements from file (opens file picker or loads last used path).
-* *(Stretch)* **Z** – Undo the last placement in the current session (not persisted).
+* **X** – Export placements to file.
+* **I** – Import placements from file (opens file picker or loads last used path).
+* **Z** – Undo the last placement in the current session (single step).
 
 **HUD feedback:**
 
@@ -50,7 +50,9 @@ Note on naming
 
   * Small “Plant Mode” chip in a corner with: current yaw angle, “Valid/Invalid” location, control hints.
   * Preview tree: tinted **green** when valid, **red** when invalid.
+* Placement feedback: valid = green when ground normal.y ≥ 0.6 (≤~53° slope); invalid = red.
 * After Export/Import: transient toast (“Exported to …/plantings/rua-plantings-YYYYMMDD-HHMMSS.json”; “Imported N objects from file”).
+* Warnings: “Zone cap reached”, “Invalid surface”, “Missing asset → placeholder used (see log)”.
 
 ---
 
@@ -202,7 +204,7 @@ struct PlacedTreeV1 {
 
 ### 5.4 Export / Import
 
-* **ExportPlacementsSystem** (F5)
+* **ExportPlacementsSystem** (X)
 
   * Read `PlacedTreesBuffer` → build `PlantingFileV1`.
   * `map_id` = `PlantModeState.map_id`.
@@ -213,7 +215,7 @@ struct PlacedTreeV1 {
   * Emit toast with full path.
   * **Note:** For determinism, values are serialized with fixed precision (e.g., 3 decimals) to avoid floating noise.
 
-* **ImportPlacementsSystem** (F9)
+* **ImportPlacementsSystem** (I)
 
   * Open file picker (or load `last_export_path` if present).
   * Parse JSON; verify `schema == "rua.plantings.v1"`.

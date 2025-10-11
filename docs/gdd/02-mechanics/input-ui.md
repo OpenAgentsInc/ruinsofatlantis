@@ -7,3 +7,12 @@
 - Readable feedback
   - Small hit markers (off by default), concise status icons (Burning/Frigid/Stagger), and an on‑demand combat log. Plain‑language descriptions throughout.
 
+#### Worldsmithing Controls (V1)
+
+- `1` — select Place Tree (in zones where worldsmithing is enabled)
+- `Q/E` or Mouse Wheel — rotate ±15°
+- `Ctrl` + Wheel — fine rotate ±1°
+- `Enter` / Left Click — confirm placement
+- `B` — toggle builder overlay (help + counts)
+- `X` / `I` — export / import authoring data
+- `Z` — undo last placement (single step)
