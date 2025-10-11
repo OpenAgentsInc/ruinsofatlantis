@@ -8,17 +8,20 @@ use anyhow::{Context, Result};
 #[derive(Clone, Debug)]
 pub struct ZonePresentation {
     pub slug: String,
-    // In the future: decoded CPU batches (instances, clusters, etc.)
+    pub trees: Option<Vec<[[f32; 4]; 4]>>, // baked tree transforms
+                                           // In the future: decoded CPU batches (instances, clusters, etc.)
 }
 
 impl ZonePresentation {
     pub fn load(slug: &str) -> Result<Self> {
         // Snapshots live under workspace `packs/zones/<slug>/snapshot.v1`.
         let root = workspace_packs_root();
-        let _snap = data_runtime::zone_snapshot::ZoneSnapshot::load(root, slug)
+        let snap = data_runtime::zone_snapshot::ZoneSnapshot::load(root, slug)
             .with_context(|| format!("load zone snapshot: {slug}"))?;
+        let trees = snap.trees.map(|t| t.models);
         Ok(Self {
             slug: slug.to_string(),
+            trees,
         })
     }
 }

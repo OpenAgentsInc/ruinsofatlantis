@@ -838,6 +838,11 @@ impl ApplicationHandler for App {
                                     &state, &zp,
                                 );
                                 state.set_zone_batches(Some(gz));
+                                if let Some(trees) = zp.trees.as_ref() {
+                                    state.set_tree_instances(trees);
+                                } else {
+                                    state.clear_tree_instances();
+                                }
                                 // Ensure PC rig assets are available when skipping the Picker via URL
                                 state.ensure_pc_assets();
                                 self.boot = BootMode::Running { slug };

@@ -657,6 +657,8 @@ impl Renderer {
         self.zone_policy = policy;
     }
 
+    // Placeholder: tree instancing is built at init via foliage module.
+
     /// Compute the intersection point of the camera center ray with the horizontal
     /// plane y=0 (if in front of the camera). Returns `[x,y,z]` on success.
     pub fn center_ray_hit_y0(&self) -> Option<[f32; 3]> {

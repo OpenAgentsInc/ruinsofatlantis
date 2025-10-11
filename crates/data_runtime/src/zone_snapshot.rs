@@ -34,6 +34,7 @@ pub struct ZoneSnapshot {
     pub colliders_bin: Option<Vec<u8>>, // baked collider set
     pub colliders_index_bin: Option<Vec<u8>>, // optional index for colliders
     pub logic_bin: Option<Vec<u8>>,     // baked logic
+    pub trees: Option<TreesSnapshot>,   // baked tree transforms (column-major 4x4)
 }
 
 impl ZoneSnapshot {
@@ -57,6 +58,17 @@ impl ZoneSnapshot {
         out.colliders_bin = read_opt(&snap.join("colliders.bin"));
         out.colliders_index_bin = read_opt(&snap.join("colliders_index.bin"));
         out.logic_bin = read_opt(&snap.join("logic.bin"));
+        // Optional trees.json (instanced transforms)
+        let trees_path = snap.join("trees.json");
+        if trees_path.exists()
+            && let Ok(txt) = fs::read_to_string(&trees_path)
+        {
+            if let Ok(t) = serde_json::from_str::<TreesSnapshot>(&txt) {
+                out.trees = Some(t);
+            } else {
+                log::warn!("zones: failed to parse trees.json at {:?}", trees_path);
+            }
+        }
         Ok(out)
     }
 }
@@ -73,6 +85,11 @@ fn read_opt(path: &Path) -> Option<Vec<u8>> {
     } else {
         None
     }
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct TreesSnapshot {
+    pub models: Vec<[[f32; 4]; 4]>,
 }
 
 /// Scan `packs/zones/*/snapshot.v1` and build a simple registry.
