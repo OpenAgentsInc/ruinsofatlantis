@@ -1226,6 +1226,8 @@ pub fn render_impl(
                     rp.set_pipeline(inst_pipe);
                     rp.set_bind_group(0, &r.globals_bg, &[]);
                     rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                    // Textured instanced pipeline layout expects palettes at group(2) even if unused.
+                    rp.set_bind_group(2, &r.palettes_bg, &[]);
                     for g in &r.trees_groups {
                         if g.count == 0 {
                             continue;
