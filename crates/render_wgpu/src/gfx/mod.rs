@@ -670,6 +670,11 @@ impl Renderer {
         }
         crate::gfx::camera_sys::ray_intersect_y_plane(eye, dir, 0.0).map(|p| [p.x, p.y, p.z])
     }
+    /// Sample terrain height at world XZ. Returns Y in meters.
+    pub fn terrain_height_at(&self, x: f32, z: f32) -> f32 {
+        let (h, _n) = terrain::height_at(&self.terrain_cpu, x, z);
+        h
+    }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs
     fn respawn(&mut self) {

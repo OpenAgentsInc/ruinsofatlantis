@@ -75,7 +75,15 @@ pub fn build_trees(
     }
     let mut trees_instances_cpu: Vec<super::types::Instance> =
         if let Some(models) = &trees_models_opt {
-            terrain::instances_from_models(models)
+            // Use baked transforms but snap Y to terrain so instances sit on the ground.
+            let mut inst = terrain::instances_from_models(models);
+            for m in &mut inst {
+                let x = m.model[3][0];
+                let z = m.model[3][2];
+                let (y, _n) = terrain::height_at(terrain_cpu, x, z);
+                m.model[3][1] = y;
+            }
+            inst
         } else {
             let (tree_count, tree_seed) = vegetation.unwrap_or((350usize, 20250926u32));
             terrain::place_trees(terrain_cpu, tree_count, tree_seed)

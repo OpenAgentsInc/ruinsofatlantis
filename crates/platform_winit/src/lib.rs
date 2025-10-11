@@ -691,7 +691,10 @@ impl ApplicationHandler for App {
                                 self.builder.active = !self.builder.active;
                             }
                             KC::Enter if pressed && self.builder.active => {
-                                if let Some(pos) = state.center_ray_hit_y0() {
+                                if let Some(mut pos) = state.center_ray_hit_y0() {
+                                    // Snap Y to terrain height at XZ so placed trees sit on ground.
+                                    let y = state.terrain_height_at(pos[0], pos[2]);
+                                    pos[1] = y;
                                     let m = SpawnMarker {
                                         id: format!("m{:04}", self.builder.markers.len() + 1),
                                         kind: "tree.default".into(),
