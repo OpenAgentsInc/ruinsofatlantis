@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Device/surface wrappers: typed shells over raw wgpu objects.
 //!
 //! Phase-one scaffolding: introduce `GpuCtx`, `SurfaceCtx`, and `Samplers`

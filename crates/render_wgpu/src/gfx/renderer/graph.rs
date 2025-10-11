@@ -53,7 +53,7 @@ impl FrameGraph {
 
     /// Forwarder skeleton: execute the current render function unchanged.
     /// The encoder/view parameters are accepted for future pass routing.
-    #[allow(unused_variables)]
+    #[allow(unused_variables, dead_code)]
     pub fn run(
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,

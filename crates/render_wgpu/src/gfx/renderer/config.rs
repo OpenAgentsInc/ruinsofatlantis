@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Renderer configuration toggles & constants (scaffolding).
 //!
 //! This module centralizes small constants and feature toggles used by the
