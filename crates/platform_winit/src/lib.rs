@@ -669,6 +669,19 @@ impl ApplicationHandler for App {
                     ];
                     // Semi-transparent green ghost
                     state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
+                    // Ensure ghost mesh matches selected kind
+                    let k = self
+                        .builder
+                        .kinds
+                        .get(self.builder.kind_idx)
+                        .cloned()
+                        .unwrap_or_else(|| "tree.default".into());
+                    let kk = if let Some(rest) = k.strip_prefix("tree.") {
+                        rest.to_ascii_lowercase()
+                    } else {
+                        k.to_ascii_lowercase()
+                    };
+                    state.set_ghost_kind(&kk);
                     let mut lines: Vec<String> = Vec::new();
                     let util = (self.builder.ws.cap_utilization() * 100.0).round();
                     let cur_kind = self

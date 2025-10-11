@@ -1206,26 +1206,42 @@ pub fn render_impl(
                     log::error!("validation after terrain: {:?}", e);
                 }
             }
-            // Ghost preview (worldsmithing): draw using a tree mesh when available, else cube
+            // Ghost preview (worldsmithing): draw using the selected kind when available, else a fallback
             if r.ghost_present {
                 if trace {
                     #[cfg(not(target_arch = "wasm32"))]
                     r.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
-                if !r.trees_groups.is_empty() {
-                    // Textured path with material; bind palettes (group 2) and material (group 3)
-                    rp.set_pipeline(&r.inst_tex_ghost_pipeline);
-                    rp.set_bind_group(0, &r.globals_bg, &[]);
-                    rp.set_bind_group(1, &r.shard_model_bg, &[]);
-                    rp.set_bind_group(2, &r.palettes_bg, &[]);
-                    let g0 = &r.trees_groups[0];
-                    let mat_bg = g0.material_bg.as_ref().unwrap_or(&r.default_material_bg);
-                    rp.set_bind_group(3, mat_bg, &[]);
-                    rp.set_vertex_buffer(0, g0.vb.slice(..));
-                    rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
-                    rp.set_index_buffer(g0.ib.slice(..), wgpu::IndexFormat::Uint16);
-                    rp.draw_indexed(0..g0.index_count, 0, 0..1);
-                } else {
+                let mut drew = false;
+                if let Some(ref k) = r.ghost_kind {
+                    // Try session batch first, else zone-baked batch by kind
+                    if let Some(b) = r.session_trees.iter().find(|b| &b.kind == k) {
+                        rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                        rp.set_bind_group(0, &r.globals_bg, &[]);
+                        rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                        rp.set_bind_group(2, &r.palettes_bg, &[]);
+                        let mat_bg = b.material_bg.as_ref().unwrap_or(&r.default_material_bg);
+                        rp.set_bind_group(3, mat_bg, &[]);
+                        rp.set_vertex_buffer(0, b.vb.slice(..));
+                        rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                        rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
+                        rp.draw_indexed(0..b.index_count, 0, 0..1);
+                        drew = true;
+                    } else if let Some(g) = r.trees_groups.iter().find(|g| &g.kind == k) {
+                        rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                        rp.set_bind_group(0, &r.globals_bg, &[]);
+                        rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                        rp.set_bind_group(2, &r.palettes_bg, &[]);
+                        let mat_bg = g.material_bg.as_ref().unwrap_or(&r.default_material_bg);
+                        rp.set_bind_group(3, mat_bg, &[]);
+                        rp.set_vertex_buffer(0, g.vb.slice(..));
+                        rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                        rp.set_index_buffer(g.ib.slice(..), wgpu::IndexFormat::Uint16);
+                        rp.draw_indexed(0..g.index_count, 0, 0..1);
+                        drew = true;
+                    }
+                }
+                if !drew {
                     let inst_pipe = if r.wire_enabled {
                         r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
                     } else {

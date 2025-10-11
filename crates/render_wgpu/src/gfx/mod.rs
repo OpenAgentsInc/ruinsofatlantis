@@ -78,6 +78,7 @@ use winit::window::Window;
 
 /// Batch of instanced trees for a single kind/model.
 pub struct TreeBatch {
+    pub kind: String,
     pub instances: wgpu::Buffer,
     pub count: u32,
     pub vb: wgpu::Buffer,
@@ -344,6 +345,7 @@ pub struct Renderer {
     ghost_index_count: u32,
     ghost_inst: wgpu::Buffer,
     ghost_present: bool,
+    ghost_kind: Option<String>,
     sorc_joints: u32,
     #[allow(dead_code)]
     sorc_models: Vec<glam::Mat4>,
@@ -841,6 +843,7 @@ impl Renderer {
                         .map(|(kind_key, g)| {
                             let kind_mesh = foliage::path_for_kind(&kind_key);
                             TreeBatch {
+                                kind: kind_key,
                                 instances: g.instances,
                                 count: g.count,
                                 vb: g.vb,
@@ -938,6 +941,11 @@ impl Renderer {
             selected: 0.0,
         };
         self.set_ghost_instance(Some(inst));
+    }
+
+    /// Set the preview kind so the ghost matches the selected asset.
+    pub fn set_ghost_kind(&mut self, key: &str) {
+        self.ghost_kind = Some(key.to_string());
     }
 
     /// Append a single session tree instance for a given kind key.

@@ -2085,6 +2085,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ghost_index_count,
         ghost_inst,
         ghost_present: false,
+        ghost_kind: None,
         sorc_joints,
         sorc_models: sorc_models.clone(),
         sorc_cpu,
