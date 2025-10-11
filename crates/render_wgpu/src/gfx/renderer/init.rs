@@ -575,10 +575,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         start_time_scale: Some(6.0),
     };
     #[cfg(not(target_arch = "wasm32"))]
-    // For sky/terrain defaults during renderer init (desktop), load a baseline manifest.
-    // This does not control gameplay; platform-selected zones still drive presentation.
-    let zone: ZoneManifest =
-        load_zone_manifest("wizard_woods").context("load zone manifest: wizard_woods")?;
+    // For desktop, prefer the selected zone (ROA_ZONE) for baseline sky/terrain
+    // to avoid mixing logs/resources from a different zone during init.
+    let zone: ZoneManifest = {
+        let zslug = std::env::var("ROA_ZONE").unwrap_or_else(|_| "wizard_woods".into());
+        load_zone_manifest(&zslug).with_context(|| format!("load zone manifest: {}", zslug))?
+    };
     log::debug!(
         "Zone '{}' (id={}, plane={:?})",
         zone.display_name,
@@ -772,13 +774,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Terrain & world
     let terrain_extent = zone.terrain.extent;
     let terrain_size = zone.terrain.size as usize; // e.g., 129 → 128x128 quads
-    let (terrain_cpu, terrain_bufs) =
-        if let Some(cpu) = terrain::load_terrain_snapshot("wizard_woods") {
-            let bufs = terrain::upload_from_cpu(&device, &cpu);
-            (cpu, bufs)
-        } else {
-            terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed)
-        };
+    let (terrain_cpu, terrain_bufs) = if let Some(cpu) = terrain::load_terrain_snapshot(&zone.slug)
+    {
+        let bufs = terrain::upload_from_cpu(&device, &cpu);
+        (cpu, bufs)
+    } else {
+        terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed)
+    };
     let terrain_vb = terrain_bufs.vb;
     let terrain_ib = terrain_bufs.ib;
     let terrain_index_count = terrain_bufs.index_count;
