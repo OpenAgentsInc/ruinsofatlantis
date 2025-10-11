@@ -165,9 +165,20 @@ pub fn build_trees(
 }
 
 fn path_for_kind(kind: &str) -> std::path::PathBuf {
+    // Support explicit Quaternius model names via kind="quaternius.<Model>"
+    if let Some(rest) = kind.strip_prefix("quaternius.") {
+        return asset_path(&format!("assets/trees/quaternius/glTF/{}.gltf", rest));
+    }
     match kind {
         "birch" => asset_path("assets/trees/Birch_4GLB.glb"),
         "common" => asset_path("assets/models/trees/CommonTree_3/CommonTree_3.gltf"),
+        // Families map to representative models
+        "pine" => asset_path("assets/trees/quaternius/glTF/Pine_3.gltf"),
+        "giantpine" => asset_path("assets/trees/quaternius/glTF/GiantPine_2.gltf"),
+        "tallthick" => asset_path("assets/trees/quaternius/glTF/TallThick_2.gltf"),
+        "twistedtree" => asset_path("assets/trees/quaternius/glTF/TwistedTree_3.gltf"),
+        "deadtree" => asset_path("assets/trees/quaternius/glTF/DeadTree_2.gltf"),
+        "cherryblossom" => asset_path("assets/trees/quaternius/glTF/CherryBlossom_2.gltf"),
         _ => {
             // Default fallback chain
             let birch = asset_path("assets/trees/Birch_4GLB.glb");
