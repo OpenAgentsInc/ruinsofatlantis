@@ -340,13 +340,122 @@ pub fn build_trees_by_kind(
                 (vb, ib, indices.len() as u32)
             }
             Err(e) => {
-                log::warn!(
-                    "gltf import failed for kind '{}': {}; falling back to uv-cube",
-                    kind,
-                    e
-                );
-                let (vb, ib, ic) = super::mesh::create_uv_cube(device);
-                (vb, ib, ic)
+                // Retry with a buffers-only path to tolerate missing images/textures
+                match gltf::Gltf::open(&mesh_path) {
+                    Ok(g) => {
+                        log::warn!(
+                            "gltf import (with images) failed for kind '{}': {}; retrying without images",
+                            kind,
+                            e
+                        );
+                        use std::path::Path;
+                        let parent = mesh_path.parent().unwrap_or(Path::new("."));
+                        let mut bufs: Vec<Vec<u8>> = Vec::new();
+                        for b in g.document.buffers() {
+                            match b.source() {
+                                gltf::buffer::Source::Uri(uri) => {
+                                    if uri.starts_with("data:") {
+                                        log::warn!(
+                                            "gltf buffer '{}' is data URI; skipping (unsupported)",
+                                            uri
+                                        );
+                                        bufs.push(Vec::new());
+                                    } else {
+                                        let p = parent.join(uri);
+                                        match std::fs::read(&p) {
+                                            Ok(bytes) => bufs.push(bytes),
+                                            Err(e2) => {
+                                                log::warn!(
+                                                    "read buffer failed '{}': {}",
+                                                    p.display(),
+                                                    e2
+                                                );
+                                                bufs.push(Vec::new());
+                                            }
+                                        }
+                                    }
+                                }
+                                gltf::buffer::Source::Bin => {
+                                    // Not expected for .gltf path; ignore
+                                    bufs.push(Vec::new());
+                                }
+                            }
+                        }
+                        let mut verts: Vec<VertexPosNrmUv> = Vec::new();
+                        let mut indices: Vec<u16> = Vec::new();
+                        for mesh in g.document.meshes() {
+                            for prim in mesh.primitives() {
+                                let reader =
+                                    prim.reader(|b| bufs.get(b.index()).map(|v| v.as_slice()));
+                                let pos = reader
+                                    .read_positions()
+                                    .map(|it| it.collect::<Vec<_>>())
+                                    .unwrap_or_default();
+                                let nrm = reader
+                                    .read_normals()
+                                    .map(|it| it.collect::<Vec<_>>())
+                                    .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+                                let uv = reader
+                                    .read_tex_coords(0)
+                                    .map(|c| c.into_f32().collect::<Vec<_>>())
+                                    .unwrap_or_else(|| vec![[0.0, 0.0]; pos.len()]);
+                                let base = verts.len() as u32;
+                                for i in 0..pos.len() {
+                                    verts.push(VertexPosNrmUv {
+                                        pos: pos[i],
+                                        nrm: nrm[i],
+                                        uv: uv[i],
+                                    });
+                                }
+                                let idx_u32: Vec<u32> = match reader.read_indices() {
+                                    Some(gltf::mesh::util::ReadIndices::U16(it)) => {
+                                        it.map(|v| v as u32).collect()
+                                    }
+                                    Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                                    Some(gltf::mesh::util::ReadIndices::U8(it)) => {
+                                        it.map(|v| v as u32).collect()
+                                    }
+                                    None => (0..pos.len() as u32).collect(),
+                                };
+                                for v in idx_u32 {
+                                    let rb = v + base;
+                                    if rb <= u16::MAX as u32 {
+                                        indices.push(rb as u16);
+                                    }
+                                }
+                            }
+                        }
+                        if verts.is_empty() || indices.is_empty() {
+                            log::warn!(
+                                "gltf (buffers-only) produced empty mesh for kind '{}'; using uv-cube",
+                                kind
+                            );
+                            let (vb, ib, ic) = super::mesh::create_uv_cube(device);
+                            (vb, ib, ic)
+                        } else {
+                            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("trees-uv-vb"),
+                                contents: bytemuck::cast_slice(&verts),
+                                usage: wgpu::BufferUsages::VERTEX,
+                            });
+                            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("trees-uv-ib"),
+                                contents: bytemuck::cast_slice(&indices),
+                                usage: wgpu::BufferUsages::INDEX,
+                            });
+                            (vb, ib, indices.len() as u32)
+                        }
+                    }
+                    Err(e2) => {
+                        log::warn!(
+                            "gltf open failed for kind '{}': {}; falling back to uv-cube",
+                            kind,
+                            e2
+                        );
+                        let (vb, ib, ic) = super::mesh::create_uv_cube(device);
+                        (vb, ib, ic)
+                    }
+                }
             }
         };
         out.push((
