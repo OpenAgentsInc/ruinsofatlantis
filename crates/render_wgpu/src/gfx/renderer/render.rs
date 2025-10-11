@@ -1242,6 +1242,24 @@ pub fn render_impl(
                     }
                 }
                 if !drew {
+                    // Try on-demand ghost mesh load for the selected kind
+                    if let Some(k) = r.ghost_kind.clone() {
+                        if let Some((vb, ib, ic, mat_bg)) = r.ghost_mesh_for_kind(&k) {
+                            rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                            rp.set_bind_group(0, &r.globals_bg, &[]);
+                            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                            rp.set_bind_group(2, &r.palettes_bg, &[]);
+                            let mb = mat_bg.as_ref().unwrap_or(&r.default_material_bg);
+                            rp.set_bind_group(3, mb, &[]);
+                            rp.set_vertex_buffer(0, vb.slice(..));
+                            rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                            rp.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rp.draw_indexed(0..ic, 0, 0..1);
+                            drew = true;
+                        }
+                    }
+                }
+                if !drew {
                     let inst_pipe = if r.wire_enabled {
                         r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
                     } else {

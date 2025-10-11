@@ -2086,6 +2086,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ghost_inst,
         ghost_present: false,
         ghost_kind: None,
+        ghost_mesh_cache: std::collections::HashMap::new(),
         sorc_joints,
         sorc_models: sorc_models.clone(),
         sorc_cpu,

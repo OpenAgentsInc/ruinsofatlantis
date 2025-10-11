@@ -346,6 +346,10 @@ pub struct Renderer {
     ghost_inst: wgpu::Buffer,
     ghost_present: bool,
     ghost_kind: Option<String>,
+    ghost_mesh_cache: std::collections::HashMap<
+        String,
+        (wgpu::Buffer, wgpu::Buffer, u32, Option<wgpu::BindGroup>),
+    >,
     sorc_joints: u32,
     #[allow(dead_code)]
     sorc_models: Vec<glam::Mat4>,
@@ -717,6 +721,9 @@ impl Renderer {
                     // Create material bind groups per kind by sampling baseColor from GLTF
                     let make_bg = |mesh_path: std::path::PathBuf| -> Option<wgpu::BindGroup> {
                         if let Ok((doc, _buffers, images)) = gltf::import(&mesh_path) {
+                            use gltf::material::AlphaMode;
+                            let mut chosen: Option<wgpu::BindGroup> = None;
+                            let mut chosen_mask = true; // prefer to replace mask with opaque when seen
                             for mesh in doc.meshes() {
                                 for prim in mesh.primitives() {
                                     if let Some(texinfo) = prim
@@ -724,6 +731,12 @@ impl Renderer {
                                         .pbr_metallic_roughness()
                                         .base_color_texture()
                                     {
+                                        let is_mask =
+                                            matches!(prim.material().alpha_mode(), AlphaMode::Mask);
+                                        if chosen.is_some() && !is_mask && !chosen_mask {
+                                            // already picked an opaque; keep it
+                                            continue;
+                                        }
                                         let img_idx = texinfo.texture().source().index();
                                         if let Some(img) = images.get(img_idx) {
                                             let (w, h) = (img.width, img.height);
@@ -830,11 +843,13 @@ impl Renderer {
                                                         },
                                                     ],
                                                 });
-                                            return Some(bg);
+                                            chosen = Some(bg);
+                                            chosen_mask = is_mask;
                                         }
                                     }
                                 }
                             }
+                            return chosen;
                         }
                         None
                     };
@@ -1023,104 +1038,117 @@ impl Renderer {
                                 idx.push((v + base) as u16);
                             }
                         }
-                        if mat_bg.is_none()
-                            && let Some(texinfo) = prim
-                                .material()
-                                .pbr_metallic_roughness()
-                                .base_color_texture()
+                        // Select a base color texture, preferring opaque (bark) over mask (leaves)
+                        if let Some(texinfo) = prim
+                            .material()
+                            .pbr_metallic_roughness()
+                            .base_color_texture()
                         {
-                            let img_idx = texinfo.texture().source().index();
-                            if let Some(img) = images.get(img_idx) {
-                                let (w, h) = (img.width, img.height);
-                                let pixels = match img.format {
-                                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
-                                    gltf::image::Format::R8G8B8 => {
-                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
-                                        for c in img.pixels.chunks_exact(3) {
-                                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                            let is_mask = matches!(
+                                prim.material().alpha_mode(),
+                                gltf::material::AlphaMode::Mask
+                            );
+                            // If we already picked a texture and it was from an opaque mat, keep it.
+                            if mat_bg.is_some() && !is_mask {
+                                // already have something (likely opaque), do not override
+                            } else {
+                                let img_idx = texinfo.texture().source().index();
+                                if let Some(img) = images.get(img_idx) {
+                                    let (w, h) = (img.width, img.height);
+                                    let pixels = match img.format {
+                                        gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                        gltf::image::Format::R8G8B8 => {
+                                            let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                            for c in img.pixels.chunks_exact(3) {
+                                                out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                            }
+                                            out
                                         }
-                                        out
-                                    }
-                                    gltf::image::Format::R8 => {
-                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
-                                        for &r in &img.pixels {
-                                            out.extend_from_slice(&[r, r, r, 255]);
+                                        gltf::image::Format::R8 => {
+                                            let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                            for &r in &img.pixels {
+                                                out.extend_from_slice(&[r, r, r, 255]);
+                                            }
+                                            out
                                         }
-                                        out
-                                    }
-                                    _ => img.pixels.clone(),
-                                };
-                                let size3 = wgpu::Extent3d {
-                                    width: w,
-                                    height: h,
-                                    depth_or_array_layers: 1,
-                                };
-                                let tex_obj =
-                                    self.device.create_texture(&wgpu::TextureDescriptor {
-                                        label: Some("session-tree-tex"),
-                                        size: size3,
-                                        mip_level_count: 1,
-                                        sample_count: 1,
-                                        dimension: wgpu::TextureDimension::D2,
-                                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                                        usage: wgpu::TextureUsages::TEXTURE_BINDING
-                                            | wgpu::TextureUsages::COPY_DST,
-                                        view_formats: &[],
-                                    });
-                                self.queue.write_texture(
-                                    wgpu::TexelCopyTextureInfo {
-                                        texture: &tex_obj,
-                                        mip_level: 0,
-                                        origin: wgpu::Origin3d::ZERO,
-                                        aspect: wgpu::TextureAspect::All,
-                                    },
-                                    &pixels,
-                                    wgpu::TexelCopyBufferLayout {
-                                        offset: 0,
-                                        bytes_per_row: Some(4 * w),
-                                        rows_per_image: Some(h),
-                                    },
-                                    size3,
-                                );
-                                let view =
-                                    tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
-                                let sampler =
-                                    self.device.create_sampler(&wgpu::SamplerDescriptor {
-                                        label: Some("session-tree-sampler"),
-                                        mag_filter: wgpu::FilterMode::Linear,
-                                        min_filter: wgpu::FilterMode::Linear,
-                                        mipmap_filter: wgpu::FilterMode::Nearest,
-                                        address_mode_u: wgpu::AddressMode::ClampToEdge,
-                                        address_mode_v: wgpu::AddressMode::ClampToEdge,
-                                        ..Default::default()
-                                    });
-                                let mat_xf_buf = self.device.create_buffer_init(
-                                    &wgpu::util::BufferInitDescriptor {
-                                        label: Some("session-material-xf"),
-                                        contents: bytemuck::bytes_of(&[0.0f32; 8]),
-                                        usage: wgpu::BufferUsages::UNIFORM,
-                                    },
-                                );
-                                mat_bg = Some(self.device.create_bind_group(
-                                    &wgpu::BindGroupDescriptor {
-                                        label: Some("session-trees-material-bg"),
-                                        layout: &self.material_bgl,
-                                        entries: &[
-                                            wgpu::BindGroupEntry {
-                                                binding: 0,
-                                                resource: wgpu::BindingResource::TextureView(&view),
-                                            },
-                                            wgpu::BindGroupEntry {
-                                                binding: 1,
-                                                resource: wgpu::BindingResource::Sampler(&sampler),
-                                            },
-                                            wgpu::BindGroupEntry {
-                                                binding: 2,
-                                                resource: mat_xf_buf.as_entire_binding(),
-                                            },
-                                        ],
-                                    },
-                                ));
+                                        _ => img.pixels.clone(),
+                                    };
+                                    let size3 = wgpu::Extent3d {
+                                        width: w,
+                                        height: h,
+                                        depth_or_array_layers: 1,
+                                    };
+                                    let tex_obj =
+                                        self.device.create_texture(&wgpu::TextureDescriptor {
+                                            label: Some("session-tree-tex"),
+                                            size: size3,
+                                            mip_level_count: 1,
+                                            sample_count: 1,
+                                            dimension: wgpu::TextureDimension::D2,
+                                            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                                | wgpu::TextureUsages::COPY_DST,
+                                            view_formats: &[],
+                                        });
+                                    self.queue.write_texture(
+                                        wgpu::TexelCopyTextureInfo {
+                                            texture: &tex_obj,
+                                            mip_level: 0,
+                                            origin: wgpu::Origin3d::ZERO,
+                                            aspect: wgpu::TextureAspect::All,
+                                        },
+                                        &pixels,
+                                        wgpu::TexelCopyBufferLayout {
+                                            offset: 0,
+                                            bytes_per_row: Some(4 * w),
+                                            rows_per_image: Some(h),
+                                        },
+                                        size3,
+                                    );
+                                    let view = tex_obj
+                                        .create_view(&wgpu::TextureViewDescriptor::default());
+                                    let sampler =
+                                        self.device.create_sampler(&wgpu::SamplerDescriptor {
+                                            label: Some("session-tree-sampler"),
+                                            mag_filter: wgpu::FilterMode::Linear,
+                                            min_filter: wgpu::FilterMode::Linear,
+                                            mipmap_filter: wgpu::FilterMode::Nearest,
+                                            address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                            address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                            ..Default::default()
+                                        });
+                                    let mat_xf_buf = self.device.create_buffer_init(
+                                        &wgpu::util::BufferInitDescriptor {
+                                            label: Some("session-material-xf"),
+                                            contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                                            usage: wgpu::BufferUsages::UNIFORM,
+                                        },
+                                    );
+                                    mat_bg = Some(self.device.create_bind_group(
+                                        &wgpu::BindGroupDescriptor {
+                                            label: Some("session-trees-material-bg"),
+                                            layout: &self.material_bgl,
+                                            entries: &[
+                                                wgpu::BindGroupEntry {
+                                                    binding: 0,
+                                                    resource: wgpu::BindingResource::TextureView(
+                                                        &view,
+                                                    ),
+                                                },
+                                                wgpu::BindGroupEntry {
+                                                    binding: 1,
+                                                    resource: wgpu::BindingResource::Sampler(
+                                                        &sampler,
+                                                    ),
+                                                },
+                                                wgpu::BindGroupEntry {
+                                                    binding: 2,
+                                                    resource: mat_xf_buf.as_entire_binding(),
+                                                },
+                                            ],
+                                        },
+                                    ));
+                                }
                             }
                         }
                     }
@@ -1175,6 +1203,184 @@ impl Renderer {
     /// Remove all session-placed trees (used when switching zones).
     pub fn clear_session_trees(&mut self) {
         self.session_trees.clear();
+    }
+
+    fn ghost_mesh_for_kind(
+        &mut self,
+        kind_key: &str,
+    ) -> Option<(wgpu::Buffer, wgpu::Buffer, u32, Option<wgpu::BindGroup>)> {
+        if let Some(c) = self.ghost_mesh_cache.get(kind_key) {
+            return Some((c.0.clone(), c.1.clone(), c.2, c.3.clone()));
+        }
+        let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
+        if let Ok((doc, buffers, images)) = gltf::import(&mesh_path) {
+            let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
+            let mut idx: Vec<u16> = Vec::new();
+            let mut mat_bg: Option<wgpu::BindGroup> = None;
+            // Prefer opaque material
+            for mesh in doc.meshes() {
+                for prim in mesh.primitives() {
+                    let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                    let pos = reader
+                        .read_positions()
+                        .map(|it| it.collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    let nrm = reader
+                        .read_normals()
+                        .map(|it| it.collect::<Vec<_>>())
+                        .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+                    let uv = reader
+                        .read_tex_coords(0)
+                        .map(|c| c.into_f32().collect::<Vec<_>>())
+                        .unwrap_or_else(|| vec![[0.0, 0.0]; pos.len()]);
+                    let base = vtx.len() as u32;
+                    for i in 0..pos.len() {
+                        vtx.push(crate::gfx::types::VertexPosNrmUv {
+                            pos: pos[i],
+                            nrm: nrm[i],
+                            uv: uv[i],
+                        });
+                    }
+                    let idx_u32: Vec<u32> = match reader.read_indices() {
+                        Some(gltf::mesh::util::ReadIndices::U16(it)) => {
+                            it.map(|v| v as u32).collect()
+                        }
+                        Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                        Some(gltf::mesh::util::ReadIndices::U8(it)) => {
+                            it.map(|v| v as u32).collect()
+                        }
+                        None => (0..pos.len() as u32).collect(),
+                    };
+                    for v in idx_u32 {
+                        if v + base <= u16::MAX as u32 {
+                            idx.push((v + base) as u16);
+                        }
+                    }
+                    if mat_bg.is_none()
+                        && !matches!(
+                            prim.material().alpha_mode(),
+                            gltf::material::AlphaMode::Mask
+                        )
+                        && let Some(texinfo) = prim
+                            .material()
+                            .pbr_metallic_roughness()
+                            .base_color_texture()
+                    {
+                        let img_idx = texinfo.texture().source().index();
+                        if let Some(img) = images.get(img_idx) {
+                            let (w, h) = (img.width, img.height);
+                            let pixels = match img.format {
+                                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                gltf::image::Format::R8G8B8 => {
+                                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                    for c in img.pixels.chunks_exact(3) {
+                                        out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                    }
+                                    out
+                                }
+                                gltf::image::Format::R8 => {
+                                    let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                    for &r in &img.pixels {
+                                        out.extend_from_slice(&[r, r, r, 255]);
+                                    }
+                                    out
+                                }
+                                _ => img.pixels.clone(),
+                            };
+                            let size3 = wgpu::Extent3d {
+                                width: w,
+                                height: h,
+                                depth_or_array_layers: 1,
+                            };
+                            let tex_obj = self.device.create_texture(&wgpu::TextureDescriptor {
+                                label: Some("ghost-tree-tex"),
+                                size: size3,
+                                mip_level_count: 1,
+                                sample_count: 1,
+                                dimension: wgpu::TextureDimension::D2,
+                                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                    | wgpu::TextureUsages::COPY_DST,
+                                view_formats: &[],
+                            });
+                            self.queue.write_texture(
+                                wgpu::TexelCopyTextureInfo {
+                                    texture: &tex_obj,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                &pixels,
+                                wgpu::TexelCopyBufferLayout {
+                                    offset: 0,
+                                    bytes_per_row: Some(4 * w),
+                                    rows_per_image: Some(h),
+                                },
+                                size3,
+                            );
+                            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+                            let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+                                label: Some("ghost-tree-sampler"),
+                                mag_filter: wgpu::FilterMode::Linear,
+                                min_filter: wgpu::FilterMode::Linear,
+                                mipmap_filter: wgpu::FilterMode::Nearest,
+                                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                ..Default::default()
+                            });
+                            let mat_xf_buf =
+                                self.device
+                                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                        label: Some("ghost-material-xf"),
+                                        contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                                        usage: wgpu::BufferUsages::UNIFORM,
+                                    });
+                            mat_bg =
+                                Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("ghost-trees-material-bg"),
+                                    layout: &self.material_bgl,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: wgpu::BindingResource::TextureView(&view),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: wgpu::BindingResource::Sampler(&sampler),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: mat_xf_buf.as_entire_binding(),
+                                        },
+                                    ],
+                                }));
+                        }
+                    }
+                }
+            }
+            let vb = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("ghost-tree-vb"),
+                    contents: bytemuck::cast_slice(&vtx),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+            let ib = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("ghost-tree-ib"),
+                    contents: bytemuck::cast_slice(&idx),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+            let ic = idx.len() as u32;
+            self.ghost_mesh_cache.insert(
+                kind_key.to_string(),
+                (vb.clone(), ib.clone(), ic, mat_bg.clone()),
+            );
+            Some((vb, ib, ic, mat_bg))
+        } else {
+            None
+        }
     }
     // Handle player character death: legacy path removed (server-authoritative).
     // moved: respawn -> renderer/update.rs
