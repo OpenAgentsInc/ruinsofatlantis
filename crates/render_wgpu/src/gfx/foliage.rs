@@ -167,7 +167,31 @@ pub fn build_trees(
 fn path_for_kind(kind: &str) -> std::path::PathBuf {
     // Support explicit Quaternius model names via kind="quaternius.<Model>"
     if let Some(rest) = kind.strip_prefix("quaternius.") {
-        return asset_path(&format!("assets/trees/quaternius/glTF/{}.gltf", rest));
+        fn map_base(base: &str) -> String {
+            match base {
+                "birch" => "Birch".into(),
+                "cherryblossom" => "CherryBlossom".into(),
+                "commontree" => "CommonTree".into(),
+                "deadtree" => "DeadTree".into(),
+                "giantpine" => "GiantPine".into(),
+                "pine" => "Pine".into(),
+                "tallthick" => "TallThick".into(),
+                "twistedtree" => "TwistedTree".into(),
+                other => {
+                    let mut cs = other.chars();
+                    match cs.next() {
+                        Some(first) => first.to_uppercase().collect::<String>() + cs.as_str(),
+                        None => String::new(),
+                    }
+                }
+            }
+        }
+        let cased = if let Some((base, idx)) = rest.split_once('_') {
+            format!("{}_{}", map_base(base), idx)
+        } else {
+            format!("{}_1", map_base(rest))
+        };
+        return asset_path(&format!("assets/trees/quaternius/glTF/{}.gltf", cased));
     }
     match kind {
         "birch" => asset_path("assets/trees/Birch_4GLB.glb"),
