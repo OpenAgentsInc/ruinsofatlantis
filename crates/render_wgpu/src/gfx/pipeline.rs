@@ -261,12 +261,15 @@ pub fn create_textured_inst_pipeline(
     shader: &ShaderModule,
     globals_bgl: &BindGroupLayout,
     model_bgl: &BindGroupLayout,
+    palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> RenderPipeline {
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("inst-tex-pipeline-layout"),
-        bind_group_layouts: &[globals_bgl, model_bgl, material_bgl],
+        // Keep indices aligned with shader expectations:
+        // 0 = globals, 1 = model, 2 = palettes (unused in this pipeline), 3 = material
+        bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl, material_bgl],
         push_constant_ranges: &[],
     });
     let depth_format = wgpu::TextureFormat::Depth32Float;

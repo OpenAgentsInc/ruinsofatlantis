@@ -1231,7 +1231,8 @@ pub fn render_impl(
                             continue;
                         }
                         if let Some(bg) = &g.material_bg {
-                            rp.set_bind_group(2, bg, &[]);
+                            // Material lives at group(3) for textured instanced pipeline
+                            rp.set_bind_group(3, bg, &[]);
                         }
                         rp.set_vertex_buffer(0, g.vb.slice(..));
                         rp.set_vertex_buffer(1, g.instances.slice(..));

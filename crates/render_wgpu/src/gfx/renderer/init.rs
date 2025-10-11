@@ -306,6 +306,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &shader,
         &globals_bgl,
         &model_bgl,
+        &palettes_bgl,
         &material_bgl,
         draw_fmt,
     );
