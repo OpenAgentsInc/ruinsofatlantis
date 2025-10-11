@@ -165,6 +165,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         log::error!("wgpu uncaptured error: {:?}", e);
     }));
 
+    // Small debug note about zone + policy
+    log::info!(
+        "init: zone='{}' policy allow_casting={} show_hud={}",
+        std::env::var("ROA_ZONE").unwrap_or_else(|_| "<picker>".into()),
+        load_actor_assets,
+        compute_zone_policy_for_slug(&std::env::var("ROA_ZONE").unwrap_or_else(|_| "".into()))
+            .show_player_hud
+    );
     // --- Surface configuration (with clamping to device limits) ---
     let size = window.inner_size();
     let caps = surface.get_capabilities(&adapter);

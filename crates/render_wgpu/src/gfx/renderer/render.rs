@@ -1368,7 +1368,10 @@ pub fn render_impl(
         // Skinned: wizards (PC always visible even if hide_wizards)
         if r.is_vox_onepath() {
             // skip wizard visuals entirely in one‑path demo
-        } else if r.has_zone_batches() && !r.is_picker_batches() {
+        } else if r.has_zone_batches()
+            && !r.is_picker_batches()
+            && (r.zone_policy.allow_casting || r.zone_policy.show_player_hud)
+        {
             // Draw only the PC rig when a real zone is active (not in Picker)
             let pc_ready = r.pc_vb.is_some()
                 && r.pc_ib.is_some()
@@ -1410,8 +1413,8 @@ pub fn render_impl(
                 }
                 // No HUD marker in normal builds; keep logs only
             } else {
-                log::warn!(
-                    "pc_draw: vb={} ib={} inst={} mat={} pal={} idx={}",
+                log::debug!(
+                    "pc_draw: skipped (policy requires actors), ready? vb={} ib={} inst={} mat={} pal={} idx={}",
                     r.pc_vb.is_some(),
                     r.pc_ib.is_some(),
                     r.pc_instances.is_some(),
