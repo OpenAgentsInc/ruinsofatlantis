@@ -196,13 +196,7 @@ impl<'a> ExecCtx<'a> {
     pub fn attachments(&mut self) -> &mut super::attachments::Attachments {
         &mut self.renderer.attachments
     }
-    // Placeholders for future adoption
-    #[inline]
-    pub fn pipelines(&self) -> &super::pipelines::Pipelines {
-        // In phase two, this will return a real grouping; for now, synthesize a view.
-        static DUMMY: super::pipelines::Pipelines = super::pipelines::Pipelines;
-        &DUMMY
-    }
+    // Placeholder for future pipelines() accessor when adopted in ExecCtx
 }
 
 #[allow(dead_code)]
