@@ -2205,7 +2205,7 @@ pub fn render_impl(
         // Hint overlay removed for CC demo and general scenes.
     }
     // Execute Particles + UI via the framegraph helper (behavior-parity path)
-    super::graph::FrameGraph::run_particles_ui(r, &mut encoder, render_view, &view);
+    super::graph::FrameGraph::run_particles_ui(r, &mut encoder, r.direct_present, &view);
     r.queue.submit(Some(encoder.finish()));
     frame.present();
     // Pop the validation scope after submit; this captures any errors raised

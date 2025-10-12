@@ -316,29 +316,52 @@ impl FrameGraph {
     pub fn run_particles_ui(
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,
-        particles_view: &wgpu::TextureView,
-        ui_view: &wgpu::TextureView,
+        direct_present: bool,
+        swap_view: &wgpu::TextureView,
     ) {
         if renderer.fx_count > 0 {
-            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("particles-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: particles_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-            renderer.draw_particles(&mut rp);
+            if direct_present {
+                let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("particles-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: swap_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                renderer.draw_particles(&mut rp);
+            } else {
+                let offscreen_view = renderer
+                    .attachments
+                    .scene_color
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+                let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("particles-pass-offscreen"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &offscreen_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                renderer.draw_particles(&mut rp);
+            }
         }
         renderer.hud.queue(&renderer.device, &renderer.queue);
-        renderer.hud.draw(encoder, ui_view);
+        renderer.hud.draw(encoder, swap_view);
     }
 }
 
