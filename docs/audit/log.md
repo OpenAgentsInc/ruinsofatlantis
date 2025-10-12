@@ -149,6 +149,21 @@ Changes
 
 Validation
 - CI green; feature off by default per existing config.
+
+---
+
+## Phase‑Two — PR 12: Framegraph core (builder, resources, validation)
+
+Changes
+- Introduced a real framegraph builder in `gfx/renderer/graph.rs`:
+  - Added `ImageKind`, `Handle<Img>`, `GraphBuilder`, `PassDecl`, `ExecCtx`, and `Graph` types.
+  - Implemented per‑pass hazard validation (read+write of same image panics in debug) and a simple `compile()` that preserves declaration order.
+  - Added a `run_forwarder` that builds a single Monolith pass and forwards to the legacy render path to keep behavior parity.
+- Kept the existing static graph (`graph_for`) and its tests intact for compatibility.
+- Added CPU‑only tests for hazard detection and declaration‑order stability.
+
+Validation
+- CI green; visuals unchanged (Monolith calls the same render path).
 ## PR 1 — Device/attachments/config scaffolding (render_wgpu)
 
 Changes

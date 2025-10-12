@@ -134,3 +134,174 @@ mod tests {
         g.validate();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Phase-2 Framegraph core (builder, resources, validation)
+// ---------------------------------------------------------------------------
+
+pub type Size2D = glam::UVec2;
+
+#[derive(Clone, Debug)]
+pub enum ImageKind {
+    Color {
+        format: wgpu::TextureFormat,
+        size: Size2D,
+        msaa: u32,
+    },
+    Depth {
+        format: wgpu::TextureFormat,
+        size: Size2D,
+        msaa: u32,
+    },
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Handle<T>(u32, std::marker::PhantomData<T>);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Access {
+    Read,
+    Write,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Img;
+
+pub struct GraphBuilder {
+    images: Vec<ImageKind>,
+    passes: Vec<PassDecl>,
+}
+
+pub struct PassDecl {
+    name: &'static str,
+    reads: Vec<Handle<Img>>,
+    writes: Vec<Handle<Img>>,
+    exec: Box<dyn Fn(&mut ExecCtx) + Send + Sync>,
+}
+
+pub struct ExecCtx<'a> {
+    pub renderer: &'a mut crate::gfx::Renderer,
+    pub encoder: &'a mut wgpu::CommandEncoder,
+}
+
+pub struct Graph {
+    pub names: Vec<&'static str>,
+    passes: Vec<PassDecl>,
+}
+
+impl GraphBuilder {
+    pub fn new() -> Self {
+        Self {
+            images: Vec::new(),
+            passes: Vec::new(),
+        }
+    }
+
+    pub fn image(&mut self, kind: ImageKind) -> Handle<Img> {
+        let id = self.images.len() as u32;
+        self.images.push(kind);
+        Handle(id, std::marker::PhantomData)
+    }
+
+    pub fn pass<F>(&mut self, name: &'static str, f: F) -> &mut PassDecl
+    where
+        F: Fn(&mut ExecCtx) + Send + Sync + 'static,
+    {
+        self.passes.push(PassDecl {
+            name,
+            reads: Vec::new(),
+            writes: Vec::new(),
+            exec: Box::new(f),
+        });
+        self.passes.last_mut().unwrap()
+    }
+}
+
+impl PassDecl {
+    pub fn reads(&mut self, h: Handle<Img>) -> &mut Self {
+        self.reads.push(h);
+        self
+    }
+    pub fn writes(&mut self, h: Handle<Img>) -> &mut Self {
+        self.writes.push(h);
+        self
+    }
+}
+
+impl Graph {
+    pub fn compile(mut b: GraphBuilder) -> Self {
+        // Validate per-pass hazards: a pass may not both read and write the same image.
+        for p in &b.passes {
+            for w in &p.writes {
+                if p.reads.iter().any(|r| r == w) {
+                    panic!("framegraph hazard in '{}': read+write same image", p.name);
+                }
+            }
+        }
+        // Preserve declaration order for now (topology is trivial without cross-pass deps).
+        let names = b.passes.iter().map(|p| p.name).collect();
+        Graph {
+            names,
+            passes: b.passes.drain(..).collect(),
+        }
+    }
+
+    pub fn execute(self, renderer: &mut crate::gfx::Renderer) {
+        // Monolith path: call existing render_impl inside a single encoder.
+        // Keep behavior parity; ignore per-pass exec closures for now except Monolith.
+        let _ = super::render::render_impl(renderer, None);
+        let _ = self; // suppress unused until passes are wired
+    }
+}
+
+impl FrameGraph {
+    /// Build and run a single Monolith pass that forwards to the existing render path.
+    #[allow(unused_variables, dead_code)]
+    pub fn run_forwarder(
+        renderer: &mut crate::gfx::Renderer,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) {
+        let mut builder = GraphBuilder::new();
+        // Declare one dummy image to exercise the API; values unused by Monolith.
+        let _color = builder.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size: glam::uvec2(1, 1),
+            msaa: 1,
+        });
+        // Monolith pass: call the legacy render implementation
+        builder.pass("Monolith", |_ctx| {
+            // The legacy path manages swapchain acquire/present internally
+            let _ = super::render::render_impl(renderer, None);
+        });
+        let g = Graph::compile(builder);
+        g.execute(renderer);
+    }
+}
+
+#[cfg(test)]
+mod builder_tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn detects_read_write_hazard_in_pass() {
+        let mut b = GraphBuilder::new();
+        let img = b.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            size: glam::uvec2(16, 16),
+            msaa: 1,
+        });
+        b.pass("bad", |_ctx| {}).reads(img).writes(img);
+        let _ = Graph::compile(b);
+    }
+
+    #[test]
+    fn preserves_pass_declaration_order() {
+        let mut b = GraphBuilder::new();
+        b.pass("A", |_ctx| {});
+        b.pass("B", |_ctx| {});
+        let g = Graph::compile(b);
+        assert_eq!(g.names, vec!["A", "B"]);
+    }
+}
