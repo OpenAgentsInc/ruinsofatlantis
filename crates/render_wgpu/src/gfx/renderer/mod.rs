@@ -17,6 +17,7 @@ pub mod passes_graph;
 pub mod render;
 pub mod replication;
 pub mod resize;
+pub mod upload;
 pub mod upload_adapter;
 pub mod voxel_upload;
 pub(crate) use attachments::Attachments;

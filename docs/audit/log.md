@@ -245,6 +245,21 @@ Validation
 
 ---
 
+## Phase‑Two — PR 19: Upload ring scaffold
+
+Changes
+- Added `gfx/renderer/upload.rs` with a simple per‑frame bump allocator:
+  - `UploadRing::new(device, frames, initial_size, usage, label)` creates one buffer per frame.
+  - `next_frame()` rotates the active buffer and resets the cursor.
+  - `allocate(queue, data, align)` writes bytes to the current frame buffer at an aligned offset; grows the buffer if needed (resets cursor on growth).
+  - Returns `UploadSlice { buffer, offset, size }` for downstream binds.
+- Exported from `renderer::mod` for later adoption in material/uniform updates.
+
+Validation
+- Clippy `-D warnings` clean; unit test added for alignment helper. No runtime adoption yet; behavior unchanged.
+
+---
+
 ## Phase‑Two — PR 16: Post suite + offscreen image (prep)
 
 Changes
