@@ -86,6 +86,7 @@ impl BgCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wgpu::util::DeviceExt;
 
     fn make_device() -> (wgpu::Device, wgpu::Queue) {
         let instance = wgpu::Instance::default();
@@ -95,14 +96,13 @@ mod tests {
             compatible_surface: None,
         }))
         .expect("adapter");
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("bgcache-test-device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-            },
-            None,
-        ))
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("bgcache-test-device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::default(),
+        }))
         .expect("device");
         (device, queue)
     }
