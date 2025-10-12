@@ -25,15 +25,20 @@ impl MainPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
             .pass("Main", |ctx: &mut ExecCtx| {
-                // For now, Main draws still execute in legacy path.
-                // Record a stats placeholder so perf UI can show a stable row.
+                let dc0 = ctx.renderer.draw_calls;
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
+                ctx.renderer.pass_main(ctx.encoder);
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let draws = ctx.renderer.draw_calls.saturating_sub(dc0);
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Main",
-                    draws: 0,
+                    draws,
                     batches: 0,
-                    cpu_ms: 0.0,
-                    bg_hits: 0,
-                    bg_misses: 0,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
                 };
                 ctx.renderer.render_stats.push(stats);
             })
