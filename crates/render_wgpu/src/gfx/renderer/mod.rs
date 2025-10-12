@@ -38,4 +38,11 @@ pub struct RenderStats {
     pub cpu_ms: f32,
     pub bg_hits: u64,
     pub bg_misses: u64,
+    // PR56: state change counters (filled progressively)
+    #[allow(dead_code)]
+    pub pipeline_binds: u32,
+    #[allow(dead_code)]
+    pub bg_binds: u32,
+    #[allow(dead_code)]
+    pub vb_ib_sets: u32,
 }

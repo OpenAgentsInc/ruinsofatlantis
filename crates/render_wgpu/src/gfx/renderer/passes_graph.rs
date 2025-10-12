@@ -39,6 +39,9 @@ impl MainPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -163,6 +166,9 @@ impl PresentPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -207,6 +213,9 @@ impl ParticlesPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -236,6 +245,9 @@ impl UiPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -308,6 +320,9 @@ impl PostAoPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -422,6 +437,9 @@ impl SsgiPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -494,6 +512,9 @@ impl SsrPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
@@ -538,6 +559,9 @@ impl BloomPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
                 };
                 ctx.renderer.render_stats.push(stats);
             })
