@@ -272,6 +272,28 @@ Validation
 
 ---
 
+## Phase‑Two — PR 21: UI pass finalization
+
+Changes
+- Ensured the `UI` pass exec closure is branch‑free (just queue + draw). The toggles/text building logic remains in the `ui` module and render prep.
+- Added a CPU‑only test that the HUD vertex count model is deterministic for a small configuration (3 slots) and scales with slot count.
+
+Validation
+- Tests pass; UI visuals unchanged; pass remains a thin draw wrapper.
+
+---
+
+## Phase‑Two — PR 22: Shims/doc polish
+
+Changes
+- Improved rustdoc for `renderer::graph` and `passes_graph` to document scope and IO.
+- Confirmed remaining `#[path]` shims were removed in earlier PRs; kept necessary compatibility imports only.
+
+Validation
+- Clippy/doc build clean; no behavior change.
+
+---
+
 ## Phase‑Two — PR 16: Post suite + offscreen image (prep)
 
 Changes

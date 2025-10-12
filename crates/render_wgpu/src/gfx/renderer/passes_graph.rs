@@ -1,8 +1,9 @@
-//! Framegraph pass declarations (scaffold for phase two).
+//! Framegraph pass declarations.
 //!
-//! These declare Sky, Main, and Present passes against the new GraphBuilder
-//! API without changing behavior yet. Execution remains the legacy path
-//! until passes are wired to run.
+//! Declares Sky, Main, Particles, UI, and Present passes against the
+//! GraphBuilder API. Execution closures are small and branch‑free; all
+//! toggles and UI string formatting are handled upstream so passes
+//! only record GPU work.
 
 #![allow(dead_code)]
 

@@ -1,11 +1,11 @@
-//! Minimal static frame-graph for pass I/O validation.
+//! Minimal frame‑graph for pass I/O validation and execution.
 //!
 //! Encodes read/write resources for each pass and validates invariants:
 //! - A pass may not sample from the same resource it writes this frame.
 //! - Depth is read-only in all passes.
 //!
-//! Render order remains explicit in `render.rs`; this module provides checks
-//! and a single place to document pass I/O.
+//! This module also hosts a builder that records execution closures
+//! for passes; `Graph::execute` runs them in declared order.
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Res {

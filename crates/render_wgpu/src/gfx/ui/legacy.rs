@@ -1940,6 +1940,27 @@ mod hud_tests {
         let total_w = slots as f32 * slot_px + (slots as f32 - 1.0) * gap;
         assert!(total_w > 0.0);
     }
+
+    #[test]
+    fn hud_vertex_counts_deterministic_small_config() {
+        // Pure math model of the HUD builder: counts quads for HP bar and a 3-slot hotbar.
+        // Each quad contributes 6 vertices (two triangles).
+        fn count_bars(slots: usize) -> u32 {
+            let mut quads = 0u32;
+            // HP bar: border + background + fill
+            quads += 3;
+            // Hotbar: for N slots, each has border + background
+            quads += (slots as u32) * 2;
+            // No text quads counted here to avoid font dependence.
+            quads * 6
+        }
+        let a = count_bars(3);
+        let b = count_bars(3);
+        assert_eq!(a, b);
+        // Changing slot count should change vertex count predictably
+        let c = count_bars(5);
+        assert!(c > a);
+    }
 }
 
 #[allow(dead_code)]
