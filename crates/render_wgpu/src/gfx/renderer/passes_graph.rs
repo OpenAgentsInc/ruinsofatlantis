@@ -13,8 +13,49 @@ pub struct SkyPass;
 impl SkyPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
-            .pass("Sky", |_ctx: &mut ExecCtx| {
-                // Execution remains in legacy path for Sky (PR16 moves to offscreen elsewhere)
+            .pass("Sky", move |ctx: &mut ExecCtx| {
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
+                let target = ctx.view_color(color).clone();
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("sky-pass(graph)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.02,
+                                g: 0.02,
+                                b: 0.04,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.sky_pipeline);
+                rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
+                rp.draw(0..3, 0..1);
+                ctx.renderer.draw_calls += 1;
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "Sky",
+                    draws: 1,
+                    batches: 1,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                    pipeline_binds: 0,
+                    bg_binds: 0,
+                    vb_ib_sets: 0,
+                };
+                ctx.renderer.render_stats.push(stats);
             })
             .writes(color);
     }

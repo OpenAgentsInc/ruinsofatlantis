@@ -1137,9 +1137,9 @@ pub fn render_impl(
         .unwrap_or(false);
     // PR16: render all scene content to offscreen color; Present composites to swapchain.
     let render_view: &wgpu::TextureView = &r.attachments.scene_view;
-    // Sky-only pass
+    // Sky-only pass (legacy path only; otherwise handled by graph below)
     log::debug!("pass: sky");
-    if !present_only {
+    if !present_only && use_legacy {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
@@ -1169,26 +1169,8 @@ pub fn render_impl(
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
     }
-    // Main pass: graph when not legacy; otherwise legacy block remains below
-    if !use_legacy && !present_only {
-        use super::graph::{Graph, GraphBuilder, ImageKind};
-        use super::passes_graph::MainPass;
-        let mut gb = GraphBuilder::new();
-        let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
-        let color = gb.image(ImageKind::Color {
-            format: wgpu::TextureFormat::Rgba16Float,
-            size,
-            msaa: r.attachments.sample_count,
-        });
-        let depth = gb.image(ImageKind::Depth {
-            format: wgpu::TextureFormat::Depth32Float,
-            size,
-            msaa: r.attachments.sample_count,
-        });
-        MainPass::declare(&mut gb, color, depth);
-        let g = Graph::compile(gb);
-        g.execute(r, &mut encoder);
-    } else if !present_only {
+    // Main pass: legacy block remains below; otherwise handled by unified graph later
+    if use_legacy && !present_only {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
@@ -2273,7 +2255,7 @@ pub fn render_impl(
         }
         // Hint overlay removed for CC demo and general scenes.
     }
-    // Execute Particles + UI + Present via the framegraph
+    // Execute full frame via the framegraph (Sky/Main/Particles/Post/UI/Present)
     {
         // Legacy fallback toggle (skip graph execution and present directly)
         let use_legacy = std::env::var("RA_RENDER_LEGACY")
@@ -2296,8 +2278,8 @@ pub fn render_impl(
         }
         use super::graph::{Graph, GraphBuilder, ImageKind};
         use super::passes_graph::{
-            BloomPass, ParticlesPass, PostAoPass, PresentPass, ResolvePass, SsgiPass, SsrPass,
-            UiPass,
+            BloomPass, MainPass, ParticlesPass, PostAoPass, PresentPass, ResolvePass, SkyPass,
+            SsgiPass, SsrPass, UiPass,
         };
         let mut gb = GraphBuilder::new();
         let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
@@ -2321,17 +2303,26 @@ pub fn render_impl(
         } else {
             None
         };
-        // Particles/UI write to HDR
-        ParticlesPass::declare(&mut gb, hdr, depth);
-        UiPass::declare(&mut gb, hdr);
-        // Post suite (behavior-neutral ordering)
+        // Scene: Sky + Main
+        if let Some(msaa_img) = msaa {
+            SkyPass::declare(&mut gb, msaa_img);
+            MainPass::declare(&mut gb, msaa_img, depth);
+            ResolvePass::declare(&mut gb, msaa_img, hdr);
+        } else {
+            SkyPass::declare(&mut gb, hdr);
+            MainPass::declare(&mut gb, hdr, depth);
+        }
+        // Particles write to msaa/hdr depending on samples
+        let color_for_overlays = msaa.unwrap_or(hdr);
+        ParticlesPass::declare(&mut gb, color_for_overlays, depth);
+        // Post suite operates on single-sample HDR
+        // If MSAA, Resolve has been declared above to write HDR
         PostAoPass::declare(&mut gb, hdr, depth);
         SsgiPass::declare(&mut gb, hdr, depth);
         SsrPass::declare(&mut gb, hdr, depth);
         BloomPass::declare(&mut gb, hdr);
-        if let Some(msaa_img) = msaa {
-            ResolvePass::declare(&mut gb, msaa_img, hdr);
-        }
+        // UI on top (single-sample HDR)
+        UiPass::declare(&mut gb, hdr);
         PresentPass::declare(&mut gb, hdr);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
