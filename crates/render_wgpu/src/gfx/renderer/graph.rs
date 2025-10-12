@@ -192,6 +192,7 @@ pub struct ExecCtx<'a> {
 }
 
 impl<'a> ExecCtx<'a> {
+    #[allow(dead_code)]
     #[inline]
     pub fn attachments(&mut self) -> &mut super::attachments::Attachments {
         &mut self.renderer.attachments
