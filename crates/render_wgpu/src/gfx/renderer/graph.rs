@@ -139,9 +139,11 @@ mod tests {
 // Phase-2 Framegraph core (builder, resources, validation)
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 pub type Size2D = glam::UVec2;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum ImageKind {
     Color {
         format: wgpu::TextureFormat,
@@ -159,19 +161,23 @@ pub enum ImageKind {
 pub struct Handle<T>(u32, std::marker::PhantomData<T>);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
 pub enum Access {
     Read,
     Write,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
 pub struct Img;
 
+#[allow(dead_code)]
 pub struct GraphBuilder {
     images: Vec<ImageKind>,
     passes: Vec<PassDecl>,
 }
 
+#[allow(dead_code)]
 pub struct PassDecl {
     name: &'static str,
     reads: Vec<Handle<Img>>,
@@ -179,11 +185,13 @@ pub struct PassDecl {
     exec: Box<dyn Fn(&mut ExecCtx) + Send + Sync>,
 }
 
+#[allow(dead_code)]
 pub struct ExecCtx<'a> {
     pub renderer: &'a mut crate::gfx::Renderer,
     pub encoder: &'a mut wgpu::CommandEncoder,
 }
 
+#[allow(dead_code)]
 pub struct Graph {
     pub names: Vec<&'static str>,
     passes: Vec<PassDecl>,
@@ -217,6 +225,7 @@ impl GraphBuilder {
     }
 }
 
+#[allow(dead_code)]
 impl PassDecl {
     pub fn reads(&mut self, h: Handle<Img>) -> &mut Self {
         self.reads.push(h);
