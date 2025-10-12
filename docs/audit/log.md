@@ -539,6 +539,17 @@ Changes
 Validation
 - `xtask ci` green.
 
+---
+
+## Phase‑Two — PR 41: File splits (mechanical)
+
+Changes
+- Model viewer: moved UI text helpers (glyph5x7_rows, UiVertex, build_text_quads) from `main.rs` into `panels.rs` and imported them, keeping `main.rs` as the bootstrap + orchestration. The remaining split modules (`cli/app/viewer/loader/utils`) are present and compile; further moves can proceed incrementally with zero churn.
+- platform_winit: module façade (`pub mod {app,input,picker,builder_overlay,replication,telemetry}`) is in place and compiles. Large bodies remain in their legacy file; planned next step is a mechanical `lib.rs` → `app.rs` move with `pub use app::*` to preserve the public API.
+
+Validation
+- `xtask ci` green; no behavior change. Tools and platform crates still build/run.
+
 ## Phase‑Two — PR 35: Extract Post Suite (behavior‑neutral)
 
 Changes
