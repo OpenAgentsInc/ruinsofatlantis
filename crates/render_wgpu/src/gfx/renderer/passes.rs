@@ -423,4 +423,27 @@ impl Renderer {
         present.set_bind_group(0, &self.present_bg, &[]);
         present.draw(0..3, 0..1);
     }
+
+    /// Copy current HDR (scene_view) into history_color via a fullscreen blit.
+    /// Uses the existing blit pipeline and present bind group that samples HDR.
+    pub(crate) fn pass_copy_hdr_to_history(&self, encoder: &mut wgpu::CommandEncoder) {
+        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("copy-hdr-to-history"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.attachments.history_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        rp.set_pipeline(&self.blit_scene_read_pipeline);
+        rp.set_bind_group(0, &self.present_bg, &[]);
+        rp.draw(0..3, 0..1);
+    }
 }

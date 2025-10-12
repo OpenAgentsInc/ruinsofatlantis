@@ -80,7 +80,7 @@ impl Attachments {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: offscreen_format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
         let history_view = history_color.create_view(&wgpu::TextureViewDescriptor::default());

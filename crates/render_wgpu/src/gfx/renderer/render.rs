@@ -2332,7 +2332,8 @@ pub fn render_impl(
         PresentPass::declare(&mut gb, hdr);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
-        // TODO(phase3-PR54): copy HDR to history after pass execution (deferred until we formalize history sampling BGs)
+        // Copy HDR to history at end of frame (behavior-neutral)
+        r.pass_copy_hdr_to_history(&mut encoder);
     }
     r.queue.submit(Some(encoder.finish()));
     // Pop the validation scope after submit; this captures any errors raised
