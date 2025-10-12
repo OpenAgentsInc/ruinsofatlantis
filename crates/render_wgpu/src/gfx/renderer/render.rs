@@ -486,6 +486,9 @@ pub fn render_impl(
     }
     // Reset per-frame stats
     r.draw_calls = 0;
+    r.pipeline_binds_count = 0;
+    r.bg_binds_count = 0;
+    r.vb_ib_sets_count = 0;
 
     // If screenshot mode is active, auto-animate a smooth orbit for 5 seconds
     if let Some(ts) = r.screenshot_start {

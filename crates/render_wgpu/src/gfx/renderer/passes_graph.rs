@@ -26,6 +26,9 @@ impl MainPass {
         let _ = builder
             .pass("Main", |ctx: &mut ExecCtx| {
                 let dc0 = ctx.renderer.draw_calls;
+                let pb0 = ctx.renderer.pipeline_binds_count;
+                let bb0 = ctx.renderer.bg_binds_count;
+                let vb0 = ctx.renderer.vb_ib_sets_count;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
@@ -39,9 +42,9 @@ impl MainPass {
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
-                    pipeline_binds: 0,
-                    bg_binds: 0,
-                    vb_ib_sets: 0,
+                    pipeline_binds: ctx.renderer.pipeline_binds_count.saturating_sub(pb0),
+                    bg_binds: ctx.renderer.bg_binds_count.saturating_sub(bb0),
+                    vb_ib_sets: ctx.renderer.vb_ib_sets_count.saturating_sub(vb0),
                 };
                 ctx.renderer.render_stats.push(stats);
             })

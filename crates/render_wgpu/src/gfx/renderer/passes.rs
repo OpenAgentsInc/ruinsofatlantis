@@ -92,10 +92,14 @@ impl Renderer {
             let mid = 0;
             let mesh = ptr_id(&self.terrain_ib);
             rp.set_pipeline(&self.pipeline);
+            self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
             rp.set_bind_group(0, &self.globals_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_bind_group(1, &self.terrain_model_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_vertex_buffer(0, self.terrain_vb.slice(..));
             rp.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+            self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
             rp.draw_indexed(0..self.terrain_index_count, 0, 0..1);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
@@ -110,12 +114,16 @@ impl Renderer {
                 };
                 let pid = ptr_id(inst_pipe);
                 rp.set_pipeline(inst_pipe);
+                self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
                 // bind and draw
                 rp.set_bind_group(0, &self.globals_bg, &[]);
+                self.bg_binds_count = self.bg_binds_count.saturating_add(1);
                 rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                self.bg_binds_count = self.bg_binds_count.saturating_add(1);
                 rp.set_vertex_buffer(0, self.ruins_vb.slice(..));
                 rp.set_vertex_buffer(1, self.ruins_instances.slice(..));
                 rp.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
+                self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
                 rp.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
                 self.draw_calls += 1;
                 let mid = 0;
@@ -126,8 +134,11 @@ impl Renderer {
         // Voxel meshes
         if !self.voxel_meshes.is_empty() && !pc_debug {
             rp.set_pipeline(&self.pipeline);
+            self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
             rp.set_bind_group(0, &self.globals_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_bind_group(1, &self.voxel_model_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             let mut voxel_keys: Vec<[u32; 3]> = Vec::new();
             for m in self.voxel_meshes.values() {
                 let pid = ptr_id(&self.pipeline);
@@ -136,6 +147,7 @@ impl Renderer {
                 voxel_keys.push([pid, mid, mesh]);
                 rp.set_vertex_buffer(0, m.vb.slice(..));
                 rp.set_index_buffer(m.ib.slice(..), wgpu::IndexFormat::Uint32);
+                self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
                 rp.draw_indexed(0..m.idx, 0, 0..1);
                 self.draw_calls += 1;
             }

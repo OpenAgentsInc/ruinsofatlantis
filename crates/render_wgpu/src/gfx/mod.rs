@@ -210,6 +210,10 @@ pub struct Renderer {
     // Debug counters
     pub(crate) present_recoveries: u32,
     pub(crate) graph_peak_mem_bytes: u64,
+    // Per-frame state-change counters (filled by pass_main)
+    pub(crate) pipeline_binds_count: u32,
+    pub(crate) bg_binds_count: u32,
+    pub(crate) vb_ib_sets_count: u32,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
