@@ -51,7 +51,7 @@ pub struct PresentPass;
 impl PresentPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
-            .pass("Present", |ctx: &mut ExecCtx| {
+            .pass("Present", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
@@ -86,10 +86,73 @@ impl PresentPass {
                 let swap_view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
-                // Composite the provided color handle (HDR) to the swapchain view.
-                // For now, present pipeline samples from attachments.scene_view via present_bg.
-                // Once Present binds a dynamic src view, switch to ctx.view_color(color).
-                ctx.renderer.pass_present(ctx.encoder, &swap_view);
+                // Build a present BG from the graph HDR view
+                let src = ctx.view_color(color);
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.present_bgl,
+                    &[
+                        src as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                        &ctx.renderer.attachments.depth_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let present_bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("present-bg[graph]"),
+                            layout: &ctx.renderer.present_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(src),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &ctx.renderer.attachments.depth_view,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                // Present full-screen draw
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("present-pass(graph)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swap_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.present_pipeline);
+                rp.set_bind_group(0, &present_bg, &[]);
+                rp.draw(0..3, 0..1);
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
@@ -189,7 +252,54 @@ impl PostAoPass {
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 let target = ctx.view_color(color).clone();
-                ctx.renderer.pass_ao(ctx.encoder, &target);
+                // Build a depth BG from graph view via BgCache
+                let depth_view = ctx.view_depth(depth);
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.post_ao_bgl,
+                    &[
+                        depth_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let post_ao_bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("post-ao-bg[graph]"),
+                            layout: &ctx.renderer.post_ao_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(depth_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("post-ao-pass(graph)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.post_ao_pipeline);
+                rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                rp.set_bind_group(1, &post_ao_bg, &[]);
+                rp.draw(0..3, 0..1);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "PostAO",
@@ -226,7 +336,84 @@ impl SsgiPass {
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 let target = ctx.view_color(color).clone();
-                ctx.renderer.pass_ssgi(ctx.encoder, &target);
+                // Depth BG
+                let depth_view = ctx.view_depth(depth);
+                let key_d = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.ssgi_depth_bgl,
+                    &[
+                        depth_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let ssgi_depth_bg = ctx.renderer.bg_cache.get_or_create(key_d, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("ssgi-depth-bg[graph]"),
+                            layout: &ctx.renderer.ssgi_depth_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(depth_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                // Scene BG (sample HDR)
+                let scene_view = ctx.view_color(color);
+                let key_s = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.ssgi_scene_bgl,
+                    &[
+                        scene_view as *const _ as u64,
+                        &ctx.renderer._post_sampler as *const _ as u64,
+                    ],
+                );
+                let ssgi_scene_bg = ctx.renderer.bg_cache.get_or_create(key_s, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("ssgi-scene-bg[graph]"),
+                            layout: &ctx.renderer.ssgi_scene_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(scene_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer._post_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("ssgi-pass(graph)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.ssgi_pipeline);
+                rp.set_bind_group(0, &ctx.renderer.ssgi_globals_bg, &[]);
+                rp.set_bind_group(1, &ssgi_depth_bg, &[]);
+                rp.set_bind_group(2, &ssgi_scene_bg, &[]);
+                rp.draw(0..3, 0..1);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "SSGI",
@@ -252,7 +439,53 @@ impl SsrPass {
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 let target = ctx.view_color(color).clone();
-                ctx.renderer.pass_ssr(ctx.encoder, &target);
+                let scene_view = ctx.view_color(color);
+                let key_s = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.ssr_scene_bgl,
+                    &[
+                        scene_view as *const _ as u64,
+                        &ctx.renderer._post_sampler as *const _ as u64,
+                    ],
+                );
+                let ssr_scene_bg = ctx.renderer.bg_cache.get_or_create(key_s, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("ssr-scene-bg[graph]"),
+                            layout: &ctx.renderer.ssr_scene_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(scene_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer._post_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("ssr-pass(graph)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.ssr_pipeline);
+                rp.set_bind_group(0, &ctx.renderer.ssr_depth_bg, &[]);
+                rp.set_bind_group(1, &ssr_scene_bg, &[]);
+                rp.draw(0..3, 0..1);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "SSR",
@@ -278,7 +511,52 @@ impl BloomPass {
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 let target = ctx.view_color(color).clone();
-                ctx.renderer.pass_bloom(ctx.encoder, &target);
+                let src = ctx.view_color(color);
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.bloom_bgl,
+                    &[
+                        src as *const _ as u64,
+                        &ctx.renderer._post_sampler as *const _ as u64,
+                    ],
+                );
+                let bloom_bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("bloom-bg[graph]"),
+                            layout: &ctx.renderer.bloom_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(src),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer._post_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("bloom-pass(graph)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.bloom_pipeline);
+                rp.set_bind_group(0, &bloom_bg, &[]);
+                rp.draw(0..3, 0..1);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Bloom",

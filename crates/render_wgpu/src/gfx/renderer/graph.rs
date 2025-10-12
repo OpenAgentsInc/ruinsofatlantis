@@ -238,8 +238,8 @@ pub struct Graph {
     pub names: Vec<&'static str>,
     // Declared images (by handle id). Used to derive per-frame views mapping.
     images: Vec<ImageKind>,
-    // Scratch views vector populated per-frame before executing passes.
-    views: Vec<wgpu::TextureView>,
+    // Keep created textures alive for the duration of execute (allocation path)
+    keep_textures: Vec<wgpu::Texture>,
     passes: Vec<PassDecl>,
 }
 
@@ -317,7 +317,7 @@ impl Graph {
         Graph {
             names,
             images: b.images,
-            views: Vec::new(),
+            keep_textures: Vec::new(),
             passes: b.passes.drain(..).collect(),
         }
     }
@@ -332,8 +332,8 @@ impl Graph {
         let do_alloc = std::env::var("RA_GRAPH_ALLOC")
             .map(|v| v == "1")
             .unwrap_or(false);
-        self.views.clear();
-        self.views.resize_with(self.images.len(), || {
+        let mut views: Vec<wgpu::TextureView> = Vec::with_capacity(self.images.len());
+        views.resize_with(self.images.len(), || {
             renderer.attachments.scene_view.clone()
         });
 
@@ -415,11 +415,12 @@ impl Graph {
                                     },
                                 ) => f0 == f1 && s0 == s1 && m0 == m1,
                                 _ => false,
-                            } && e.usage == usages[ix];
+                            } && e.usage.contains(usages[ix]);
                             if same && e.live.last < lives[ix].first {
                                 // Disjoint lifetimes; reuse
                                 e.live = lives[ix];
-                                self.views[ix] = e.view.clone();
+                                self.keep_textures.push(e._tex.clone());
+                                views[ix] = e.view.clone();
                                 reused = true;
                                 break;
                             }
@@ -445,7 +446,8 @@ impl Graph {
                                         view_formats: &[],
                                     });
                                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
-                                self.views[ix] = view.clone();
+                                self.keep_textures.push(tex.clone());
+                                views[ix] = view.clone();
                                 pool.push(PoolEntry {
                                     kind: kind.clone(),
                                     usage: usages[ix],
@@ -471,7 +473,8 @@ impl Graph {
                                         view_formats: &[],
                                     });
                                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
-                                self.views[ix] = view.clone();
+                                self.keep_textures.push(tex.clone());
+                                views[ix] = view.clone();
                                 pool.push(PoolEntry {
                                     kind: kind.clone(),
                                     usage: usages[ix],
@@ -502,8 +505,8 @@ impl Graph {
                                 usage: usages[ix],
                                 view_formats: &[],
                             });
-                            self.views[ix] =
-                                tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            self.keep_textures.push(tex.clone());
+                            views[ix] = tex.create_view(&wgpu::TextureViewDescriptor::default());
                         }
                         ImageKind::Depth { format, size, msaa } => {
                             let tex = renderer.device.create_texture(&wgpu::TextureDescriptor {
@@ -520,8 +523,8 @@ impl Graph {
                                 usage: usages[ix],
                                 view_formats: &[],
                             });
-                            self.views[ix] =
-                                tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            self.keep_textures.push(tex.clone());
+                            views[ix] = tex.create_view(&wgpu::TextureViewDescriptor::default());
                         }
                     }
                 }
@@ -531,10 +534,10 @@ impl Graph {
             for (ix, kind) in self.images.iter().enumerate() {
                 match kind {
                     ImageKind::Color { .. } => {
-                        self.views[ix] = renderer.attachments.scene_view.clone();
+                        views[ix] = renderer.attachments.scene_view.clone();
                     }
                     ImageKind::Depth { .. } => {
-                        self.views[ix] = renderer.attachments.depth_view.clone();
+                        views[ix] = renderer.attachments.depth_view.clone();
                     }
                 }
             }
@@ -543,7 +546,7 @@ impl Graph {
             let mut ctx = ExecCtx {
                 renderer,
                 encoder,
-                views: &self.views,
+                views: &views,
             };
             (p.exec)(&mut ctx);
         }
