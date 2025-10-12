@@ -1561,11 +1561,8 @@ pub fn render_impl(
         } else {
             log::debug!("draw: zombies skipped (RA_DRAW_ZOMBIES=0)");
         }
-        // Particles + projectiles
-        r.draw_particles(&mut rp);
-        if r.fx_count > 0 {
-            r.draw_calls += 1;
-        }
+        // Particles + projectiles: executed via framegraph to stage PR15
+        // Skip legacy draw here; will render in a separate pass below.
         // Copy SceneColor into SceneRead when not direct-present
         if !r.direct_present {
             drop(rp);
@@ -2207,8 +2204,8 @@ pub fn render_impl(
         }
         // Hint overlay removed for CC demo and general scenes.
     }
-    r.hud.queue(&r.device, &r.queue);
-    r.hud.draw(&mut encoder, &view);
+    // Execute Particles + UI via the framegraph helper (behavior-parity path)
+    super::graph::FrameGraph::run_particles_ui(r, &mut encoder, render_view, &view);
     r.queue.submit(Some(encoder.finish()));
     frame.present();
     // Pop the validation scope after submit; this captures any errors raised
