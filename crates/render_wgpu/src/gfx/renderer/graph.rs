@@ -270,10 +270,7 @@ impl FrameGraph {
             msaa: 1,
         });
         // Monolith pass: call the legacy render implementation
-        builder.pass("Monolith", |_ctx| {
-            // The legacy path manages swapchain acquire/present internally
-            let _ = super::render::render_impl(renderer, None);
-        });
+        builder.pass("Monolith", |_ctx| { /* forwarder; see execute() */ });
         let g = Graph::compile(builder);
         g.execute(renderer);
     }
