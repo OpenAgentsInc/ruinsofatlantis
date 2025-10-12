@@ -313,8 +313,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         direct_present,
         draw_fmt
     );
-    let (pipeline, inst_pipeline, wire_pipeline) =
-        pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
+    let (pipeline, inst_pipeline, wire_pipeline) = pipeline::create_pipelines(
+        &device,
+        &shader,
+        &globals_bgl,
+        &model_bgl,
+        draw_fmt,
+        attachments.sample_count,
+    );
     let inst_tex_pipeline = pipeline::create_textured_inst_pipeline(
         &device,
         &shader,
@@ -323,6 +329,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &palettes_bgl,
         &material_bgl,
         draw_fmt,
+        attachments.sample_count,
     );
     let inst_tex_ghost_pipeline = pipeline::create_textured_inst_ghost_pipeline(
         &device,
@@ -332,6 +339,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &palettes_bgl,
         &material_bgl,
         draw_fmt,
+        attachments.sample_count,
     );
     // Create a default 1x1 white material BG for textured pipelines (trees fallback)
     let mat_xf_zero = [0.0f32; 8];
@@ -403,7 +411,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     });
     // Sky background
     let sky_bgl = pipeline::create_sky_bgl(&device);
-    let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
+    let sky_pipeline = pipeline::create_sky_pipeline(
+        &device,
+        &globals_bgl,
+        &sky_bgl,
+        draw_fmt,
+        attachments.sample_count,
+    );
     // Present pipeline (SceneColor -> swapchain)
     let present_bgl = pipeline::create_present_bgl(&device);
     let present_pipeline =
@@ -437,6 +451,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &palettes_bgl,
         &material_bgl,
         draw_fmt,
+        attachments.sample_count,
     );
     let wizard_pipeline_debug = Some(pipeline::create_wizard_pipeline_debug(
         &device,
@@ -446,9 +461,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         &palettes_bgl,
         &material_bgl,
         draw_fmt,
+        attachments.sample_count,
     ));
-    let particle_pipeline =
-        pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
+    let particle_pipeline = pipeline::create_particle_pipeline(
+        &device,
+        &shader,
+        &globals_bgl,
+        draw_fmt,
+        attachments.sample_count,
+    );
 
     // Model buffers for terrain/shards
     let plane_model_init = Model {
@@ -1875,6 +1896,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         main_batch_prev_key: None,
         main_batch_count_curr: 0,
         main_batch_count_last: 0,
+        graph_peak_mem_bytes: 0,
         globals_buf,
         sky_buf,
         _plane_model_buf,

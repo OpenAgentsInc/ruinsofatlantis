@@ -422,6 +422,12 @@ impl Graph {
                                 self.keep_textures.push(e._tex.clone());
                                 views[ix] = e.view.clone();
                                 reused = true;
+                                if std::env::var("RA_GRAPH_TRACE")
+                                    .map(|v| v == "1")
+                                    .unwrap_or(false)
+                                {
+                                    log::debug!("graph: alias Img#{} -> existing", ix);
+                                }
                                 break;
                             }
                         }
@@ -448,6 +454,18 @@ impl Graph {
                                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
                                 self.keep_textures.push(tex.clone());
                                 views[ix] = view.clone();
+                                if std::env::var("RA_GRAPH_TRACE")
+                                    .map(|v| v == "1")
+                                    .unwrap_or(false)
+                                {
+                                    log::debug!(
+                                        "graph: alloc Img#{} (format={:?} size={:?} samples={})",
+                                        ix,
+                                        format,
+                                        size,
+                                        msaa
+                                    );
+                                }
                                 pool.push(PoolEntry {
                                     kind: kind.clone(),
                                     usage: usages[ix],
@@ -475,6 +493,18 @@ impl Graph {
                                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
                                 self.keep_textures.push(tex.clone());
                                 views[ix] = view.clone();
+                                if std::env::var("RA_GRAPH_TRACE")
+                                    .map(|v| v == "1")
+                                    .unwrap_or(false)
+                                {
+                                    log::debug!(
+                                        "graph: alloc Img#{} (format={:?} size={:?} samples={})",
+                                        ix,
+                                        format,
+                                        size,
+                                        msaa
+                                    );
+                                }
                                 pool.push(PoolEntry {
                                     kind: kind.clone(),
                                     usage: usages[ix],
@@ -507,6 +537,18 @@ impl Graph {
                             });
                             self.keep_textures.push(tex.clone());
                             views[ix] = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            if std::env::var("RA_GRAPH_TRACE")
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                            {
+                                log::debug!(
+                                    "graph: alloc Img#{} (format={:?} size={:?} samples={})",
+                                    ix,
+                                    format,
+                                    size,
+                                    msaa
+                                );
+                            }
                         }
                         ImageKind::Depth { format, size, msaa } => {
                             let tex = renderer.device.create_texture(&wgpu::TextureDescriptor {
@@ -525,6 +567,18 @@ impl Graph {
                             });
                             self.keep_textures.push(tex.clone());
                             views[ix] = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            if std::env::var("RA_GRAPH_TRACE")
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                            {
+                                log::debug!(
+                                    "graph: alloc Img#{} (format={:?} size={:?} samples={})",
+                                    ix,
+                                    format,
+                                    size,
+                                    msaa
+                                );
+                            }
                         }
                     }
                 }
@@ -542,6 +596,32 @@ impl Graph {
                 }
             }
         }
+        // Compute a simple peak memory estimate (non-aliased) for debugging
+        let mut peak_bytes: u64 = 0;
+        for kind in &self.images {
+            match kind {
+                ImageKind::Color { format, size, msaa } => {
+                    let bpp = match format {
+                        wgpu::TextureFormat::Rgba16Float => 8u64,
+                        wgpu::TextureFormat::Rgba8Unorm => 4u64,
+                        _ => 4u64,
+                    };
+                    peak_bytes = peak_bytes
+                        .saturating_add(size.x as u64 * size.y as u64 * (*msaa as u64) * bpp);
+                }
+                ImageKind::Depth {
+                    format: _f,
+                    size,
+                    msaa,
+                } => {
+                    // Depth32Float ~ 4B
+                    peak_bytes = peak_bytes
+                        .saturating_add(size.x as u64 * size.y as u64 * (*msaa as u64) * 4u64);
+                }
+            }
+        }
+        // Store on renderer for HUD later
+        renderer.graph_peak_mem_bytes = peak_bytes;
         for p in self.passes.drain(..) {
             let mut ctx = ExecCtx {
                 renderer,

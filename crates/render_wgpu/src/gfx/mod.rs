@@ -207,6 +207,9 @@ pub struct Renderer {
     main_batch_count_curr: u32,
     #[allow(dead_code)]
     pub(crate) main_batch_count_last: u32,
+    // Debug counters
+    pub(crate) present_recoveries: u32,
+    pub(crate) graph_peak_mem_bytes: u64,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -474,8 +477,6 @@ pub struct Renderer {
 
     // Zone UI/controls policy (derived from zone slug or manifest)
     zone_policy: ZonePolicy,
-    // Present recovery counter (incremented when surface is lost/outdated)
-    pub(crate) present_recoveries: u32,
 
     // --- Destructible (voxel) state ---
     #[cfg(feature = "vox_onepath_demo")]
@@ -1770,11 +1771,23 @@ impl Renderer {
         } else {
             offscreen_fmt
         };
-        let (pipeline, inst_pipeline, wire_pipeline) =
-            pipeline::create_pipelines(&device, &shader, &globals_bgl, &model_bgl, draw_fmt);
+        let (pipeline, inst_pipeline, wire_pipeline) = pipeline::create_pipelines(
+            &device,
+            &shader,
+            &globals_bgl,
+            &model_bgl,
+            draw_fmt,
+            attachments.sample_count,
+        );
         // Sky background
         let sky_bgl = pipeline::create_sky_bgl(&device);
-        let sky_pipeline = pipeline::create_sky_pipeline(&device, &globals_bgl, &sky_bgl, draw_fmt);
+        let sky_pipeline = pipeline::create_sky_pipeline(
+            &device,
+            &globals_bgl,
+            &sky_bgl,
+            draw_fmt,
+            attachments.sample_count,
+        );
         // Present pipeline (SceneColor -> swapchain)
         let present_bgl = pipeline::create_present_bgl(&device);
         let present_pipeline =
@@ -1814,6 +1827,7 @@ impl Renderer {
             &palettes_bgl,
             &material_bgl,
             draw_fmt,
+            attachments.sample_count,
         );
         let wizard_pipeline_debug = Some(pipeline::create_wizard_pipeline_debug(
             &device,
@@ -1823,9 +1837,15 @@ impl Renderer {
             &palettes_bgl,
             &material_bgl,
             draw_fmt,
+            attachments.sample_count,
         ));
-        let particle_pipeline =
-            pipeline::create_particle_pipeline(&device, &shader, &globals_bgl, draw_fmt);
+        let particle_pipeline = pipeline::create_particle_pipeline(
+            &device,
+            &shader,
+            &globals_bgl,
+            draw_fmt,
+            attachments.sample_count,
+        );
 
         // UI: nameplates + health bars — build against active color format (swapchain if direct-present)
         let nameplates = ui::Nameplates::new(&device, draw_fmt)?;

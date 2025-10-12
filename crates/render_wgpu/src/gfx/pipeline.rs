@@ -133,6 +133,7 @@ pub fn create_pipelines(
     globals_bgl: &BindGroupLayout,
     model_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> (RenderPipeline, RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("pipeline-layout"),
@@ -170,7 +171,10 @@ pub fn create_pipelines(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     });
@@ -203,7 +207,10 @@ pub fn create_pipelines(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     });
@@ -244,7 +251,10 @@ pub fn create_pipelines(
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
-                multisample: wgpu::MultisampleState::default(),
+                multisample: wgpu::MultisampleState {
+                    count: sample_count,
+                    ..Default::default()
+                },
                 multiview: None,
                 cache: None,
             }),
@@ -256,6 +266,7 @@ pub fn create_pipelines(
     (pipeline, inst_pipeline, wire_pipeline)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_textured_inst_pipeline(
     device: &wgpu::Device,
     shader: &ShaderModule,
@@ -264,6 +275,7 @@ pub fn create_textured_inst_pipeline(
     palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> RenderPipeline {
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("inst-tex-pipeline-layout"),
@@ -303,12 +315,16 @@ pub fn create_textured_inst_pipeline(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_textured_inst_ghost_pipeline(
     device: &wgpu::Device,
     shader: &ShaderModule,
@@ -317,6 +333,7 @@ pub fn create_textured_inst_ghost_pipeline(
     palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> RenderPipeline {
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("inst-tex-ghost-pipeline-layout"),
@@ -354,7 +371,10 @@ pub fn create_textured_inst_ghost_pipeline(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     })
@@ -382,6 +402,7 @@ pub fn create_sky_pipeline(
     globals_bgl: &BindGroupLayout,
     sky_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("sky-shader"),
@@ -413,7 +434,10 @@ pub fn create_sky_pipeline(
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     })
@@ -428,6 +452,7 @@ pub fn create_wizard_pipelines(
     palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> (RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("wizard-pipeline-layout"),
@@ -463,7 +488,10 @@ pub fn create_wizard_pipelines(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     });
@@ -503,7 +531,10 @@ pub fn create_wizard_pipelines(
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
-                multisample: wgpu::MultisampleState::default(),
+                multisample: wgpu::MultisampleState {
+                    count: sample_count,
+                    ..Default::default()
+                },
                 multiview: None,
                 cache: None,
             }),
@@ -524,6 +555,7 @@ pub fn create_wizard_pipeline_debug(
     palettes_bgl: &BindGroupLayout,
     material_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> RenderPipeline {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("wizard-pipeline-layout-debug"),
@@ -554,7 +586,10 @@ pub fn create_wizard_pipeline_debug(
             ..Default::default()
         },
         depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     })
@@ -565,6 +600,7 @@ pub fn create_particle_pipeline(
     shader: &ShaderModule,
     globals_bgl: &BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> RenderPipeline {
     let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("particle-pipeline-layout"),
@@ -613,7 +649,10 @@ pub fn create_particle_pipeline(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         multiview: None,
         cache: None,
     })
