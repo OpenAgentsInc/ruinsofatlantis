@@ -13,6 +13,11 @@ pub(crate) struct Attachments {
     pub scene_view: wgpu::TextureView,
     pub scene_read: wgpu::Texture,
     pub scene_read_view: wgpu::TextureView,
+    // History color (previous frame HDR)
+    #[allow(dead_code)]
+    pub history_color: wgpu::Texture,
+    #[allow(dead_code)]
+    pub history_view: wgpu::TextureView,
     pub width: u32,
     pub height: u32,
     pub swapchain_format: TextureFormat,
@@ -63,12 +68,30 @@ impl Attachments {
             view_formats: &[],
         });
         let scene_read_view = scene_read.create_view(&wgpu::TextureViewDescriptor::default());
+        // History color (copy of HDR from previous frame)
+        let history_color = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("history-color"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: offscreen_format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let history_view = history_color.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
             depth_view,
             scene_color,
             scene_view,
             scene_read,
             scene_read_view,
+            history_color,
+            history_view,
             width,
             height,
             swapchain_format,
