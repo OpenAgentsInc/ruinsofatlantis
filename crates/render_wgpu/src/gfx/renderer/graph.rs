@@ -247,6 +247,25 @@ impl Graph {
                 }
             }
         }
+        // Cross-pass monotonic rule: no write after any read of the same image.
+        #[cfg(debug_assertions)]
+        {
+            use std::collections::HashSet;
+            let mut seen_read: HashSet<u32> = HashSet::new();
+            for p in &b.passes {
+                for &w in &p.writes {
+                    if seen_read.contains(&w.0) {
+                        panic!(
+                            "framegraph hazard: pass '{}' writes an image after it was read earlier",
+                            p.name
+                        );
+                    }
+                }
+                for &r in &p.reads {
+                    seen_read.insert(r.0);
+                }
+            }
+        }
         // Preserve declaration order for now (topology is trivial without cross-pass deps).
         let names = b.passes.iter().map(|p| p.name).collect();
         Graph {

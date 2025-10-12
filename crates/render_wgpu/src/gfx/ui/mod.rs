@@ -4,14 +4,11 @@
 //! introducing focused submodules. No behavior change.
 
 pub mod help; // help overlay
-pub mod hotbar;
-pub mod perf; // overlays / perf // hotbar UI
+pub mod hotbar; // hotbar UI
+pub mod legacy;
+pub mod perf; // overlays / perf // moved from ../ui.rs
 
-// Back-compat: include the original monolithic UI module.
-#[path = "../ui.rs"]
-mod legacy;
-
-pub use legacy::*;
+pub use legacy::*; // keep external API unchanged during transition
 
 #[cfg(test)]
 mod tests {

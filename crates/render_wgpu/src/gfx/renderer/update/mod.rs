@@ -10,18 +10,17 @@ pub mod destructibles_demo;
 pub mod math;
 pub mod projectiles;
 
-// Back-compat: include the original monolithic module.
-#[path = "../update.rs"]
-mod legacy;
+// Back-compat: legacy monolithic implementation moved to `legacy.rs` (git mv).
+pub mod legacy;
 
 #[allow(unused_imports)]
-pub(crate) use builder::*;
+pub use builder::*;
 #[cfg(feature = "vox_onepath_demo")]
 #[allow(unused_imports)]
-pub(crate) use destructibles_demo::*;
+pub use destructibles_demo::*;
 #[allow(unused_imports)]
-pub(crate) use legacy::*;
+pub use legacy::*;
 #[allow(unused_imports)]
-pub(crate) use math::*;
+pub use math::*;
 #[allow(unused_imports)]
-pub(crate) use projectiles::*;
+pub use projectiles::*;

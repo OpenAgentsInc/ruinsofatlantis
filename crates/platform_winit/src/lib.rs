@@ -15,32 +15,12 @@ use winit::{
 };
 
 // Phase-one scaffolding: split modules by concern (no behavior change yet)
-pub mod app {}
-pub mod input {
-    #![allow(dead_code)]
-    /// Example pure mapping used for a unit test; real mapping remains in legacy code.
-    pub fn map_keys_to_intent(keys: &[&str]) -> Option<&'static str> {
-        if keys.contains(&"W") {
-            Some("MoveForward")
-        } else {
-            None
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::map_keys_to_intent;
-        #[test]
-        fn maps_w_to_move_forward() {
-            assert_eq!(map_keys_to_intent(&["W"]), Some("MoveForward"));
-            assert_eq!(map_keys_to_intent(&["A"]), None);
-        }
-    }
-}
-pub mod picker {}
-pub mod builder_overlay {}
-pub mod replication {}
-pub mod telemetry {}
+pub mod app;
+pub mod builder_overlay;
+pub mod input;
+pub mod picker;
+pub mod replication;
+pub mod telemetry;
 
 #[allow(dead_code)]
 enum BootMode {
