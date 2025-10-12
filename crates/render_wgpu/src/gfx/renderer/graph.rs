@@ -222,6 +222,11 @@ impl<'a> ExecCtx<'a> {
     pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
         &self.renderer.config
     }
+    #[inline]
+    pub fn pipelines(&self) -> &super::pipelines::Pipelines {
+        // Typed pipelines accessor (backed by Renderer field). No behavior change yet.
+        &self.renderer.pipelines
+    }
     // Placeholder for future pipelines() accessor when adopted in ExecCtx
 }
 

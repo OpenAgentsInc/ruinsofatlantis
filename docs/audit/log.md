@@ -482,6 +482,29 @@ Validation
 
 ---
 
+## Phase‑Two — PR 36: Split pipelines (mechanical)
+
+Changes
+- Added per-pass pipeline modules under `gfx/renderer/pipelines/*` with behavior-neutral re-exports to `gfx/pipeline.rs`:
+  - `{present,sky,terrain,instanced,post_ao,ssgi,ssr,bloom}.rs` plus `common.rs` and `mod.rs`.
+- Introduced a `Pipelines` grouping (empty scaffolding for now) and exported the namespace from `renderer::mod`.
+- Left all call-sites intact (continue to use `gfx::pipeline::*`); this sets up a no-churn path to migrate builders later.
+
+Validation
+- `xtask ci` green; no public API changes at call-sites.
+
+---
+
+## Phase‑Two — PR 37: ExecCtx::pipelines() + typed handle scaffolding
+
+Changes
+- Added `Renderer::pipelines: renderer::pipelines::Pipelines` field and initialized it in `init.rs` (default).
+- Added `ExecCtx::pipelines()` accessor returning `&Pipelines` (not yet used by passes).
+- Exported `renderer::pipelines` from `renderer/mod.rs`.
+
+Validation
+- `xtask ci` green; no behavior changes; accessor unused for now.
+
 ## Phase‑Two — PR 35: Extract Post Suite (behavior‑neutral)
 
 Changes

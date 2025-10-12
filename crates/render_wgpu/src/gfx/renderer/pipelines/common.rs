@@ -15,12 +15,16 @@ pub struct Pipeline<T> {
 
 impl<T> std::ops::Deref for Bgl<T> {
     type Target = wgpu::BindGroupLayout;
-    fn deref(&self) -> &Self::Target { &self.raw }
+    fn deref(&self) -> &Self::Target {
+        &self.raw
+    }
 }
 
 impl<T> std::ops::Deref for Pipeline<T> {
     type Target = wgpu::RenderPipeline;
-    fn deref(&self) -> &Self::Target { &self.raw }
+    fn deref(&self) -> &Self::Target {
+        &self.raw
+    }
 }
 
 // Tag types for typed pipelines
@@ -31,4 +35,3 @@ pub enum AoPass {}
 pub enum SsgiPass {}
 pub enum SsrPass {}
 pub enum BloomPass {}
-
