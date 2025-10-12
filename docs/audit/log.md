@@ -564,3 +564,55 @@ Changes
 Validation
 - `xtask ci` green; all unit tests and WGSL validation pass.
 - Manual smoke: post overlays render as before; perf HUD shows Post rows with ms/draws.
+
+---
+
+## Phase‑Three — PR 42: Graph Views API (behavior‑neutral)
+
+Changes
+- Extended `renderer::graph::Graph` to retain declared `images` and a per‑frame `views` array.
+- Updated `ExecCtx` to expose `view_color(handle)` and `view_depth(handle)` backed by the graph’s `views` slice.
+- In `Graph::execute`, populated `views` by aliasing handles to current attachments (`scene_view` / `depth_view`) to keep behavior identical.
+- Passes now consistently consume graph views (Particles/UI already adopted; others remain unchanged behaviorally).
+
+Validation
+- `cargo clippy -D warnings` and `cargo test` green.
+- Visual parity verified locally; no change in Present or Main paths.
+
+---
+
+## Phase‑Three — PR 43: Allocation Plan & Liveness (no aliasing yet by default)
+
+Changes
+- Computed simple liveness intervals (`first/last` touching pass) and per‑image `TextureUsages` during `Graph::execute`.
+- Added an optional per‑image instantiation path gated by `RA_GRAPH_ALLOC=1` that creates `wgpu::Texture`s 1:1 from `ImageKind` and usage flags, filling `views` with those texture views.
+- Default remains attachment aliasing for parity (env var off).
+
+Validation
+- Logic‑only; default path unchanged. Unit tests unaffected; CI green.
+- Manual smoke with `RA_GRAPH_ALLOC=1` keeps passes executing; Present still composites attachments as expected.
+
+---
+
+## Phase‑Three — PR 44: Optional Aliasing (interval packing, env‑gated)
+
+Changes
+- Implemented a simple interval packing allocator behind `RA_GRAPH_ALIASING=1` (effective only when `RA_GRAPH_ALLOC=1` is also set):
+  - Reuses textures for images with identical descriptors (format/size/samples/usages) and non‑overlapping lifetimes.
+- Falls back to 1:1 instantiation when aliasing is disabled; logs can be enabled via `RA_GRAPH_TRACE=1` (future enhancement).
+
+Validation
+- Feature is off by default; CI green on default path.
+- Local smoke with both env vars enabled shows no validation errors.
+
+---
+
+## Phase‑Three — PR 45: MSAA threading (scaffold)
+
+Changes
+- Threaded `attachments.sample_count` through graph image declarations for Main/Post paths.
+- Left `attachments` creation at `sample_count=1` (behavior‑neutral). Resolve path will be introduced when Main adopts graph targets.
+
+Validation
+- CI green; no behavior change with default `sample_count=1`.
+

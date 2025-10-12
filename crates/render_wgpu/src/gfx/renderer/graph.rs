@@ -189,6 +189,8 @@ pub struct PassDecl {
 pub struct ExecCtx<'a> {
     pub renderer: &'a mut crate::gfx::Renderer,
     pub encoder: &'a mut wgpu::CommandEncoder,
+    // Graph-provided views for declared image handles. The index matches Handle<Img>.0
+    views: &'a [wgpu::TextureView],
 }
 
 impl<'a> ExecCtx<'a> {
@@ -198,13 +200,13 @@ impl<'a> ExecCtx<'a> {
         &mut self.renderer.attachments
     }
     #[inline]
-    pub fn view_color(&self, _h: Handle<Img>) -> &wgpu::TextureView {
-        &self.renderer.attachments.scene_view
+    pub fn view_color(&self, h: Handle<Img>) -> &wgpu::TextureView {
+        &self.views[h.0 as usize]
     }
     #[inline]
     #[allow(dead_code)]
-    pub fn view_depth(&self, _h: Handle<Img>) -> &wgpu::TextureView {
-        &self.renderer.attachments.depth_view
+    pub fn view_depth(&self, h: Handle<Img>) -> &wgpu::TextureView {
+        &self.views[h.0 as usize]
     }
     // Minimal accessors to avoid reaching into renderer directly from passes
     #[allow(dead_code)]
@@ -234,6 +236,10 @@ impl<'a> ExecCtx<'a> {
 #[allow(dead_code)]
 pub struct Graph {
     pub names: Vec<&'static str>,
+    // Declared images (by handle id). Used to derive per-frame views mapping.
+    images: Vec<ImageKind>,
+    // Scratch views vector populated per-frame before executing passes.
+    views: Vec<wgpu::TextureView>,
     passes: Vec<PassDecl>,
 }
 
@@ -310,6 +316,8 @@ impl Graph {
         let names = b.passes.iter().map(|p| p.name).collect();
         Graph {
             names,
+            images: b.images,
+            views: Vec::new(),
             passes: b.passes.drain(..).collect(),
         }
     }
@@ -319,8 +327,224 @@ impl Graph {
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,
     ) {
+        // Behavior-neutral default: alias declared image handles to the current attachments.
+        // Optionally allocate real textures per handle if RA_GRAPH_ALLOC=1 is set.
+        let do_alloc = std::env::var("RA_GRAPH_ALLOC")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        self.views.clear();
+        self.views.resize_with(self.images.len(), || {
+            renderer.attachments.scene_view.clone()
+        });
+
+        if do_alloc {
+            // Compute simple liveness and usages per image, then instantiate textures.
+            #[derive(Clone, Copy, Default)]
+            struct Live {
+                first: usize,
+                last: usize,
+                init: bool,
+            }
+            let mut lives: Vec<Live> = vec![Live::default(); self.images.len()];
+            let mut usages: Vec<wgpu::TextureUsages> =
+                vec![wgpu::TextureUsages::empty(); self.images.len()];
+            for (pi, p) in self.passes.iter().enumerate() {
+                for &r in &p.reads {
+                    let i = r.0 as usize;
+                    let l = &mut lives[i];
+                    if !l.init {
+                        l.first = pi;
+                        l.init = true;
+                    }
+                    l.last = pi.max(l.last);
+                    usages[i] |= wgpu::TextureUsages::TEXTURE_BINDING;
+                }
+                for &w in &p.writes {
+                    let i = w.0 as usize;
+                    let l = &mut lives[i];
+                    if !l.init {
+                        l.first = pi;
+                        l.init = true;
+                    }
+                    l.last = pi.max(l.last);
+                    usages[i] |= wgpu::TextureUsages::RENDER_ATTACHMENT;
+                }
+            }
+            // Optional aliasing of non-overlapping images behind RA_GRAPH_ALIASING=1
+            let do_alias = std::env::var("RA_GRAPH_ALIASING")
+                .map(|v| v == "1")
+                .unwrap_or(false);
+            if do_alias {
+                struct PoolEntry {
+                    kind: ImageKind,
+                    usage: wgpu::TextureUsages,
+                    live: Live,
+                    _tex: wgpu::Texture,
+                    view: wgpu::TextureView,
+                }
+                let mut pool: Vec<PoolEntry> = Vec::new();
+                for (ix, kind) in self.images.iter().enumerate() {
+                    // Try to find a reusable texture in the pool
+                    let mut reused = false;
+                    for e in &mut pool {
+                        // Only alias exactly matching descriptors (format/size/msaa/usage)
+                        if std::mem::discriminant(&e.kind) == std::mem::discriminant(kind) {
+                            let same = match (&e.kind, kind) {
+                                (
+                                    ImageKind::Color {
+                                        format: f0,
+                                        size: s0,
+                                        msaa: m0,
+                                    },
+                                    ImageKind::Color {
+                                        format: f1,
+                                        size: s1,
+                                        msaa: m1,
+                                    },
+                                ) => f0 == f1 && s0 == s1 && m0 == m1,
+                                (
+                                    ImageKind::Depth {
+                                        format: f0,
+                                        size: s0,
+                                        msaa: m0,
+                                    },
+                                    ImageKind::Depth {
+                                        format: f1,
+                                        size: s1,
+                                        msaa: m1,
+                                    },
+                                ) => f0 == f1 && s0 == s1 && m0 == m1,
+                                _ => false,
+                            } && e.usage == usages[ix];
+                            if same && e.live.last < lives[ix].first {
+                                // Disjoint lifetimes; reuse
+                                e.live = lives[ix];
+                                self.views[ix] = e.view.clone();
+                                reused = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !reused {
+                        // Create a new texture
+                        match kind {
+                            ImageKind::Color { format, size, msaa } => {
+                                let tex =
+                                    renderer.device.create_texture(&wgpu::TextureDescriptor {
+                                        label: Some("graph-color"),
+                                        size: wgpu::Extent3d {
+                                            width: size.x,
+                                            height: size.y,
+                                            depth_or_array_layers: 1,
+                                        },
+                                        mip_level_count: 1,
+                                        sample_count: *msaa,
+                                        dimension: wgpu::TextureDimension::D2,
+                                        format: *format,
+                                        usage: usages[ix],
+                                        view_formats: &[],
+                                    });
+                                let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                                self.views[ix] = view.clone();
+                                pool.push(PoolEntry {
+                                    kind: kind.clone(),
+                                    usage: usages[ix],
+                                    live: lives[ix],
+                                    _tex: tex,
+                                    view,
+                                });
+                            }
+                            ImageKind::Depth { format, size, msaa } => {
+                                let tex =
+                                    renderer.device.create_texture(&wgpu::TextureDescriptor {
+                                        label: Some("graph-depth"),
+                                        size: wgpu::Extent3d {
+                                            width: size.x,
+                                            height: size.y,
+                                            depth_or_array_layers: 1,
+                                        },
+                                        mip_level_count: 1,
+                                        sample_count: *msaa,
+                                        dimension: wgpu::TextureDimension::D2,
+                                        format: *format,
+                                        usage: usages[ix],
+                                        view_formats: &[],
+                                    });
+                                let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                                self.views[ix] = view.clone();
+                                pool.push(PoolEntry {
+                                    kind: kind.clone(),
+                                    usage: usages[ix],
+                                    live: lives[ix],
+                                    _tex: tex,
+                                    view,
+                                });
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Instantiate textures per descriptor (no aliasing)
+                for (ix, kind) in self.images.iter().enumerate() {
+                    match kind {
+                        ImageKind::Color { format, size, msaa } => {
+                            let tex = renderer.device.create_texture(&wgpu::TextureDescriptor {
+                                label: Some("graph-color"),
+                                size: wgpu::Extent3d {
+                                    width: size.x,
+                                    height: size.y,
+                                    depth_or_array_layers: 1,
+                                },
+                                mip_level_count: 1,
+                                sample_count: *msaa,
+                                dimension: wgpu::TextureDimension::D2,
+                                format: *format,
+                                usage: usages[ix],
+                                view_formats: &[],
+                            });
+                            self.views[ix] =
+                                tex.create_view(&wgpu::TextureViewDescriptor::default());
+                        }
+                        ImageKind::Depth { format, size, msaa } => {
+                            let tex = renderer.device.create_texture(&wgpu::TextureDescriptor {
+                                label: Some("graph-depth"),
+                                size: wgpu::Extent3d {
+                                    width: size.x,
+                                    height: size.y,
+                                    depth_or_array_layers: 1,
+                                },
+                                mip_level_count: 1,
+                                sample_count: *msaa,
+                                dimension: wgpu::TextureDimension::D2,
+                                format: *format,
+                                usage: usages[ix],
+                                view_formats: &[],
+                            });
+                            self.views[ix] =
+                                tex.create_view(&wgpu::TextureViewDescriptor::default());
+                        }
+                    }
+                }
+            }
+        } else {
+            // Aliasing path (default): route all images to current attachments
+            for (ix, kind) in self.images.iter().enumerate() {
+                match kind {
+                    ImageKind::Color { .. } => {
+                        self.views[ix] = renderer.attachments.scene_view.clone();
+                    }
+                    ImageKind::Depth { .. } => {
+                        self.views[ix] = renderer.attachments.depth_view.clone();
+                    }
+                }
+            }
+        }
         for p in self.passes.drain(..) {
-            let mut ctx = ExecCtx { renderer, encoder };
+            let mut ctx = ExecCtx {
+                renderer,
+                encoder,
+                views: &self.views,
+            };
             (p.exec)(&mut ctx);
         }
     }
