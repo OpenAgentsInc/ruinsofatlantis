@@ -43,7 +43,9 @@ pub mod terrain;
 mod ui;
 mod util;
 #[cfg(feature = "vox_onepath_demo")]
-pub mod vox_onepath;
+pub mod demo {
+    pub mod vox_onepath;
+}
 mod zombies;
 pub mod zone_batches;
 

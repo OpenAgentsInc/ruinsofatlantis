@@ -36,6 +36,31 @@ Changes
 Validation
 - CI green; no behavior change.
 
+---
+
+## PR 10 — net_core snapshot split (scaffold)
+
+Changes
+- Converted `crates/net_core/src/snapshot.rs` into a directory module:
+  - Added `crates/net_core/src/snapshot/mod.rs` with domain stubs (`encode.rs`, `actors.rs`, `projectiles.rs`, `destructibles.rs`, `hud.rs`) and a legacy include.
+  - Kept original implementation via `#[path = "../snapshot.rs"] mod legacy; pub use legacy::*;` to preserve the API with zero behavior change.
+- Left existing tests intact (round‑trips and delta checks pass).
+
+Validation
+- CI green; no wire format changes.
+
+---
+
+## PR 11 — Move vox demo under gated path
+
+Changes
+- Added `crates/render_wgpu/src/gfx/demo/vox_onepath.rs` that includes the original demo implementation.
+- Changed `gfx::mod` to export `gfx::demo::vox_onepath` under `vox_onepath_demo` feature, moving the demo out of the core path.
+- Default build remains unchanged; the demo compiles only when the feature is enabled.
+
+Validation
+- CI green; feature off by default per existing config.
+
 
 ## PR 1 — Device/attachments/config scaffolding (render_wgpu)
 
