@@ -254,13 +254,20 @@ pub fn render_impl(
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
-                r.zombie_palettes_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("zombie-palettes-bg"),
-                    layout: &r.palettes_bgl,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: r.zombie_palettes_buf.as_entire_binding(),
-                    }],
+                // Cache the bind group by layout + buffer id
+                let key = super::bindgroups::BgKey::new(
+                    &r.palettes_bgl,
+                    &[&r.zombie_palettes_buf as *const _ as u64],
+                );
+                r.zombie_palettes_bg = r.bg_cache.get_or_create(key, || {
+                    r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("zombie-palettes-bg"),
+                        layout: &r.palettes_bgl,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: r.zombie_palettes_buf.as_entire_binding(),
+                        }],
+                    })
                 });
             }
         }
@@ -458,13 +465,19 @@ pub fn render_impl(
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
-                r.zombie_palettes_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("zombie-palettes-bg"),
-                    layout: &r.palettes_bgl,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: r.zombie_palettes_buf.as_entire_binding(),
-                    }],
+                let key = super::bindgroups::BgKey::new(
+                    &r.palettes_bgl,
+                    &[&r.zombie_palettes_buf as *const _ as u64],
+                );
+                r.zombie_palettes_bg = r.bg_cache.get_or_create(key, || {
+                    r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("zombie-palettes-bg"),
+                        layout: &r.palettes_bgl,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: r.zombie_palettes_buf.as_entire_binding(),
+                        }],
+                    })
                 });
                 log::info!(
                     "replication: built zombie visuals (fallback) from {} NPCs",
@@ -2100,8 +2113,16 @@ pub fn render_impl(
                         );
                         if let Some(inst) = r.dk_instances_cpu.get_mut(0) {
                             inst.model = m.to_cols_array_2d();
-                            r.queue
-                                .write_buffer(&r.dk_instances, 0, bytemuck::bytes_of(inst));
+                            // Upload via staging ring then copy to the DK instance buffer
+                            let bytes = bytemuck::bytes_of(inst);
+                            let slice = r.uploads.allocate(&r.queue, bytes, 256);
+                            encoder.copy_buffer_to_buffer(
+                                &slice.buffer,
+                                slice.offset,
+                                &r.dk_instances,
+                                0,
+                                slice.size,
+                            );
                         }
                     }
                 }

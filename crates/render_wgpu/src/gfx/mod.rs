@@ -124,6 +124,10 @@ pub struct Renderer {
     max_dim: u32,
     // Consolidated attachments group for depth + offscreen targets
     attachments: Attachments,
+    // Upload ring for per-frame staging copies
+    uploads: renderer::upload::UploadRing,
+    // BindGroup cache for frequently rebuilt groups
+    bg_cache: renderer::bindgroups::BgCache,
     // Resize/rebuild notification bus
     pub(crate) rebuild_bus: renderer::rebuild_bus::RebuildBus,
     // Externalized client updates (controls + collision)

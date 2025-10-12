@@ -1796,6 +1796,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         mapped_at_creation: false,
     });
 
+    // Clone device for constructing helper resources during struct init
+    let device_clone = device.clone();
     let mut renderer = crate::gfx::Renderer {
         surface,
         device,
@@ -1805,6 +1807,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         max_dim,
         attachments,
         rebuild_bus: crate::gfx::renderer::rebuild_bus::RebuildBus::new(),
+        uploads: crate::gfx::renderer::upload::UploadRing::new(
+            &device_clone,
+            3,
+            64 * 1024,
+            wgpu::BufferUsages::COPY_SRC,
+            Some("staging"),
+        ),
+        bg_cache: crate::gfx::renderer::bindgroups::BgCache::with_capacity(512),
         gbuffer: Some(gbuffer),
         hiz: Some(hiz),
         pipeline,
