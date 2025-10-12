@@ -1075,6 +1075,8 @@ pub fn render_impl(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
         });
+    // Clear per-pass stats at the start of the frame
+    r.render_stats.clear();
     let present_only = std::env::var("RA_PRESENT_ONLY")
         .map(|v| v == "1")
         .unwrap_or(false);
@@ -2222,8 +2224,6 @@ pub fn render_impl(
     }
     // Execute Particles + UI + Present via the framegraph
     {
-        // Clear per-pass stats at frame start
-        r.render_stats.clear();
         // Legacy fallback toggle (skip graph execution and present directly)
         let use_legacy = std::env::var("RA_RENDER_LEGACY")
             .map(|v| v == "1")

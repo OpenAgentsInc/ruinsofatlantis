@@ -85,18 +85,19 @@ impl PresentPass {
 
 pub struct ParticlesPass;
 impl ParticlesPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, _depth: Handle<Img>) {
         let _ = builder
-            .pass("Particles", |ctx: &mut ExecCtx| {
+            .pass("Particles", move |ctx: &mut ExecCtx| {
                 let dc0 = ctx.renderer.draw_calls;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 if ctx.renderer.fx_count > 0 {
+                    let view = ctx.view_color(color).clone();
                     let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("particles-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &ctx.renderer.attachments.scene_view,
+                            view: &view,
                             resolve_target: None,
                             depth_slice: None,
                             ops: wgpu::Operations {
@@ -122,8 +123,7 @@ impl ParticlesPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
-            .writes(color)
-            .writes(depth);
+            .writes(color);
     }
 }
 
@@ -131,16 +131,15 @@ pub struct UiPass;
 impl UiPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
-            .pass("UI", |ctx: &mut ExecCtx| {
+            .pass("UI", move |ctx: &mut ExecCtx| {
                 let dc0 = ctx.renderer.draw_calls;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 let (device, queue) = (&ctx.renderer.device, &ctx.renderer.queue);
                 ctx.renderer.hud.queue(device, queue);
-                ctx.renderer
-                    .hud
-                    .draw(ctx.encoder, &ctx.renderer.attachments.scene_view);
+                let view = ctx.view_color(color).clone();
+                ctx.renderer.hud.draw(ctx.encoder, &view);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let draws = ctx.renderer.draw_calls.saturating_sub(dc0);
                 let stats = crate::gfx::renderer::RenderStats {

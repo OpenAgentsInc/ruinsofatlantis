@@ -197,6 +197,15 @@ impl<'a> ExecCtx<'a> {
     pub fn attachments(&mut self) -> &mut super::attachments::Attachments {
         &mut self.renderer.attachments
     }
+    #[inline]
+    pub fn view_color(&self, _h: Handle<Img>) -> &wgpu::TextureView {
+        &self.renderer.attachments.scene_view
+    }
+    #[inline]
+    #[allow(dead_code)]
+    pub fn view_depth(&self, _h: Handle<Img>) -> &wgpu::TextureView {
+        &self.renderer.attachments.depth_view
+    }
     // Minimal accessors to avoid reaching into renderer directly from passes
     #[allow(dead_code)]
     #[inline]

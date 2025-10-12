@@ -54,6 +54,11 @@ impl BgCache {
     {
         if let Some(bg) = self.map.get(&key) {
             self.hits += 1;
+            // Refresh recency: move this key to the back
+            if let Some(pos) = self.order.iter().position(|k| *k == key) {
+                self.order.remove(pos);
+            }
+            self.order.push_back(key.clone());
             return bg.clone();
         }
         self.misses += 1;
@@ -66,9 +71,10 @@ impl BgCache {
         }
         let bg = make();
         self.order.push_back(key.clone());
-        let inserted = self.map.insert(key, bg);
+        let inserted = self.map.insert(key.clone(), bg);
         debug_assert!(inserted.is_none());
-        self.map.values().last().unwrap().clone()
+        // Return the freshly inserted one
+        self.map.get(&key).unwrap().clone()
     }
 
     #[inline]
