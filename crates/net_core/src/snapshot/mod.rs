@@ -10,7 +10,7 @@ pub mod projectiles {}
 pub mod destructibles {}
 pub mod hud {}
 
-#[path = "legacy.rs"]
+#[path = "../snapshot_body.rs"]
 mod legacy;
 
 pub use legacy::*;
