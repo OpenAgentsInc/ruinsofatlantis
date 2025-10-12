@@ -186,11 +186,25 @@ pub struct PassDecl {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ImageDesc {
+    pub format: wgpu::TextureFormat,
+    pub size: [u32; 2],
+    pub msaa: u32,
+    pub usage: wgpu::TextureUsages,
+}
+
+pub struct ImageArena {
+    textures: Vec<wgpu::Texture>,
+    views: Vec<wgpu::TextureView>,
+    descs: Vec<ImageDesc>,
+}
+
 pub struct ExecCtx<'a> {
     pub renderer: &'a mut crate::gfx::Renderer,
     pub encoder: &'a mut wgpu::CommandEncoder,
-    // Graph-provided views for declared image handles. The index matches Handle<Img>.0
-    views: &'a [wgpu::TextureView],
+    // Graph-provided per-handle resources
+    arena: &'a ImageArena,
 }
 
 impl<'a> ExecCtx<'a> {
@@ -201,12 +215,26 @@ impl<'a> ExecCtx<'a> {
     }
     #[inline]
     pub fn view_color(&self, h: Handle<Img>) -> &wgpu::TextureView {
-        &self.views[h.0 as usize]
+        debug_assert!((h.0 as usize) < self.arena.views.len());
+        &self.arena.views[h.0 as usize]
     }
     #[inline]
     #[allow(dead_code)]
     pub fn view_depth(&self, h: Handle<Img>) -> &wgpu::TextureView {
-        &self.views[h.0 as usize]
+        debug_assert!((h.0 as usize) < self.arena.views.len());
+        &self.arena.views[h.0 as usize]
+    }
+    #[inline]
+    #[allow(dead_code)]
+    pub fn texture(&self, h: Handle<Img>) -> &wgpu::Texture {
+        debug_assert!((h.0 as usize) < self.arena.textures.len());
+        &self.arena.textures[h.0 as usize]
+    }
+    #[inline]
+    #[allow(dead_code)]
+    pub fn desc(&self, h: Handle<Img>) -> ImageDesc {
+        debug_assert!((h.0 as usize) < self.arena.descs.len());
+        self.arena.descs[h.0 as usize]
     }
     // Minimal accessors to avoid reaching into renderer directly from passes
     #[allow(dead_code)]
@@ -332,10 +360,41 @@ impl Graph {
         let do_alloc = std::env::var("RA_GRAPH_ALLOC")
             .map(|v| v == "1")
             .unwrap_or(false);
-        let mut views: Vec<wgpu::TextureView> = Vec::with_capacity(self.images.len());
-        views.resize_with(self.images.len(), || {
+        let mut arena = ImageArena {
+            textures: Vec::with_capacity(self.images.len()),
+            views: Vec::with_capacity(self.images.len()),
+            descs: Vec::with_capacity(self.images.len()),
+        };
+        // Pre-size to handle indexing by handle id
+        arena.textures.resize_with(self.images.len(), || {
+            // Dummy 1x1 texture; will be replaced below
+            renderer.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("graph-dummy"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+        });
+        arena.views.resize_with(self.images.len(), || {
             renderer.attachments.scene_view.clone()
         });
+        arena.descs.resize(
+            self.images.len(),
+            ImageDesc {
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                size: [1, 1],
+                msaa: 1,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            },
+        );
 
         if do_alloc {
             // Compute simple liveness and usages per image, then instantiate textures.
@@ -379,7 +438,7 @@ impl Graph {
                     kind: ImageKind,
                     usage: wgpu::TextureUsages,
                     live: Live,
-                    _tex: wgpu::Texture,
+                    tex: wgpu::Texture,
                     view: wgpu::TextureView,
                 }
                 let mut pool: Vec<PoolEntry> = Vec::new();
@@ -419,8 +478,24 @@ impl Graph {
                             if same && e.live.last < lives[ix].first {
                                 // Disjoint lifetimes; reuse
                                 e.live = lives[ix];
-                                self.keep_textures.push(e._tex.clone());
-                                views[ix] = e.view.clone();
+                                self.keep_textures.push(e.tex.clone());
+                                arena.textures[ix] = e.tex.clone();
+                                arena.views[ix] = e.view.clone();
+                                // Update descs
+                                let (fmt, sz, msaa) = match kind {
+                                    ImageKind::Color { format, size, msaa } => {
+                                        (*format, *size, *msaa)
+                                    }
+                                    ImageKind::Depth { format, size, msaa } => {
+                                        (*format, *size, *msaa)
+                                    }
+                                };
+                                arena.descs[ix] = ImageDesc {
+                                    format: fmt,
+                                    size: [sz.x, sz.y],
+                                    msaa,
+                                    usage: usages[ix],
+                                };
                                 reused = true;
                                 if std::env::var("RA_GRAPH_TRACE")
                                     .map(|v| v == "1")
@@ -453,7 +528,14 @@ impl Graph {
                                     });
                                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
                                 self.keep_textures.push(tex.clone());
-                                views[ix] = view.clone();
+                                arena.textures[ix] = tex.clone();
+                                arena.views[ix] = view.clone();
+                                arena.descs[ix] = ImageDesc {
+                                    format: *format,
+                                    size: [size.x, size.y],
+                                    msaa: *msaa,
+                                    usage: usages[ix],
+                                };
                                 if std::env::var("RA_GRAPH_TRACE")
                                     .map(|v| v == "1")
                                     .unwrap_or(false)
@@ -470,7 +552,7 @@ impl Graph {
                                     kind: kind.clone(),
                                     usage: usages[ix],
                                     live: lives[ix],
-                                    _tex: tex,
+                                    tex,
                                     view,
                                 });
                             }
@@ -492,7 +574,14 @@ impl Graph {
                                     });
                                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
                                 self.keep_textures.push(tex.clone());
-                                views[ix] = view.clone();
+                                arena.textures[ix] = tex.clone();
+                                arena.views[ix] = view.clone();
+                                arena.descs[ix] = ImageDesc {
+                                    format: *format,
+                                    size: [size.x, size.y],
+                                    msaa: *msaa,
+                                    usage: usages[ix],
+                                };
                                 if std::env::var("RA_GRAPH_TRACE")
                                     .map(|v| v == "1")
                                     .unwrap_or(false)
@@ -509,7 +598,7 @@ impl Graph {
                                     kind: kind.clone(),
                                     usage: usages[ix],
                                     live: lives[ix],
-                                    _tex: tex,
+                                    tex,
                                     view,
                                 });
                             }
@@ -556,7 +645,15 @@ impl Graph {
                                 view_formats: &[],
                             });
                             self.keep_textures.push(tex.clone());
-                            views[ix] = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            arena.views[ix] =
+                                tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            arena.textures[ix] = tex.clone();
+                            arena.descs[ix] = ImageDesc {
+                                format: *format,
+                                size: [size.x, size.y],
+                                msaa: *msaa,
+                                usage: usages[ix],
+                            };
                             if std::env::var("RA_GRAPH_TRACE")
                                 .map(|v| v == "1")
                                 .unwrap_or(false)
@@ -586,7 +683,15 @@ impl Graph {
                                 view_formats: &[],
                             });
                             self.keep_textures.push(tex.clone());
-                            views[ix] = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            arena.views[ix] =
+                                tex.create_view(&wgpu::TextureViewDescriptor::default());
+                            arena.textures[ix] = tex.clone();
+                            arena.descs[ix] = ImageDesc {
+                                format: *format,
+                                size: [size.x, size.y],
+                                msaa: *msaa,
+                                usage: usages[ix],
+                            };
                             if std::env::var("RA_GRAPH_TRACE")
                                 .map(|v| v == "1")
                                 .unwrap_or(false)
@@ -608,10 +713,24 @@ impl Graph {
             for (ix, kind) in self.images.iter().enumerate() {
                 match kind {
                     ImageKind::Color { .. } => {
-                        views[ix] = renderer.attachments.scene_view.clone();
+                        arena.views[ix] = renderer.attachments.scene_view.clone();
+                        arena.descs[ix] = ImageDesc {
+                            format: renderer.attachments.offscreen_format,
+                            size: [renderer.config.width, renderer.config.height],
+                            msaa: 1,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::TEXTURE_BINDING,
+                        };
                     }
                     ImageKind::Depth { .. } => {
-                        views[ix] = renderer.attachments.depth_view.clone();
+                        arena.views[ix] = renderer.attachments.depth_view.clone();
+                        arena.descs[ix] = ImageDesc {
+                            format: wgpu::TextureFormat::Depth32Float,
+                            size: [renderer.config.width, renderer.config.height],
+                            msaa: 1,
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                | wgpu::TextureUsages::TEXTURE_BINDING,
+                        };
                     }
                 }
             }
@@ -646,7 +765,7 @@ impl Graph {
             let mut ctx = ExecCtx {
                 renderer,
                 encoder,
-                views: &views,
+                arena: &arena,
             };
             (p.exec)(&mut ctx);
         }

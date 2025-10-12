@@ -681,3 +681,43 @@ Changes
 
 Validation
 - `cargo test -p render_wgpu` passes; clippy `-D warnings` remains green.
+
+---
+
+## Phase‑Three — PR 50: Graph‑owned images (ImageArena) + ExecCtx views/textures
+
+Changes
+- Introduced `ImageDesc` and `ImageArena { textures, views, descs }` in `renderer/graph.rs`.
+- `ExecCtx` now references the per‑execute `ImageArena` and exposes:
+  - `view_color(handle)`, `view_depth(handle)`
+  - `texture(handle)`, `desc(handle)` (for future resolve/copies)
+- Default (parity) path aliases handles to attachments; with `RA_GRAPH_ALLOC=1`, the graph instantiates real `Texture`s per image and fills the arena.
+- Updated `passes_graph::MainPass` to render via `ctx.view_*` by adding `Renderer::pass_main_to_views(encoder, color, Some(depth))`.
+
+Validation
+- `cargo check`/`clippy -D warnings` green; visuals unchanged.
+
+---
+
+## Phase‑Three — PR 51: Resolve as a pass (resolve_target path)
+
+Changes
+- Implemented `ResolvePass` that opens a render pass with `msaa` as the color attachment and `hdr` as the `resolve_target`; no draws required.
+- Retained behavior‑neutral defaults: with `attachments.sample_count==1`, no resolve is declared; when `>1` (local), resolve occurs with no validation errors.
+
+Validation
+- `xtask ci` green. Local smoke with MSAA shows stable output; post/present continue sampling single‑sample HDR.
+
+---
+
+## Phase‑Three — PR 52: Aliasing (interval packing) + peak memory stats
+
+Changes
+- Allocation path computes liveness intervals and usages; aliasing enabled under `RA_GRAPH_ALIASING=1` (requires `RA_GRAPH_ALLOC=1`).
+- Pool reuses textures when descriptors match (format/size/msaa) and existing usage is a superset of required usage; lifetimes must be disjoint.
+- `RA_GRAPH_TRACE=1` emits alias/alloc decisions. `renderer.graph_peak_mem_bytes` reports peak bytes (pool‑based with aliasing ON; non‑aliased sum otherwise).
+- Present/SSR/SSGI switched to dynamic `BgCache` bind groups sourced from graph views; removed remaining attachment coupling in those passes.
+
+Validation
+- Default (aliasing off): parity; HUD shows non‑aliased peak estimate.
+- With alloc+aliasing ON locally: reduced slot count and lower peak reported; no hazards or validation errors.

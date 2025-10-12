@@ -24,7 +24,7 @@ pub struct MainPass;
 impl MainPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
-            .pass("Main", |ctx: &mut ExecCtx| {
+            .pass("Main", move |ctx: &mut ExecCtx| {
                 let dc0 = ctx.renderer.draw_calls;
                 let pb0 = ctx.renderer.pipeline_binds_count;
                 let bb0 = ctx.renderer.bg_binds_count;
@@ -32,7 +32,10 @@ impl MainPass {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                ctx.renderer.pass_main(ctx.encoder);
+                let color_view = ctx.view_color(color).clone();
+                let depth_view = ctx.view_depth(depth).clone();
+                ctx.renderer
+                    .pass_main_to_views(ctx.encoder, &color_view, Some(&depth_view));
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let draws = ctx.renderer.draw_calls.saturating_sub(dc0);
                 let stats = crate::gfx::renderer::RenderStats {
@@ -98,8 +101,6 @@ impl PresentPass {
                     &ctx.renderer.present_bgl,
                     &[
                         &src_owned as *const _ as u64,
-                        &ctx.renderer.point_sampler as *const _ as u64,
-                        &ctx.renderer.attachments.depth_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
@@ -488,6 +489,35 @@ impl SsrPass {
                             ],
                         })
                 });
+                // Depth BG (graph-owned)
+                let depth_view = ctx.view_depth(depth).clone();
+                let key_d = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.ssr_depth_bgl,
+                    &[
+                        &depth_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let ssr_depth_bg = ctx.renderer.bg_cache.get_or_create(key_d, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("ssr-depth-bg[graph]"),
+                            layout: &ctx.renderer.ssr_depth_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&depth_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
                 let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("ssr-pass(graph)"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -504,7 +534,7 @@ impl SsrPass {
                     timestamp_writes: None,
                 });
                 rp.set_pipeline(&ctx.renderer.ssr_pipeline);
-                rp.set_bind_group(0, &ctx.renderer.ssr_depth_bg, &[]);
+                rp.set_bind_group(0, &ssr_depth_bg, &[]);
                 rp.set_bind_group(1, &ssr_scene_bg, &[]);
                 rp.draw(0..3, 0..1);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
