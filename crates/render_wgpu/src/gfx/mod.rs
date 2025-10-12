@@ -3965,6 +3965,31 @@ impl Renderer {
                     let line = format!("{:.2} ms  {:.0} FPS  {} draws", ms, fps, self.draw_calls);
                     self.hud
                         .append_perf_text(self.size.width, self.size.height, &line);
+                    // Show per-pass stats if available
+                    if !self.render_stats.is_empty() {
+                        for rs in &self.render_stats {
+                            let l = format!(
+                                "· {:<8} {:>3}d {:>3}b {:>4.1}ms  PB:{} BG:{} VB:{}",
+                                rs.name,
+                                rs.draws,
+                                rs.batches,
+                                rs.cpu_ms,
+                                rs.pipeline_binds,
+                                rs.bg_binds,
+                                rs.vb_ib_sets
+                            );
+                            self.hud
+                                .append_perf_text(self.size.width, self.size.height, &l);
+                        }
+                    }
+                    // Global debug counters
+                    let mem_mb = (self.graph_peak_mem_bytes as f64) / (1024.0 * 1024.0);
+                    let gl = format!(
+                        "recovery:{}  graph_peak:{:.1} MiB",
+                        self.present_recoveries, mem_mb
+                    );
+                    self.hud
+                        .append_perf_text(self.size.width, self.size.height, &gl);
                 }
             }
             // Queue+draw HUD (either normal or death overlay)
