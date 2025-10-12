@@ -154,40 +154,7 @@ impl Schedule {
     }
 }
 
-/// Returns the ordered system name labels used in this schedule (for tests).
-pub fn system_names_for_test() -> Vec<&'static str> {
-    vec![
-        "input_apply_intents",
-        "cooldown_and_mana_tick",
-        "ai_caster_cast_and_face",
-        "cast_system",
-        "ingest_projectile_spawns",
-        "spatial.rebuild",
-        "effects_tick",
-        "ai_move_hostiles",
-        "separate_undead",
-        "melee_apply_when_contact",
-        "homing_acquire_targets",
-        "homing_update",
-        "projectile_integrate_ecs",
-        "projectile_collision_ecs",
-        "aoe_apply_explosions",
-        "faction_flip_on_pc_hits_wizards",
-        "apply_damage_to_ecs",
-        "cleanup",
-    ]
-}
-
-#[cfg(test)]
-mod order_tests {
-    #[test]
-    fn names_include_key_stages() {
-        let names = super::system_names_for_test();
-        assert!(names.contains(&"input_apply_intents"));
-        assert!(names.contains(&"apply_damage_to_ecs"));
-        assert!(names.last() == Some(&"cleanup"));
-    }
-}
+// (test helper and stage modules declared earlier in file)
 
 fn targets_by_faction(srv: &ServerState, f: crate::actor::Faction) -> Vec<(ActorId, Vec3, f32)> {
     srv.ecs
