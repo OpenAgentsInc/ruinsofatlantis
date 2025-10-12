@@ -647,3 +647,17 @@ Changes
 
 Validation
 - CI green; counter increments on forced resize/lost (manual local). Perf HUD wiring will follow in later perf plumbing PRs.
+
+---
+
+## Phase‑Three — Tightening A–C (alloc lifetime, aliasing superset, dynamic sampling)
+
+Changes
+- Keep textures alive during `Graph::execute` (allocation path) so `TextureView`s are valid for the whole frame. Reuse pool now allows usage supersets (existing ⊇ needed) and still enforces non-overlapping lifetimes.
+- Present and Post passes now build bind groups per-frame via `BgCache` using graph TextureViews (`ctx.view_*`) instead of attachment-coupled BGs. Borrow conflicts avoided by cloning views for cache keys.
+- Removed `BlitSceneReadPass` from the graph; SSR/SSGI now sample HDR directly.
+- ResolvePass now performs a real MSAA resolve by opening a pass with `msaa` as color attachment and `hdr` as `resolve_target` (no draws required).
+
+Validation
+- `cargo test` + clippy `-D warnings` green; WGSL validated; pre-push `xtask ci` green.
+- Visuals unchanged with default path (alloc/alias off). With `RA_GRAPH_ALLOC=1` verified post/present paths sample HDR from graph views.

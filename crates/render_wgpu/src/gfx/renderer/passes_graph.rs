@@ -549,8 +549,27 @@ pub struct ResolvePass;
 impl ResolvePass {
     pub fn declare(builder: &mut GraphBuilder, msaa: Handle<Img>, hdr: Handle<Img>) {
         let _ = builder
-            .pass("Resolve", |_ctx: &mut ExecCtx| {
-                // No-op for now; aliasing path maps both handles to the same view.
+            .pass("Resolve", move |ctx: &mut ExecCtx| {
+                // Resolve MSAA color into single-sample HDR by opening a pass with
+                // msaa view as color attachment and hdr as resolve target. No draws needed.
+                let msaa_view = ctx.view_color(msaa).clone();
+                let hdr_view = ctx.view_color(hdr).clone();
+                let _rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("resolve-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &msaa_view,
+                        resolve_target: Some(&hdr_view),
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                // Drop closes pass and triggers resolve
             })
             .reads(msaa)
             .writes(hdr);
