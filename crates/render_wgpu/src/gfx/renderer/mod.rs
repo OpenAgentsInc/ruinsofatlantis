@@ -11,6 +11,7 @@ pub mod device;
 pub mod graph;
 pub mod init;
 pub mod passes;
+pub mod passes_graph;
 pub mod render;
 pub mod replication;
 pub mod resize;

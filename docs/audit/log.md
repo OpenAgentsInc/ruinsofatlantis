@@ -164,6 +164,29 @@ Changes
 
 Validation
 - CI green; visuals unchanged (Monolith calls the same render path).
+
+---
+
+## Phase‑Two — PR 13: Extract Present and Sky (declarations)
+
+Changes
+- Added `gfx/renderer/passes_graph.rs` with scaffolded pass declarations for `SkyPass` and `PresentPass` using the new `GraphBuilder` API.
+- For now, these passes register no‑op exec closures (no behavior change). They declare write intent to the color target to establish IO.
+- Kept present lifecycle as‑is in the legacy path (`frame.present()`), per low‑churn guidance.
+
+Validation
+- CI green; visuals unchanged.
+
+---
+
+## Phase‑Two — PR 14: Extract Main (declaration)
+
+Changes
+- Extended `passes_graph.rs` with `MainPass::declare(...)` that writes to color and depth handles, matching the intended IO of the main scene pass.
+- Did not move draw code yet; execution remains in the legacy path. This sets the shape for later wiring while keeping diffs small.
+
+Validation
+- CI green; visuals unchanged.
 ## PR 1 — Device/attachments/config scaffolding (render_wgpu)
 
 Changes
