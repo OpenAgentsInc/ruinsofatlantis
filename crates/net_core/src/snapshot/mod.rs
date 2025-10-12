@@ -4,11 +4,11 @@
 //! introducing domain modules. External API remains unchanged by
 //! re-exporting `legacy::*`.
 
-pub mod encode {}
-pub mod actors {}
-pub mod projectiles {}
-pub mod destructibles {}
-pub mod hud {}
+pub mod actors;
+pub mod destructibles;
+pub mod encode;
+pub mod hud;
+pub mod projectiles;
 
 #[path = "../snapshot_body.rs"]
 mod legacy;

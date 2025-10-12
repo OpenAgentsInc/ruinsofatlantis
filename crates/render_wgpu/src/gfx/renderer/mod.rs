@@ -8,6 +8,7 @@ mod attachments;
 pub mod config;
 pub mod controls;
 pub mod device;
+pub mod draw_list;
 pub mod graph;
 pub mod init;
 pub mod passes;

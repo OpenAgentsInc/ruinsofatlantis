@@ -217,6 +217,21 @@ Validation
 
 ---
 
+## Phase‑Two — PR 17: Draw‑list builder (CPU‑only) + tests
+
+Changes
+- Added `gfx/renderer/draw_list.rs` with a pure `DrawList` builder that groups contiguous `DrawItem`s by `DrawKey` into `DrawBatch`es. This is deterministic and has no `wgpu` dependencies.
+- Exported from `renderer::mod` so future passes (Main) can adopt it with low churn.
+- Wrote unit tests that verify:
+  - Contiguous identical keys are merged with summed counts.
+  - Different keys do not merge across boundaries.
+  - Stable ordering of batches.
+
+Validation
+- All tests pass under `cargo test`. No behavior change in rendering yet; integration into Main will follow in a later PR.
+
+---
+
 ## Phase‑Two — PR 16: Post suite + offscreen image (prep)
 
 Changes

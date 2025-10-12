@@ -11,14 +11,7 @@ use crate::actor::{ActorId, Faction};
 use crate::ecs::geom::segment_hits_circle_xz;
 
 // Phase-one scaffolding: stage files (unused public modules) and a test helper.
-#[allow(clippy::module_inception)]
-pub mod schedule_stages {
-    pub mod stage_input {}
-    pub mod stage_ai {}
-    pub mod stage_move {}
-    pub mod stage_combat {}
-    pub mod stage_cleanup {}
-}
+pub mod schedule_stages;
 
 #[derive(Copy, Clone, Debug)]
 pub struct DamageEvent {
