@@ -1815,6 +1815,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             Some("staging"),
         ),
         bg_cache: crate::gfx::renderer::bindgroups::BgCache::with_capacity(512),
+        render_stats: Vec::new(),
         gbuffer: Some(gbuffer),
         hiz: Some(hiz),
         pipeline,

@@ -2193,11 +2193,43 @@ pub fn render_impl(
                         .append_perf_text_line(r.size.width, r.size.height, &line, 4);
                 }
             }
+            // Render pass stats (name, draws/batches, cpu_ms, BG cache hits/misses)
+            let mut line_ix = 5u32;
+            for s in &r.render_stats {
+                let l = format!(
+                    "{:8}  draws {:>3}  batches {:>2}  {:>5.2} ms  BG {} / {}",
+                    s.name, s.draws, s.batches, s.cpu_ms, s.bg_hits, s.bg_misses
+                );
+                r.hud
+                    .append_perf_text_line(r.size.width, r.size.height, &l, line_ix);
+                line_ix += 1;
+            }
         }
         // Hint overlay removed for CC demo and general scenes.
     }
     // Execute Particles + UI + Present via the framegraph
     {
+        // Clear per-pass stats at frame start
+        r.render_stats.clear();
+        // Legacy fallback toggle (skip graph execution and present directly)
+        let use_legacy = std::env::var("RA_RENDER_LEGACY")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        if use_legacy {
+            let frame = r.surface.get_current_texture()?;
+            let swap_view = frame
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            r.pass_present(&mut encoder, &swap_view);
+            r.queue.submit(Some(encoder.finish()));
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                log::error!("validation (legacy present): {:?}", e);
+                return Ok(());
+            }
+            frame.present();
+            return Ok(());
+        }
         use super::graph::{Graph, GraphBuilder, ImageKind};
         use super::passes_graph::{ParticlesPass, PresentPass, UiPass};
         let mut gb = GraphBuilder::new();

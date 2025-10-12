@@ -37,6 +37,9 @@ impl PresentPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
             .pass("Present", |ctx: &mut ExecCtx| {
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
                 // Acquire, composite offscreen hdr_color to swapchain, and present
                 let frame = match ctx.renderer.surface.get_current_texture() {
                     Ok(f) => f,
@@ -50,6 +53,16 @@ impl PresentPass {
                     .create_view(&wgpu::TextureViewDescriptor::default());
                 ctx.renderer.pass_present(ctx.encoder, &swap_view);
                 frame.present();
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "Present",
+                    draws: 1,
+                    batches: 1,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
             })
             .reads(color);
     }
@@ -60,8 +73,11 @@ impl ParticlesPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
             .pass("Particles", |ctx: &mut ExecCtx| {
+                let dc0 = ctx.renderer.draw_calls;
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
                 if ctx.renderer.fx_count > 0 {
-                    // Draw particles over offscreen scene color
                     let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("particles-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -79,6 +95,17 @@ impl ParticlesPass {
                     });
                     ctx.renderer.draw_particles(&mut rp);
                 }
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let draws = ctx.renderer.draw_calls.saturating_sub(dc0);
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "Particles",
+                    draws,
+                    batches: if draws > 0 { 1 } else { 0 },
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
             })
             .writes(color)
             .writes(depth);
@@ -90,12 +117,26 @@ impl UiPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
             .pass("UI", |ctx: &mut ExecCtx| {
-                // Queue/upload any UI buffers, then draw HUD to offscreen
+                let dc0 = ctx.renderer.draw_calls;
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
                 let (device, queue) = (&ctx.renderer.device, &ctx.renderer.queue);
                 ctx.renderer.hud.queue(device, queue);
                 ctx.renderer
                     .hud
                     .draw(ctx.encoder, &ctx.renderer.attachments.scene_view);
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let draws = ctx.renderer.draw_calls.saturating_sub(dc0);
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "UI",
+                    draws,
+                    batches: if draws > 0 { 1 } else { 0 },
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
             })
             .writes(color);
     }

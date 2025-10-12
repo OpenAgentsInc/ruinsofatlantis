@@ -128,6 +128,8 @@ pub struct Renderer {
     uploads: renderer::upload::UploadRing,
     // BindGroup cache for frequently rebuilt groups
     bg_cache: renderer::bindgroups::BgCache,
+    // Per-pass render stats (last frame)
+    render_stats: Vec<renderer::RenderStats>,
     // Resize/rebuild notification bus
     pub(crate) rebuild_bus: renderer::rebuild_bus::RebuildBus,
     // Externalized client updates (controls + collision)

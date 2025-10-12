@@ -28,3 +28,13 @@ use crate::gfx::PcCast;
 mod input;
 #[path = "update/mod.rs"]
 mod update;
+
+#[derive(Clone, Debug, Default)]
+pub struct RenderStats {
+    pub name: &'static str,
+    pub draws: u32,
+    pub batches: u32,
+    pub cpu_ms: f32,
+    pub bg_hits: u64,
+    pub bg_misses: u64,
+}
