@@ -1166,8 +1166,8 @@ pub fn render_impl(
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
     }
-    // Legacy main path removed (graph handles Main below); keep debug block only when present_only
-    if false && !present_only {
+    // Legacy main path removed (graph handles Main below)
+    if false {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
