@@ -1131,15 +1131,12 @@ pub fn render_impl(
     let present_only = std::env::var("RA_PRESENT_ONLY")
         .map(|v| v == "1")
         .unwrap_or(false);
-    // Legacy fallback toggle (skip graph Main/Present and use legacy path)
-    let use_legacy = std::env::var("RA_RENDER_LEGACY")
-        .map(|v| v == "1")
-        .unwrap_or(false);
+    // Legacy fallback removed: graph path owns full frame execution
     // PR16: render all scene content to offscreen color; Present composites to swapchain.
     let render_view: &wgpu::TextureView = &r.attachments.scene_view;
     // Sky-only pass (legacy path only; otherwise handled by graph below)
     log::debug!("pass: sky");
-    if !present_only && use_legacy {
+    if !present_only {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
@@ -1169,8 +1166,8 @@ pub fn render_impl(
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
     }
-    // Main pass: legacy block remains below; otherwise handled by unified graph later
-    if use_legacy && !present_only {
+    // Legacy main path removed (graph handles Main below); keep debug block only when present_only
+    if false && !present_only {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
@@ -2257,25 +2254,7 @@ pub fn render_impl(
     }
     // Execute full frame via the framegraph (Sky/Main/Particles/Post/UI/Present)
     {
-        // Legacy fallback toggle (skip graph execution and present directly)
-        let use_legacy = std::env::var("RA_RENDER_LEGACY")
-            .map(|v| v == "1")
-            .unwrap_or(false);
-        if use_legacy {
-            let frame = r.surface.get_current_texture()?;
-            let swap_view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            r.pass_present(&mut encoder, &swap_view);
-            r.queue.submit(Some(encoder.finish()));
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation (legacy present): {:?}", e);
-                return Ok(());
-            }
-            frame.present();
-            return Ok(());
-        }
+        // Legacy fallback removed; always execute the framegraph
         use super::graph::{Graph, GraphBuilder, ImageKind};
         use super::passes_graph::{
             BloomPass, MainPass, ParticlesPass, PostAoPass, PresentPass, ResolvePass, SkyPass,
