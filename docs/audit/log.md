@@ -232,6 +232,19 @@ Validation
 
 ---
 
+## Phase‑Two — PR 18: BindGroup cache scaffold
+
+Changes
+- Added `gfx/renderer/bindgroups.rs` with a simple `BgCache` and `BgKey`:
+  - `BgKey { layout_hash, ids }` captures layout identity and resource ids.
+  - `BgCache::get_or_create(key, make)` returns a cached BG or inserts via `make`, tracking `hits/misses/evictions` with FIFO/LRU-ish eviction at a fixed capacity.
+- Exported from `renderer::mod` so passes and materials can adopt it later.
+
+Validation
+- Compiles cleanly with clippy `-D warnings`. Not yet adopted by passes; no behavior change.
+
+---
+
 ## Phase‑Two — PR 16: Post suite + offscreen image (prep)
 
 Changes
