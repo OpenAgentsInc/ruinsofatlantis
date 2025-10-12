@@ -661,3 +661,23 @@ Changes
 Validation
 - `cargo test` + clippy `-D warnings` green; WGSL validated; pre-push `xtask ci` green.
 - Visuals unchanged with default path (alloc/alias off). With `RA_GRAPH_ALLOC=1` verified post/present paths sample HDR from graph views.
+
+---
+
+## Phase‑Three — PR 54: History buffers (scaffold)
+
+Changes
+- Added `history_color`/`history_view` textures in attachments for a previous-frame HDR copy. Not yet wired into a copy or sampling BGs; kept clippy green with `#[allow(dead_code)]` pending full adoption.
+
+Validation
+- CI green; no behavior change. Copy/sampling to be added when WGSL blit or compatible copy API is wired.
+
+---
+
+## Phase‑Three — PR 56: DrawList 2.1 counters (scaffold)
+
+Changes
+- Extended `renderer/draw_list.rs` with `state_counters()` that computes `pipeline_binds`, `bg_binds`, and `vb_ib_sets` from an ordered list; added CPU tests. Added fields to `RenderStats` and initialized counters to zero in pass stats (integration to update them will follow).
+
+Validation
+- `cargo test -p render_wgpu` passes; clippy `-D warnings` remains green.

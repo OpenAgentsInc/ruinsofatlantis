@@ -72,6 +72,33 @@ impl DrawList {
         }
         out
     }
+
+    /// Compute simple state-change counters for this list assuming
+    /// render order equals item order.
+    ///
+    /// - `pipeline_binds`: increments when `pipeline_id` changes
+    /// - `bg_binds`: increments when `(pipeline_id, material_id)` changes
+    /// - `vb_ib_sets`: number of items (assumes per-draw VB/IB set)
+    #[allow(dead_code)]
+    pub fn state_counters(&self) -> (u32, u32, u32) {
+        let mut pipeline_binds = 0u32;
+        let mut bg_binds = 0u32;
+        let mut prev_pipe: Option<u32> = None;
+        let mut prev_pair: Option<(u32, u32)> = None;
+        for it in &self.items {
+            if prev_pipe.map_or(true, |p| p != it.key.pipeline_id) {
+                pipeline_binds += 1;
+                prev_pipe = Some(it.key.pipeline_id);
+            }
+            let pair = (it.key.pipeline_id, it.key.material_id);
+            if prev_pair.map_or(true, |pp| pp != pair) {
+                bg_binds += 1;
+                prev_pair = Some(pair);
+            }
+        }
+        let vb_ib_sets = self.items.len() as u32;
+        (pipeline_binds, bg_binds, vb_ib_sets)
+    }
 }
 
 #[cfg(test)]
@@ -168,5 +195,53 @@ mod tests {
         assert_eq!(b.len(), 2);
         assert_eq!(b[0].key.pipeline_id, 1);
         assert_eq!(b[1].key.pipeline_id, 2);
+    }
+
+    #[test]
+    fn state_counters_pipeline_and_bg_changes() {
+        let mut dl = DrawList::new();
+        // Two draws with same (pipeline, material) → 1 bg bind; then pipeline changes
+        dl.add(DrawItem {
+            key: DrawKey {
+                pipeline_id: 1,
+                material_id: 10,
+                mesh_id: 100,
+            },
+            index_count: 3,
+            instance_count: 1,
+        });
+        dl.add(DrawItem {
+            key: DrawKey {
+                pipeline_id: 1,
+                material_id: 10,
+                mesh_id: 101,
+            },
+            index_count: 3,
+            instance_count: 1,
+        });
+        // material changes (same pipeline) → bg bind increments, pipeline doesn't
+        dl.add(DrawItem {
+            key: DrawKey {
+                pipeline_id: 1,
+                material_id: 11,
+                mesh_id: 102,
+            },
+            index_count: 3,
+            instance_count: 1,
+        });
+        // pipeline changes → both pipeline and bg bind
+        dl.add(DrawItem {
+            key: DrawKey {
+                pipeline_id: 2,
+                material_id: 20,
+                mesh_id: 200,
+            },
+            index_count: 3,
+            instance_count: 1,
+        });
+        let (pipe_binds, bg_binds, vb_ib_sets) = dl.state_counters();
+        assert_eq!(pipe_binds, 2); // pipeline 1 then 2
+        assert_eq!(bg_binds, 3); // (1,10) then (1,11) then (2,20)
+        assert_eq!(vb_ib_sets, 4); // 4 draws
     }
 }
