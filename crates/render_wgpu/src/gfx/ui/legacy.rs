@@ -869,7 +869,7 @@ impl HealthBars {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("bars-shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
+                "../shader.wgsl"
             ))),
         });
         let pipeline = pipeline::create_bar_pipeline(device, &shader, color_format);
