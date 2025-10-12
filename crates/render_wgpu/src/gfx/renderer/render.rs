@@ -1233,17 +1233,8 @@ pub fn render_impl(
                     emissive: 0.0,
                     _pad: [0.0; 4],
                 };
-                {
-                    let bytes = bytemuck::bytes_of(&shard_m);
-                    let slice = r.uploads.allocate(&r.queue, bytes, 256);
-                    encoder.copy_buffer_to_buffer(
-                        &slice.buffer,
-                        slice.offset,
-                        &r.shard_model_buf,
-                        0,
-                        slice.size,
-                    );
-                }
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
                 r.draw_pc_only(&mut rp);
                 drop(rp);
                 // Present immediately for the isolate path (no HUD perf text)
@@ -1563,17 +1554,8 @@ pub fn render_impl(
                     emissive: 0.0,
                     _pad: [0.0; 4],
                 };
-                {
-                    let bytes = bytemuck::bytes_of(&shard_m);
-                    let slice = r.uploads.allocate(&r.queue, bytes, 256);
-                    encoder.copy_buffer_to_buffer(
-                        &slice.buffer,
-                        slice.offset,
-                        &r.shard_model_buf,
-                        0,
-                        slice.size,
-                    );
-                }
+                r.queue
+                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
 
                 // Extra visibility: record resource readiness
                 log::debug!(
