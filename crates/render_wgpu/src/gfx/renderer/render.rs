@@ -1127,12 +1127,12 @@ pub fn render_impl(
         let color = gb.image(ImageKind::Color {
             format: wgpu::TextureFormat::Rgba16Float,
             size,
-            msaa: 1,
+            msaa: r.attachments.sample_count,
         });
         let depth = gb.image(ImageKind::Depth {
             format: wgpu::TextureFormat::Depth32Float,
             size,
-            msaa: 1,
+            msaa: r.attachments.sample_count,
         });
         MainPass::declare(&mut gb, color, depth);
         let g = Graph::compile(gb);
@@ -2250,12 +2250,12 @@ pub fn render_impl(
         let color = gb.image(ImageKind::Color {
             format: wgpu::TextureFormat::Rgba16Float,
             size,
-            msaa: 1,
+            msaa: r.attachments.sample_count,
         });
         let depth = gb.image(ImageKind::Depth {
             format: wgpu::TextureFormat::Depth32Float,
             size,
-            msaa: 1,
+            msaa: r.attachments.sample_count,
         });
         ParticlesPass::declare(&mut gb, color, depth);
         UiPass::declare(&mut gb, color);

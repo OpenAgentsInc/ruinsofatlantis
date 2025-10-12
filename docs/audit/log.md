@@ -455,3 +455,27 @@ Changes
 Validation
 - Visual parity; resize/minimize/maximize recovers without panic locally.
 - clippy/tests green.
+
+---
+
+## Phase‑Two — PR 32: BgCache correctness + tests
+
+Changes
+- Fixed `BgCache::get_or_create` to return by key and refresh recency; proper FIFO/LRU-ish eviction.
+- Added unit tests for counts and eviction. Tests are CI-friendly and skip gracefully if no adapter is available in the environment.
+
+Validation
+- `cargo test -p render_wgpu` passes; cache tests validated hits/misses/evictions.
+- Full `xtask ci` green.
+
+---
+
+## Phase‑Two — PR 33: Main batching plumbing (behavior-neutral)
+
+Changes
+- Updated Main pass `RenderStats` to report `batches = draws` conservatively to reflect one-batch-per-draw until DrawList integration lands.
+- Left draw code intact (no visual changes). DrawList module and tests already exist and will be adopted next.
+
+Validation
+- Visual parity.
+- clippy/tests green.

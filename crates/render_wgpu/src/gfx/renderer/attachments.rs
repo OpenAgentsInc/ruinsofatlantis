@@ -17,6 +17,7 @@ pub(crate) struct Attachments {
     pub height: u32,
     pub swapchain_format: TextureFormat,
     pub offscreen_format: TextureFormat,
+    pub sample_count: u32,
 }
 
 impl Attachments {
@@ -72,6 +73,7 @@ impl Attachments {
             height,
             swapchain_format,
             offscreen_format,
+            sample_count: 1,
         }
     }
 

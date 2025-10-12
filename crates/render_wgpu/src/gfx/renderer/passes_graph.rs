@@ -35,7 +35,7 @@ impl MainPass {
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Main",
                     draws,
-                    batches: 0,
+                    batches: draws, // conservative: one batch per draw until DrawList is adopted
                     cpu_ms,
                     bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
                     bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
