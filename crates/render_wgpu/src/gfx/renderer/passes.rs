@@ -290,14 +290,14 @@ impl Renderer {
         blit.draw(0..3, 0..1);
     }
 
-    pub(crate) fn pass_ssr(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn pass_ssr(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView) {
         if !self.enable_ssr {
             return;
         }
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssr-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.attachments.scene_view,
+                view: target,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -315,14 +315,14 @@ impl Renderer {
         rp.draw(0..3, 0..1);
     }
 
-    pub(crate) fn pass_ssgi(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn pass_ssgi(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView) {
         if !self.enable_ssgi {
             return;
         }
         let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssgi-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.attachments.scene_view,
+                view: target,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -341,14 +341,14 @@ impl Renderer {
         gi.draw(0..3, 0..1);
     }
 
-    pub(crate) fn pass_ao(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn pass_ao(&self, encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView) {
         if !self.enable_post_ao {
             return;
         }
         let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("post-ao-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.attachments.scene_view,
+                view: target,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -366,14 +366,18 @@ impl Renderer {
         post.draw(0..3, 0..1);
     }
 
-    pub(crate) fn pass_bloom(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn pass_bloom(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+    ) {
         if !self.enable_bloom {
             return;
         }
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("bloom-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.attachments.scene_view,
+                view: target,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {

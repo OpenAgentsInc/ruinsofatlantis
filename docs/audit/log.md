@@ -616,3 +616,34 @@ Changes
 Validation
 - CI green; no behavior change with default `sample_count=1`.
 
+---
+
+## Phase‑Three — PR 50: Passes consume graph views (behavior‑neutral)
+
+Changes
+- Updated post pass helpers (`pass_ao/ssgi/ssr/bloom`) to accept an explicit render target `&TextureView` and bound them in exec closures via `ctx.view_color(handle)`.
+- Ensures pass code does not hardcode `attachments.scene_view` for color outputs; depth/UI sampling remains via existing BGs for parity.
+
+Validation
+- `cargo test` and `clippy -D warnings` green; visuals unchanged.
+
+---
+
+## Phase‑Three — PR 51: MSAA resolve as a pass (shape only)
+
+Changes
+- Graph build now declares `hdr` (single-sample), `depth(samples)`, and, when `samples>1`, a `msaa` color. Added `ResolvePass` (reads `msaa` → writes `hdr`).
+- Present/Post/Particles/UI now thread the `hdr` handle. Exec body for resolve is a no‑op for now (aliasing path maps both handles to the attachment view), keeping visuals identical.
+
+Validation
+- `xtask ci` green; toggling sample count changes declared pass layout without affecting visuals.
+
+---
+
+## Phase‑Three — PR 53: Present recovery counter
+
+Changes
+- Added `Renderer.present_recoveries` and increment it on `SurfaceError::Lost/Outdated` in `PresentPass`; reuses existing resize/reconfigure.
+
+Validation
+- CI green; counter increments on forced resize/lost (manual local). Perf HUD wiring will follow in later perf plumbing PRs.

@@ -61,6 +61,8 @@ impl PresentPass {
                     Err(wgpu::SurfaceError::Lost) | Err(wgpu::SurfaceError::Outdated) => {
                         // Surface lost/outdated — reconfigure using current size and attachments
                         log::warn!("present: surface lost/outdated; reconfiguring");
+                        ctx.renderer.present_recoveries =
+                            ctx.renderer.present_recoveries.saturating_add(1);
                         let size = ctx.renderer.size; // current logical size tracked by renderer
                         crate::gfx::renderer::resize::resize_impl(ctx.renderer, size);
                         return;
@@ -84,6 +86,9 @@ impl PresentPass {
                 let swap_view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
+                // Composite the provided color handle (HDR) to the swapchain view.
+                // For now, present pipeline samples from attachments.scene_view via present_bg.
+                // Once Present binds a dynamic src view, switch to ctx.view_color(color).
                 ctx.renderer.pass_present(ctx.encoder, &swap_view);
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
@@ -179,11 +184,12 @@ pub struct PostAoPass;
 impl PostAoPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
-            .pass("PostAO", |ctx: &mut ExecCtx| {
+            .pass("PostAO", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                ctx.renderer.pass_ao(ctx.encoder);
+                let target = ctx.view_color(color).clone();
+                ctx.renderer.pass_ao(ctx.encoder, &target);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "PostAO",
@@ -215,11 +221,12 @@ pub struct SsgiPass;
 impl SsgiPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
-            .pass("SSGI", |ctx: &mut ExecCtx| {
+            .pass("SSGI", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                ctx.renderer.pass_ssgi(ctx.encoder);
+                let target = ctx.view_color(color).clone();
+                ctx.renderer.pass_ssgi(ctx.encoder, &target);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "SSGI",
@@ -240,11 +247,12 @@ pub struct SsrPass;
 impl SsrPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
-            .pass("SSR", |ctx: &mut ExecCtx| {
+            .pass("SSR", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                ctx.renderer.pass_ssr(ctx.encoder);
+                let target = ctx.view_color(color).clone();
+                ctx.renderer.pass_ssr(ctx.encoder, &target);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "SSR",
@@ -265,11 +273,12 @@ pub struct BloomPass;
 impl BloomPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
-            .pass("Bloom", |ctx: &mut ExecCtx| {
+            .pass("Bloom", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                ctx.renderer.pass_bloom(ctx.encoder);
+                let target = ctx.view_color(color).clone();
+                ctx.renderer.pass_bloom(ctx.encoder, &target);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Bloom",
@@ -282,5 +291,17 @@ impl BloomPass {
                 ctx.renderer.render_stats.push(stats);
             })
             .writes(color);
+    }
+}
+
+pub struct ResolvePass;
+impl ResolvePass {
+    pub fn declare(builder: &mut GraphBuilder, msaa: Handle<Img>, hdr: Handle<Img>) {
+        let _ = builder
+            .pass("Resolve", |_ctx: &mut ExecCtx| {
+                // No-op for now; aliasing path maps both handles to the same view.
+            })
+            .reads(msaa)
+            .writes(hdr);
     }
 }

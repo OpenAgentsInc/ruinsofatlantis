@@ -474,6 +474,8 @@ pub struct Renderer {
 
     // Zone UI/controls policy (derived from zone slug or manifest)
     zone_policy: ZonePolicy,
+    // Present recovery counter (incremented when surface is lost/outdated)
+    pub(crate) present_recoveries: u32,
 
     // --- Destructible (voxel) state ---
     #[cfg(feature = "vox_onepath_demo")]

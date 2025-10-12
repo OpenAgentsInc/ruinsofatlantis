@@ -2293,30 +2293,44 @@ pub fn render_impl(
         }
         use super::graph::{Graph, GraphBuilder, ImageKind};
         use super::passes_graph::{
-            BlitSceneReadPass, BloomPass, ParticlesPass, PostAoPass, PresentPass, SsgiPass,
-            SsrPass, UiPass,
+            BlitSceneReadPass, BloomPass, ParticlesPass, PostAoPass, PresentPass, ResolvePass,
+            SsgiPass, SsrPass, UiPass,
         };
         let mut gb = GraphBuilder::new();
         let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
-        let color = gb.image(ImageKind::Color {
+        let samples = r.attachments.sample_count;
+        let hdr = gb.image(ImageKind::Color {
             format: wgpu::TextureFormat::Rgba16Float,
             size,
-            msaa: r.attachments.sample_count,
+            msaa: 1,
         });
         let depth = gb.image(ImageKind::Depth {
             format: wgpu::TextureFormat::Depth32Float,
             size,
-            msaa: r.attachments.sample_count,
+            msaa: samples,
         });
-        ParticlesPass::declare(&mut gb, color, depth);
-        UiPass::declare(&mut gb, color);
+        let msaa = if samples > 1 {
+            Some(gb.image(ImageKind::Color {
+                format: wgpu::TextureFormat::Rgba16Float,
+                size,
+                msaa: samples,
+            }))
+        } else {
+            None
+        };
+        // Particles/UI write to HDR
+        ParticlesPass::declare(&mut gb, hdr, depth);
+        UiPass::declare(&mut gb, hdr);
         // Post suite (behavior-neutral ordering)
-        PostAoPass::declare(&mut gb, color, depth);
-        BlitSceneReadPass::declare(&mut gb, color);
-        SsgiPass::declare(&mut gb, color, depth);
-        SsrPass::declare(&mut gb, color, depth);
-        BloomPass::declare(&mut gb, color);
-        PresentPass::declare(&mut gb, color);
+        PostAoPass::declare(&mut gb, hdr, depth);
+        BlitSceneReadPass::declare(&mut gb, hdr);
+        SsgiPass::declare(&mut gb, hdr, depth);
+        SsrPass::declare(&mut gb, hdr, depth);
+        BloomPass::declare(&mut gb, hdr);
+        if let Some(msaa_img) = msaa {
+            ResolvePass::declare(&mut gb, msaa_img, hdr);
+        }
+        PresentPass::declare(&mut gb, hdr);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
     }
