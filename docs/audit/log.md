@@ -187,6 +187,28 @@ Changes
 
 Validation
 - CI green; visuals unchanged.
+
+---
+
+## Phase‑Two — PR 15: Particles + UI (initial extraction)
+
+Changes
+- Extended `gfx/renderer/passes_graph.rs` with `ParticlesPass::declare(color, depth)` and `UiPass::declare(color)` (no‑op exec closures for now) so their IO is modeled.
+- Kept render/present behavior unchanged (legacy path) while we prepare to execute these passes in a later PR.
+
+Validation
+- CI green; visuals unchanged.
+
+---
+
+## Phase‑Two — PR 16: Post suite + offscreen image (prep)
+
+Changes
+- Added cross‑pass monotonic hazard validation (no write after any read) in the framegraph compiler to catch ordering mistakes early.
+- Present lifecycle remains unchanged for now; introduction of `hdr_color` and non‑swapchain compositing will come with Post extraction.
+
+Validation
+- CI green; visuals unchanged.
 ## PR 1 — Device/attachments/config scaffolding (render_wgpu)
 
 Changes

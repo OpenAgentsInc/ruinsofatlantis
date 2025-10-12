@@ -28,3 +28,20 @@ impl PresentPass {
         let _ = builder.pass("Present", |_ctx| {});
     }
 }
+
+pub struct ParticlesPass;
+impl ParticlesPass {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+        let _ = builder
+            .pass("Particles", |_ctx| {})
+            .writes(color)
+            .writes(depth);
+    }
+}
+
+pub struct UiPass;
+impl UiPass {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
+        let _ = builder.pass("UI", |_ctx| {}).writes(color);
+    }
+}
