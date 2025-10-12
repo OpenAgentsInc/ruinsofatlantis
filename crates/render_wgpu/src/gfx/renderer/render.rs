@@ -2244,6 +2244,8 @@ pub fn render_impl(
             size,
             msaa: 1,
         });
+        use super::passes_graph::MainPass;
+        MainPass::declare(&mut gb, color, depth);
         ParticlesPass::declare(&mut gb, color, depth);
         UiPass::declare(&mut gb, color);
         PresentPass::declare(&mut gb, color);

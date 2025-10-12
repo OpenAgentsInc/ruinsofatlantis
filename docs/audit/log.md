@@ -399,6 +399,17 @@ Validation
 
 ---
 
+## Phase‑Two — PR 29: Main under pass (prep)
+
+Changes
+- Declared `MainPass` in the per‑frame graph and added a stats placeholder so perf UI shows a stable row.
+- Legacy Main draws remain in `render.rs` for now to keep behavior parity; extraction will bind Main into the pass next.
+
+Validation
+- Visual parity; graph order now includes Main (stub) before Particles.
+
+---
+
 ## Phase‑Two — PR 24: BgCache in more hotspots
 
 Changes

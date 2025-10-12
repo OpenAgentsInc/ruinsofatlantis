@@ -24,8 +24,18 @@ pub struct MainPass;
 impl MainPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
-            .pass("Main", |_ctx: &mut ExecCtx| {
-                // Execution remains in legacy path for Main (PR16 moves to offscreen elsewhere)
+            .pass("Main", |ctx: &mut ExecCtx| {
+                // For now, Main draws still execute in legacy path.
+                // Record a stats placeholder so perf UI can show a stable row.
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "Main",
+                    draws: 0,
+                    batches: 0,
+                    cpu_ms: 0.0,
+                    bg_hits: 0,
+                    bg_misses: 0,
+                };
+                ctx.renderer.render_stats.push(stats);
             })
             .writes(color)
             .writes(depth);
