@@ -700,10 +700,7 @@ pub fn render_impl(
     } else {
         globals.fog_params = [0.6, 0.7, 0.8, 0.0035];
     }
-    r.queue
-        .write_buffer(&r.globals_buf, 0, bytemuck::bytes_of(&globals));
-    r.queue
-        .write_buffer(&r.sky_buf, 0, bytemuck::bytes_of(&r.sky.sky_uniform));
+    // (moved) globals/sky uploads happen after encoder creation via UploadRing
 
     // Send authoritative Move/Aim intents each frame when command TX is present
     if let Some(tx) = &r.cmd_tx {
@@ -771,8 +768,7 @@ pub fn render_impl(
         emissive: 0.05,
         _pad: [0.0; 4],
     };
-    r.queue
-        .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_model));
+    // (moved) shard_model upload happens after encoder creation via UploadRing
 
     // Handle queued PC cast and update animation state (skip in Picker)
     if !r.is_picker_batches() {
@@ -1052,8 +1048,7 @@ pub fn render_impl(
             n += 1;
         }
         raw.count = n as u32;
-        r.queue
-            .write_buffer(&r.lights_buf, 0, bytemuck::bytes_of(&raw));
+        // Defer upload until after encoder creation; we'll stage via UploadRing and copy
     }
 
     // Validate frame-graph invariants for this frame
@@ -1075,6 +1070,59 @@ pub fn render_impl(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("encoder"),
         });
+    // Upload globals/sky/lights via staging ring
+    {
+        let bytes = bytemuck::bytes_of(&globals);
+        let slice = r.uploads.allocate(&r.queue, bytes, 256);
+        encoder.copy_buffer_to_buffer(&slice.buffer, slice.offset, &r.globals_buf, 0, slice.size);
+    }
+    {
+        let bytes = bytemuck::bytes_of(&r.sky.sky_uniform);
+        let slice = r.uploads.allocate(&r.queue, bytes, 256);
+        encoder.copy_buffer_to_buffer(&slice.buffer, slice.offset, &r.sky_buf, 0, slice.size);
+    }
+    {
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct LightsRaw2 {
+            count: u32,
+            _pad: [f32; 3],
+            pos_radius: [[f32; 4]; 16],
+            color: [[f32; 4]; 16],
+        }
+        let mut raw = LightsRaw2 {
+            count: 0,
+            _pad: [0.0; 3],
+            pos_radius: [[0.0; 4]; 16],
+            color: [[0.0; 4]; 16],
+        };
+        let mut n = 0usize;
+        let maxr = 10.0f32;
+        for p in &r.projectiles {
+            if n >= 16 {
+                break;
+            }
+            raw.pos_radius[n] = [p.pos.x, p.pos.y, p.pos.z, maxr];
+            let s = 0.9f32;
+            raw.color[n] = [p.color[0] * s, p.color[1] * s, p.color[2] * s, 0.0];
+            n += 1;
+        }
+        raw.count = n as u32;
+        let bytes = bytemuck::bytes_of(&raw);
+        let slice = r.uploads.allocate(&r.queue, bytes, 256);
+        encoder.copy_buffer_to_buffer(&slice.buffer, slice.offset, &r.lights_buf, 0, slice.size);
+    }
+    {
+        let bytes = bytemuck::bytes_of(&shard_model);
+        let slice = r.uploads.allocate(&r.queue, bytes, 256);
+        encoder.copy_buffer_to_buffer(
+            &slice.buffer,
+            slice.offset,
+            &r.shard_model_buf,
+            0,
+            slice.size,
+        );
+    }
     // Clear per-pass stats at the start of the frame
     r.render_stats.clear();
     let present_only = std::env::var("RA_PRESENT_ONLY")
@@ -1185,8 +1233,17 @@ pub fn render_impl(
                     emissive: 0.0,
                     _pad: [0.0; 4],
                 };
-                r.queue
-                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+                {
+                    let bytes = bytemuck::bytes_of(&shard_m);
+                    let slice = r.uploads.allocate(&r.queue, bytes, 256);
+                    encoder.copy_buffer_to_buffer(
+                        &slice.buffer,
+                        slice.offset,
+                        &r.shard_model_buf,
+                        0,
+                        slice.size,
+                    );
+                }
                 r.draw_pc_only(&mut rp);
                 drop(rp);
                 // Present immediately for the isolate path (no HUD perf text)
@@ -1506,8 +1563,17 @@ pub fn render_impl(
                     emissive: 0.0,
                     _pad: [0.0; 4],
                 };
-                r.queue
-                    .write_buffer(&r.shard_model_buf, 0, bytemuck::bytes_of(&shard_m));
+                {
+                    let bytes = bytemuck::bytes_of(&shard_m);
+                    let slice = r.uploads.allocate(&r.queue, bytes, 256);
+                    encoder.copy_buffer_to_buffer(
+                        &slice.buffer,
+                        slice.offset,
+                        &r.shard_model_buf,
+                        0,
+                        slice.size,
+                    );
+                }
 
                 // Extra visibility: record resource readiness
                 log::debug!(
