@@ -5,6 +5,7 @@
 //! the produced batches to minimize state changes.
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[allow(dead_code)] // Adopted by Main in a later PR
 pub struct DrawKey {
     pub pipeline_id: u32,
     pub material_id: u32,
@@ -12,6 +13,7 @@ pub struct DrawKey {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub struct DrawItem {
     pub key: DrawKey,
     pub index_count: u32,
@@ -19,6 +21,7 @@ pub struct DrawItem {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub struct DrawBatch {
     pub key: DrawKey,
     pub index_count: u32,
@@ -26,34 +29,40 @@ pub struct DrawBatch {
 }
 
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct DrawList {
     items: Vec<DrawItem>,
 }
 
 impl DrawList {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self { items: Vec::new() }
     }
+    #[allow(dead_code)]
     pub fn add(&mut self, item: DrawItem) {
         self.items.push(item);
     }
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.items.len()
     }
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
     /// Group contiguous items with the same key into batches.
+    #[allow(dead_code)]
     pub fn to_batches(&self) -> Vec<DrawBatch> {
         let mut out: Vec<DrawBatch> = Vec::new();
         for it in &self.items {
-            if let Some(last) = out.last_mut() {
-                if last.key == it.key {
-                    last.index_count += it.index_count;
-                    last.instance_count += it.instance_count;
-                    continue;
-                }
+            if let Some(last) = out.last_mut()
+                && last.key == it.key
+            {
+                last.index_count += it.index_count;
+                last.instance_count += it.instance_count;
+                continue;
             }
             out.push(DrawBatch {
                 key: it.key,
