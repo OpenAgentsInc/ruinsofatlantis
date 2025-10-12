@@ -82,3 +82,158 @@ impl BgCache {
         self.map.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_device() -> (wgpu::Device, wgpu::Queue) {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            force_fallback_adapter: false,
+            compatible_surface: None,
+        }))
+        .expect("adapter");
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("bgcache-test-device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
+            },
+            None,
+        ))
+        .expect("device");
+        (device, queue)
+    }
+
+    fn make_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("bgcache-test-bgl"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(std::num::NonZeroU64::new(16).unwrap()),
+                },
+                count: None,
+            }],
+        })
+    }
+
+    fn make_uniform(device: &wgpu::Device) -> wgpu::Buffer {
+        let data = [0u8; 16];
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("bgcache-test-ubo"),
+            contents: &data,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        })
+    }
+
+    #[test]
+    fn cache_counts_and_len_behave() {
+        let (device, _queue) = make_device();
+        let bgl = make_layout(&device);
+        let buf_a = make_uniform(&device);
+        let buf_b = make_uniform(&device);
+        let mut cache = BgCache::with_capacity(8);
+
+        let key_a = BgKey::new(&bgl, &[&buf_a as *const _ as u64]);
+        let key_b = BgKey::new(&bgl, &[&buf_b as *const _ as u64]);
+
+        let _a0 = cache.get_or_create(key_a.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("A0"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buf_a.as_entire_binding(),
+                }],
+            })
+        });
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 0);
+
+        // Hit on A again
+        let _a1 = cache.get_or_create(key_a.clone(), || unreachable!("should hit"));
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 1);
+
+        // Miss on B
+        let _b0 = cache.get_or_create(key_b.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("B0"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buf_b.as_entire_binding(),
+                }],
+            })
+        });
+        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.misses, 2);
+        assert_eq!(cache.hits, 1);
+
+        // Hit on B
+        let _b1 = cache.get_or_create(key_b.clone(), || unreachable!("should hit"));
+        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.misses, 2);
+        assert_eq!(cache.hits, 2);
+        assert_eq!(cache.evictions, 0);
+    }
+
+    #[test]
+    fn cache_evicts_oldest_when_at_capacity() {
+        let (device, _queue) = make_device();
+        let bgl = make_layout(&device);
+        let buf_a = make_uniform(&device);
+        let buf_b = make_uniform(&device);
+        let buf_c = make_uniform(&device);
+        let mut cache = BgCache::with_capacity(2);
+
+        let key_a = BgKey::new(&bgl, &[&buf_a as *const _ as u64]);
+        let key_b = BgKey::new(&bgl, &[&buf_b as *const _ as u64]);
+        let key_c = BgKey::new(&bgl, &[&buf_c as *const _ as u64]);
+
+        let _ = cache.get_or_create(key_a.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("A"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buf_a.as_entire_binding(),
+                }],
+            })
+        });
+        let _ = cache.get_or_create(key_b.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("B"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buf_b.as_entire_binding(),
+                }],
+            })
+        });
+        // Refresh A so B becomes the oldest
+        let _ = cache.get_or_create(key_a.clone(), || unreachable!());
+
+        // Insert C, should evict B
+        let _ = cache.get_or_create(key_c.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("C"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buf_c.as_entire_binding(),
+                }],
+            })
+        });
+        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.evictions, 1);
+    }
+}

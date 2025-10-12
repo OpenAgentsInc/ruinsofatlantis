@@ -370,4 +370,20 @@ mod builder_tests {
         let g = Graph::compile(b);
         assert_eq!(g.names, vec!["A", "B"]);
     }
+
+    #[test]
+    #[should_panic]
+    fn panics_on_write_after_read() {
+        let mut b = GraphBuilder::new();
+        let img = b.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            size: glam::uvec2(16, 16),
+            msaa: 1,
+        });
+        b.pass("writer", |_ctx| {}).writes(img);
+        b.pass("reader", |_ctx| {}).reads(img);
+        // Illegal: write again after a read
+        b.pass("writer2", |_ctx| {}).writes(img);
+        let _ = Graph::compile(b);
+    }
 }
