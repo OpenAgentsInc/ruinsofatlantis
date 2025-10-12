@@ -58,7 +58,25 @@ impl PresentPass {
                 // Acquire, composite offscreen hdr_color to swapchain, and present
                 let frame = match ctx.renderer.surface.get_current_texture() {
                     Ok(f) => f,
+                    Err(wgpu::SurfaceError::Lost) | Err(wgpu::SurfaceError::Outdated) => {
+                        // Surface lost/outdated — reconfigure using current size and attachments
+                        log::warn!("present: surface lost/outdated; reconfiguring");
+                        let size = ctx.renderer.size; // current logical size tracked by renderer
+                        crate::gfx::renderer::resize::resize_impl(ctx.renderer, size);
+                        return;
+                    }
+                    Err(wgpu::SurfaceError::Timeout) => {
+                        // Timed out acquiring a frame — skip this frame quietly
+                        log::warn!("present: acquire timeout; skipping frame");
+                        return;
+                    }
+                    Err(wgpu::SurfaceError::OutOfMemory) => {
+                        // OOM — log loudly and skip; caller may decide to stop rendering
+                        log::error!("present: out of memory while acquiring frame");
+                        return;
+                    }
                     Err(e) => {
+                        // Fallback: log and skip
                         log::error!("present: acquire failed: {:?}", e);
                         return;
                     }

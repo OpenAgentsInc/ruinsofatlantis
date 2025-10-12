@@ -440,3 +440,18 @@ Changes
 
 Validation
 - Visual parity. Hazard validation intact (Present reads `hdr_color`). clippy/tests green.
+
+---
+
+## Phase‑Two — PR 31: IO correctness & Present error handling
+
+Changes
+- Passes now consistently access views via `ExecCtx::view_color/view_depth` (Particles/UI already adopted; Main executes through `pass_main` which targets `attachments.scene_view/depth_view` identically).
+- Corrected Particles pass IO to only `.writes(color)` (no depth claims).
+- Strengthened `Present` error handling in `passes_graph.rs`:
+  - Handles `SurfaceError::Lost|Outdated` by invoking `renderer::resize::resize_impl` with current size.
+  - Treats `Timeout` as a soft skip for the frame; `OutOfMemory` logs an error and returns.
+
+Validation
+- Visual parity; resize/minimize/maximize recovers without panic locally.
+- clippy/tests green.

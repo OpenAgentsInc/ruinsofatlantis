@@ -26,3 +26,7 @@ impl RebuildBus {
         }
     }
 }
+
+// Note: Unit-testing listener order would require constructing a Renderer. We avoid
+// unsafe tricks or GPU/device creation in unit tests per repo policy. The ordering is
+// guaranteed by Vec iteration; integration is covered indirectly via resize paths.
