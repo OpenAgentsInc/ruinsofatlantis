@@ -4,6 +4,39 @@ This log tracks the execution of the first three refactor PRs outlined in `docs/
 
 ---
 
+## PR 7 — platform_winit split (scaffold)
+
+Changes
+- Declared new modules in `crates/platform_winit/src/lib.rs`: `app`, `input`, `picker`, `builder_overlay`, `replication`, `telemetry` (empty placeholders).
+- Added a small pure mapping function + unit test in `input` to establish a testable seam.
+- Left the existing event loop and logic in place for zero behavior change.
+
+Validation
+- CI green; input unit test passes.
+
+---
+
+## PR 8 — server_core schedule staged (scaffold)
+
+Changes
+- Added nested public modules under `ecs::schedule` for future stages (`stage_input/ai/move/combat/cleanup`).
+- Exposed `system_names_for_test()` returning the current schedule’s span labels for verification; added a simple order test.
+- No logic moved; run order untouched.
+
+Validation
+- CI green; new tests pass.
+
+---
+
+## PR 9 — server_core lib.rs trims (defer heavy moves)
+
+Changes
+- No structural moves in this pass to avoid churn; lib.rs already carries concise docs and re‑exports. Trimming/moves will be performed in a later targeted PR.
+
+Validation
+- CI green; no behavior change.
+
+
 ## PR 1 — Device/attachments/config scaffolding (render_wgpu)
 
 Changes
@@ -55,3 +88,38 @@ Validation
 
 Summary
 - Introduced device/surface/sampler wrappers and a config home, stood up the pipelines namespace with typed wrappers, and added a framegraph run forwarder. All changes are additive and behavior‑neutral, preparing for the next staged moves without disrupting current rendering.
+
+---
+
+## PR 4 — Split renderer::update by concern (scaffold)
+
+Changes
+- Added `gfx/renderer/update/` directory with submodules (`builder.rs`, `projectiles.rs`, `math.rs`, and `destructibles_demo.rs` behind `vox_onepath_demo`).
+- Included the original monolithic `update.rs` via `#[path = "../update.rs"] mod legacy;` and re‑exported as `pub(crate)` to keep external call sites unchanged.
+- Imported `PcCast` into the renderer namespace to satisfy legacy path references.
+- Added `update::math` with two small pure helpers and unit tests (CPU‑only).
+
+Validation
+- CI green; no behavior change.
+
+---
+
+## PR 5 — Split gfx::ui into focused modules (scaffold)
+
+Changes
+- Added `gfx/ui/` directory with `mod.rs` that includes the original UI via `#[path = "../ui.rs"] mod legacy;` and re‑exports it, plus placeholders `perf.rs`, `help.rs`, `hotbar.rs`.
+- Pointed `gfx::ui` to the directory module using `#[path = "ui/mod.rs"]` to avoid ambiguity.
+- Added a tiny CPU‑only sanity test under `gfx::ui`.
+
+Validation
+- CI green; no behavior change.
+
+---
+
+## PR 6 — tools/model-viewer split scaffolding
+
+Changes
+- Declared empty modules `cli/app/viewer/panels/loader/utils` from `main.rs` (no behavior change yet). This sets up the layout for a mechanical move in a follow‑up PR.
+
+Validation
+- CI green; tool still builds and runs as before.
