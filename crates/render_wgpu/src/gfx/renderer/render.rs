@@ -16,10 +16,8 @@ pub fn render_impl(
     r: &mut crate::gfx::Renderer,
     window: Option<&winit::window::Window>,
 ) -> Result<(), SurfaceError> {
-    let frame = r.surface.get_current_texture()?;
-    let view = frame
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
+    // Graph-based Present pass acquires/presents. Define a dummy view for debug-only paths.
+    let view = r.attachments.scene_view.clone();
     // Optional tracing left to RA_TRACE (no default info spam)
 
     // WASM debug path: draw SKY + TERRAIN into offscreen, then present to swapchain.
@@ -1178,9 +1176,8 @@ pub fn render_impl(
                 drop(rp);
                 // Present immediately for the isolate path (no HUD perf text)
                 r.hud.queue(&r.device, &r.queue);
-                r.hud.draw(&mut encoder, &view);
+                r.hud.draw(&mut encoder, &r.attachments.scene_view);
                 r.queue.submit(Some(encoder.finish()));
-                frame.present();
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
@@ -1840,7 +1837,6 @@ pub fn render_impl(
             log::error!("wgpu validation error (minimal mode): {:?}", e);
             return Ok(());
         }
-        frame.present();
         return Ok(());
     }
     // Ensure SceneRead is available for bloom pass as well
@@ -2220,10 +2216,9 @@ pub fn render_impl(
         UiPass::declare(&mut gb, color);
         PresentPass::declare(&mut gb, color);
         let g = Graph::compile(gb);
-        g.execute(r, &mut encoder, &view);
+        g.execute(r, &mut encoder);
     }
     r.queue.submit(Some(encoder.finish()));
-    frame.present();
     // Pop the validation scope after submit; this captures any errors raised
     // during encoder.finish() or queue.submit().
     #[cfg(not(target_arch = "wasm32"))]

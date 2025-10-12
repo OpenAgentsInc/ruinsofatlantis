@@ -37,8 +37,19 @@ impl PresentPass {
     pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
         let _ = builder
             .pass("Present", |ctx: &mut ExecCtx| {
-                // Composite offscreen hdr_color to the swapchain
-                ctx.renderer.pass_present(ctx.encoder, ctx.swap_view);
+                // Acquire, composite offscreen hdr_color to swapchain, and present
+                let frame = match ctx.renderer.surface.get_current_texture() {
+                    Ok(f) => f,
+                    Err(e) => {
+                        log::error!("present: acquire failed: {:?}", e);
+                        return;
+                    }
+                };
+                let swap_view = frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+                ctx.renderer.pass_present(ctx.encoder, &swap_view);
+                frame.present();
             })
             .reads(color);
     }

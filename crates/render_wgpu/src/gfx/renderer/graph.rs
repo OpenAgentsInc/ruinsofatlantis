@@ -189,7 +189,6 @@ pub struct PassDecl {
 pub struct ExecCtx<'a> {
     pub renderer: &'a mut crate::gfx::Renderer,
     pub encoder: &'a mut wgpu::CommandEncoder,
-    pub swap_view: &'a wgpu::TextureView,
 }
 
 impl<'a> ExecCtx<'a> {
@@ -304,14 +303,9 @@ impl Graph {
         mut self,
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,
-        swap_view: &wgpu::TextureView,
     ) {
         for p in self.passes.drain(..) {
-            let mut ctx = ExecCtx {
-                renderer,
-                encoder,
-                swap_view,
-            };
+            let mut ctx = ExecCtx { renderer, encoder };
             (p.exec)(&mut ctx);
         }
     }

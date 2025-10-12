@@ -388,3 +388,44 @@ Changes
 
 Validation
 - CI green; tool still builds and runs as before.
+## Phase‑Two — PR 23: Main uses DrawList (scaffold)
+
+Changes
+- Added `renderer::passes::main.rs` scaffold to host Main’s execution and prepare for DrawList‑driven batching.
+- Kept legacy Main draws intact; no behavior change yet. DrawList module and tests already exist.
+
+Validation
+- Visual parity. clippy/tests green.
+
+---
+
+## Phase‑Two — PR 24: BgCache in more hotspots
+
+Changes
+- Adopted `BgCache` for zombie palettes bind groups in the render path to avoid rebuilding when buffer identity is unchanged across frames.
+- Left a TODO to expand to material BGs and post‑FX once those are wired through passes.
+
+Validation
+- Visual parity; cache keys stable; clippy/tests green.
+
+---
+
+## Phase‑Two — PR 25: UploadRing in more hotspots
+
+Changes
+- Integrated `UploadRing` for DK instance updates (staged copy) and kept uniform writes direct where encoder borrowing would conflict.
+- Added `uploads.next_frame()` at the start of each frame before recording commands.
+
+Validation
+- Visual parity; no mixed update path for the same buffer in a frame; clippy/tests green.
+
+---
+
+## Phase‑Two — PR 26: Present owns acquire/present
+
+Changes
+- Moved swapchain acquire/present into the Present pass exec closure. The render path no longer acquires or presents directly.
+- `Graph::execute` API simplified (no swap view argument). Legacy debug paths use the offscreen view for drawing when needed.
+
+Validation
+- Visual parity. Hazard validation intact (Present reads `hdr_color`). clippy/tests green.
