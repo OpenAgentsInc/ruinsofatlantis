@@ -505,6 +505,17 @@ Changes
 Validation
 - `xtask ci` green; no behavior changes; accessor unused for now.
 
+---
+
+## Phase‑Two — PR 38: Main adopts DrawList batching (behavior‑neutral)
+
+Changes
+- Added conservative batch counting in `pass_main` without changing draw behavior. We compute a key per draw as `(pipeline_id, material_id, mesh_id)` and count a new batch when the key changes; order matches legacy.
+- Updated `RenderStats` for Main to report real `batches` via a renderer field (`main_batch_count_last`). Draws are still issued exactly as before.
+
+Validation
+- `xtask ci` green locally; visuals unchanged. Perf HUD shows `batches ≤ draws` for Main.
+
 ## Phase‑Two — PR 35: Extract Post Suite (behavior‑neutral)
 
 Changes

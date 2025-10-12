@@ -12,7 +12,31 @@
 
 use crate::gfx::Renderer;
 
+#[inline]
+fn ptr_id<T>(r: &T) -> u32 {
+    (r as *const T as usize as u64) as u32
+}
+
 impl Renderer {
+    fn batch_begin(&mut self) {
+        self.main_batch_prev_key = None;
+        self.main_batch_count_curr = 0;
+    }
+
+    fn batch_add_key_ids(&mut self, pid: u32, mid: u32, mesh_ref_id: u32) {
+        let key = [pid, mid, mesh_ref_id];
+        match self.main_batch_prev_key {
+            Some(prev) if prev == key => {}
+            _ => {
+                self.main_batch_prev_key = Some(key);
+                self.main_batch_count_curr = self.main_batch_count_curr.saturating_add(1);
+            }
+        }
+    }
+
+    fn batch_end(&mut self) {
+        self.main_batch_count_last = self.main_batch_count_curr;
+    }
     pub(crate) fn set_pending_frame(&mut self, frame: wgpu::SurfaceTexture) {
         self.pending_frame = Some(frame);
     }
@@ -30,6 +54,8 @@ impl Renderer {
         } else {
             true
         };
+        // Track batches conservatively across draws (pipeline, material, mesh)
+        self.batch_begin();
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -62,6 +88,9 @@ impl Renderer {
             .unwrap_or(true)
             && !self.is_picker_batches()
         {
+            let pid = ptr_id(&self.pipeline);
+            let mid = 0;
+            let mesh = ptr_id(&self.terrain_ib);
             rp.set_pipeline(&self.pipeline);
             rp.set_bind_group(0, &self.globals_bg, &[]);
             rp.set_bind_group(1, &self.terrain_model_bg, &[]);
@@ -69,33 +98,49 @@ impl Renderer {
             rp.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
             rp.draw_indexed(0..self.terrain_index_count, 0, 0..1);
             self.draw_calls += 1;
+            self.batch_add_key_ids(pid, mid, mesh);
         }
         // Ruins (instanced static)
         if self.ruins_count > 0 && !self.is_picker_batches() {
-            let inst_pipe = if self.wire_enabled {
-                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
-            } else {
-                &self.inst_pipeline
-            };
-            rp.set_pipeline(inst_pipe);
-            rp.set_bind_group(0, &self.globals_bg, &[]);
-            rp.set_bind_group(1, &self.shard_model_bg, &[]);
-            rp.set_vertex_buffer(0, self.ruins_vb.slice(..));
-            rp.set_vertex_buffer(1, self.ruins_instances.slice(..));
-            rp.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
-            rp.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
-            self.draw_calls += 1;
+            {
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                let pid = ptr_id(inst_pipe);
+                rp.set_pipeline(inst_pipe);
+                // bind and draw
+                rp.set_bind_group(0, &self.globals_bg, &[]);
+                rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                rp.set_vertex_buffer(0, self.ruins_vb.slice(..));
+                rp.set_vertex_buffer(1, self.ruins_instances.slice(..));
+                rp.set_index_buffer(self.ruins_ib.slice(..), wgpu::IndexFormat::Uint16);
+                rp.draw_indexed(0..self.ruins_index_count, 0, 0..self.ruins_count);
+                self.draw_calls += 1;
+                let mid = 0;
+                let mesh = ptr_id(&self.ruins_ib);
+                self.batch_add_key_ids(pid, mid, mesh);
+            }
         }
         // Voxel meshes
         if !self.voxel_meshes.is_empty() && !pc_debug {
             rp.set_pipeline(&self.pipeline);
             rp.set_bind_group(0, &self.globals_bg, &[]);
             rp.set_bind_group(1, &self.voxel_model_bg, &[]);
+            let mut voxel_keys: Vec<[u32; 3]> = Vec::new();
             for m in self.voxel_meshes.values() {
+                let pid = ptr_id(&self.pipeline);
+                let mid = ptr_id(&self.voxel_model_bg);
+                let mesh = ptr_id(&m.ib);
+                voxel_keys.push([pid, mid, mesh]);
                 rp.set_vertex_buffer(0, m.vb.slice(..));
                 rp.set_index_buffer(m.ib.slice(..), wgpu::IndexFormat::Uint32);
                 rp.draw_indexed(0..m.idx, 0, 0..1);
                 self.draw_calls += 1;
+            }
+            for [pid, mid, mesh] in voxel_keys.into_iter() {
+                self.batch_add_key_ids(pid, mid, mesh);
             }
         }
         // Wizards and PC
@@ -109,8 +154,12 @@ impl Renderer {
                 && self.pc_palettes_bg.is_some()
                 && self.pc_index_count > 0;
             if pc_ready {
+                let pid = ptr_id(&self.wizard_pipeline);
+                let mid = ptr_id(&self.wizard_mat_bg);
+                let mesh = ptr_id(&self.wizard_ib);
                 self.draw_pc_only(&mut rp);
                 self.draw_calls += 1;
+                self.batch_add_key_ids(pid, mid, mesh);
             }
         } else if !self.has_zone_batches()
             && !pc_debug
@@ -118,11 +167,19 @@ impl Renderer {
                 .map(|v| v != "0")
                 .unwrap_or(true)
         {
+            let pid = ptr_id(&self.wizard_pipeline);
+            let mid = ptr_id(&self.wizard_mat_bg);
+            let mesh = ptr_id(&self.wizard_ib);
             self.draw_wizards(&mut rp);
             self.draw_calls += 1;
+            self.batch_add_key_ids(pid, mid, mesh);
             if self.pc_vb.is_some() {
+                let pid = ptr_id(&self.wizard_pipeline);
+                let mid = ptr_id(&self.wizard_mat_bg);
+                let mesh = ptr_id(&self.wizard_ib);
                 self.draw_pc_only(&mut rp);
                 self.draw_calls += 1;
+                self.batch_add_key_ids(pid, mid, mesh);
             }
         }
         // DK, Sorceress, Zombies
@@ -131,12 +188,20 @@ impl Renderer {
             && !self.has_zone_batches()
             && self.repl_buf.boss_status.is_some()
         {
+            let pid = ptr_id(&self.wizard_pipeline);
+            let mid = ptr_id(&self.dk_mat_bg);
+            let mesh = ptr_id(&self.dk_ib);
             self.draw_deathknight(&mut rp);
             self.draw_calls += 1;
+            self.batch_add_key_ids(pid, mid, mesh);
         }
         if self.sorc_count > 0 && !self.is_vox_onepath() && !self.has_zone_batches() {
+            let pid = ptr_id(&self.wizard_pipeline);
+            let mid = ptr_id(&self.sorc_mat_bg);
+            let mesh = ptr_id(&self.sorc_ib);
             self.draw_sorceress(&mut rp);
             self.draw_calls += 1;
+            self.batch_add_key_ids(pid, mid, mesh);
         }
         if !self.is_vox_onepath()
             && !self.has_zone_batches()
@@ -144,8 +209,12 @@ impl Renderer {
                 .map(|v| v != "0")
                 .unwrap_or(true)
         {
+            let pid = ptr_id(&self.wizard_pipeline);
+            let mid = ptr_id(&self.zombie_mat_bg);
+            let mesh = ptr_id(&self.zombie_ib);
             self.draw_zombies(&mut rp);
             self.draw_calls += 1;
+            self.batch_add_key_ids(pid, mid, mesh);
         }
         drop(rp);
         // SceneRead copy for bloom/ssgi if needed
@@ -175,6 +244,7 @@ impl Renderer {
             blit.draw(0..3, 0..1);
             self.draw_calls += 1;
         }
+        self.batch_end();
     }
     pub(crate) fn pass_build_hiz(&self, encoder: &mut wgpu::CommandEncoder) {
         if let Some(hiz) = &self.hiz {

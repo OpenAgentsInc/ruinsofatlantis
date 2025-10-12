@@ -200,6 +200,13 @@ pub struct Renderer {
     frame_counter: u32,
     // Stats
     draw_calls: u32,
+    // Main pass batching (for RenderStats)
+    #[allow(dead_code)]
+    main_batch_prev_key: Option<[u32; 3]>,
+    #[allow(dead_code)]
+    main_batch_count_curr: u32,
+    #[allow(dead_code)]
+    pub(crate) main_batch_count_last: u32,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
