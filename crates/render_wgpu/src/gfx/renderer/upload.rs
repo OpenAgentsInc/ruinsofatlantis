@@ -58,6 +58,15 @@ impl UploadRing {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn _cursor_for_test(&self) -> u64 {
+        self.cursor
+    }
+    #[cfg(test)]
+    pub(crate) fn _frame_ix_for_test(&self) -> usize {
+        self.frame
+    }
+
     #[inline]
     pub fn next_frame(&mut self) {
         self.frame = (self.frame + 1) % self.buffers.len();
@@ -117,6 +126,7 @@ impl UploadRing {
 #[cfg(test)]
 mod tests {
     use super::UploadRing;
+    use wgpu::util::DeviceExt;
 
     #[test]
     fn align_up_basics() {
@@ -125,5 +135,37 @@ mod tests {
         assert_eq!(UploadRing::align_up(1, 4), 4);
         assert_eq!(UploadRing::align_up(4, 4), 4);
         assert_eq!(UploadRing::align_up(5, 4), 8);
+    }
+
+    #[test]
+    fn next_frame_resets_cursor() {
+        // Create a minimal device for buffer creation
+        let instance = wgpu::Instance::default();
+        let adapter =
+            match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::LowPower,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+            })) {
+                Ok(a) => a,
+                Err(_) => return, // skip test if no adapter (CI-safe)
+            };
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("upload-test"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::default(),
+        }))
+        .expect("device");
+        let mut ring =
+            UploadRing::new(&device, 3, 1024, wgpu::BufferUsages::COPY_SRC, Some("ring"));
+        let before_frame = ring._frame_ix_for_test();
+        let data = [1u8; 128];
+        let _s = ring.allocate(&queue, &data, 256);
+        assert!(ring._cursor_for_test() >= 128);
+        ring.next_frame();
+        assert_eq!(ring._cursor_for_test(), 0);
+        assert_eq!(ring._frame_ix_for_test(), (before_frame + 1) % 3);
     }
 }

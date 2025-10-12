@@ -507,6 +507,18 @@ Validation
 
 ---
 
+## Phase‑Two — PR 39: UploadRing adoption (more hotspots)
+
+Changes
+- Switched per-frame uploads for `globals_buf`, `sky_buf`, `lights_buf`, and the normal-path `shard_model_buf` to use the staging `UploadRing` + `copy_buffer_to_buffer`.
+- Kept the debug-only shard UBO update inside the open pass via `queue.write_buffer` to avoid encoder borrows; no mixed write path for the same buffer in one frame.
+- Added unit test `next_frame_resets_cursor()` under `renderer/upload.rs` (device-backed; skips if no adapter) and exposed test-only getters.
+
+Validation
+- `xtask ci` green; no visual changes. Grep confirms no buffer uses both write paths in the same frame.
+
+---
+
 ## Phase‑Two — PR 38: Main adopts DrawList batching (behavior‑neutral)
 
 Changes
@@ -515,6 +527,17 @@ Changes
 
 Validation
 - `xtask ci` green locally; visuals unchanged. Perf HUD shows `batches ≤ draws` for Main.
+
+---
+
+## Phase‑Two — PR 40: RebuildBusCore<T> + tests
+
+Changes
+- Extracted a generic `RebuildBusCore<T>` with `new/register/run_all` and defined `type RebuildBus = RebuildBusCore<Renderer>`.
+- Added CPU-only unit test `listeners_run_in_order` using `RebuildBusCore<u32>` to verify deterministic order.
+
+Validation
+- `xtask ci` green.
 
 ## Phase‑Two — PR 35: Extract Post Suite (behavior‑neutral)
 
