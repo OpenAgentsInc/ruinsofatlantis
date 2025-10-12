@@ -1078,6 +1078,10 @@ pub fn render_impl(
     let present_only = std::env::var("RA_PRESENT_ONLY")
         .map(|v| v == "1")
         .unwrap_or(false);
+    // Legacy fallback toggle (skip graph Main/Present and use legacy path)
+    let use_legacy = std::env::var("RA_RENDER_LEGACY")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     // PR16: render all scene content to offscreen color; Present composites to swapchain.
     let render_view: &wgpu::TextureView = &r.attachments.scene_view;
     // Sky-only pass
@@ -1112,27 +1116,36 @@ pub fn render_impl(
         sky.draw(0..3, 0..1);
         r.draw_calls += 1;
     }
-    // Main pass with depth
-    log::debug!("pass: main");
-    // Capture validation across the entire main pass to surface concrete errors
-    #[cfg(not(target_arch = "wasm32"))]
-    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-    if !present_only {
+    // Main pass: graph when not legacy; otherwise legacy block remains below
+    if !use_legacy && !present_only {
+        use super::graph::{Graph, GraphBuilder, ImageKind};
+        use super::passes_graph::MainPass;
+        let mut gb = GraphBuilder::new();
+        let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
+        let color = gb.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size,
+            msaa: 1,
+        });
+        let depth = gb.image(ImageKind::Depth {
+            format: wgpu::TextureFormat::Depth32Float,
+            size,
+            msaa: 1,
+        });
+        MainPass::declare(&mut gb, color, depth);
+        let g = Graph::compile(gb);
+        g.execute(r, &mut encoder);
+    } else if !present_only {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
-        // Depth is required for the normal scene. In debug-isolate we only
-        // omit depth when the picker is active and we're not drawing the PC.
-        // Otherwise, keep depth so pipelines that expect it are compatible.
         let want_depth = if pc_debug {
-            // In debug: use depth unless the picker overlay is active.
             !r.is_picker_batches()
         } else {
-            // In normal runs: always use depth for the main pass.
             true
         };
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("main-pass"),
+            label: Some("main-pass(legacy)"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: render_view,
                 resolve_target: None,
