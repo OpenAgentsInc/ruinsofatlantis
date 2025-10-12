@@ -86,12 +86,12 @@ impl DrawList {
         let mut prev_pipe: Option<u32> = None;
         let mut prev_pair: Option<(u32, u32)> = None;
         for it in &self.items {
-            if prev_pipe.map_or(true, |p| p != it.key.pipeline_id) {
+            if prev_pipe != Some(it.key.pipeline_id) {
                 pipeline_binds += 1;
                 prev_pipe = Some(it.key.pipeline_id);
             }
             let pair = (it.key.pipeline_id, it.key.material_id);
-            if prev_pair.map_or(true, |pp| pp != pair) {
+            if prev_pair != Some(pair) {
                 bg_binds += 1;
                 prev_pair = Some(pair);
             }
