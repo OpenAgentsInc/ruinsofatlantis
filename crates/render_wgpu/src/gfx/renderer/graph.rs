@@ -516,6 +516,26 @@ impl Graph {
                         }
                     }
                 }
+                // Compute peak memory based on pool slots
+                let mut peak_bytes: u64 = 0;
+                for e in &pool {
+                    let (fmt, sz, msaa) = match e.kind {
+                        ImageKind::Color { format, size, msaa } => (format, size, msaa),
+                        ImageKind::Depth {
+                            format: _,
+                            size,
+                            msaa,
+                        } => (wgpu::TextureFormat::Rgba8Unorm, size, msaa),
+                    };
+                    let bpp = match fmt {
+                        wgpu::TextureFormat::Rgba16Float => 8u64,
+                        wgpu::TextureFormat::Rgba8Unorm => 4u64,
+                        _ => 4u64,
+                    };
+                    peak_bytes =
+                        peak_bytes.saturating_add(sz.x as u64 * sz.y as u64 * (msaa as u64) * bpp);
+                }
+                renderer.graph_peak_mem_bytes = peak_bytes;
             } else {
                 // Instantiate textures per descriptor (no aliasing)
                 for (ix, kind) in self.images.iter().enumerate() {
