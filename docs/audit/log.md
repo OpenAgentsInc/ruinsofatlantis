@@ -403,7 +403,7 @@ Validation
 
 Changes
 - Adopted `BgCache` for zombie palettes bind groups in the render path to avoid rebuilding when buffer identity is unchanged across frames.
-- Left a TODO to expand to material BGs and post‑FX once those are wired through passes.
+- Adopted `BgCache` for resize‑recreated BGs via `rebuild_bus` (Present, Post AO, SSGI depth/scene, SSR depth/scene) keyed by view/sampler ids.
 
 Validation
 - Visual parity; cache keys stable; clippy/tests green.
@@ -413,8 +413,8 @@ Validation
 ## Phase‑Two — PR 25: UploadRing in more hotspots
 
 Changes
-- Integrated `UploadRing` for DK instance updates (staged copy) and kept uniform writes direct where encoder borrowing would conflict.
-- Added `uploads.next_frame()` at the start of each frame before recording commands.
+- Integrated `UploadRing` for DK instance updates (staged copy) and kept uniform writes direct where encoder borrowing would conflict. Considered palette/instance updates; deferred until they move under passes to avoid borrow/encoder lifetime issues.
+- `uploads.next_frame()` runs at frame start before recording commands.
 
 Validation
 - Visual parity; no mixed update path for the same buffer in a frame; clippy/tests green.

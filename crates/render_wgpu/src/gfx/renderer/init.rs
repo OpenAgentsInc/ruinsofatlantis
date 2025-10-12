@@ -2152,106 +2152,161 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         .rebuild_bus
         .register(|r: &mut crate::gfx::Renderer| {
             // Present
-            r.present_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("present-bg"),
-                layout: &r.present_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&r.attachments.scene_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-                    },
+            let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                &r.present_bgl,
+                &[
+                    &r.attachments.scene_view as *const _ as u64,
+                    &r.point_sampler as *const _ as u64,
+                    &r.attachments.depth_view as *const _ as u64,
                 ],
-            });
-            // Post AO (depth + non-filtering sampler)
-            r.post_ao_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("post-ao-bg"),
-                layout: &r.post_ao_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-                    },
-                ],
-            });
-            // SSGI
-            r.ssgi_depth_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ssgi-depth-bg"),
-                layout: &r.ssgi_depth_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-                    },
-                ],
-            });
-            r.ssgi_scene_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ssgi-scene-bg"),
-                layout: &r.ssgi_scene_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(
-                            &r.attachments.scene_read_view,
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&r._post_sampler),
-                    },
-                ],
-            });
-            // SSR
-            if let Some(h) = &r.hiz {
-                r.ssr_depth_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("ssr-depth-bg"),
-                    layout: &r.ssr_depth_bgl,
+            );
+            r.present_bg = r.bg_cache.get_or_create(key, || {
+                r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("present-bg"),
+                    layout: &r.present_bgl,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&h.linear_view),
+                            resource: wgpu::BindingResource::TextureView(&r.attachments.scene_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                        },
+                    ],
+                })
+            });
+            // Post AO (depth + non-filtering sampler)
+            let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                &r.post_ao_bgl,
+                &[
+                    &r.attachments.depth_view as *const _ as u64,
+                    &r.point_sampler as *const _ as u64,
+                ],
+            );
+            r.post_ao_bg = r.bg_cache.get_or_create(key, || {
+                r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("post-ao-bg"),
+                    layout: &r.post_ao_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
                             resource: wgpu::BindingResource::Sampler(&r.point_sampler),
                         },
                     ],
+                })
+            });
+            // SSGI
+            let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                &r.ssgi_depth_bgl,
+                &[
+                    &r.attachments.depth_view as *const _ as u64,
+                    &r.point_sampler as *const _ as u64,
+                ],
+            );
+            r.ssgi_depth_bg = r.bg_cache.get_or_create(key, || {
+                r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ssgi-depth-bg"),
+                    layout: &r.ssgi_depth_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                        },
+                    ],
+                })
+            });
+            let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                &r.ssgi_scene_bgl,
+                &[
+                    &r.attachments.scene_read_view as *const _ as u64,
+                    &r._post_sampler as *const _ as u64,
+                ],
+            );
+            r.ssgi_scene_bg = r.bg_cache.get_or_create(key, || {
+                r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ssgi-scene-bg"),
+                    layout: &r.ssgi_scene_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(
+                                &r.attachments.scene_read_view,
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                        },
+                    ],
+                })
+            });
+            // SSR
+            if let Some(h) = &r.hiz {
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &r.ssr_depth_bgl,
+                    &[
+                        &h.linear_view as *const _ as u64,
+                        &r.point_sampler as *const _ as u64,
+                    ],
+                );
+                r.ssr_depth_bg = r.bg_cache.get_or_create(key, || {
+                    r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("ssr-depth-bg"),
+                        layout: &r.ssr_depth_bgl,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(&h.linear_view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                            },
+                        ],
+                    })
                 });
             }
-            r.ssr_scene_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("ssr-scene-bg"),
-                layout: &r.ssr_scene_bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(
-                            &r.attachments.scene_read_view,
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&r._post_sampler),
-                    },
+            let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                &r.ssr_scene_bgl,
+                &[
+                    &r.attachments.scene_read_view as *const _ as u64,
+                    &r._post_sampler as *const _ as u64,
                 ],
+            );
+            r.ssr_scene_bg = r.bg_cache.get_or_create(key, || {
+                r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ssr-scene-bg"),
+                    layout: &r.ssr_scene_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(
+                                &r.attachments.scene_read_view,
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                        },
+                    ],
+                })
             });
         });
 
