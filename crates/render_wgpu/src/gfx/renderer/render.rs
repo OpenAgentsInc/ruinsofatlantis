@@ -2271,6 +2271,10 @@ pub fn render_impl(
         log::error!("validation (main pass): {:?}", e);
         return Ok(());
     }
+    // Present any acquired frame from the Present pass
+    if let Some(frame) = r.take_pending_frame() {
+        frame.present();
+    }
     Ok(())
 }
 

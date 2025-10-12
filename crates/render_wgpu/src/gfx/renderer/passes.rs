@@ -13,6 +13,13 @@
 use crate::gfx::Renderer;
 
 impl Renderer {
+    pub(crate) fn set_pending_frame(&mut self, frame: wgpu::SurfaceTexture) {
+        self.pending_frame = Some(frame);
+    }
+
+    pub(crate) fn take_pending_frame(&mut self) -> Option<wgpu::SurfaceTexture> {
+        self.pending_frame.take()
+    }
     pub(crate) fn pass_main(&mut self, encoder: &mut wgpu::CommandEncoder) {
         // Match legacy behavior: render to offscreen scene_view with optional depth
         let pc_debug = std::env::var("RA_PC_DEBUG")

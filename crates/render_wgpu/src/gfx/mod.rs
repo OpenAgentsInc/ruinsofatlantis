@@ -130,6 +130,8 @@ pub struct Renderer {
     bg_cache: renderer::bindgroups::BgCache,
     // Per-pass render stats (last frame)
     render_stats: Vec<renderer::RenderStats>,
+    // Surface frame acquired by Present pass, presented after submit
+    pending_frame: Option<wgpu::SurfaceTexture>,
     // Resize/rebuild notification bus
     pub(crate) rebuild_bus: renderer::rebuild_bus::RebuildBus,
     // Externalized client updates (controls + collision)

@@ -85,7 +85,8 @@ impl PresentPass {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
                 ctx.renderer.pass_present(ctx.encoder, &swap_view);
-                frame.present();
+                // Defer present until after submission; store the frame on the renderer
+                ctx.renderer.set_pending_frame(frame);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Present",
