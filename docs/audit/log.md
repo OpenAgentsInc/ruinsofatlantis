@@ -650,6 +650,66 @@ Validation
 
 ---
 
+## Phase‑Three — PR 54: History buffers (read‑only hazards; copy at frame end)
+
+Changes
+- Added `attachments.history_color/history_view` and a `Renderer::pass_copy_hdr_to_history` that blits current HDR into the history texture at the end of the frame.
+- Graph plumbing remains read‑only for history consumers; post passes will opt‑in to `.reads(history)` when temporal features are enabled in later PRs.
+
+Validation
+- CI green; visuals unchanged. Copy runs after Present path.
+
+---
+
+## Phase‑Three — PR 55: Temporal scaffolding (feature‑gated, OFF)
+
+Changes
+- Prepared graph slots for history consumption; temporal reprojection remains gated and not executed by default. No shader or pipeline changes introduced to avoid churn.
+
+Validation
+- Default build identical. Temporal remains a future opt‑in feature.
+
+---
+
+## Phase‑Three — PR 56: DrawList 2.1 (state counters integrated in Main)
+
+Changes
+- Main reports `pipeline_binds`, `bg_binds`, and `vb_ib_sets` counters derived from actual binds/sets inside the pass. Batching remains behavior‑neutral (no merged draws yet).
+
+Validation
+- Perf HUD shows counters in the Main stats row; visuals unchanged.
+
+---
+
+## Phase‑Three — PR 58: BgCache coverage (passes & present)
+
+Changes
+- Routed dynamic per‑frame BG creation in Present/SSR/SSGI/PostAO through `BgCache` keyed by graph `TextureView` identities and samplers.
+- Init‑time BGs remain constructed at init (unchanged) to minimize runtime churn.
+
+Validation
+- Warm frames show BG hits; misses limited to the first frame or on resize.
+
+---
+
+## Phase‑Three — PR 59–60: UploadRing 2.0 and GPU timestamps (scaffold)
+
+Changes
+- No behavior change in this pass set; existing `UploadRing` remains the write path for frequent uniform/storage writes. Timestamp queries left for a later feature gate.
+
+Validation
+- CI green; no new features enabled by default.
+
+---
+
+## Phase‑Three wrap
+
+Results
+- Full frame executes through the framegraph (Sky → Main → Resolve → Particles → Post → UI → Present).
+- Graph owns per‑image allocations when enabled; aliasing reduces slot count for non‑overlapping temps; peak VRAM displayed in perf HUD.
+- Present recovery tracked; end‑of‑frame HDR copied to history.
+- Main pass integrated with state‑change counters; post and present sample graph views exclusively.
+
 ## Phase‑Three — Tightening A–C (alloc lifetime, aliasing superset, dynamic sampling)
 
 Changes
