@@ -1806,7 +1806,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         size: PhysicalSize::new(w, h),
         max_dim,
         attachments,
-        pipelines: crate::gfx::renderer::pipelines::Pipelines::default(),
+        pipelines: crate::gfx::renderer::pipelines::Pipelines,
         rebuild_bus: crate::gfx::renderer::rebuild_bus::RebuildBus::new(),
         uploads: crate::gfx::renderer::upload::UploadRing::new(
             &device_clone,

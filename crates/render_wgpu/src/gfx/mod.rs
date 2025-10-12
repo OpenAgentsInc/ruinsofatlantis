@@ -142,6 +142,7 @@ pub struct Renderer {
     hiz: Option<hiz::HiZPyramid>,
 
     // --- Pipelines & BGLs ---
+    #[allow(dead_code)]
     pipelines: renderer::pipelines::Pipelines,
     pipeline: wgpu::RenderPipeline,
     inst_pipeline: wgpu::RenderPipeline,

@@ -223,6 +223,7 @@ impl<'a> ExecCtx<'a> {
         &self.renderer.config
     }
     #[inline]
+    #[allow(dead_code)]
     pub fn pipelines(&self) -> &super::pipelines::Pipelines {
         // Typed pipelines accessor (backed by Renderer field). No behavior change yet.
         &self.renderer.pipelines
