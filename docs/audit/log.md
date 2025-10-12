@@ -260,6 +260,18 @@ Validation
 
 ---
 
+## Phase‑Two — PR 20: Centralized resize/rebuild bus
+
+Changes
+- Added `gfx/renderer/rebuild_bus.rs` providing a simple `RebuildBus` to notify subsystems on resize/attachment changes.
+- Renderer now owns `rebuild_bus` and registers listeners during init to rebuild all sized bind groups (Present, Post AO, SSGI, SSR) from current `attachments` and samplers.
+- Updated `resize_impl` to rebuild attachments/Hi‑Z/G‑Buffer, then dispatch the bus once instead of hand‑recreating each bind group inline.
+
+Validation
+- Behavior remains the same; only the call site changes. clippy/tests are green.
+
+---
+
 ## Phase‑Two — PR 16: Post suite + offscreen image (prep)
 
 Changes

@@ -124,6 +124,8 @@ pub struct Renderer {
     max_dim: u32,
     // Consolidated attachments group for depth + offscreen targets
     attachments: Attachments,
+    // Resize/rebuild notification bus
+    pub(crate) rebuild_bus: renderer::rebuild_bus::RebuildBus,
     // Externalized client updates (controls + collision)
     scene_inputs: client_runtime::SceneInputs,
 

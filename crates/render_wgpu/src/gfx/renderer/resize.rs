@@ -35,72 +35,7 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
     r.attachments
         .rebuild(&r.device, r.config.width, r.config.height);
 
-    // Rebuild bind groups referencing resized textures
-    r.present_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("present-bg"),
-        layout: &r.present_bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&r.attachments.scene_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                // Must match NonFiltering sampler type in the BGL for WebGPU
-                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-            },
-        ],
-    });
-    r.post_ao_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("post-ao-bg"),
-        layout: &r.post_ao_bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-            },
-        ],
-    });
-    r.ssgi_depth_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("ssgi-depth-bg"),
-        layout: &r.ssgi_depth_bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-            },
-        ],
-    });
-    r.ssgi_scene_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("ssgi-scene-bg"),
-        layout: &r.ssgi_scene_bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&r.attachments.scene_read_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
-            },
-        ],
-    });
+    // Rebuild bind groups referencing resized textures via centralized bus
     // Lighting M1 resources
     r.gbuffer = Some(gbuffer::GBuffer::create(
         &r.device,
@@ -112,34 +47,11 @@ pub fn resize_impl(r: &mut Renderer, new_size: PhysicalSize<u32>) {
         r.config.width,
         r.config.height,
     ));
-    if let Some(h) = &r.hiz {
-        r.ssr_depth_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("ssr-depth-bg"),
-            layout: &r.ssr_depth_bgl,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&h.linear_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&r.point_sampler),
-                },
-            ],
-        });
-    }
-    r.ssr_scene_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("ssr-scene-bg"),
-        layout: &r.ssr_scene_bgl,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&r.attachments.scene_read_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&r._post_sampler),
-            },
-        ],
-    });
+    // Temporarily move the bus out to avoid borrow conflicts when passing &mut r
+    let bus = std::mem::replace(
+        &mut r.rebuild_bus,
+        crate::gfx::renderer::rebuild_bus::RebuildBus::new(),
+    );
+    bus.run_all(r);
+    r.rebuild_bus = bus;
 }

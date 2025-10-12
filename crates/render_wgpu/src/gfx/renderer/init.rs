@@ -1804,6 +1804,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         size: PhysicalSize::new(w, h),
         max_dim,
         attachments,
+        rebuild_bus: crate::gfx::renderer::rebuild_bus::RebuildBus::new(),
         gbuffer: Some(gbuffer),
         hiz: Some(hiz),
         pipeline,
@@ -2135,6 +2136,113 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     renderer.controller_state.profile = prof;
     // Start in Cursor mode (no mouselook) to match WoW default
     renderer.controller_state.mode = ecs_core::components::ControllerMode::Cursor;
+    // Register resize/rebuild listeners so sized bind groups stay in sync on resize
+    renderer
+        .rebuild_bus
+        .register(|r: &mut crate::gfx::Renderer| {
+            // Present
+            r.present_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("present-bg"),
+                layout: &r.present_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&r.attachments.scene_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                    },
+                ],
+            });
+            // Post AO (depth + non-filtering sampler)
+            r.post_ao_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("post-ao-bg"),
+                layout: &r.post_ao_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                    },
+                ],
+            });
+            // SSGI
+            r.ssgi_depth_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("ssgi-depth-bg"),
+                layout: &r.ssgi_depth_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&r.attachments.depth_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                    },
+                ],
+            });
+            r.ssgi_scene_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("ssgi-scene-bg"),
+                layout: &r.ssgi_scene_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(
+                            &r.attachments.scene_read_view,
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                    },
+                ],
+            });
+            // SSR
+            if let Some(h) = &r.hiz {
+                r.ssr_depth_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("ssr-depth-bg"),
+                    layout: &r.ssr_depth_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&h.linear_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&r.point_sampler),
+                        },
+                    ],
+                });
+            }
+            r.ssr_scene_bg = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("ssr-scene-bg"),
+                layout: &r.ssr_scene_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(
+                            &r.attachments.scene_read_view,
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&r._post_sampler),
+                    },
+                ],
+            });
+        });
 
     // If a demo voxel grid was created, enqueue all chunks once so it renders immediately
     #[cfg(feature = "vox_onepath_demo")]
