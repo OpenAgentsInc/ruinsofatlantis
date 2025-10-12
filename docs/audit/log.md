@@ -479,3 +479,20 @@ Changes
 Validation
 - Visual parity.
 - clippy/tests green.
+
+---
+
+## Phase‑Two — PR 35: Extract Post Suite (behavior‑neutral)
+
+Changes
+- Added post pass helpers in `gfx/renderer/passes.rs`:
+  - `pass_ao`, `pass_ssgi`, `pass_ssr`, and new `pass_bloom` target `attachments.scene_view` and use existing BGs/pipelines; `pass_blit_scene_read` remains to prep `SceneRead` when needed.
+- Declared post passes in `gfx/renderer/passes_graph.rs` with per‑pass `RenderStats`:
+  - `PostAoPass` (reads depth, writes color), `BlitSceneReadPass` (no graph IO; copies color→read), `SsgiPass` (reads depth, writes color), `SsrPass` (reads depth, writes color), `BloomPass` (writes color).
+- Wired graph order in `gfx/renderer/render.rs`:
+  - `Main → Particles → UI → PostAO → BlitSceneRead → SSGI → SSR → Bloom → Present`.
+- Legacy monolith code left intact; graph path now executes post passes. Visuals unchanged.
+
+Validation
+- `xtask ci` green; all unit tests and WGSL validation pass.
+- Manual smoke: post overlays render as before; perf HUD shows Post rows with ms/draws.

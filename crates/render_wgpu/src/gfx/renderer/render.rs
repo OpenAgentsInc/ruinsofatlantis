@@ -2244,7 +2244,10 @@ pub fn render_impl(
             return Ok(());
         }
         use super::graph::{Graph, GraphBuilder, ImageKind};
-        use super::passes_graph::{ParticlesPass, PresentPass, UiPass};
+        use super::passes_graph::{
+            BlitSceneReadPass, BloomPass, ParticlesPass, PostAoPass, PresentPass, SsgiPass,
+            SsrPass, UiPass,
+        };
         let mut gb = GraphBuilder::new();
         let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
         let color = gb.image(ImageKind::Color {
@@ -2259,6 +2262,12 @@ pub fn render_impl(
         });
         ParticlesPass::declare(&mut gb, color, depth);
         UiPass::declare(&mut gb, color);
+        // Post suite (behavior-neutral ordering)
+        PostAoPass::declare(&mut gb, color, depth);
+        BlitSceneReadPass::declare(&mut gb, color);
+        SsgiPass::declare(&mut gb, color, depth);
+        SsrPass::declare(&mut gb, color, depth);
+        BloomPass::declare(&mut gb, color);
         PresentPass::declare(&mut gb, color);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);

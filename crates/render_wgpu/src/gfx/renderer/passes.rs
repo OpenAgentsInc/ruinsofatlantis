@@ -296,6 +296,30 @@ impl Renderer {
         post.draw(0..3, 0..1);
     }
 
+    pub(crate) fn pass_bloom(&self, encoder: &mut wgpu::CommandEncoder) {
+        if !self.enable_bloom {
+            return;
+        }
+        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("bloom-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.attachments.scene_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        rp.set_pipeline(&self.bloom_pipeline);
+        rp.set_bind_group(0, &self.bloom_bg, &[]);
+        rp.draw(0..3, 0..1);
+    }
+
     pub(crate) fn pass_present(
         &self,
         encoder: &mut wgpu::CommandEncoder,

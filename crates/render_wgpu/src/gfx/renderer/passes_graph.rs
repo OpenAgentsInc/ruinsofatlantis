@@ -174,3 +174,113 @@ impl UiPass {
             .writes(color);
     }
 }
+
+pub struct PostAoPass;
+impl PostAoPass {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+        let _ = builder
+            .pass("PostAO", |ctx: &mut ExecCtx| {
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
+                ctx.renderer.pass_ao(ctx.encoder);
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "PostAO",
+                    draws: 1,
+                    batches: 1,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
+            })
+            .reads(depth)
+            .writes(color);
+    }
+}
+
+pub struct BlitSceneReadPass;
+impl BlitSceneReadPass {
+    pub fn declare(builder: &mut GraphBuilder, _color: Handle<Img>) {
+        let _ = builder.pass("BlitSceneRead", |ctx: &mut ExecCtx| {
+            // Copy SceneColor -> SceneRead when SSR/SSGI need it; no IO declared in graph yet
+            ctx.renderer.pass_blit_scene_read(ctx.encoder);
+            // No stats row; folded into post stats
+        });
+    }
+}
+
+pub struct SsgiPass;
+impl SsgiPass {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+        let _ = builder
+            .pass("SSGI", |ctx: &mut ExecCtx| {
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
+                ctx.renderer.pass_ssgi(ctx.encoder);
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "SSGI",
+                    draws: 1,
+                    batches: 1,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
+            })
+            .reads(depth)
+            .writes(color);
+    }
+}
+
+pub struct SsrPass;
+impl SsrPass {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+        let _ = builder
+            .pass("SSR", |ctx: &mut ExecCtx| {
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
+                ctx.renderer.pass_ssr(ctx.encoder);
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "SSR",
+                    draws: 1,
+                    batches: 1,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
+            })
+            .reads(depth)
+            .writes(color);
+    }
+}
+
+pub struct BloomPass;
+impl BloomPass {
+    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
+        let _ = builder
+            .pass("Bloom", |ctx: &mut ExecCtx| {
+                let h0 = ctx.renderer.bg_cache.hits;
+                let m0 = ctx.renderer.bg_cache.misses;
+                let t0 = std::time::Instant::now();
+                ctx.renderer.pass_bloom(ctx.encoder);
+                let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
+                let stats = crate::gfx::renderer::RenderStats {
+                    name: "Bloom",
+                    draws: 1,
+                    batches: 1,
+                    cpu_ms,
+                    bg_hits: ctx.renderer.bg_cache.hits.saturating_sub(h0),
+                    bg_misses: ctx.renderer.bg_cache.misses.saturating_sub(m0),
+                };
+                ctx.renderer.render_stats.push(stats);
+            })
+            .writes(color);
+    }
+}
