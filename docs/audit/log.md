@@ -190,14 +190,30 @@ Validation
 
 ---
 
-## Phase‑Two — PR 15: Particles + UI (initial extraction)
+## Phase‑Two — PR 15: Particles + UI (execute via graph)
 
 Changes
-- Extended `gfx/renderer/passes_graph.rs` with `ParticlesPass::declare(color, depth)` and `UiPass::declare(color)` (no‑op exec closures for now) so their IO is modeled.
-- Kept render/present behavior unchanged (legacy path) while we prepare to execute these passes in a later PR.
+- Added pass exec closures in `gfx/renderer/passes_graph.rs`:
+  - `ParticlesPass`: opens a render pass targeting offscreen scene color and calls `renderer.draw_particles(...)` when `fx_count > 0`.
+  - `UiPass`: calls `hud.queue(device, queue)` then draws the HUD into offscreen scene color.
+- Extended `renderer::graph::ExecCtx` to include `swap_view` and minimal accessors `device()`, `queue()`, `surface_config()`.
+- Implemented `Graph::execute(renderer, encoder, swap_view)` to iterate and run pass closures.
+- Replaced the temporary `FrameGraph::run_particles_ui` helper (removed) with a real graph build/execute in `renderer::render`.
 
 Validation
-- CI green; visuals unchanged.
+- CI green locally; visuals unchanged (particles and HUD still render correctly).
+
+---
+
+## Phase‑Two — PR 16: Offscreen hdr_color + real Present pass
+
+Changes
+- Switched the scene to render to offscreen (`attachments.scene_view`) unconditionally in `renderer::render` (Sky/Main/overlays paths now target offscreen).
+- Added a real `PresentPass` exec closure in `passes_graph.rs` that composites offscreen color to the swapchain using the existing `present_pipeline`/`present_bg`.
+- `renderer::render` now builds a per‑frame graph with `Particles → UI → Present` and calls `Graph::execute`, then submits and presents.
+
+Validation
+- CI green locally; behavior parity maintained. Present path now explicitly composites offscreen → swapchain.
 
 ---
 

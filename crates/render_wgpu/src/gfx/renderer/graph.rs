@@ -189,6 +189,7 @@ pub struct PassDecl {
 pub struct ExecCtx<'a> {
     pub renderer: &'a mut crate::gfx::Renderer,
     pub encoder: &'a mut wgpu::CommandEncoder,
+    pub swap_view: &'a wgpu::TextureView,
 }
 
 impl<'a> ExecCtx<'a> {
@@ -196,6 +197,22 @@ impl<'a> ExecCtx<'a> {
     #[inline]
     pub fn attachments(&mut self) -> &mut super::attachments::Attachments {
         &mut self.renderer.attachments
+    }
+    // Minimal accessors to avoid reaching into renderer directly from passes
+    #[allow(dead_code)]
+    #[inline]
+    pub fn device(&self) -> &wgpu::Device {
+        &self.renderer.device
+    }
+    #[allow(dead_code)]
+    #[inline]
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.renderer.queue
+    }
+    #[allow(dead_code)]
+    #[inline]
+    pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
+        &self.renderer.config
     }
     // Placeholder for future pipelines() accessor when adopted in ExecCtx
 }
@@ -283,11 +300,20 @@ impl Graph {
         }
     }
 
-    pub fn execute(self, renderer: &mut crate::gfx::Renderer) {
-        // Monolith path: call existing render_impl inside a single encoder.
-        // Keep behavior parity; ignore per-pass exec closures for now except Monolith.
-        let _ = super::render::render_impl(renderer, None);
-        let _ = self; // suppress unused until passes are wired
+    pub fn execute(
+        mut self,
+        renderer: &mut crate::gfx::Renderer,
+        encoder: &mut wgpu::CommandEncoder,
+        swap_view: &wgpu::TextureView,
+    ) {
+        for p in self.passes.drain(..) {
+            let mut ctx = ExecCtx {
+                renderer,
+                encoder,
+                swap_view,
+            };
+            (p.exec)(&mut ctx);
+        }
     }
 }
 
@@ -309,60 +335,11 @@ impl FrameGraph {
         // Monolith pass: call the legacy render implementation
         builder.pass("Monolith", |_ctx| { /* forwarder; see execute() */ });
         let g = Graph::compile(builder);
-        g.execute(renderer);
+        // Forward to legacy path to keep behavior parity
+        let _ = super::render::render_impl(renderer, None);
     }
 
-    /// Execute Particles and UI using the provided encoder and views.
-    pub fn run_particles_ui(
-        renderer: &mut crate::gfx::Renderer,
-        encoder: &mut wgpu::CommandEncoder,
-        direct_present: bool,
-        swap_view: &wgpu::TextureView,
-    ) {
-        if renderer.fx_count > 0 {
-            if direct_present {
-                let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("particles-pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: swap_view,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-                renderer.draw_particles(&mut rp);
-            } else {
-                let offscreen_view = renderer
-                    .attachments
-                    .scene_color
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-                let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("particles-pass-offscreen"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &offscreen_view,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-                renderer.draw_particles(&mut rp);
-            }
-        }
-        renderer.hud.queue(&renderer.device, &renderer.queue);
-        renderer.hud.draw(encoder, swap_view);
-    }
+    // helper removed; Particles/UI now execute via pass closures
 }
 
 #[cfg(test)]

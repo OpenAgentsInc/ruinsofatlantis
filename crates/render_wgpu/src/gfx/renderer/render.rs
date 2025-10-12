@@ -1067,11 +1067,8 @@ pub fn render_impl(
     let present_only = std::env::var("RA_PRESENT_ONLY")
         .map(|v| v == "1")
         .unwrap_or(false);
-    let render_view: &wgpu::TextureView = if r.direct_present {
-        &view
-    } else {
-        &r.attachments.scene_view
-    };
+    // PR16: render all scene content to offscreen color; Present composites to swapchain.
+    let render_view: &wgpu::TextureView = &r.attachments.scene_view;
     // Sky-only pass
     log::debug!("pass: sky");
     if !present_only {
@@ -1673,12 +1670,7 @@ pub fn render_impl(
             view_proj,
             &bar_entries,
         );
-        let bars_target = if r.direct_present {
-            &view
-        } else {
-            &r.attachments.scene_view
-        };
-        r.bars.draw(&mut encoder, bars_target);
+        r.bars.draw(&mut encoder, &r.attachments.scene_view);
     }
 
     // Damage numbers: update, queue, draw (independent of RA_OVERLAYS to ensure visibility)
@@ -1691,12 +1683,7 @@ pub fn render_impl(
             r.config.height,
             view_proj,
         );
-        let damage_target = if r.direct_present {
-            &view
-        } else {
-            &r.attachments.scene_view
-        };
-        r.damage.draw(&mut encoder, damage_target);
+        r.damage.draw(&mut encoder, &r.attachments.scene_view);
     }
 
     #[cfg(test)]
@@ -1764,11 +1751,7 @@ pub fn render_impl(
             }
         }
         if !wiz_alive.is_empty() {
-            let target_view = if r.direct_present {
-                &view
-            } else {
-                &r.attachments.scene_view
-            };
+            let target_view = &r.attachments.scene_view;
             r.nameplates.queue_labels(
                 &r.device,
                 &r.queue,
@@ -1798,11 +1781,7 @@ pub fn render_impl(
             }
         }
         if !npc_positions.is_empty() {
-            let target_view = if r.direct_present {
-                &view
-            } else {
-                &r.attachments.scene_view
-            };
+            let target_view = &r.attachments.scene_view;
             r.nameplates_npc.queue_npc_labels(
                 &r.device,
                 &r.queue,
@@ -1821,11 +1800,7 @@ pub fn render_impl(
         {
             let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);
             let pos = head.truncate();
-            let target_view = if r.direct_present {
-                &view
-            } else {
-                &r.attachments.scene_view
-            };
+            let target_view = &r.attachments.scene_view;
             r.nameplates_npc.queue_npc_labels(
                 &r.device,
                 &r.queue,
@@ -2204,8 +2179,28 @@ pub fn render_impl(
         }
         // Hint overlay removed for CC demo and general scenes.
     }
-    // Execute Particles + UI via the framegraph helper (behavior-parity path)
-    super::graph::FrameGraph::run_particles_ui(r, &mut encoder, r.direct_present, &view);
+    // Execute Particles + UI + Present via the framegraph
+    {
+        use super::graph::{Graph, GraphBuilder, ImageKind};
+        use super::passes_graph::{ParticlesPass, PresentPass, UiPass};
+        let mut gb = GraphBuilder::new();
+        let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
+        let color = gb.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size,
+            msaa: 1,
+        });
+        let depth = gb.image(ImageKind::Depth {
+            format: wgpu::TextureFormat::Depth32Float,
+            size,
+            msaa: 1,
+        });
+        ParticlesPass::declare(&mut gb, color, depth);
+        UiPass::declare(&mut gb, color);
+        PresentPass::declare(&mut gb, color);
+        let g = Graph::compile(gb);
+        g.execute(r, &mut encoder, &view);
+    }
     r.queue.submit(Some(encoder.finish()));
     frame.present();
     // Pop the validation scope after submit; this captures any errors raised
