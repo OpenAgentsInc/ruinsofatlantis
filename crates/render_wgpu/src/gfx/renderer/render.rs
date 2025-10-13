@@ -2297,12 +2297,12 @@ pub fn render_impl(
         SsgiPass::declare(&mut gb, post, hdr, depth);
         SsrPass::declare(&mut gb, post, hdr, depth);
         BloomPass::declare(&mut gb, post);
+        super::passes_graph::HistoryCopyPass::declare(&mut gb, post);
         UiPass::declare(&mut gb, post);
         PresentPass::declare(&mut gb, post);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
-        // Copy HDR to history at end of frame (behavior-neutral)
-        r.pass_copy_hdr_to_history(&mut encoder);
+        // History copy handled via graph pass
     }
     r.queue.submit(Some(encoder.finish()));
     // Pop the validation scope after submit; this captures any errors raised

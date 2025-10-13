@@ -116,9 +116,9 @@ impl MainPass {
                     (ctx.view_color(hdr).clone(), None)
                 };
                 let depth_view = ctx.view_depth(depth).clone();
-                // Begin a pass to honor resolve target; then delegate draws
-                let _rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("main-pass(begin)"),
+                // Draw inside the same pass so resolve_target is honored
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("main-pass(graph)"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &color_view,
                         resolve_target: resolve_to.as_ref(),
@@ -139,9 +139,8 @@ impl MainPass {
                     occlusion_query_set: None,
                     timestamp_writes: None,
                 });
-                drop(_rp);
-                ctx.renderer
-                    .pass_main_to_views(ctx.encoder, &color_view, Some(&depth_view));
+                ctx.renderer.main_draw_into(&mut rp);
+                drop(rp);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let draws = ctx.renderer.draw_calls.saturating_sub(dc0);
                 let stats = crate::gfx::renderer::RenderStats {
@@ -508,6 +507,63 @@ impl BlitHdrToPostPass {
             })
             .reads(hdr)
             .writes(post);
+    }
+}
+
+pub struct HistoryCopyPass;
+impl HistoryCopyPass {
+    pub fn declare(builder: &mut GraphBuilder, src: Handle<Img>) {
+        let _ = builder
+            .pass("HistoryCopy", move |ctx: &mut ExecCtx| {
+                let src_ref = ctx.view_color(src);
+                let src_owned = src_ref.clone();
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.present_bgl,
+                    &[
+                        src_ref as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("history-copy-bg"),
+                            layout: &ctx.renderer.present_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&src_owned),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("history-copy-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &ctx.renderer.attachments.history_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.blit_scene_read_pipeline);
+                rp.set_bind_group(0, &bg, &[]);
+                rp.draw(0..3, 0..1);
+            })
+            .reads(src);
     }
 }
 

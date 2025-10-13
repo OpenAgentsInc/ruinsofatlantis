@@ -52,14 +52,6 @@ impl Renderer {
         color_view: &wgpu::TextureView,
         depth_view: Option<&wgpu::TextureView>,
     ) {
-        let pc_debug = std::env::var("RA_PC_DEBUG")
-            .map(|v| v == "1")
-            .unwrap_or(false);
-        let want_depth = if pc_debug {
-            !self.is_picker_batches()
-        } else {
-            true
-        };
         self.batch_begin();
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main-pass(graph)"),
@@ -72,21 +64,27 @@ impl Renderer {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: if want_depth {
-                depth_view.map(|dv| wgpu::RenderPassDepthStencilAttachment {
-                    view: dv,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                })
-            } else {
-                None
-            },
+            depth_stencil_attachment: depth_view.map(|dv| wgpu::RenderPassDepthStencilAttachment {
+                view: dv,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             occlusion_query_set: None,
             timestamp_writes: None,
         });
+        self.main_draw_into(&mut rp);
+        // pass ends when rp goes out of scope
+        self.batch_end();
+    }
+
+    /// Draw the main scene content into an already-open render pass.
+    pub(crate) fn main_draw_into<'rp>(&mut self, rp: &mut wgpu::RenderPass<'rp>) {
+        let pc_debug = std::env::var("RA_PC_DEBUG")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         // Terrain (if enabled)
         if std::env::var("RA_DRAW_TERRAIN")
             .map(|v| v != "0")
@@ -174,7 +172,7 @@ impl Renderer {
                 let pid = ptr_id(&self.wizard_pipeline);
                 let mid = ptr_id(&self.wizard_mat_bg);
                 let mesh = ptr_id(&self.wizard_ib);
-                self.draw_pc_only(&mut rp);
+                self.draw_pc_only(rp);
                 self.draw_calls += 1;
                 self.batch_add_key_ids(pid, mid, mesh);
             }
@@ -187,14 +185,14 @@ impl Renderer {
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.wizard_mat_bg);
             let mesh = ptr_id(&self.wizard_ib);
-            self.draw_wizards(&mut rp);
+            self.draw_wizards(rp);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
             if self.pc_vb.is_some() {
                 let pid = ptr_id(&self.wizard_pipeline);
                 let mid = ptr_id(&self.wizard_mat_bg);
                 let mesh = ptr_id(&self.wizard_ib);
-                self.draw_pc_only(&mut rp);
+                self.draw_pc_only(rp);
                 self.draw_calls += 1;
                 self.batch_add_key_ids(pid, mid, mesh);
             }
@@ -208,7 +206,7 @@ impl Renderer {
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.dk_mat_bg);
             let mesh = ptr_id(&self.dk_ib);
-            self.draw_deathknight(&mut rp);
+            self.draw_deathknight(rp);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
@@ -216,7 +214,7 @@ impl Renderer {
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.sorc_mat_bg);
             let mesh = ptr_id(&self.sorc_ib);
-            self.draw_sorceress(&mut rp);
+            self.draw_sorceress(rp);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
@@ -229,11 +227,11 @@ impl Renderer {
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.zombie_mat_bg);
             let mesh = ptr_id(&self.zombie_ib);
-            self.draw_zombies(&mut rp);
+            self.draw_zombies(rp);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
-        drop(rp);
+        // pass ends when rp goes out of scope
         self.batch_end();
     }
     pub(crate) fn pass_main(&mut self, encoder: &mut wgpu::CommandEncoder) {
@@ -420,35 +418,7 @@ impl Renderer {
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
-        drop(rp);
-        // SceneRead copy for bloom/ssgi if needed
-        if !self.direct_present {
-            let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("blit-scene-read"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.attachments.scene_read_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-            blit.set_pipeline(&self.blit_scene_read_pipeline);
-            blit.set_bind_group(0, &self.present_bg, &[]);
-            blit.draw(0..3, 0..1);
-            self.draw_calls += 1;
-        }
-        self.batch_end();
+        // Legacy blit removed; post chain handles blit/copies
     }
     pub(crate) fn pass_build_hiz(&self, encoder: &mut wgpu::CommandEncoder) {
         if let Some(hiz) = &self.hiz {
