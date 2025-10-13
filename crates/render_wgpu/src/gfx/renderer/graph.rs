@@ -711,25 +711,44 @@ impl Graph {
                 }
             }
         } else {
-            // Aliasing path (default): route all images to current attachments
+            // Behavior-neutral aliasing: map logical images onto existing attachments
+            // using distinct underlying views to avoid sampling the same texture we
+            // render to in a pass. We round-robin across scene_view, scene_read_view,
+            // and history_view for Color kinds.
+            let mut color_ix = 0usize;
             for (ix, kind) in self.images.iter().enumerate() {
                 match kind {
                     ImageKind::Color { .. } => {
-                        arena.views[ix] = renderer.attachments.scene_view.clone();
+                        let (view, fmt) = match color_ix % 3 {
+                            0 => (
+                                &renderer.attachments.scene_view,
+                                renderer.attachments.offscreen_format,
+                            ),
+                            1 => (
+                                &renderer.attachments.scene_read_view,
+                                renderer.attachments.offscreen_format,
+                            ),
+                            _ => (
+                                &renderer.attachments.history_view,
+                                renderer.attachments.offscreen_format,
+                            ),
+                        };
+                        arena.views[ix] = view.clone();
                         arena.descs[ix] = ImageDesc {
-                            format: renderer.attachments.offscreen_format,
+                            format: fmt,
                             size: [renderer.config.width, renderer.config.height],
                             msaa: 1,
                             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                                 | wgpu::TextureUsages::TEXTURE_BINDING,
                         };
+                        color_ix += 1;
                     }
                     ImageKind::Depth { .. } => {
                         arena.views[ix] = renderer.attachments.depth_view.clone();
                         arena.descs[ix] = ImageDesc {
                             format: wgpu::TextureFormat::Depth32Float,
                             size: [renderer.config.width, renderer.config.height],
-                            msaa: 1,
+                            msaa: renderer.attachments.sample_count,
                             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                                 | wgpu::TextureUsages::TEXTURE_BINDING,
                         };
@@ -765,6 +784,7 @@ impl Graph {
         renderer.graph_peak_mem_bytes = peak_bytes;
         for p in self.passes.drain(..) {
             let pass_name = p.name;
+            log::debug!("graph: begin pass {}", pass_name);
             let mut ctx = ExecCtx {
                 renderer,
                 encoder,
@@ -788,6 +808,7 @@ impl Graph {
                     break;
                 }
             }
+            log::debug!("graph: end pass {}", pass_name);
         }
     }
 }
