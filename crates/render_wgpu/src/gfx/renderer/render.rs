@@ -2255,7 +2255,7 @@ pub fn render_impl(
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
             {
-                let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                let rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("picker-clear"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &view,
