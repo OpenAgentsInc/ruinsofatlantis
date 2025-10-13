@@ -653,10 +653,10 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
                 // If we just transitioned to Running, release HUD-only latch right before rendering
-                if let BootMode::Running { .. } = self.boot {
-                    if state.picker_mode() {
-                        state.set_picker_mode(false);
-                    }
+                if let BootMode::Running { .. } = self.boot
+                    && state.picker_mode()
+                {
+                    state.set_picker_mode(false);
                 }
                 // In Picker, draw overlay lines from platform before rendering.
                 if let BootMode::Picker = self.boot {
