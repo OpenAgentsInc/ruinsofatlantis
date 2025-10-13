@@ -2231,8 +2231,13 @@ pub fn render_impl(
         // Hint overlay removed for CC demo and general scenes.
     }
     // Execute full frame via the framegraph (Sky/Main/Particles/Post/UI/Present)
-    // If we are showing Picker batches, skip scene graph and draw HUD only.
-    if r.is_picker_batches() {
+    // If we are showing Picker batches OR no zone batches are attached yet, skip scene graph and draw HUD only.
+    if r.is_picker_batches() || !r.has_zone_batches() {
+        log::debug!(
+            "picker: HUD-only path (is_picker_batches={} has_zone_batches={})",
+            r.is_picker_batches(),
+            r.has_zone_batches()
+        );
         #[cfg(not(target_arch = "wasm32"))]
         r.device.push_error_scope(wgpu::ErrorFilter::Validation);
         // Acquire frame and clear
@@ -2281,11 +2286,7 @@ pub fn render_impl(
         if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
             log::error!("validation (picker): {:?}", e);
         }
-        if let Some(size) = r.deferred_resize.take() {
-            // Ensure no outstanding frame is held, then resize
-            let _ = r.take_pending_frame();
-            crate::gfx::renderer::resize::resize_impl(r, size);
-        }
+        // Defer resize handling to platform on picker path
         return Ok(());
     }
     // Normal scene path (graph)
