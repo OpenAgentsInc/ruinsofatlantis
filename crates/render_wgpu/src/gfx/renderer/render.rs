@@ -2232,9 +2232,10 @@ pub fn render_impl(
     }
     // Execute full frame via the framegraph (Sky/Main/Particles/Post/UI/Present)
     // If we are showing Picker batches OR no zone batches are attached yet, skip scene graph and draw HUD only.
-    if r.is_picker_batches() || !r.has_zone_batches() {
+    if r.picker_mode || r.is_picker_batches() || !r.has_zone_batches() {
         log::debug!(
-            "picker: HUD-only path (is_picker_batches={} has_zone_batches={})",
+            "picker: HUD-only path (picker_mode={} is_picker_batches={} has_zone_batches={})",
+            r.picker_mode,
             r.is_picker_batches(),
             r.has_zone_batches()
         );

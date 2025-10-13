@@ -217,6 +217,8 @@ pub struct Renderer {
     pub(crate) pipeline_binds_count: u32,
     pub(crate) bg_binds_count: u32,
     pub(crate) vb_ib_sets_count: u32,
+    // True when the platform has put us into the Zone Picker (no scene graph).
+    picker_mode: bool,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -729,6 +731,8 @@ impl Renderer {
             .map(|b| compute_zone_policy_for_slug(b.slug.as_str()))
             .unwrap_or_default();
         self.zone_policy = policy;
+        // Update picker flag so render path can bypass scene graph reliably
+        self.picker_mode = matches!(self.zone_batches.as_ref(), Some(b) if b.slug == "<picker>");
 
         // Rebuild zone-dependent instancing (trees, rocks) when a real zone is attached.
         if let Some(b) = &self.zone_batches

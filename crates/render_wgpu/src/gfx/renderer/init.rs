@@ -1998,6 +1998,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pipeline_binds_count: 0,
         bg_binds_count: 0,
         vb_ib_sets_count: 0,
+        picker_mode: false,
         globals_buf,
         sky_buf,
         _plane_model_buf,
