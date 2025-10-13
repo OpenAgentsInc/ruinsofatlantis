@@ -741,6 +741,32 @@ impl ApplicationHandler for App {
                 {
                     // Clear any placement ghost when leaving builder overlay
                     state.set_ghost_instance(None);
+                    // Spawn background loader so UI remains responsive
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let slug_clone = slug.clone();
+                        self.boot = BootMode::Loading {
+                            slug: slug.clone(),
+                            handle: std::thread::spawn(move || {
+                                let zp =
+                                    client_core::zone_client::ZonePresentation::load(&slug_clone)?;
+                                // Optionally decode PC rig off the UI thread for non-authoring zones
+                                let pc_cpu = if slug_clone == "campaign_builder"
+                                    || slug_clone == "cc_demo"
+                                {
+                                    None
+                                } else {
+                                    use roa_assets::skinning::load_gltf_skinned;
+                                    let ubc_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                                        .join("../../assets/models/ubc/godot/Superhero_Male.gltf");
+                                    load_gltf_skinned(&ubc_path).ok()
+                                };
+                                Ok((zp, pc_cpu))
+                            }),
+                        };
+                        window.set_title(&format!("Loading — {}", slug));
+                    }
+                    #[cfg(target_arch = "wasm32")]
                     if let Ok(zp) = client_core::zone_client::ZonePresentation::load(&slug) {
                         let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(state, &zp);
                         state.set_zone_batches(Some(gz));
@@ -782,10 +808,7 @@ impl ApplicationHandler for App {
                             self.builder.kind_idx = 0;
                         }
                     } else {
-                        log::error!(
-                            "zone picker: failed to load zone '{}': snapshot missing or invalid",
-                            slug
-                        );
+                        log::error!("zone picker: failed to queue zone '{}' for loading", slug);
                     }
                 }
             }
