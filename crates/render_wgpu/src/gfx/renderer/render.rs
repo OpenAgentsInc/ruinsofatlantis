@@ -1854,7 +1854,9 @@ pub fn render_impl(
         return Ok(());
     }
     // Ensure SceneRead is available for bloom pass as well
-    if !present_only && r.enable_bloom {
+    // Legacy overlays (SSR/SSGI/PostAO/Bloom/Present) are now handled by the framegraph.
+    // Keep disabled to avoid double-recording and potential encoder invalidation.
+    if false && !present_only && r.enable_bloom {
         let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("blit-scene-to-read(bloom)"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1875,7 +1877,7 @@ pub fn render_impl(
         blit.draw(0..3, 0..1);
     }
     // SSR overlay
-    if !present_only && r.enable_ssr {
+    if false && !present_only && r.enable_ssr {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssr-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1898,7 +1900,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // SSGI additive overlay
-    if !present_only && r.enable_ssgi {
+    if false && !present_only && r.enable_ssgi {
         let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssgi-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1922,7 +1924,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // Post AO
-    if !present_only && r.enable_post_ao {
+    if false && !present_only && r.enable_post_ao {
         let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("post-ao"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1945,7 +1947,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // Bloom
-    if r.enable_bloom {
+    if false && r.enable_bloom {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("bloom-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1966,7 +1968,7 @@ pub fn render_impl(
         rp.draw(0..3, 0..1);
     }
     // Present pass when using offscreen
-    if !r.direct_present {
+    if false && !r.direct_present {
         log::debug!("pass: present");
         let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("present-pass"),
