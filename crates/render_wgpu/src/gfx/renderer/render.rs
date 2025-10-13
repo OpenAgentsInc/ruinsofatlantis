@@ -2232,7 +2232,7 @@ pub fn render_impl(
         use super::graph::{Graph, GraphBuilder, ImageKind};
         use super::passes_graph::{
             BlitHdrToPostPass, BloomPass, MainPass, ParticlesPass, PostAoPass, PresentPass,
-            SkyPass, SsgiPass, SsrPass, UiPass,
+            SkyPass, SsgiPass, SsrPass,
         };
         let mut gb = GraphBuilder::new();
         let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
