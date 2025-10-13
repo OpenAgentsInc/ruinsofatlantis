@@ -65,6 +65,8 @@ Config (optional)
 
 CLI/Env toggles
 - `--no-vsync` (or `RA_NO_VSYNC=1`): prefer Immediate present mode if supported.
+- `RA_TREES_PROCEDURAL=1`: ignore baked trees snapshot and use procedural scatter.
+- `RA_TREES_COUNT=<n>`: override manifest tree_count for procedural scatter (desktop only).
 
 ## Time‑of‑Day (TOD) authoring
 - The initial TOD is controlled per zone in `data/zones/<slug>/manifest.json`:
