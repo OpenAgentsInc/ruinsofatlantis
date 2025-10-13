@@ -85,12 +85,24 @@ impl Renderer {
         let pc_debug = std::env::var("RA_PC_DEBUG")
             .map(|v| v == "1")
             .unwrap_or(false);
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut pop_scope = |label: &str, dev: &wgpu::Device| -> bool {
+            if let Some(e) = pollster::block_on(dev.pop_error_scope()) {
+                log::error!("main pass: {}: {:?}", label, e);
+                return true;
+            }
+            false
+        };
+        #[cfg(target_arch = "wasm32")]
+        let mut pop_scope = |_label: &str, _dev: &wgpu::Device| -> bool { false };
         // Terrain (if enabled)
         if std::env::var("RA_DRAW_TERRAIN")
             .map(|v| v != "0")
             .unwrap_or(true)
             && !self.is_picker_batches()
         {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
             let pid = ptr_id(&self.pipeline);
             let mid = 0;
             let mesh = ptr_id(&self.terrain_ib);
@@ -106,9 +118,14 @@ impl Renderer {
             rp.draw_indexed(0..self.terrain_index_count, 0, 0..1);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
+            if pop_scope("terrain", &self.device) {
+                return;
+            }
         }
         // Ruins (instanced static)
         if self.ruins_count > 0 && !self.is_picker_batches() {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
             {
                 let inst_pipe = if self.wire_enabled {
                     self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
@@ -133,9 +150,14 @@ impl Renderer {
                 let mesh = ptr_id(&self.ruins_ib);
                 self.batch_add_key_ids(pid, mid, mesh);
             }
+            if pop_scope("ruins", &self.device) {
+                return;
+            }
         }
         // Voxel meshes
         if !self.voxel_meshes.is_empty() && !pc_debug {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
             rp.set_pipeline(&self.pipeline);
             self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
             rp.set_bind_group(0, &self.globals_bg, &[]);
@@ -157,9 +179,14 @@ impl Renderer {
             for [pid, mid, mesh] in voxel_keys.into_iter() {
                 self.batch_add_key_ids(pid, mid, mesh);
             }
+            if pop_scope("voxels", &self.device) {
+                return;
+            }
         }
         // Trees (instanced static mesh; textured pipeline for UV support)
         if self.trees_count > 0 && !self.is_picker_batches() {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
             let inst_pipe = &self.inst_tex_pipeline;
             let pid = ptr_id(inst_pipe);
             rp.set_pipeline(inst_pipe);
@@ -181,9 +208,14 @@ impl Renderer {
             let mid = ptr_id(&self.shard_model_bg);
             let mesh = ptr_id(&self.trees_ib);
             self.batch_add_key_ids(pid, mid, mesh);
+            if pop_scope("trees", &self.device) {
+                return;
+            }
         }
         // Rocks (instanced static mesh)
         if self.rocks_count > 0 && !self.is_picker_batches() {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
             let inst_pipe = if self.wire_enabled {
                 self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
             } else {
@@ -206,6 +238,9 @@ impl Renderer {
             let mid = ptr_id(&self.shard_model_bg);
             let mesh = ptr_id(&self.rocks_ib);
             self.batch_add_key_ids(pid, mid, mesh);
+            if pop_scope("rocks", &self.device) {
+                return;
+            }
         }
         // Wizards and PC
         if self.is_vox_onepath() {
@@ -231,6 +266,8 @@ impl Renderer {
                 .map(|v| v != "0")
                 .unwrap_or(true)
         {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.wizard_mat_bg);
             let mesh = ptr_id(&self.wizard_ib);
@@ -244,6 +281,9 @@ impl Renderer {
                 self.draw_pc_only(rp);
                 self.draw_calls += 1;
                 self.batch_add_key_ids(pid, mid, mesh);
+            }
+            if pop_scope("wizards", &self.device) {
+                return;
             }
         }
         // DK, Sorceress, Zombies
