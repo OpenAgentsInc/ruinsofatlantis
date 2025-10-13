@@ -348,7 +348,8 @@ pub fn build_trees_by_kind(
                 // Retry with a buffers-only path to tolerate missing images/textures
                 match gltf::Gltf::open(&mesh_path) {
                     Ok(g) => {
-                        log::warn!(
+                        // Demote to debug to avoid console spam when textures are absent
+                        log::debug!(
                             "gltf import (with images) failed for kind '{}': {}; retrying without images",
                             kind,
                             e

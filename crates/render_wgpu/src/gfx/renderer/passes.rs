@@ -158,6 +158,54 @@ impl Renderer {
                 self.batch_add_key_ids(pid, mid, mesh);
             }
         }
+        // Trees (instanced static mesh)
+        if self.trees_count > 0 && !self.is_picker_batches() {
+            let inst_pipe = if self.wire_enabled {
+                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+            } else {
+                &self.inst_pipeline
+            };
+            let pid = ptr_id(inst_pipe);
+            rp.set_pipeline(inst_pipe);
+            self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+            rp.set_bind_group(0, &self.globals_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_bind_group(1, &self.shard_model_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_vertex_buffer(0, self.trees_vb.slice(..));
+            rp.set_vertex_buffer(1, self.trees_instances.slice(..));
+            rp.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
+            self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+            rp.draw_indexed(0..self.trees_index_count, 0, 0..self.trees_count);
+            self.draw_calls += 1;
+            let mid = ptr_id(&self.shard_model_bg);
+            let mesh = ptr_id(&self.trees_ib);
+            self.batch_add_key_ids(pid, mid, mesh);
+        }
+        // Rocks (instanced static mesh)
+        if self.rocks_count > 0 && !self.is_picker_batches() {
+            let inst_pipe = if self.wire_enabled {
+                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+            } else {
+                &self.inst_pipeline
+            };
+            let pid = ptr_id(inst_pipe);
+            rp.set_pipeline(inst_pipe);
+            self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+            rp.set_bind_group(0, &self.globals_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_bind_group(1, &self.shard_model_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_vertex_buffer(0, self.rocks_vb.slice(..));
+            rp.set_vertex_buffer(1, self.rocks_instances.slice(..));
+            rp.set_index_buffer(self.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
+            self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+            rp.draw_indexed(0..self.rocks_index_count, 0, 0..self.rocks_count);
+            self.draw_calls += 1;
+            let mid = ptr_id(&self.shard_model_bg);
+            let mesh = ptr_id(&self.rocks_ib);
+            self.batch_add_key_ids(pid, mid, mesh);
+        }
         // Wizards and PC
         if self.is_vox_onepath() {
             // skip entirely in demo
