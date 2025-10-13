@@ -652,6 +652,12 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size),
             WindowEvent::RedrawRequested => {
+                // If we just transitioned to Running, release HUD-only latch right before rendering
+                if let BootMode::Running { .. } = self.boot {
+                    if state.picker_mode() {
+                        state.set_picker_mode(false);
+                    }
+                }
                 // In Picker, draw overlay lines from platform before rendering.
                 if let BootMode::Picker = self.boot {
                     let lines = self.picker.display_lines();
@@ -987,9 +993,8 @@ impl ApplicationHandler for App {
                                     let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
                                         st, &zp,
                                     );
+                                    // Attach scene for next frame; keep HUD-only for the remainder of this tick
                                     st.set_zone_batches(Some(gz));
-                                    // Release HUD-only latch now that we're transitioning to Running
-                                    st.set_picker_mode(false);
                                     if let Some(cpu) = pc_cpu_opt {
                                         st.install_pc_cpu(cpu);
                                     } else {
@@ -1006,6 +1011,8 @@ impl ApplicationHandler for App {
                                 self.boot = BootMode::Running { slug: slug.clone() };
                                 if let Some(win) = &self.window {
                                     win.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                    // Nudge a redraw so the next frame can unlatch HUD-only just-in-time
+                                    win.request_redraw();
                                 }
                             }
                             Ok(Err(e)) => {

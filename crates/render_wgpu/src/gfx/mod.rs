@@ -726,6 +726,11 @@ impl Renderer {
     pub fn set_picker_mode(&mut self, on: bool) {
         self.picker_mode = on;
     }
+    /// Returns whether the renderer is currently latched in picker-mode (HUD-only).
+    #[inline]
+    pub fn picker_mode(&self) -> bool {
+        self.picker_mode
+    }
     /// Attach or clear zone batches uploaded by the client.
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
         self.zone_batches = z;
