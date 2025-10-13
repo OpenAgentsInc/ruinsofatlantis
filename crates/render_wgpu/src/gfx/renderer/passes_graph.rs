@@ -124,7 +124,8 @@ impl MainPass {
                         resolve_target: resolve_to.as_ref(),
                         depth_slice: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
+                            // Clear to a sane color so we never sample garbage
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -170,7 +171,12 @@ impl PresentPass {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                // Acquire, composite offscreen hdr_color to swapchain, and present
+                // If a previous frame is still pending (e.g., last frame bailed early),
+                // present it now to avoid holding a swapchain image across frames.
+                if let Some(prev) = ctx.renderer.take_pending_frame() {
+                    prev.present();
+                }
+                // Acquire, composite offscreen color to swapchain, and present
                 let frame = match ctx.renderer.surface.get_current_texture() {
                     Ok(f) => f,
                     Err(wgpu::SurfaceError::Lost) | Err(wgpu::SurfaceError::Outdated) => {
@@ -178,8 +184,9 @@ impl PresentPass {
                         log::warn!("present: surface lost/outdated; reconfiguring");
                         ctx.renderer.present_recoveries =
                             ctx.renderer.present_recoveries.saturating_add(1);
-                        let size = ctx.renderer.size; // current logical size tracked by renderer
-                        crate::gfx::renderer::resize::resize_impl(ctx.renderer, size);
+                        // Defer resize until after submit/present; do not reconfigure while a frame/encoder is active
+                        let size = ctx.renderer.size;
+                        ctx.renderer.deferred_resize = Some(size);
                         return;
                     }
                     Err(wgpu::SurfaceError::Timeout) => {
@@ -193,8 +200,9 @@ impl PresentPass {
                         return;
                     }
                     Err(e) => {
-                        // Fallback: log and skip
+                        // Fallback: log and request a deferred resize; skip this frame
                         log::error!("present: acquire failed: {:?}", e);
+                        ctx.renderer.deferred_resize = Some(ctx.renderer.size);
                         return;
                     }
                 };
@@ -207,6 +215,8 @@ impl PresentPass {
                     &ctx.renderer.present_bgl,
                     &[
                         src_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                        &ctx.renderer.attachments.depth_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
@@ -462,6 +472,8 @@ impl BlitHdrToPostPass {
                     &[
                         src as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
+                        &ctx.renderer.attachments.depth_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
                 let src_owned = ctx.view_color(hdr).clone();
@@ -478,6 +490,18 @@ impl BlitHdrToPostPass {
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &ctx.renderer.attachments.depth_view,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
                                     resource: wgpu::BindingResource::Sampler(
                                         &ctx.renderer.point_sampler,
                                     ),
@@ -510,6 +534,79 @@ impl BlitHdrToPostPass {
     }
 }
 
+pub struct BlitPostToSrcPass;
+impl BlitPostToSrcPass {
+    pub fn declare(builder: &mut GraphBuilder, src: Handle<Img>, dst: Handle<Img>) {
+        let _ = builder
+            .pass("BlitPostToSrc", move |ctx: &mut ExecCtx| {
+                let src_ref = ctx.view_color(src);
+                let src_owned = src_ref.clone();
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.present_bgl,
+                    &[
+                        src_ref as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                        &ctx.renderer.attachments.depth_view as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("blit-post-to-src[graph]"),
+                            layout: &ctx.renderer.present_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&src_owned),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &ctx.renderer.attachments.depth_view,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let dst_view = ctx.view_color(dst).clone();
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("blit-post-to-src-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &dst_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.blit_scene_read_pipeline);
+                rp.set_bind_group(0, &bg, &[]);
+                rp.draw(0..3, 0..1);
+            })
+            .reads(src)
+            .writes(dst);
+    }
+}
+
 pub struct HistoryCopyPass;
 impl HistoryCopyPass {
     pub fn declare(builder: &mut GraphBuilder, src: Handle<Img>) {
@@ -521,6 +618,8 @@ impl HistoryCopyPass {
                     &ctx.renderer.present_bgl,
                     &[
                         src_ref as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                        &ctx.renderer.attachments.depth_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
@@ -537,6 +636,18 @@ impl HistoryCopyPass {
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: wgpu::BindingResource::TextureView(
+                                        &ctx.renderer.attachments.depth_view,
+                                    ),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
                                     resource: wgpu::BindingResource::Sampler(
                                         &ctx.renderer.point_sampler,
                                     ),
@@ -795,29 +906,37 @@ impl SsrPass {
 
 pub struct BloomPass;
 impl BloomPass {
-    pub fn declare(builder: &mut GraphBuilder, post: Handle<Img>) {
+    pub fn declare(builder: &mut GraphBuilder, post: Handle<Img>, src: Handle<Img>) {
         let _ = builder
             .pass("Bloom", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 // Build bloom BG before opening the pass to avoid borrow overlap
-                let src_ptr = ctx.view_color(post) as *const _ as u64;
+                let src_ptr = ctx.view_color(src) as *const _ as u64;
                 let key = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.bloom_bgl,
-                    &[src_ptr],
+                    &[src_ptr, &ctx.renderer._post_sampler as *const _ as u64],
                 );
-                let src_owned = ctx.view_color(post).clone();
+                let src_owned = ctx.view_color(src).clone();
                 let bloom_bg = ctx.renderer.bg_cache.get_or_create(key, || {
                     ctx.renderer
                         .device
                         .create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some("bloom-bg[graph]"),
                             layout: &ctx.renderer.bloom_bgl,
-                            entries: &[wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(&src_owned),
-                            }],
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&src_owned),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer._post_sampler,
+                                    ),
+                                },
+                            ],
                         })
                 });
                 let target = ctx.view_color(post).clone();
@@ -853,7 +972,7 @@ impl BloomPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
-            .reads(post)
+            .reads(src)
             .writes(post);
     }
 }

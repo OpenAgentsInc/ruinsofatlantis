@@ -764,12 +764,30 @@ impl Graph {
         // Store on renderer for HUD later
         renderer.graph_peak_mem_bytes = peak_bytes;
         for p in self.passes.drain(..) {
+            let pass_name = p.name;
             let mut ctx = ExecCtx {
                 renderer,
                 encoder,
                 arena: &arena,
             };
+            // Per-pass validation scope so we can attribute the first error,
+            // and early-bail to avoid "Encoder is invalid" spam.
+            #[cfg(not(target_arch = "wasm32"))]
+            ctx.renderer
+                .device
+                .push_error_scope(wgpu::ErrorFilter::Validation);
+
             (p.exec)(&mut ctx);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Resolve the pass-scoped error now.
+                if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
+                    log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
+                    // Abort executing subsequent passes this frame; the encoder is invalid.
+                    break;
+                }
+            }
         }
     }
 }

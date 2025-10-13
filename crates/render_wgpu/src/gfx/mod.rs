@@ -132,6 +132,8 @@ pub struct Renderer {
     render_stats: Vec<renderer::RenderStats>,
     // Surface frame acquired by Present pass, presented after submit
     pending_frame: Option<wgpu::SurfaceTexture>,
+    // Defer surface reconfigure until after the command buffer is submitted and any frame is presented
+    deferred_resize: Option<winit::dpi::PhysicalSize<u32>>,
     // Resize/rebuild notification bus
     pub(crate) rebuild_bus: renderer::rebuild_bus::RebuildBus,
     // Externalized client updates (controls + collision)
@@ -2703,7 +2705,13 @@ impl Renderer {
 
     /// Resize the swapchain while preserving aspect and device limits.
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        renderer::resize::resize_impl(self, new_size);
+        // Avoid reconfiguring the surface while a SurfaceTexture is held by Present
+        // or while we're mid-frame. Defer until after submit/present.
+        if self.pending_frame.is_some() {
+            self.deferred_resize = Some(new_size);
+        } else {
+            renderer::resize::resize_impl(self, new_size);
+        }
     }
 
     /// Render one frame (delegate wrapper).

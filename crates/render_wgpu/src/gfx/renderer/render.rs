@@ -1134,38 +1134,7 @@ pub fn render_impl(
     // Legacy fallback removed: graph path owns full frame execution
     // PR16: render all scene content to offscreen color; Present composites to swapchain.
     let render_view: &wgpu::TextureView = &r.attachments.scene_view;
-    // Sky-only pass (legacy path only; otherwise handled by graph below)
-    log::debug!("pass: sky");
-    if !present_only {
-        let pc_debug = std::env::var("RA_PC_DEBUG")
-            .map(|v| v == "1")
-            .unwrap_or(false);
-        let mut sky = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("sky-pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: render_view,
-                resolve_target: None,
-                depth_slice: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.02,
-                        g: 0.02,
-                        b: 0.04,
-                        a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-        sky.set_pipeline(&r.sky_pipeline);
-        sky.set_bind_group(0, &r.globals_bg, &[]);
-        sky.set_bind_group(1, &r.sky_bg, &[]);
-        sky.draw(0..3, 0..1);
-        r.draw_calls += 1;
-    }
+    // Sky is rendered via graph (no legacy pre-pass)
     // Legacy main path removed (graph handles Main below)
     if false {
         let pc_debug = std::env::var("RA_PC_DEBUG")
@@ -2296,25 +2265,54 @@ pub fn render_impl(
         PostAoPass::declare(&mut gb, post, depth);
         SsgiPass::declare(&mut gb, post, hdr, depth);
         SsrPass::declare(&mut gb, post, hdr, depth);
-        BloomPass::declare(&mut gb, post);
-        super::passes_graph::HistoryCopyPass::declare(&mut gb, post);
-        UiPass::declare(&mut gb, post);
-        PresentPass::declare(&mut gb, post);
+        // Create a post_src to sample from during bloom
+        let post_src = gb.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size,
+            msaa: 1,
+        });
+        super::passes_graph::BlitPostToSrcPass::declare(&mut gb, post, post_src);
+        // Bloom output goes to post_bloom, a new target
+        let post_bloom = gb.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size,
+            msaa: 1,
+        });
+        BloomPass::declare(&mut gb, post_bloom, post_src);
+        // Copy bloom output into history before UI (pre-UI history)
+        super::passes_graph::HistoryCopyPass::declare(&mut gb, post_bloom);
+        // UI renders into a fresh image to avoid write-after-read hazards on post_bloom
+        let post_ui = gb.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size,
+            msaa: 1,
+        });
+        // Blit bloom into UI target first so UI composes over it
+        super::passes_graph::BlitPostToSrcPass::declare(&mut gb, post_bloom, post_ui);
+        UiPass::declare(&mut gb, post_ui);
+        PresentPass::declare(&mut gb, post_ui);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
         // History copy handled via graph pass
     }
     r.queue.submit(Some(encoder.finish()));
-    // Pop the validation scope after submit; this captures any errors raised
+    // Present any acquired frame from the Present pass before checking validation,
+    // to avoid holding a SurfaceTexture across frames on error.
+    if let Some(frame) = r.take_pending_frame() {
+        frame.present();
+    }
+    // Pop the validation scope after submit/present; capture any errors raised
     // during encoder.finish() or queue.submit().
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
         log::error!("validation (main pass): {:?}", e);
-        return Ok(());
+        // continue to apply deferred resize below even on validation error
     }
-    // Present any acquired frame from the Present pass
-    if let Some(frame) = r.take_pending_frame() {
-        frame.present();
+    // If a resize was deferred by Present (Lost/Outdated), apply it now after submit/present
+    if let Some(size) = r.deferred_resize.take() {
+        // Ensure no outstanding frame is held
+        let _ = r.take_pending_frame();
+        crate::gfx::renderer::resize::resize_impl(r, size);
     }
     Ok(())
 }
