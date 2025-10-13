@@ -168,6 +168,8 @@ impl Renderer {
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_bind_group(1, &self.shard_model_bg, &[]);
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            // Palettes group (unused by this pipeline, but layout expects it)
+            rp.set_bind_group(2, &self.palettes_bg, &[]);
             // Material group (base_tex/base_sam); fall back to default white
             rp.set_bind_group(3, &self.default_material_bg, &[]);
             rp.set_vertex_buffer(0, self.trees_vb.slice(..));
