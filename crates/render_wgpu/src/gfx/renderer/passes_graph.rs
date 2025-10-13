@@ -14,6 +14,11 @@ impl SkyPass {
     pub fn declare(builder: &mut GraphBuilder, hdr: Handle<Img>, msaa: Option<Handle<Img>>) {
         let _ = builder
             .pass("Sky", move |ctx: &mut ExecCtx| {
+                // In Picker mode, just clear the background; do not draw the gradient sky.
+                let picker_mode = ctx.renderer.is_picker_batches()
+                    || std::env::var("ROA_ZONE")
+                        .map(|s| s.is_empty() || s == "<picker>")
+                        .unwrap_or(false);
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
@@ -40,10 +45,12 @@ impl SkyPass {
                         occlusion_query_set: None,
                         timestamp_writes: None,
                     });
-                    rp.set_pipeline(&ctx.renderer.sky_pipeline);
-                    rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
-                    rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
-                    rp.draw(0..3, 0..1);
+                    if !picker_mode {
+                        rp.set_pipeline(&ctx.renderer.sky_pipeline);
+                        rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                        rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
+                        rp.draw(0..3, 0..1);
+                    }
                 } else {
                     let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("sky-pass(graph)"),
@@ -65,10 +72,12 @@ impl SkyPass {
                         occlusion_query_set: None,
                         timestamp_writes: None,
                     });
-                    rp.set_pipeline(&ctx.renderer.sky_pipeline);
-                    rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
-                    rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
-                    rp.draw(0..3, 0..1);
+                    if !picker_mode {
+                        rp.set_pipeline(&ctx.renderer.sky_pipeline);
+                        rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                        rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
+                        rp.draw(0..3, 0..1);
+                    }
                 }
                 ctx.renderer.draw_calls += 1;
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
