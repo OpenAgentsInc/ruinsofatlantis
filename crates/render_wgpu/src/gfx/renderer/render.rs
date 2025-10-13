@@ -2231,6 +2231,64 @@ pub fn render_impl(
         // Hint overlay removed for CC demo and general scenes.
     }
     // Execute full frame via the framegraph (Sky/Main/Particles/Post/UI/Present)
+    // If we are showing Picker batches, skip scene graph and draw HUD only.
+    if r.is_picker_batches() {
+        #[cfg(not(target_arch = "wasm32"))]
+        r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        // Acquire frame and clear
+        let frame = match r.surface.get_current_texture() {
+            Ok(f) => Some(f),
+            Err(wgpu::SurfaceError::Lost) | Err(wgpu::SurfaceError::Outdated) => {
+                r.deferred_resize = Some(r.size);
+                None
+            }
+            Err(wgpu::SurfaceError::Timeout) => None,
+            Err(wgpu::SurfaceError::OutOfMemory) => None,
+            Err(e) => {
+                log::error!("present(picker): acquire failed: {:?}", e);
+                r.deferred_resize = Some(r.size);
+                None
+            }
+        };
+        if let Some(frame) = frame {
+            let view = frame
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            {
+                let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("picker-clear"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                drop(rp);
+            }
+            r.hud.queue(&r.device, &r.queue);
+            r.hud.draw(&mut encoder, &view);
+            r.queue.submit(Some(encoder.finish()));
+            frame.present();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+            log::error!("validation (picker): {:?}", e);
+        }
+        if let Some(size) = r.deferred_resize.take() {
+            // Ensure no outstanding frame is held, then resize
+            let _ = r.take_pending_frame();
+            crate::gfx::renderer::resize::resize_impl(r, size);
+        }
+        return Ok(());
+    }
+    // Normal scene path (graph)
     {
         // Legacy fallback removed; always execute the framegraph
         use super::graph::{Graph, GraphBuilder, ImageKind};
