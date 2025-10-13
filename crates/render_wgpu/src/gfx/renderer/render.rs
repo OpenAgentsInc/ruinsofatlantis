@@ -1855,8 +1855,11 @@ pub fn render_impl(
     }
     // Ensure SceneRead is available for bloom pass as well
     // Legacy overlays (SSR/SSGI/PostAO/Bloom/Present) are now handled by the framegraph.
-    // Keep disabled to avoid double-recording and potential encoder invalidation.
-    if false && !present_only && r.enable_bloom {
+    // Guard them behind a feature that is OFF by default.
+    let legacy_overlays = std::env::var("RA_LEGACY_OVERLAYS")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if legacy_overlays && !present_only && r.enable_bloom {
         let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("blit-scene-to-read(bloom)"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1877,7 +1880,7 @@ pub fn render_impl(
         blit.draw(0..3, 0..1);
     }
     // SSR overlay
-    if false && !present_only && r.enable_ssr {
+    if legacy_overlays && !present_only && r.enable_ssr {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssr-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1900,7 +1903,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // SSGI additive overlay
-    if false && !present_only && r.enable_ssgi {
+    if legacy_overlays && !present_only && r.enable_ssgi {
         let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssgi-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1924,7 +1927,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // Post AO
-    if false && !present_only && r.enable_post_ao {
+    if legacy_overlays && !present_only && r.enable_post_ao {
         let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("post-ao"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1947,7 +1950,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // Bloom
-    if false && r.enable_bloom {
+    if legacy_overlays && r.enable_bloom {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("bloom-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1968,7 +1971,7 @@ pub fn render_impl(
         rp.draw(0..3, 0..1);
     }
     // Present pass when using offscreen
-    if false && !r.direct_present {
+    if legacy_overlays && !r.direct_present {
         log::debug!("pass: present");
         let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("present-pass"),
