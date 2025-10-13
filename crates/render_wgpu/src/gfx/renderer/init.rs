@@ -39,12 +39,13 @@ use crate::gfx::{
 
 pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Renderer> {
     // Decide what to load:
-    // - PC rig: always load (third-person camera), regardless of HUD/casting.
-    // - NPC/demo actors (wizard ring, zombies, DK, Sorceress): only for combat/demo zones.
+    // - In Picker mode (no ROA_ZONE or "<picker>"), avoid loading heavy assets entirely.
+    // - Otherwise, NPC/demo actors (wizard ring, zombies, DK, Sorceress) gate on policy.
     let zone_slug = std::env::var("ROA_ZONE").unwrap_or_default();
+    let is_picker = zone_slug.is_empty() || zone_slug == "<picker>";
     let pol = compute_zone_policy_for_slug(zone_slug.as_str());
-    let load_pc_assets = true;
-    let load_npc_assets = pol.allow_casting || pol.show_player_hud;
+    let load_pc_assets = !is_picker;
+    let load_npc_assets = !is_picker && (pol.allow_casting || pol.show_player_hud);
 
     // --- Instance + Surface + Adapter (with backend fallback) ---
     fn backend_from_env() -> Option<wgpu::Backends> {
@@ -604,8 +605,31 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // For desktop, prefer the selected zone (ROA_ZONE) for baseline sky/terrain
     // to avoid mixing logs/resources from a different zone during init.
     let zone: ZoneManifest = {
-        let zslug = std::env::var("ROA_ZONE").unwrap_or_else(|_| "wizard_woods".into());
-        load_zone_manifest(&zslug).with_context(|| format!("load zone manifest: {}", zslug))?
+        let zslug = std::env::var("ROA_ZONE").unwrap_or_default();
+        if zslug.is_empty() || zslug == "<picker>" {
+            // Minimal stub for Picker: avoid touching disk or loading a real zone.
+            ZoneManifest {
+                zone_id: 0,
+                slug: "<picker>".to_string(),
+                display_name: "Zone Picker".to_string(),
+                plane: data_runtime::zone::ZonePlane::Material,
+                terrain: data_runtime::zone::TerrainSpec {
+                    size: 2,
+                    extent: 1.0,
+                    seed: 0,
+                },
+                weather: None,
+                vegetation: None,
+                start_time_frac: None,
+                start_paused: Some(true),
+                start_time_scale: Some(1.0),
+                allow_casting: Some(false),
+                show_player_hud: Some(false),
+                worldsmithing: None,
+            }
+        } else {
+            load_zone_manifest(&zslug).with_context(|| format!("load zone manifest: {}", zslug))?
+        }
     };
     log::debug!(
         "Zone '{}' (id={}, plane={:?})",
@@ -800,21 +824,46 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Terrain & world
     let terrain_extent = zone.terrain.extent;
     let terrain_size = zone.terrain.size as usize; // e.g., 129 → 128x128 quads
-    let (terrain_cpu, terrain_bufs) = if let Some(cpu) = terrain::load_terrain_snapshot(&zone.slug)
-    {
-        let bufs = terrain::upload_from_cpu(&device, &cpu);
-        (cpu, bufs)
+    let (terrain_cpu, terrain_vb, terrain_ib, terrain_index_count, slug) = if is_picker {
+        // Tiny dummy terrain buffers (never drawn in Picker)
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("terrain-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (
+            terrain::generate_cpu(2, 1.0, 0),
+            dummy.clone(),
+            dummy,
+            0u32,
+            zone.slug.clone(),
+        )
     } else {
-        terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed)
+        let (cpu, bufs) = if let Some(cpu) = terrain::load_terrain_snapshot(&zone.slug) {
+            let bufs = terrain::upload_from_cpu(&device, &cpu);
+            (cpu, bufs)
+        } else {
+            terrain::create_terrain(&device, terrain_size, terrain_extent, zone.terrain.seed)
+        };
+        (cpu, bufs.vb, bufs.ib, bufs.index_count, zone.slug.clone())
     };
-    let terrain_vb = terrain_bufs.vb;
-    let terrain_ib = terrain_bufs.ib;
-    let terrain_index_count = terrain_bufs.index_count;
-    let ZoneManifest { slug, .. } = zone.clone();
 
     // Ruins mesh + metrics
     #[cfg(not(target_arch = "wasm32"))]
-    let ruins_gpu = ruins::build_ruins(&device).context("build ruins mesh")?;
+    let ruins_gpu = if is_picker {
+        // Small dummy mesh
+        let (vb, ib, index_count) = super::super::mesh::create_cube(&device);
+        super::super::ruins::RuinsGpu {
+            vb,
+            ib,
+            index_count,
+            base_offset: 0.0,
+            radius: 1.0,
+        }
+    } else {
+        ruins::build_ruins(&device).context("build ruins mesh")?
+    };
     #[cfg(target_arch = "wasm32")]
     let ruins_gpu = ruins::build_ruins(&device).unwrap_or_else(|_| {
         // Fallback to a cube if GLTF fails (should not, as we embed ruins.gltf)
@@ -1197,34 +1246,80 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     };
 
     // NPCs and server
-    let npcs = npcs::build(&device, terrain_extent);
-    let npc_vb = npcs.vb;
-    let npc_ib = npcs.ib;
-    let npc_index_count = npcs.index_count;
-    let npc_instances = npcs.instances;
-    let npc_models = npcs.models;
+    let (npc_vb, npc_ib, npc_index_count, npc_instances, npc_models) = if is_picker {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("npc-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (
+            dummy.clone(),
+            dummy,
+            0u32,
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("npc-inst-empty"),
+                size: 4,
+                usage: wgpu::BufferUsages::VERTEX,
+                mapped_at_creation: false,
+            }),
+            Vec::new(),
+        )
+    } else {
+        let npcs = npcs::build(&device, terrain_extent);
+        (
+            npcs.vb,
+            npcs.ib,
+            npcs.index_count,
+            npcs.instances,
+            npcs.models,
+        )
+    };
     // legacy client AI removed; local server is not held by renderer
 
-    // Vegetation
-    let veg = zone
-        .vegetation
-        .as_ref()
-        .map(|v| (v.tree_count as usize, v.tree_seed));
-    // On wasm, tree GLTF uses external .bin; skip trees by setting count=0 above.
-    let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &slug, veg)
-        .context("build trees (instances + mesh) for zone")?;
-    let trees_instances = trees_gpu.instances;
-    let trees_count = trees_gpu.count;
-    let (trees_vb, trees_ib, trees_index_count) =
-        (trees_gpu.vb, trees_gpu.ib, trees_gpu.index_count);
-
-    // Rocks: enable full mesh + instances on Web too (we embed rock.glb bytes in roa_assets).
-    let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
-        .context("build rocks (instances + mesh) for zone")?;
-    let rocks_instances = rocks_gpu.instances;
-    let rocks_count = rocks_gpu.count;
-    let (rocks_vb, rocks_ib, rocks_index_count) =
-        (rocks_gpu.vb, rocks_gpu.ib, rocks_gpu.index_count);
+    // Vegetation and rocks: skip entirely in Picker
+    let (trees_instances, trees_count, trees_vb, trees_ib, trees_index_count) = if is_picker {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("trees-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (dummy.clone(), 0u32, dummy.clone(), dummy, 0u32)
+    } else {
+        let veg = zone
+            .vegetation
+            .as_ref()
+            .map(|v| (v.tree_count as usize, v.tree_seed));
+        let trees_gpu = foliage::build_trees(&device, &terrain_cpu, &slug, veg)
+            .context("build trees (instances + mesh) for zone")?;
+        (
+            trees_gpu.instances,
+            trees_gpu.count,
+            trees_gpu.vb,
+            trees_gpu.ib,
+            trees_gpu.index_count,
+        )
+    };
+    let (rocks_instances, rocks_count, rocks_vb, rocks_ib, rocks_index_count) = if is_picker {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("rocks-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        (dummy.clone(), 0u32, dummy.clone(), dummy, 0u32)
+    } else {
+        let rocks_gpu = rocks::build_rocks(&device, &terrain_cpu, &slug, None)
+            .context("build rocks (instances + mesh) for zone")?;
+        (
+            rocks_gpu.instances,
+            rocks_gpu.count,
+            rocks_gpu.vb,
+            rocks_gpu.ib,
+            rocks_gpu.index_count,
+        )
+    };
 
     // UI prep
     bars.queue_entries(

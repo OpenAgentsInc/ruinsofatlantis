@@ -2261,7 +2261,14 @@ pub fn render_impl(
             None
         };
         // Scene: Sky + Main writing hdr (resolve in-pass if msaa)
-        SkyPass::declare(&mut gb, hdr, msaa);
+        // Skip Sky when in Picker to avoid drawing a backdrop behind the Zone Picker UI
+        if !(r.is_picker_batches()
+            || std::env::var("ROA_ZONE")
+                .map(|s| s.is_empty() || s == "<picker>")
+                .unwrap_or(true))
+        {
+            SkyPass::declare(&mut gb, hdr, msaa);
+        }
         MainPass::declare(&mut gb, hdr, depth, msaa);
         ParticlesPass::declare(&mut gb, hdr, msaa);
         // Post chain operates on a separate post color

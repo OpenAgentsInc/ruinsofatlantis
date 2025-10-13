@@ -158,13 +158,9 @@ impl Renderer {
                 self.batch_add_key_ids(pid, mid, mesh);
             }
         }
-        // Trees (instanced static mesh)
+        // Trees (instanced static mesh; textured pipeline for UV support)
         if self.trees_count > 0 && !self.is_picker_batches() {
-            let inst_pipe = if self.wire_enabled {
-                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
-            } else {
-                &self.inst_pipeline
-            };
+            let inst_pipe = &self.inst_tex_pipeline;
             let pid = ptr_id(inst_pipe);
             rp.set_pipeline(inst_pipe);
             self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
