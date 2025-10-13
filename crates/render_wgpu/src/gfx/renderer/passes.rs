@@ -261,6 +261,7 @@ impl Renderer {
                 self.batch_add_key_ids(pid, mid, mesh);
             }
         } else if !self.has_zone_batches()
+            && !self.is_picker_batches()
             && !pc_debug
             && std::env::var("RA_DRAW_WIZARDS")
                 .map(|v| v != "0")
@@ -290,6 +291,7 @@ impl Renderer {
         if self.dk_count > 0
             && !self.is_vox_onepath()
             && !self.has_zone_batches()
+            && !self.is_picker_batches()
             && self.repl_buf.boss_status.is_some()
         {
             let pid = ptr_id(&self.wizard_pipeline);
@@ -299,7 +301,11 @@ impl Renderer {
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
-        if self.sorc_count > 0 && !self.is_vox_onepath() && !self.has_zone_batches() {
+        if self.sorc_count > 0
+            && !self.is_vox_onepath()
+            && !self.has_zone_batches()
+            && !self.is_picker_batches()
+        {
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.sorc_mat_bg);
             let mesh = ptr_id(&self.sorc_ib);
@@ -309,6 +315,7 @@ impl Renderer {
         }
         if !self.is_vox_onepath()
             && !self.has_zone_batches()
+            && !self.is_picker_batches()
             && std::env::var("RA_DRAW_ZOMBIES")
                 .map(|v| v != "0")
                 .unwrap_or(true)
