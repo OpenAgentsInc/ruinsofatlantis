@@ -610,6 +610,8 @@ impl ApplicationHandler for App {
                                         Ok((zp, pc_cpu))
                                     }),
                                 };
+                                // Latch HUD-only path throughout Loading
+                                state.set_picker_mode(true);
                                 window.set_title(&format!("Loading — {}", slug));
                             }
                         }
@@ -764,6 +766,8 @@ impl ApplicationHandler for App {
                                 Ok((zp, pc_cpu))
                             }),
                         };
+                        // Keep HUD-only path active until Running so the graph never executes mid-load
+                        state.set_picker_mode(true);
                         window.set_title(&format!("Loading — {}", slug));
                     }
                     #[cfg(target_arch = "wasm32")]
@@ -984,6 +988,8 @@ impl ApplicationHandler for App {
                                         st, &zp,
                                     );
                                     st.set_zone_batches(Some(gz));
+                                    // Release HUD-only latch now that we're transitioning to Running
+                                    st.set_picker_mode(false);
                                     if let Some(cpu) = pc_cpu_opt {
                                         st.install_pc_cpu(cpu);
                                     } else {
