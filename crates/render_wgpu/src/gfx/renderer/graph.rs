@@ -355,6 +355,11 @@ impl Graph {
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,
     ) {
+        // Never execute the scene graph while the Picker/HUD-only mode is active.
+        if renderer.is_picker_batches() || renderer.picker_mode {
+            log::debug!("graph: skip execute (picker mode)");
+            return;
+        }
         // ensure per-frame allocations do not accumulate
         self.keep_textures.clear();
         // Behavior-neutral default: alias declared image handles to the current attachments.
