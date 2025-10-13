@@ -276,7 +276,9 @@ impl PresentPass {
                     timestamp_writes: None,
                 });
                 rp.set_pipeline(&ctx.renderer.present_pipeline);
-                rp.set_bind_group(0, &present_bg, &[]);
+                // Layout: [globals_bgl, present_bgl]
+                rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                rp.set_bind_group(1, &present_bg, &[]);
                 rp.draw(0..3, 0..1);
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
