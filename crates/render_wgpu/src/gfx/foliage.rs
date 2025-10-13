@@ -44,6 +44,9 @@ pub fn build_trees(
     } else {
         terrain::load_trees_snapshot(zone_slug)
     };
+    // Track whether we intentionally fell back due to a collapsed snapshot so we can
+    // still allow procedural trees even if the manifest sets tree_count=0.
+    let mut collapsed_bake = false;
     if let Some(models) = &trees_models_opt
         && snapshot_is_collapsed(models)
     {
@@ -53,12 +56,19 @@ pub fn build_trees(
             models.len()
         );
         trees_models_opt = None;
+        collapsed_bake = true;
     }
+    // Optional override for procedural count via env
+    let env_count: Option<usize> = std::env::var("RA_TREES_COUNT")
+        .ok()
+        .and_then(|s| s.parse().ok());
     // If no baked snapshot is present and vegetation explicitly sets tree_count=0,
-    // disable trees. Otherwise, use baked snapshot (if any), falling back to procedural.
+    // disable trees — unless a collapsed bake forced procedural fallback, or an env override exists.
     if trees_models_opt.is_none()
+        && env_count.is_none()
         && let Some((count, _)) = vegetation
         && count == 0
+        && !collapsed_bake
     {
         log::debug!("trees disabled by manifest (count=0) and no baked snapshot present");
         let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -89,7 +99,16 @@ pub fn build_trees(
             }
             inst
         } else {
-            let (tree_count, tree_seed) = vegetation.unwrap_or((350usize, 20250926u32));
+            // Procedural path. Resolve count/seed with env override first, then manifest, else defaults.
+            let (mut tree_count, tree_seed) = vegetation.unwrap_or((350usize, 20250926u32));
+            if let Some(c) = env_count {
+                tree_count = c;
+            }
+            if tree_count == 0 {
+                // If we got here because of a collapsed bake, fall back to a sensible default.
+                // This avoids the "collapsed bake + tree_count=0" → no trees pitfall.
+                tree_count = 350;
+            }
             terrain::place_trees(terrain_cpu, tree_count, tree_seed)
         };
     // Mark trees with a non-highlight selection value to enable wind sway in the shader.
@@ -172,6 +191,11 @@ pub fn build_trees(
 pub(crate) fn path_for_kind(kind: &str) -> std::path::PathBuf {
     // Support explicit Quaternius model names via kind="quaternius.<Model>"
     if let Some(rest) = kind.strip_prefix("quaternius.") {
+        // Prefer an embedded-texture GLB fallback if present to avoid missing PNGs
+        let glb_fallback = asset_path("assets/trees/Birch_4GLB.glb");
+        if glb_fallback.exists() {
+            return glb_fallback;
+        }
         fn map_base(base: &str) -> String {
             match base {
                 "birch" => "Birch".into(),
@@ -234,6 +258,14 @@ pub fn build_trees_by_kind(
         // Skip problematic kinds per request (e.g., Quaternius Pine_* missing assets)
         if should_skip_kind(&kind) {
             log::info!("trees: skipping kind '{}' (policy)", kind);
+            continue;
+        }
+        // Skip obviously broken bakes for this kind (all instances at nearly one spot)
+        if snapshot_is_collapsed(&models) {
+            log::warn!(
+                "trees: kind '{}' snapshot appears collapsed; skipping",
+                kind
+            );
             continue;
         }
         // Convert models to Instances and snap Y to terrain
@@ -476,7 +508,7 @@ pub fn build_trees_by_kind(
             },
         ));
     }
-    Some(out)
+    if out.is_empty() { None } else { Some(out) }
 }
 
 #[inline]

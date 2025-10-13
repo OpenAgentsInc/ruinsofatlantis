@@ -85,7 +85,11 @@ pub fn place_trees(cpu: &TerrainCPU, count: usize, seed: u32) -> Vec<Instance> {
     let mut out: Vec<Instance> = Vec::with_capacity(count);
     let mut s = splitmix(seed as u64);
     let center_excl = cpu.extent * 0.25; // wider clearing near the player
-    for _ in 0..count {
+    // Keep sampling until we fill the requested count, with a safety cap to avoid long loops.
+    let mut attempts = 0usize;
+    let max_attempts = count.saturating_mul(20).max(1000);
+    while out.len() < count && attempts < max_attempts {
+        attempts += 1;
         let x = (rand01(&mut s) * 2.0 - 1.0) * cpu.extent;
         let z = (rand01(&mut s) * 2.0 - 1.0) * cpu.extent;
         if x.abs() < center_excl && z.abs() < center_excl {
@@ -113,6 +117,14 @@ pub fn place_trees(cpu: &TerrainCPU, count: usize, seed: u32) -> Vec<Instance> {
             color: [base[0] * tint, base[1] * tint, base[2] * tint],
             selected: 0.0,
         });
+    }
+    if out.len() < count {
+        log::debug!(
+            "trees: placed {} of requested {} after {} attempts (terrain slope/clearing limits)",
+            out.len(),
+            count,
+            attempts
+        );
     }
     out
 }

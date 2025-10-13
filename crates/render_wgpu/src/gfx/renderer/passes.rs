@@ -172,6 +172,8 @@ impl Renderer {
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_bind_group(1, &self.shard_model_bg, &[]);
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            // Material group (base_tex/base_sam); fall back to default white
+            rp.set_bind_group(3, &self.default_material_bg, &[]);
             rp.set_vertex_buffer(0, self.trees_vb.slice(..));
             rp.set_vertex_buffer(1, self.trees_instances.slice(..));
             rp.set_index_buffer(self.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
@@ -196,6 +198,7 @@ impl Renderer {
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_bind_group(1, &self.shard_model_bg, &[]);
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_bind_group(3, &self.default_material_bg, &[]);
             rp.set_vertex_buffer(0, self.rocks_vb.slice(..));
             rp.set_vertex_buffer(1, self.rocks_instances.slice(..));
             rp.set_index_buffer(self.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
