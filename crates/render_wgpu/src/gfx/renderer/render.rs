@@ -1804,7 +1804,10 @@ pub fn render_impl(
                 npc_positions.push(head.truncate());
             }
         }
-        if !npc_positions.is_empty() {
+        let legacy_overlays_np = std::env::var("RA_LEGACY_OVERLAYS")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        if legacy_overlays_np && !npc_positions.is_empty() {
             let target_view = &r.attachments.scene_view;
             r.nameplates_npc.queue_npc_labels(
                 &r.device,
@@ -1819,7 +1822,8 @@ pub fn render_impl(
         }
 
         // Death Knight nameplate (single instance)
-        if r.dk_count > 0
+        if legacy_overlays_np
+            && r.dk_count > 0
             && let Some(m) = r.dk_models.first().copied()
         {
             let head = m * glam::Vec4::new(0.0, 1.6, 0.0, 1.0);

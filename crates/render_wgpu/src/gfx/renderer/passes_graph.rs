@@ -124,8 +124,8 @@ impl MainPass {
                         resolve_target: resolve_to.as_ref(),
                         depth_slice: None,
                         ops: wgpu::Operations {
-                            // Clear to a sane color so we never sample garbage
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            // Preserve Sky background; Sky clears color, Main should Load
+                            load: wgpu::LoadOp::Load,
                             store: wgpu::StoreOp::Store,
                         },
                     })],
