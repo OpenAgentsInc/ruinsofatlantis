@@ -284,7 +284,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     #[cfg(not(target_arch = "wasm32"))]
     let direct_present = std::env::var("RA_DIRECT_PRESENT")
         .map(|v| v != "0")
-        .unwrap_or(true);
+        // Desktop default: use offscreen+present to match the framegraph HDR path
+        .unwrap_or(false);
     // If swapchain format is sRGB we can safely direct-present; otherwise keep
     // offscreen so present.wgsl can sRGB-encode for correct brightness.
     #[cfg(target_arch = "wasm32")]
