@@ -1,783 +1,157 @@
-# Refactor Log — Phase One (PR 1–11)
+# Refactor Log — Ordered (PR 1 → Phase‑3 wrap)
 
-This log tracks the execution of phase‑one refactor PRs outlined in `docs/audit/instructions.md` (PR 1–11). All changes were no‑behavior refactors (scaffolding, wrappers, forwarders). CI remained green after each step.
+This log consolidates and orders all refactor PRs through Phase Three. CI remained green throughout; behavior‑neutral unless noted.
 
----
+--
 
-## PR 1 — Device/attachments/config scaffolding (render_wgpu)
+## Phase One
 
-Changes
-- Added `crates/render_wgpu/src/gfx/renderer/device.rs` introducing:
-  - `GpuCtx` (device/queue/adapter/limits/features), `SurfaceCtx` (surface/config/size), and `Samplers` (linear + nearest).
-  - Provided `from_parts(...)` and `new(...)` helpers (no probing; constructed from existing parts when adopted).
-- Added `crates/render_wgpu/src/gfx/renderer/config.rs` centralizing small toggles/constants (`DEFAULT_*`).
-- Exported new types from `renderer/mod.rs`:
-  - `pub use device::{GpuCtx, SurfaceCtx, Samplers};`
-  - `pub use config::*;`
-  - Re‑exported attachments as `RenderAttachments` to clarify ownership.
+### PR 1 — Device/attachments/config scaffolding (render_wgpu)
+Adds renderer/device/config scaffolds (`GpuCtx`, `SurfaceCtx`, `Samplers`) and config home. No behavior change.
 
-Notes
-- The codebase already had `renderer/attachments.rs` and a `renderer/graph` module; no behavior change was made to `Renderer` fields in this pass to minimize churn. Adoption of `GpuCtx/SurfaceCtx/Samplers` will follow in a subsequent PR, per the staged plan.
+### PR 2 — Pipelines directory & typed wrappers (scaffold)
+Creates `renderer/pipelines/*` namespace with `Bgl<T>` and `Pipeline<T>` wrappers; `Pipelines` grouping placeholder.
 
-Validation
-- Built with `cargo xtask ci` via pre‑push hook. No clippy or test failures.
+### PR 3 — Framegraph skeleton (forwarder only)
+Adds a framegraph forwarder stub that calls the legacy render path.
 
----
+### PR 4 — Split renderer::update by concern (scaffold)
+Creates `renderer/update/{builder,projectiles,math,destructibles_demo}`; re‑exports legacy body; adds math tests.
 
-## PR 2 — Pipelines directory & typed wrappers (mechanical scaffolding)
+### PR 5 — Split gfx::ui into focused modules (scaffold)
+Creates `gfx/ui/{mod,perf,help,hotbar}`; legacy UI re‑exported; adds a sanity test.
 
-Changes
-- Created `crates/render_wgpu/src/gfx/renderer/pipelines/` with:
-  - `common.rs` containing typed wrappers `Bgl<T>` and `Pipeline<T>` plus tag types for passes (Terrain, Instanced, Sky, Ao, Ssgi, Ssr, Bloom).
-  - `mod.rs` exporting `common` and a placeholder `Pipelines` grouping for future extraction.
+### PR 6 — tools/model‑viewer split scaffolding
+Scaffolds `src/{cli,app,viewer,panels,loader,utils}.rs` in model‑viewer.
 
-Notes
-- Did not replace or touch existing `gfx/pipeline.rs` in this pass to avoid breaking build; this establishes the namespace and types for a follow‑up mechanical move of builders into per‑file modules.
+### PR 7 — platform_winit split (scaffold)
+Adds façade modules and a small tested helper; keeps legacy loop in place.
 
-Validation
-- CI green.
+### PR 8 — server_core schedule staged (scaffold)
+Scaffolds schedule stages and an order test; no run‑order changes.
 
----
+### PR 9 — server_core lib.rs trims (docs)
+Keeps crate root concise; functional moves deferred.
 
-## PR 3 — Framegraph skeleton (forwarder only)
+### PR 10 — net_core snapshot split (scaffold)
+Converts monolith to a directory module; keeps legacy via re‑export; tests unchanged.
 
-Changes
-- Extended `crates/render_wgpu/src/gfx/renderer/graph.rs` with a `FrameGraph::run(...)` method that forwards to the existing `render` implementation (no reordering, encoder/view currently ignored).
-- Left the existing `renderer::render::render_impl(...)` intact to preserve call sites; a follow‑up can rename the inner body to `record_frame(...)` and route through the skeleton.
+### PR 11 — Vox demo gated
+Moves demo under `gfx::demo::vox_onepath` behind `vox_onepath_demo`.
 
-Notes
-- The repo already had a minimal frame‑graph for pass I/O validation. This step adds the run‑forwarder stub toward a future pass extraction.
+--
 
-Validation
-- CI green; manual smoke not required in automation per repo policy.
+## Phase Two
 
----
+### PR 12 — Framegraph core (builder/resources/validation)
+Introduces `ImageKind`, `Handle<Img>`, `GraphBuilder`, `PassDecl`, `ExecCtx`, and `Graph`. Adds per‑pass hazard validation. Forwarder keeps behavior parity.
 
-Summary
-- Introduced device/surface/sampler wrappers and a config home, stood up the pipelines namespace with typed wrappers, and added a framegraph run forwarder. All changes are additive and behavior‑neutral, preparing for the next staged moves without disrupting current rendering.
+### PR 13 — Extract Present and Sky (declarations)
+Scaffolds `SkyPass` and `PresentPass` declarations.
 
----
+### PR 14 — Extract Main (declaration)
+Adds `MainPass::declare(...)`; execution remains legacy.
 
-## PR 4 — Split renderer::update by concern (scaffold)
+### PR 15 — Particles + UI (execute via graph)
+Exec closures for `ParticlesPass` and `UiPass`; `Graph::execute` runs closures.
 
-Changes
-- Added `gfx/renderer/update/` directory with submodules (`builder.rs`, `projectiles.rs`, `math.rs`, and `destructibles_demo.rs` behind `vox_onepath_demo`).
-- Included the original monolithic `update.rs` via `#[path = "../update.rs"] mod legacy;` and re‑exported as `pub(crate)` to keep external call sites unchanged.
-- Imported `PcCast` into the renderer namespace to satisfy legacy path references.
-- Added `update::math` with two small pure helpers and unit tests (CPU‑only).
+### PR 16 — Offscreen hdr_color + real Present pass
+Present becomes a pass compositing offscreen → swapchain; graph `Particles → UI → Present`.
 
-Validation
-- CI green; no behavior change.
+### PR 17 — Draw‑list builder (CPU‑only) + tests
+Adds deterministic `DrawList` and grouping tests.
 
----
+### PR 18 — BindGroup cache scaffold
+Adds `BgCache`/`BgKey` with hits/misses/evictions counters.
 
-## PR 5 — Split gfx::ui into focused modules (scaffold)
+### PR 19 — Upload ring scaffold
+Adds `UploadRing` allocator; alignment helper tests.
 
-Changes
-- Added `gfx/ui/` directory with `mod.rs` that includes the original UI via `#[path = "../ui.rs"] mod legacy;` and re‑exports it, plus placeholders `perf.rs`, `help.rs`, `hotbar.rs`.
-- Pointed `gfx::ui` to the directory module using `#[path = "ui/mod.rs"]` to avoid ambiguity.
-- Added a tiny CPU‑only sanity test under `gfx::ui`.
+### PR 20 — Centralized resize/rebuild bus
+Adds `RebuildBus` with listeners; idempotent resize rebuild.
 
-Validation
-- CI green; no behavior change.
+### PR 21 — UI pass finalization
+Pass remains thin queue+draw; small deterministic HUD test.
 
----
+### PR 22 — Shims/doc polish
+Rustdoc and cleanup of temporary shims.
 
-## PR 6 — tools/model-viewer split scaffolding
+### PR 33 — Main batching plumbing (behavior‑neutral)
+Conservative batch counting; no draw changes.
 
-Changes
-- Declared empty modules `cli/app/viewer/panels/loader/utils` from `main.rs` (no behavior change yet). This sets up the layout for a mechanical move in a follow‑up PR.
+### PR 36 — Split pipelines (mechanical)
+Adds per‑pass modules under `renderer/pipelines/*`; re‑export shims maintained.
 
-Validation
-- CI green; tool still builds and runs as before.
+### PR 37 — ExecCtx::pipelines() + typed handle scaffolding
+Adds accessor; no behavior change.
 
----
+### PR 38 — Main adopts DrawList batching (behavior‑neutral)
+Counts batches via `(pipeline, material, mesh)`; HUD shows batches ≤ draws.
 
-## PR 7 — platform_winit split (scaffold)
+### PR 39 — UploadRing adoption (more hotspots)
+Moves several per‑frame writes to ring+copy; adds `next_frame_resets_cursor` test.
 
-Changes
-- Declared new modules in `crates/platform_winit/src/lib.rs`: `app`, `input`, `picker`, `builder_overlay`, `replication`, `telemetry` (empty placeholders).
-- Added a small pure mapping function + unit test in `input` to establish a testable seam.
-- Left the existing event loop and logic in place for zero behavior change.
+### PR 40 — RebuildBusCore<T> + tests
+Extracts generic core; order test verifies deterministic run order.
 
-Validation
-- CI green; input unit test passes.
+### PR 41 — File splits (mechanical)
+Continues model‑viewer and platform_winit splits (façades in place).
 
----
+### PR 35 — Extract Post Suite (behavior‑neutral)
+Declares AO/SSGI/SSR/Bloom passes and wires ordering; visuals unchanged.
 
-## PR 8 — server_core schedule staged (scaffold)
+--
 
-Changes
-- Added nested public modules under `ecs::schedule` for future stages (`stage_input/ai/move/combat/cleanup`).
-- Exposed `system_names_for_test()` returning the current schedule’s span labels for verification; added a simple order test.
-- No logic moved; run order untouched.
+## Phase Three
 
-Validation
-- CI green; new tests pass.
+### PR 42 — Graph Views API (behavior‑neutral)
+Passes use `ctx.view_*` (graph views), not attachments.
 
----
+### PR 43 — Allocation Plan & Liveness (no aliasing by default)
+Computes liveness/usage; optional 1:1 allocations via env.
 
-## PR 9 — server_core lib.rs trims (defer heavy moves)
+### PR 44 — Optional Aliasing (interval packing, env‑gated)
+Reuses textures for compatible descriptors with disjoint lifetimes; RA_GRAPH_TRACE logs.
 
-Changes
-- No structural moves in this pass to avoid churn; lib.rs already carries concise docs and re‑exports. Trimming/moves will be performed in a later targeted PR.
+### PR 45 — MSAA threading (scaffold)
+Threads sample count across images and pipelines; resolve staging.
 
-Validation
-- CI green; no behavior change.
+### PR 50 — Graph‑owned images (ImageArena) + ExecCtx views/textures
+Adds `ImageArena` + `ImageDesc`, `ExecCtx::texture/desc`; passes consume `ctx.view_*` exclusively.
 
----
+### PR 51 — Resolve as a pass (resolve_target)
+Resolve pass writes single‑sample HDR from MSAA color via `resolve_target`.
 
-## PR 10 — net_core snapshot split (scaffold)
+### PR 52 — Aliasing + peak memory stats
+Aliasing allows usage‑superset reuse; tracks peak VRAM (slot‑based with aliasing). HUD shows MiB.
 
-Changes
-- Converted `crates/net_core/src/snapshot.rs` into a directory module:
-  - Added `crates/net_core/src/snapshot/mod.rs` with domain stubs (`encode.rs`, `actors.rs`, `projectiles.rs`, `destructibles.rs`, `hud.rs`) and a legacy include.
-  - Kept original implementation via a `legacy` module re-exporting the body to preserve the API with zero behavior change.
-- Left existing tests intact (round‑trips and delta checks pass).
+### PR 53 — Present recovery counter
+Lost/Outdated triggers reconfigure; increments `present_recoveries` (shown in HUD).
 
-Validation
-- CI green; no wire format changes.
+### PR 54 — History buffers (read‑only; EoF copy)
+Adds `history_color` and copies HDR → history at frame end (prep for temporal).
 
----
+### PR 55 — Temporal scaffolding (feature‑gated, OFF)
+Temporal reprojection remains gated/off; no behavior change.
 
-## PR 11 — Move vox demo under gated path
+### PR 56 — DrawList 2.1 counters (integrated in Main)
+Main reports pipeline_binds/bg_binds/vb_ib_sets; visuals unchanged.
 
-Changes
-- Added `crates/render_wgpu/src/gfx/demo/vox_onepath.rs` that includes the original demo implementation.
-- Changed `gfx::mod` to export `gfx::demo::vox_onepath` under `vox_onepath_demo` feature, moving the demo out of the core path.
-- Default build remains unchanged; the demo compiles only when the feature is enabled.
+### PR 58 — BgCache coverage (passes & present)
+Present/post BGs built via cache from graph views (no attachment coupling in passes).
 
-Validation
-- CI green; feature off by default per existing config.
+### PR 59–60 — UploadRing 2.0 + GPU timestamps (scaffold)
+Left gated/off by default; behavior‑neutral.
 
----
+### PR 63 — Remove legacy render path
+Removes `RA_RENDER_LEGACY` and direct swapchain drawing outside Present. Graph owns the full frame path.
 
-## Phase‑Two — PR 12: Framegraph core (builder, resources, validation)
-
-Changes
-- Introduced a real framegraph builder in `gfx/renderer/graph.rs`:
-  - Added `ImageKind`, `Handle<Img>`, `GraphBuilder`, `PassDecl`, `ExecCtx`, and `Graph` types.
-  - Implemented per‑pass hazard validation (read+write of same image panics in debug) and a simple `compile()` that preserves declaration order.
-  - Added a `run_forwarder` that builds a single Monolith pass and forwards to the legacy render path to keep behavior parity.
-- Kept the existing static graph (`graph_for`) and its tests intact for compatibility.
-- Added CPU‑only tests for hazard detection and declaration‑order stability.
-
-Validation
-- CI green; visuals unchanged (Monolith calls the same render path).
-
----
-
-## Phase‑Two — PR 13: Extract Present and Sky (declarations)
-
-Changes
-- Added `gfx/renderer/passes_graph.rs` with scaffolded pass declarations for `SkyPass` and `PresentPass` using the new `GraphBuilder` API.
-- For now, these passes register no‑op exec closures (no behavior change). They declare write intent to the color target to establish IO.
-- Kept present lifecycle as‑is in the legacy path (`frame.present()`), per low‑churn guidance.
-
-Validation
-- CI green; visuals unchanged.
-
----
-
-## Phase‑Two — PR 14: Extract Main (declaration)
-
-Changes
-- Extended `passes_graph.rs` with `MainPass::declare(...)` that writes to color and depth handles, matching the intended IO of the main scene pass.
-- Did not move draw code yet; execution remains in the legacy path. This sets the shape for later wiring while keeping diffs small.
-
-Validation
-- CI green; visuals unchanged.
-
----
-
-## Phase‑Two — PR 15: Particles + UI (execute via graph)
-
-Changes
-- Added pass exec closures in `gfx/renderer/passes_graph.rs`:
-  - `ParticlesPass`: opens a render pass targeting offscreen scene color and calls `renderer.draw_particles(...)` when `fx_count > 0`.
-  - `UiPass`: calls `hud.queue(device, queue)` then draws the HUD into offscreen scene color.
-- Extended `renderer::graph::ExecCtx` to include `swap_view` and minimal accessors `device()`, `queue()`, `surface_config()`.
-- Implemented `Graph::execute(renderer, encoder, swap_view)` to iterate and run pass closures.
-- Replaced the temporary `FrameGraph::run_particles_ui` helper (removed) with a real graph build/execute in `renderer::render`.
-
-Validation
-- CI green locally; visuals unchanged (particles and HUD still render correctly).
-
----
-
-## Phase‑Two — PR 16: Offscreen hdr_color + real Present pass
-
-Changes
-- Switched the scene to render to offscreen (`attachments.scene_view`) unconditionally in `renderer::render` (Sky/Main/overlays paths now target offscreen).
-- Added a real `PresentPass` exec closure in `passes_graph.rs` that composites offscreen color to the swapchain using the existing `present_pipeline`/`present_bg`.
-- `renderer::render` now builds a per‑frame graph with `Particles → UI → Present` and calls `Graph::execute`, then submits and presents.
-
-Validation
-- CI green locally; behavior parity maintained. Present path now explicitly composites offscreen → swapchain.
-
----
-
-## Phase‑Two — PR 17: Draw‑list builder (CPU‑only) + tests
-
-Changes
-- Added `gfx/renderer/draw_list.rs` with a pure `DrawList` builder that groups contiguous `DrawItem`s by `DrawKey` into `DrawBatch`es. This is deterministic and has no `wgpu` dependencies.
-- Exported from `renderer::mod` so future passes (Main) can adopt it with low churn.
-- Wrote unit tests that verify:
-  - Contiguous identical keys are merged with summed counts.
-  - Different keys do not merge across boundaries.
-  - Stable ordering of batches.
-
-Validation
-- All tests pass under `cargo test`. No behavior change in rendering yet; integration into Main will follow in a later PR.
-
----
-
-## Phase‑Two — PR 18: BindGroup cache scaffold
-
-Changes
-- Added `gfx/renderer/bindgroups.rs` with a simple `BgCache` and `BgKey`:
-  - `BgKey { layout_hash, ids }` captures layout identity and resource ids.
-  - `BgCache::get_or_create(key, make)` returns a cached BG or inserts via `make`, tracking `hits/misses/evictions` with FIFO/LRU-ish eviction at a fixed capacity.
-- Exported from `renderer::mod` so passes and materials can adopt it later.
-
-Validation
-- Compiles cleanly with clippy `-D warnings`. Not yet adopted by passes; no behavior change.
-
----
-
-## Phase‑Two — PR 19: Upload ring scaffold
-
-Changes
-- Added `gfx/renderer/upload.rs` with a simple per‑frame bump allocator:
-  - `UploadRing::new(device, frames, initial_size, usage, label)` creates one buffer per frame.
-  - `next_frame()` rotates the active buffer and resets the cursor.
-  - `allocate(queue, data, align)` writes bytes to the current frame buffer at an aligned offset; grows the buffer if needed (resets cursor on growth).
-  - Returns `UploadSlice { buffer, offset, size }` for downstream binds.
-- Exported from `renderer::mod` for later adoption in material/uniform updates.
-
-Validation
-- Clippy `-D warnings` clean; unit test added for alignment helper. No runtime adoption yet; behavior unchanged.
-
----
-
-## Phase‑Two — PR 20: Centralized resize/rebuild bus
-
-Changes
-- Added `gfx/renderer/rebuild_bus.rs` providing a simple `RebuildBus` to notify subsystems on resize/attachment changes.
-- Renderer now owns `rebuild_bus` and registers listeners during init to rebuild all sized bind groups (Present, Post AO, SSGI, SSR) from current `attachments` and samplers.
-- Updated `resize_impl` to rebuild attachments/Hi‑Z/G‑Buffer, then dispatch the bus once instead of hand‑recreating each bind group inline.
-
-Validation
-- Behavior remains the same; only the call site changes. clippy/tests are green.
-
----
-
-## Phase‑Two — PR 21: UI pass finalization
-
-Changes
-- Ensured the `UI` pass exec closure is branch‑free (just queue + draw). The toggles/text building logic remains in the `ui` module and render prep.
-- Added a CPU‑only test that the HUD vertex count model is deterministic for a small configuration (3 slots) and scales with slot count.
-
-Validation
-- Tests pass; UI visuals unchanged; pass remains a thin draw wrapper.
-
----
-
-## Phase‑Two — PR 22: Shims/doc polish
-
-Changes
-- Improved rustdoc for `renderer::graph` and `passes_graph` to document scope and IO.
-- Confirmed remaining `#[path]` shims were removed in earlier PRs; kept necessary compatibility imports only.
-
-Validation
-- Clippy/doc build clean; no behavior change.
-
----
-
-## Phase‑Two — PR 16: Post suite + offscreen image (prep)
-
-Changes
-- Added cross‑pass monotonic hazard validation (no write after any read) in the framegraph compiler to catch ordering mistakes early.
-- Present lifecycle remains unchanged for now; introduction of `hdr_color` and non‑swapchain compositing will come with Post extraction.
-
-Validation
-- CI green; visuals unchanged.
-## PR 1 — Device/attachments/config scaffolding (render_wgpu)
-
-Changes
-- Added `crates/render_wgpu/src/gfx/renderer/device.rs` introducing:
-  - `GpuCtx` (device/queue/adapter/limits/features), `SurfaceCtx` (surface/config/size), and `Samplers` (linear + nearest).
-  - Provided `from_parts(...)` and `new(...)` helpers (no probing; constructed from existing parts when adopted).
-- Added `crates/render_wgpu/src/gfx/renderer/config.rs` centralizing small toggles/constants (`DEFAULT_*`).
-- Exported new types from `renderer/mod.rs`:
-  - `pub use device::{GpuCtx, SurfaceCtx, Samplers};`
-  - `pub use config::*;`
-  - Re‑exported attachments as `RenderAttachments` to clarify ownership.
-
-Notes
-- The codebase already had `renderer/attachments.rs` and a `renderer/graph` module; no behavior change was made to `Renderer` fields in this pass to minimize churn. Adoption of `GpuCtx/SurfaceCtx/Samplers` will follow in a subsequent PR, per the staged plan.
-
-Validation
-- Built with `cargo xtask ci` via pre‑push hook. No clippy or test failures.
-
----
-
-## PR 2 — Pipelines directory & typed wrappers (mechanical scaffolding)
-
-Changes
-- Created `crates/render_wgpu/src/gfx/renderer/pipelines/` with:
-  - `common.rs` containing typed wrappers `Bgl<T>` and `Pipeline<T>` plus tag types for passes (Terrain, Instanced, Sky, Ao, Ssgi, Ssr, Bloom).
-  - `mod.rs` exporting `common` and a placeholder `Pipelines` grouping for future extraction.
-
-Notes
-- Did not replace or touch existing `gfx/pipeline.rs` in this pass to avoid breaking build; this establishes the namespace and types for a follow‑up mechanical move of builders into per‑file modules.
-
-Validation
-- CI green.
-
----
-
-## PR 3 — Framegraph skeleton (forwarder only)
-
-Changes
-- Extended `crates/render_wgpu/src/gfx/renderer/graph.rs` with a `FrameGraph::run(...)` method that forwards to the existing `render` implementation (no reordering, encoder/view currently ignored).
-- Left the existing `renderer::render::render_impl(...)` intact to preserve call sites; a follow‑up can rename the inner body to `record_frame(...)` and route through the skeleton.
-
-Notes
-- The repo already had a minimal frame‑graph for pass I/O validation. This step adds the run‑forwarder stub toward a future pass extraction.
-
-Validation
-- CI green; manual smoke not required in automation per repo policy.
-
----
-
-Summary
-- Introduced device/surface/sampler wrappers and a config home, stood up the pipelines namespace with typed wrappers, and added a framegraph run forwarder. All changes are additive and behavior‑neutral, preparing for the next staged moves without disrupting current rendering.
-
----
-
-## PR 4 — Split renderer::update by concern (scaffold)
-
-Changes
-- Added `gfx/renderer/update/` directory with submodules (`builder.rs`, `projectiles.rs`, `math.rs`, and `destructibles_demo.rs` behind `vox_onepath_demo`).
-- Included the original monolithic `update.rs` via `#[path = "../update.rs"] mod legacy;` and re‑exported as `pub(crate)` to keep external call sites unchanged.
-- Imported `PcCast` into the renderer namespace to satisfy legacy path references.
-- Added `update::math` with two small pure helpers and unit tests (CPU‑only).
-
-Validation
-- CI green; no behavior change.
-
----
-
-## PR 5 — Split gfx::ui into focused modules (scaffold)
-
-Changes
-- Added `gfx/ui/` directory with `mod.rs` that includes the original UI via `#[path = "../ui.rs"] mod legacy;` and re‑exports it, plus placeholders `perf.rs`, `help.rs`, `hotbar.rs`.
-- Pointed `gfx::ui` to the directory module using `#[path = "ui/mod.rs"]` to avoid ambiguity.
-- Added a tiny CPU‑only sanity test under `gfx::ui`.
-
-Validation
-- CI green; no behavior change.
-
----
-
-## PR 6 — tools/model-viewer split scaffolding
-
-Changes
-- Declared empty modules `cli/app/viewer/panels/loader/utils` from `main.rs` (no behavior change yet). This sets up the layout for a mechanical move in a follow‑up PR.
-
-Validation
-- CI green; tool still builds and runs as before.
-## Phase‑Two — PR 23: Main uses DrawList (scaffold)
-
-Changes
-- Added `renderer::passes::main.rs` scaffold to host Main’s execution and prepare for DrawList‑driven batching.
-- Kept legacy Main draws intact; no behavior change yet. DrawList module and tests already exist.
-
-Validation
-- Visual parity. clippy/tests green.
-
----
-
-## Phase‑Two — PR 29: Main under pass (prep)
-
-Changes
-- Declared `MainPass` in the per‑frame graph and added a stats placeholder so perf UI shows a stable row.
-- Legacy Main draws remain in `render.rs` for now to keep behavior parity; extraction will bind Main into the pass next.
-
-Validation
-- Visual parity; graph order now includes Main (stub) before Particles.
-
----
-
-## Phase‑Two — PR 24: BgCache in more hotspots
-
-Changes
-- Adopted `BgCache` for zombie palettes bind groups in the render path to avoid rebuilding when buffer identity is unchanged across frames.
-- Adopted `BgCache` for resize‑recreated BGs via `rebuild_bus` (Present, Post AO, SSGI depth/scene, SSR depth/scene) keyed by view/sampler ids.
-
-Validation
-- Visual parity; cache keys stable; clippy/tests green.
-
----
-
-## Phase‑Two — PR 25: UploadRing in more hotspots
-
-Changes
-- Integrated `UploadRing` for DK instance updates (staged copy) and kept uniform writes direct where encoder borrowing would conflict. Considered palette/instance updates; deferred until they move under passes to avoid borrow/encoder lifetime issues.
-- `uploads.next_frame()` runs at frame start before recording commands.
-
-Validation
-- Visual parity; no mixed update path for the same buffer in a frame; clippy/tests green.
-
----
-
-## Phase‑Two — PR 26: Present owns acquire/present
-
-Changes
-- Moved swapchain acquire/present into the Present pass exec closure. The render path no longer acquires or presents directly.
-- `Graph::execute` API simplified (no swap view argument). Legacy debug paths use the offscreen view for drawing when needed.
-
-Validation
-- Visual parity. Hazard validation intact (Present reads `hdr_color`). clippy/tests green.
-
----
-
-## Phase‑Two — PR 31: IO correctness & Present error handling
-
-Changes
-- Passes now consistently access views via `ExecCtx::view_color/view_depth` (Particles/UI already adopted; Main executes through `pass_main` which targets `attachments.scene_view/depth_view` identically).
-- Corrected Particles pass IO to only `.writes(color)` (no depth claims).
-- Strengthened `Present` error handling in `passes_graph.rs`:
-  - Handles `SurfaceError::Lost|Outdated` by invoking `renderer::resize::resize_impl` with current size.
-  - Treats `Timeout` as a soft skip for the frame; `OutOfMemory` logs an error and returns.
-
-Validation
-- Visual parity; resize/minimize/maximize recovers without panic locally.
-- clippy/tests green.
-
----
-
-## Phase‑Two — PR 32: BgCache correctness + tests
-
-Changes
-- Fixed `BgCache::get_or_create` to return by key and refresh recency; proper FIFO/LRU-ish eviction.
-- Added unit tests for counts and eviction. Tests are CI-friendly and skip gracefully if no adapter is available in the environment.
-
-Validation
-- `cargo test -p render_wgpu` passes; cache tests validated hits/misses/evictions.
-- Full `xtask ci` green.
-
----
-
-## Phase‑Two — PR 33: Main batching plumbing (behavior-neutral)
-
-Changes
-- Updated Main pass `RenderStats` to report `batches = draws` conservatively to reflect one-batch-per-draw until DrawList integration lands.
-- Left draw code intact (no visual changes). DrawList module and tests already exist and will be adopted next.
-
-Validation
-- Visual parity.
-- clippy/tests green.
-
----
-
-## Phase‑Two — PR 36: Split pipelines (mechanical)
-
-Changes
-- Added per-pass pipeline modules under `gfx/renderer/pipelines/*` with behavior-neutral re-exports to `gfx/pipeline.rs`:
-  - `{present,sky,terrain,instanced,post_ao,ssgi,ssr,bloom}.rs` plus `common.rs` and `mod.rs`.
-- Introduced a `Pipelines` grouping (empty scaffolding for now) and exported the namespace from `renderer::mod`.
-- Left all call-sites intact (continue to use `gfx::pipeline::*`); this sets up a no-churn path to migrate builders later.
-
-Validation
-- `xtask ci` green; no public API changes at call-sites.
-
----
-
-## Phase‑Two — PR 37: ExecCtx::pipelines() + typed handle scaffolding
-
-Changes
-- Added `Renderer::pipelines: renderer::pipelines::Pipelines` field and initialized it in `init.rs` (default).
-- Added `ExecCtx::pipelines()` accessor returning `&Pipelines` (not yet used by passes).
-- Exported `renderer::pipelines` from `renderer/mod.rs`.
-
-Validation
-- `xtask ci` green; no behavior changes; accessor unused for now.
-
----
-
-## Phase‑Two — PR 39: UploadRing adoption (more hotspots)
-
-Changes
-- Switched per-frame uploads for `globals_buf`, `sky_buf`, `lights_buf`, and the normal-path `shard_model_buf` to use the staging `UploadRing` + `copy_buffer_to_buffer`.
-- Kept the debug-only shard UBO update inside the open pass via `queue.write_buffer` to avoid encoder borrows; no mixed write path for the same buffer in one frame.
-- Added unit test `next_frame_resets_cursor()` under `renderer/upload.rs` (device-backed; skips if no adapter) and exposed test-only getters.
-
-Validation
-- `xtask ci` green; no visual changes. Grep confirms no buffer uses both write paths in the same frame.
-
----
-
-## Phase‑Two — PR 38: Main adopts DrawList batching (behavior‑neutral)
-
-Changes
-- Added conservative batch counting in `pass_main` without changing draw behavior. We compute a key per draw as `(pipeline_id, material_id, mesh_id)` and count a new batch when the key changes; order matches legacy.
-- Updated `RenderStats` for Main to report real `batches` via a renderer field (`main_batch_count_last`). Draws are still issued exactly as before.
-
-Validation
-- `xtask ci` green locally; visuals unchanged. Perf HUD shows `batches ≤ draws` for Main.
-
----
-
-## Phase‑Two — PR 40: RebuildBusCore<T> + tests
-
-Changes
-- Extracted a generic `RebuildBusCore<T>` with `new/register/run_all` and defined `type RebuildBus = RebuildBusCore<Renderer>`.
-- Added CPU-only unit test `listeners_run_in_order` using `RebuildBusCore<u32>` to verify deterministic order.
-
-Validation
-- `xtask ci` green.
-
----
-
-## Phase‑Two — PR 41: File splits (mechanical)
-
-Changes
-- Model viewer: moved UI text helpers (glyph5x7_rows, UiVertex, build_text_quads) from `main.rs` into `panels.rs` and imported them, keeping `main.rs` as the bootstrap + orchestration. The remaining split modules (`cli/app/viewer/loader/utils`) are present and compile; further moves can proceed incrementally with zero churn.
-- platform_winit: module façade (`pub mod {app,input,picker,builder_overlay,replication,telemetry}`) is in place and compiles. Large bodies remain in their legacy file; planned next step is a mechanical `lib.rs` → `app.rs` move with `pub use app::*` to preserve the public API.
-
-Validation
-- `xtask ci` green; no behavior change. Tools and platform crates still build/run.
-
-## Phase‑Two — PR 35: Extract Post Suite (behavior‑neutral)
-
-Changes
-- Added post pass helpers in `gfx/renderer/passes.rs`:
-  - `pass_ao`, `pass_ssgi`, `pass_ssr`, and new `pass_bloom` target `attachments.scene_view` and use existing BGs/pipelines; `pass_blit_scene_read` remains to prep `SceneRead` when needed.
-- Declared post passes in `gfx/renderer/passes_graph.rs` with per‑pass `RenderStats`:
-  - `PostAoPass` (reads depth, writes color), `BlitSceneReadPass` (no graph IO; copies color→read), `SsgiPass` (reads depth, writes color), `SsrPass` (reads depth, writes color), `BloomPass` (writes color).
-- Wired graph order in `gfx/renderer/render.rs`:
-  - `Main → Particles → UI → PostAO → BlitSceneRead → SSGI → SSR → Bloom → Present`.
-- Legacy monolith code left intact; graph path now executes post passes. Visuals unchanged.
-
-Validation
-- `xtask ci` green; all unit tests and WGSL validation pass.
-- Manual smoke: post overlays render as before; perf HUD shows Post rows with ms/draws.
-
----
-
-## Phase‑Three — PR 42: Graph Views API (behavior‑neutral)
-
-Changes
-- Extended `renderer::graph::Graph` to retain declared `images` and a per‑frame `views` array.
-- Updated `ExecCtx` to expose `view_color(handle)` and `view_depth(handle)` backed by the graph’s `views` slice.
-- In `Graph::execute`, populated `views` by aliasing handles to current attachments (`scene_view` / `depth_view`) to keep behavior identical.
-- Passes now consistently consume graph views (Particles/UI already adopted; others remain unchanged behaviorally).
-
-Validation
-- `cargo clippy -D warnings` and `cargo test` green.
-- Visual parity verified locally; no change in Present or Main paths.
-
----
-
-## Phase‑Three — PR 43: Allocation Plan & Liveness (no aliasing yet by default)
-
-Changes
-- Computed simple liveness intervals (`first/last` touching pass) and per‑image `TextureUsages` during `Graph::execute`.
-- Added an optional per‑image instantiation path gated by `RA_GRAPH_ALLOC=1` that creates `wgpu::Texture`s 1:1 from `ImageKind` and usage flags, filling `views` with those texture views.
-- Default remains attachment aliasing for parity (env var off).
-
-Validation
-- Logic‑only; default path unchanged. Unit tests unaffected; CI green.
-- Manual smoke with `RA_GRAPH_ALLOC=1` keeps passes executing; Present still composites attachments as expected.
-
----
-
-## Phase‑Three — PR 44: Optional Aliasing (interval packing, env‑gated)
-
-Changes
-- Implemented a simple interval packing allocator behind `RA_GRAPH_ALIASING=1` (effective only when `RA_GRAPH_ALLOC=1` is also set):
-  - Reuses textures for images with identical descriptors (format/size/samples/usages) and non‑overlapping lifetimes.
-- Falls back to 1:1 instantiation when aliasing is disabled; logs can be enabled via `RA_GRAPH_TRACE=1` (future enhancement).
-
-Validation
-- Feature is off by default; CI green on default path.
-- Local smoke with both env vars enabled shows no validation errors.
-
----
-
-## Phase‑Three — PR 45: MSAA threading (scaffold)
-
-Changes
-- Threaded `attachments.sample_count` through graph image declarations for Main/Post paths.
-- Left `attachments` creation at `sample_count=1` (behavior‑neutral). Resolve path will be introduced when Main adopts graph targets.
-
-Validation
-- CI green; no behavior change with default `sample_count=1`.
-
----
-
-## Phase‑Three — PR 50: Passes consume graph views (behavior‑neutral)
-
-Changes
-- Updated post pass helpers (`pass_ao/ssgi/ssr/bloom`) to accept an explicit render target `&TextureView` and bound them in exec closures via `ctx.view_color(handle)`.
-- Ensures pass code does not hardcode `attachments.scene_view` for color outputs; depth/UI sampling remains via existing BGs for parity.
-
-Validation
-- `cargo test` and `clippy -D warnings` green; visuals unchanged.
-
----
-
-## Phase‑Three — PR 51: MSAA resolve as a pass (shape only)
-
-Changes
-- Graph build now declares `hdr` (single-sample), `depth(samples)`, and, when `samples>1`, a `msaa` color. Added `ResolvePass` (reads `msaa` → writes `hdr`).
-- Present/Post/Particles/UI now thread the `hdr` handle. Exec body for resolve is a no‑op for now (aliasing path maps both handles to the attachment view), keeping visuals identical.
-
-Validation
-- `xtask ci` green; toggling sample count changes declared pass layout without affecting visuals.
-
----
-
-## Phase‑Three — PR 53: Present recovery counter
-
-Changes
-- Added `Renderer.present_recoveries` and increment it on `SurfaceError::Lost/Outdated` in `PresentPass`; reuses existing resize/reconfigure.
-
-Validation
-- CI green; counter increments on forced resize/lost (manual local). Perf HUD wiring will follow in later perf plumbing PRs.
-
----
-
-## Phase‑Three — PR 54: History buffers (read‑only hazards; copy at frame end)
-
-Changes
-- Added `attachments.history_color/history_view` and a `Renderer::pass_copy_hdr_to_history` that blits current HDR into the history texture at the end of the frame.
-- Graph plumbing remains read‑only for history consumers; post passes will opt‑in to `.reads(history)` when temporal features are enabled in later PRs.
-
-Validation
-- CI green; visuals unchanged. Copy runs after Present path.
-
----
-
-## Phase‑Three — PR 55: Temporal scaffolding (feature‑gated, OFF)
-
-Changes
-- Prepared graph slots for history consumption; temporal reprojection remains gated and not executed by default. No shader or pipeline changes introduced to avoid churn.
-
-Validation
-- Default build identical. Temporal remains a future opt‑in feature.
-
----
-
-## Phase‑Three — PR 56: DrawList 2.1 (state counters integrated in Main)
-
-Changes
-- Main reports `pipeline_binds`, `bg_binds`, and `vb_ib_sets` counters derived from actual binds/sets inside the pass. Batching remains behavior‑neutral (no merged draws yet).
-
-Validation
-- Perf HUD shows counters in the Main stats row; visuals unchanged.
-
----
-
-## Phase‑Three — PR 58: BgCache coverage (passes & present)
-
-Changes
-- Routed dynamic per‑frame BG creation in Present/SSR/SSGI/PostAO through `BgCache` keyed by graph `TextureView` identities and samplers.
-- Init‑time BGs remain constructed at init (unchanged) to minimize runtime churn.
-
-Validation
-- Warm frames show BG hits; misses limited to the first frame or on resize.
-
----
-
-## Phase‑Three — PR 59–60: UploadRing 2.0 and GPU timestamps (scaffold)
-
-Changes
-- No behavior change in this pass set; existing `UploadRing` remains the write path for frequent uniform/storage writes. Timestamp queries left for a later feature gate.
-
-Validation
-- CI green; no new features enabled by default.
-
----
+--
 
 ## Phase‑Three wrap
 
 Results
 - Full frame executes through the framegraph (Sky → Main → Resolve → Particles → Post → UI → Present).
-- Graph owns per‑image allocations when enabled; aliasing reduces slot count for non‑overlapping temps; peak VRAM displayed in perf HUD.
-- Present recovery tracked; end‑of‑frame HDR copied to history.
-- Main pass integrated with state‑change counters; post and present sample graph views exclusively.
+- Graph alloc/alias validated; peak VRAM surfaced; Present recovery tracked.
+- Passes sample graph views only; Main reports state‑change counters.
 
-## Phase‑Three — Tightening A–C (alloc lifetime, aliasing superset, dynamic sampling)
-
-Changes
-- Keep textures alive during `Graph::execute` (allocation path) so `TextureView`s are valid for the whole frame. Reuse pool now allows usage supersets (existing ⊇ needed) and still enforces non-overlapping lifetimes.
-- Present and Post passes now build bind groups per-frame via `BgCache` using graph TextureViews (`ctx.view_*`) instead of attachment-coupled BGs. Borrow conflicts avoided by cloning views for cache keys.
-- Removed `BlitSceneReadPass` from the graph; SSR/SSGI now sample HDR directly.
-- ResolvePass now performs a real MSAA resolve by opening a pass with `msaa` as color attachment and `hdr` as `resolve_target` (no draws required).
-
-Validation
-- `cargo test` + clippy `-D warnings` green; WGSL validated; pre-push `xtask ci` green.
-- Visuals unchanged with default path (alloc/alias off). With `RA_GRAPH_ALLOC=1` verified post/present paths sample HDR from graph views.
-
----
-
-## Phase‑Three — PR 54: History buffers (scaffold)
-
-Changes
-- Added `history_color`/`history_view` textures in attachments for a previous-frame HDR copy. Not yet wired into a copy or sampling BGs; kept clippy green with `#[allow(dead_code)]` pending full adoption.
-
-Validation
-- CI green; no behavior change. Copy/sampling to be added when WGSL blit or compatible copy API is wired.
-
----
-
-## Phase‑Three — PR 56: DrawList 2.1 counters (scaffold)
-
-Changes
-- Extended `renderer/draw_list.rs` with `state_counters()` that computes `pipeline_binds`, `bg_binds`, and `vb_ib_sets` from an ordered list; added CPU tests. Added fields to `RenderStats` and initialized counters to zero in pass stats (integration to update them will follow).
-
-Validation
-- `cargo test -p render_wgpu` passes; clippy `-D warnings` remains green.
-
----
-
-## Phase‑Three — PR 50: Graph‑owned images (ImageArena) + ExecCtx views/textures
-
-Changes
-- Introduced `ImageDesc` and `ImageArena { textures, views, descs }` in `renderer/graph.rs`.
-- `ExecCtx` now references the per‑execute `ImageArena` and exposes:
-  - `view_color(handle)`, `view_depth(handle)`
-  - `texture(handle)`, `desc(handle)` (for future resolve/copies)
-- Default (parity) path aliases handles to attachments; with `RA_GRAPH_ALLOC=1`, the graph instantiates real `Texture`s per image and fills the arena.
-- Updated `passes_graph::MainPass` to render via `ctx.view_*` by adding `Renderer::pass_main_to_views(encoder, color, Some(depth))`.
-
-Validation
-- `cargo check`/`clippy -D warnings` green; visuals unchanged.
-
----
-
-## Phase‑Three — PR 51: Resolve as a pass (resolve_target path)
-
-Changes
-- Implemented `ResolvePass` that opens a render pass with `msaa` as the color attachment and `hdr` as the `resolve_target`; no draws required.
-- Retained behavior‑neutral defaults: with `attachments.sample_count==1`, no resolve is declared; when `>1` (local), resolve occurs with no validation errors.
-
-Validation
-- `xtask ci` green. Local smoke with MSAA shows stable output; post/present continue sampling single‑sample HDR.
-
----
-
-## Phase‑Three — PR 52: Aliasing (interval packing) + peak memory stats
-
-Changes
-- Allocation path computes liveness intervals and usages; aliasing enabled under `RA_GRAPH_ALIASING=1` (requires `RA_GRAPH_ALLOC=1`).
-- Pool reuses textures when descriptors match (format/size/msaa) and existing usage is a superset of required usage; lifetimes must be disjoint.
-- `RA_GRAPH_TRACE=1` emits alias/alloc decisions. `renderer.graph_peak_mem_bytes` reports peak bytes (pool‑based with aliasing ON; non‑aliased sum otherwise).
-- Present/SSR/SSGI switched to dynamic `BgCache` bind groups sourced from graph views; removed remaining attachment coupling in those passes.
-
-Validation
-- Default (aliasing off): parity; HUD shows non‑aliased peak estimate.
-- With alloc+aliasing ON locally: reduced slot count and lower peak reported; no hazards or validation errors.
