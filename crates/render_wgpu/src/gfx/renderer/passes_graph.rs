@@ -280,6 +280,13 @@ impl PresentPass {
                 rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
                 rp.set_bind_group(1, &present_bg, &[]);
                 rp.draw(0..3, 0..1);
+                // Drop RP so HUD can open its own pass targeting the same swapchain view
+                drop(rp);
+                // Draw HUD directly to the swapchain (UI pipelines are built for swapchain format)
+                ctx.renderer
+                    .hud
+                    .queue(&ctx.renderer.device, &ctx.renderer.queue);
+                ctx.renderer.hud.draw(ctx.encoder, &swap_view);
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
                 log::debug!("present: drew fullscreen and set pending frame");

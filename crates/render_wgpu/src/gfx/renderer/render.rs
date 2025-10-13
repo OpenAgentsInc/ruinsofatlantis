@@ -2286,16 +2286,8 @@ pub fn render_impl(
         BloomPass::declare(&mut gb, post_bloom, post_src);
         // Copy bloom output into history before UI (pre-UI history)
         super::passes_graph::HistoryCopyPass::declare(&mut gb, post_bloom);
-        // UI renders into a fresh image to avoid write-after-read hazards on post_bloom
-        let post_ui = gb.image(ImageKind::Color {
-            format: wgpu::TextureFormat::Rgba16Float,
-            size,
-            msaa: 1,
-        });
-        // Blit bloom into UI target first so UI composes over it
-        super::passes_graph::BlitPostToSrcPass::declare(&mut gb, post_bloom, post_ui);
-        UiPass::declare(&mut gb, post_ui);
-        PresentPass::declare(&mut gb, post_ui);
+        // Draw HUD directly to the swapchain inside Present; present reads post_bloom
+        PresentPass::declare(&mut gb, post_bloom);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
         // History copy handled via graph pass
