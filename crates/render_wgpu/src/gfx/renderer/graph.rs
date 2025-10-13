@@ -716,21 +716,27 @@ impl Graph {
             // render to in a pass. We round-robin across scene_view, scene_read_view,
             // and history_view for Color kinds.
             let mut color_ix = 0usize;
+            let trace_alias = std::env::var("RA_GRAPH_TRACE")
+                .map(|v| v == "1")
+                .unwrap_or(false);
             for (ix, kind) in self.images.iter().enumerate() {
                 match kind {
                     ImageKind::Color { .. } => {
-                        let (view, fmt) = match color_ix % 3 {
+                        let (view, fmt, name) = match color_ix % 3 {
                             0 => (
                                 &renderer.attachments.scene_view,
                                 renderer.attachments.offscreen_format,
+                                "scene_view",
                             ),
                             1 => (
                                 &renderer.attachments.scene_read_view,
                                 renderer.attachments.offscreen_format,
+                                "scene_read_view",
                             ),
                             _ => (
                                 &renderer.attachments.history_view,
                                 renderer.attachments.offscreen_format,
+                                "history_view",
                             ),
                         };
                         arena.views[ix] = view.clone();
@@ -741,6 +747,9 @@ impl Graph {
                             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                                 | wgpu::TextureUsages::TEXTURE_BINDING,
                         };
+                        if trace_alias {
+                            log::debug!("graph: alias Img#{} -> {}", ix, name);
+                        }
                         color_ix += 1;
                     }
                     ImageKind::Depth { .. } => {

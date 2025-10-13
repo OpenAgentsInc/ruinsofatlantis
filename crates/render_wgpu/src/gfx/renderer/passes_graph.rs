@@ -206,6 +206,7 @@ impl PresentPass {
                         return;
                     }
                 };
+                log::debug!("present: acquired frame");
                 let swap_view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
@@ -279,6 +280,7 @@ impl PresentPass {
                 rp.draw(0..3, 0..1);
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
+                log::debug!("present: drew fullscreen and set pending frame");
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Present",
