@@ -155,3 +155,18 @@ Results
 - Graph alloc/alias validated; peak VRAM surfaced; Present recovery tracked.
 - Passes sample graph views only; Main reports state‑change counters.
 
+--
+
+## Phase‑Three — Follow‑ups (tests and correctness)
+
+### PR 63a — Main resolve correctness
+- Extracted `Renderer::main_draw_into(&mut RenderPass)` and updated `MainPass` to draw inside the resolve‑enabled pass (with `resolve_target = hdr` when MSAA > 1). Removed the intermediate/dummy pass.
+
+### PR 63b — History copy as a graph pass
+- Added `HistoryCopyPass` to sample the graph `post` image and render into `attachments.history_view` via a per‑frame BG built from the graph view. Removed out‑of‑graph history copy.
+
+### PR 63c — Tests: MSAA graph shape
+- Added CPU‑only tests in `renderer/graph.rs`:
+  - No `Resolve` pass exists.
+  - `Main` writes `hdr`/`depth` (no MSAA) and `hdr`/`msaa`/`depth` (with MSAA).
+- Existing self‑conflict IO test already covers read+write same image panics.

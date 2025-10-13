@@ -802,6 +802,7 @@ impl FrameGraph {
 #[cfg(test)]
 mod builder_tests {
     use super::*;
+    use crate::gfx::renderer::passes_graph as pg;
 
     #[test]
     #[should_panic]
@@ -839,5 +840,71 @@ mod builder_tests {
         // Illegal: write again after a read
         b.pass("writer2", |_ctx| {}).writes(img);
         let _ = Graph::compile(b);
+    }
+
+    #[test]
+    fn msaa_shape_no_msaa() {
+        // Build a tiny graph without MSAA: Sky/Main writing HDR directly
+        let mut b = GraphBuilder::new();
+        let hdr = b.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size: glam::uvec2(64, 64),
+            msaa: 1,
+        });
+        let depth = b.image(ImageKind::Depth {
+            format: wgpu::TextureFormat::Depth32Float,
+            size: glam::uvec2(64, 64),
+            msaa: 1,
+        });
+        pg::SkyPass::declare(&mut b, hdr, None);
+        pg::MainPass::declare(&mut b, hdr, depth, None);
+        let g = Graph::compile(b);
+        // Ensure no Resolve pass exists
+        assert!(!g.names.iter().any(|n| *n == "Resolve"));
+        // Ensure Main writes HDR and Depth (and not MSAA)
+        let main = g
+            .passes
+            .iter()
+            .find(|p| p.name == "Main")
+            .expect("Main pass present");
+        let writes_ids: Vec<u32> = main.writes.iter().map(|h| h.0).collect();
+        assert!(writes_ids.contains(&hdr.0));
+        assert!(writes_ids.contains(&depth.0));
+    }
+
+    #[test]
+    fn msaa_shape_with_msaa() {
+        // Build a tiny graph with MSAA: Sky/Main write MSAA and resolve to HDR
+        let mut b = GraphBuilder::new();
+        let hdr = b.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size: glam::uvec2(64, 64),
+            msaa: 1,
+        });
+        let depth = b.image(ImageKind::Depth {
+            format: wgpu::TextureFormat::Depth32Float,
+            size: glam::uvec2(64, 64),
+            msaa: 4,
+        });
+        let msaa = b.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size: glam::uvec2(64, 64),
+            msaa: 4,
+        });
+        pg::SkyPass::declare(&mut b, hdr, Some(msaa));
+        pg::MainPass::declare(&mut b, hdr, depth, Some(msaa));
+        let g = Graph::compile(b);
+        // Ensure no Resolve pass exists
+        assert!(!g.names.iter().any(|n| *n == "Resolve"));
+        // Ensure Main writes HDR, MSAA, and Depth
+        let main = g
+            .passes
+            .iter()
+            .find(|p| p.name == "Main")
+            .expect("Main pass present");
+        let writes_ids: Vec<u32> = main.writes.iter().map(|h| h.0).collect();
+        assert!(writes_ids.contains(&hdr.0));
+        assert!(writes_ids.contains(&msaa.0));
+        assert!(writes_ids.contains(&depth.0));
     }
 }
