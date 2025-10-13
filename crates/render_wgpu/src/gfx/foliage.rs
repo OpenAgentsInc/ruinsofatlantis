@@ -145,13 +145,23 @@ pub fn build_trees(
     // Default to cube fallback if GLTF fails for any reason.
     let (vb, ib, index_count) = match load_gltf_mesh(&tree_mesh_path) {
         Ok(cpu) => {
+            // Build a UV-capable vertex buffer so we can use the textured instanced pipeline.
+            let verts_uv: Vec<VertexPosNrmUv> = cpu
+                .vertices
+                .iter()
+                .map(|v| VertexPosNrmUv {
+                    pos: v.pos,
+                    nrm: v.nrm,
+                    uv: [0.0, 0.0],
+                })
+                .collect();
             let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("trees-vb"),
-                contents: bytemuck::cast_slice(&cpu.vertices),
+                label: Some("trees-uv-vb"),
+                contents: bytemuck::cast_slice(&verts_uv),
                 usage: wgpu::BufferUsages::VERTEX,
             });
             let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("trees-ib"),
+                label: Some("trees-uv-ib"),
                 contents: bytemuck::cast_slice(&cpu.indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
@@ -159,11 +169,11 @@ pub fn build_trees(
         }
         Err(e) => {
             log::warn!(
-                "failed to load GLTF tree mesh ({}): {}; falling back to cube",
+                "failed to load GLTF tree mesh ({}): {}; falling back to uv-cube",
                 tree_mesh_path.display(),
                 e
             );
-            super::mesh::create_cube(device)
+            super::mesh::create_uv_cube(device)
         }
     };
 
