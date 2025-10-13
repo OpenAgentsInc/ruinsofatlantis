@@ -355,6 +355,8 @@ impl Graph {
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,
     ) {
+        // ensure per-frame allocations do not accumulate
+        self.keep_textures.clear();
         // Behavior-neutral default: alias declared image handles to the current attachments.
         // Optionally allocate real textures per handle if RA_GRAPH_ALLOC=1 is set.
         let do_alloc = std::env::var("RA_GRAPH_ALLOC")

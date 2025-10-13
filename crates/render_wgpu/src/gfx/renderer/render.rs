@@ -2257,8 +2257,8 @@ pub fn render_impl(
         // Legacy fallback removed; always execute the framegraph
         use super::graph::{Graph, GraphBuilder, ImageKind};
         use super::passes_graph::{
-            BloomPass, MainPass, ParticlesPass, PostAoPass, PresentPass, ResolvePass, SkyPass,
-            SsgiPass, SsrPass, UiPass,
+            BlitHdrToPostPass, BloomPass, MainPass, ParticlesPass, PostAoPass, PresentPass,
+            SkyPass, SsgiPass, SsrPass, UiPass,
         };
         let mut gb = GraphBuilder::new();
         let size = glam::uvec2(r.config.width.max(1), r.config.height.max(1));
@@ -2282,27 +2282,23 @@ pub fn render_impl(
         } else {
             None
         };
-        // Scene: Sky + Main
-        if let Some(msaa_img) = msaa {
-            SkyPass::declare(&mut gb, msaa_img);
-            MainPass::declare(&mut gb, msaa_img, depth);
-            ResolvePass::declare(&mut gb, msaa_img, hdr);
-        } else {
-            SkyPass::declare(&mut gb, hdr);
-            MainPass::declare(&mut gb, hdr, depth);
-        }
-        // Particles write to msaa/hdr depending on samples
-        let color_for_overlays = msaa.unwrap_or(hdr);
-        ParticlesPass::declare(&mut gb, color_for_overlays, depth);
-        // Post suite operates on single-sample HDR
-        // If MSAA, Resolve has been declared above to write HDR
-        PostAoPass::declare(&mut gb, hdr, depth);
-        SsgiPass::declare(&mut gb, hdr, depth);
-        SsrPass::declare(&mut gb, hdr, depth);
-        BloomPass::declare(&mut gb, hdr);
-        // UI on top (single-sample HDR)
-        UiPass::declare(&mut gb, hdr);
-        PresentPass::declare(&mut gb, hdr);
+        // Scene: Sky + Main writing hdr (resolve in-pass if msaa)
+        SkyPass::declare(&mut gb, hdr, msaa);
+        MainPass::declare(&mut gb, hdr, depth, msaa);
+        ParticlesPass::declare(&mut gb, hdr, msaa);
+        // Post chain operates on a separate post color
+        let post = gb.image(ImageKind::Color {
+            format: wgpu::TextureFormat::Rgba16Float,
+            size,
+            msaa: 1,
+        });
+        BlitHdrToPostPass::declare(&mut gb, hdr, post);
+        PostAoPass::declare(&mut gb, post, depth);
+        SsgiPass::declare(&mut gb, post, hdr, depth);
+        SsrPass::declare(&mut gb, post, hdr, depth);
+        BloomPass::declare(&mut gb, post);
+        UiPass::declare(&mut gb, post);
+        PresentPass::declare(&mut gb, post);
         let g = Graph::compile(gb);
         g.execute(r, &mut encoder);
         // Copy HDR to history at end of frame (behavior-neutral)

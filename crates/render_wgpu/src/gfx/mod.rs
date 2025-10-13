@@ -157,6 +157,7 @@ pub struct Renderer {
     present_pipeline: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     bloom_pipeline: wgpu::RenderPipeline,
+    bloom_bgl: wgpu::BindGroupLayout,
     bloom_bg: wgpu::BindGroup,
     direct_present: bool,
     lights_buf: wgpu::Buffer,

@@ -11,37 +11,65 @@ use super::graph::{ExecCtx, GraphBuilder, Handle, Img};
 
 pub struct SkyPass;
 impl SkyPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
+    pub fn declare(builder: &mut GraphBuilder, hdr: Handle<Img>, msaa: Option<Handle<Img>>) {
         let _ = builder
             .pass("Sky", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                let target = ctx.view_color(color).clone();
-                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("sky-pass(graph)"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &target,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.02,
-                                g: 0.02,
-                                b: 0.04,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-                rp.set_pipeline(&ctx.renderer.sky_pipeline);
-                rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
-                rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
-                rp.draw(0..3, 0..1);
+                let hdr_view = ctx.view_color(hdr).clone();
+                if let Some(msaa_h) = msaa {
+                    let msaa_view = ctx.view_color(msaa_h).clone();
+                    let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("sky-pass(graph)"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &msaa_view,
+                            resolve_target: Some(&hdr_view),
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.02,
+                                    g: 0.02,
+                                    b: 0.04,
+                                    a: 1.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+                    rp.set_pipeline(&ctx.renderer.sky_pipeline);
+                    rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                    rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
+                    rp.draw(0..3, 0..1);
+                } else {
+                    let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("sky-pass(graph)"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &hdr_view,
+                            resolve_target: None,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.02,
+                                    g: 0.02,
+                                    b: 0.04,
+                                    a: 1.0,
+                                }),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        occlusion_query_set: None,
+                        timestamp_writes: None,
+                    });
+                    rp.set_pipeline(&ctx.renderer.sky_pipeline);
+                    rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
+                    rp.set_bind_group(1, &ctx.renderer.sky_bg, &[]);
+                    rp.draw(0..3, 0..1);
+                }
                 ctx.renderer.draw_calls += 1;
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
@@ -57,13 +85,19 @@ impl SkyPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
-            .writes(color);
+            .writes(hdr)
+            .writes(msaa.unwrap_or(hdr));
     }
 }
 
 pub struct MainPass;
 impl MainPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+    pub fn declare(
+        builder: &mut GraphBuilder,
+        hdr: Handle<Img>,
+        depth: Handle<Img>,
+        msaa: Option<Handle<Img>>,
+    ) {
         let _ = builder
             .pass("Main", move |ctx: &mut ExecCtx| {
                 let dc0 = ctx.renderer.draw_calls;
@@ -73,8 +107,39 @@ impl MainPass {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                let color_view = ctx.view_color(color).clone();
+                let (color_view, resolve_to) = if let Some(msaa_h) = msaa {
+                    (
+                        ctx.view_color(msaa_h).clone(),
+                        Some(ctx.view_color(hdr).clone()),
+                    )
+                } else {
+                    (ctx.view_color(hdr).clone(), None)
+                };
                 let depth_view = ctx.view_depth(depth).clone();
+                // Begin a pass to honor resolve target; then delegate draws
+                let _rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("main-pass(begin)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &color_view,
+                        resolve_target: resolve_to.as_ref(),
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &depth_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                drop(_rp);
                 ctx.renderer
                     .pass_main_to_views(ctx.encoder, &color_view, Some(&depth_view));
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
@@ -92,7 +157,8 @@ impl MainPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
-            .writes(color)
+            .writes(hdr)
+            .writes(msaa.unwrap_or(hdr))
             .writes(depth);
     }
 }
@@ -137,14 +203,15 @@ impl PresentPass {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
                 // Build a present BG from the graph HDR view
-                let src_owned = ctx.view_color(color).clone();
+                let src_view = ctx.view_color(color);
                 let key = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.present_bgl,
                     &[
-                        &src_owned as *const _ as u64,
+                        src_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
+                let src_owned = ctx.view_color(color).clone();
                 let present_bg = ctx.renderer.bg_cache.get_or_create(key, || {
                     ctx.renderer
                         .device
@@ -223,7 +290,7 @@ impl PresentPass {
 
 pub struct ParticlesPass;
 impl ParticlesPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, _depth: Handle<Img>) {
+    pub fn declare(builder: &mut GraphBuilder, hdr: Handle<Img>, msaa: Option<Handle<Img>>) {
         let _ = builder
             .pass("Particles", move |ctx: &mut ExecCtx| {
                 let dc0 = ctx.renderer.draw_calls;
@@ -231,12 +298,19 @@ impl ParticlesPass {
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
                 if ctx.renderer.fx_count > 0 {
-                    let view = ctx.view_color(color).clone();
+                    let (view, resolve_to) = if let Some(msaa_h) = msaa {
+                        (
+                            ctx.view_color(msaa_h).clone(),
+                            Some(ctx.view_color(hdr).clone()),
+                        )
+                    } else {
+                        (ctx.view_color(hdr).clone(), None)
+                    };
                     let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("particles-pass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &view,
-                            resolve_target: None,
+                            resolve_target: resolve_to.as_ref(),
                             depth_slice: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
@@ -264,7 +338,8 @@ impl ParticlesPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
-            .writes(color);
+            .writes(hdr)
+            .writes(msaa.unwrap_or(hdr));
     }
 }
 
@@ -302,22 +377,23 @@ impl UiPass {
 
 pub struct PostAoPass;
 impl PostAoPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+    pub fn declare(builder: &mut GraphBuilder, post: Handle<Img>, depth: Handle<Img>) {
         let _ = builder
             .pass("PostAO", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                let target = ctx.view_color(color).clone();
+                let target = ctx.view_color(post).clone();
                 // Build a depth BG from graph view via BgCache
-                let depth_view = ctx.view_depth(depth).clone();
+                let depth_view = ctx.view_depth(depth);
                 let key = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.post_ao_bgl,
                     &[
-                        &depth_view as *const _ as u64,
+                        depth_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
+                let depth_owned = ctx.view_depth(depth).clone();
                 let post_ao_bg = ctx.renderer.bg_cache.get_or_create(key, || {
                     ctx.renderer
                         .device
@@ -327,7 +403,7 @@ impl PostAoPass {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&depth_view),
+                                    resource: wgpu::BindingResource::TextureView(&depth_owned),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
@@ -372,39 +448,93 @@ impl PostAoPass {
                 ctx.renderer.render_stats.push(stats);
             })
             .reads(depth)
-            .writes(color);
+            .writes(post);
     }
 }
 
-pub struct BlitSceneReadPass;
-impl BlitSceneReadPass {
-    pub fn declare(builder: &mut GraphBuilder, _color: Handle<Img>) {
-        let _ = builder.pass("BlitSceneRead", |ctx: &mut ExecCtx| {
-            // Copy SceneColor -> SceneRead when SSR/SSGI need it; no IO declared in graph yet
-            ctx.renderer.pass_blit_scene_read(ctx.encoder);
-            // No stats row; folded into post stats
-        });
+pub struct BlitHdrToPostPass;
+impl BlitHdrToPostPass {
+    pub fn declare(builder: &mut GraphBuilder, hdr: Handle<Img>, post: Handle<Img>) {
+        let _ = builder
+            .pass("BlitHdrToPost", move |ctx: &mut ExecCtx| {
+                let src = ctx.view_color(hdr);
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.present_bgl,
+                    &[
+                        src as *const _ as u64,
+                        &ctx.renderer.point_sampler as *const _ as u64,
+                    ],
+                );
+                let src_owned = ctx.view_color(hdr).clone();
+                let blit_bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("blit-hdr-to-post[graph]"),
+                            layout: &ctx.renderer.present_bgl,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&src_owned),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        &ctx.renderer.point_sampler,
+                                    ),
+                                },
+                            ],
+                        })
+                });
+                let target = ctx.view_color(post).clone();
+                let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("blit-hdr-to-post-pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &target,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                rp.set_pipeline(&ctx.renderer.blit_scene_read_pipeline);
+                rp.set_bind_group(0, &blit_bg, &[]);
+                rp.draw(0..3, 0..1);
+            })
+            .reads(hdr)
+            .writes(post);
     }
 }
 
 pub struct SsgiPass;
 impl SsgiPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+    pub fn declare(
+        builder: &mut GraphBuilder,
+        post: Handle<Img>,
+        hdr: Handle<Img>,
+        depth: Handle<Img>,
+    ) {
         let _ = builder
             .pass("SSGI", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                let target = ctx.view_color(color).clone();
+                let target = ctx.view_color(post).clone();
                 // Depth BG
-                let depth_view = ctx.view_depth(depth).clone();
+                let depth_view = ctx.view_depth(depth);
                 let key_d = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.ssgi_depth_bgl,
                     &[
-                        &depth_view as *const _ as u64,
+                        depth_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
+                let depth_owned = ctx.view_depth(depth).clone();
                 let ssgi_depth_bg = ctx.renderer.bg_cache.get_or_create(key_d, || {
                     ctx.renderer
                         .device
@@ -414,7 +544,7 @@ impl SsgiPass {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&depth_view),
+                                    resource: wgpu::BindingResource::TextureView(&depth_owned),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
@@ -426,14 +556,15 @@ impl SsgiPass {
                         })
                 });
                 // Scene BG (sample HDR)
-                let scene_view = ctx.view_color(color).clone();
+                let scene_view = ctx.view_color(hdr);
                 let key_s = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.ssgi_scene_bgl,
                     &[
-                        &scene_view as *const _ as u64,
+                        scene_view as *const _ as u64,
                         &ctx.renderer._post_sampler as *const _ as u64,
                     ],
                 );
+                let hdr_owned = ctx.view_color(hdr).clone();
                 let ssgi_scene_bg = ctx.renderer.bg_cache.get_or_create(key_s, || {
                     ctx.renderer
                         .device
@@ -443,7 +574,7 @@ impl SsgiPass {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&scene_view),
+                                    resource: wgpu::BindingResource::TextureView(&hdr_owned),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
@@ -488,28 +619,35 @@ impl SsgiPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
+            .reads(hdr)
             .reads(depth)
-            .writes(color);
+            .writes(post);
     }
 }
 
 pub struct SsrPass;
 impl SsrPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>, depth: Handle<Img>) {
+    pub fn declare(
+        builder: &mut GraphBuilder,
+        post: Handle<Img>,
+        hdr: Handle<Img>,
+        depth: Handle<Img>,
+    ) {
         let _ = builder
             .pass("SSR", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                let target = ctx.view_color(color).clone();
-                let scene_view = ctx.view_color(color).clone();
+                let target = ctx.view_color(post).clone();
+                let scene_view = ctx.view_color(hdr);
                 let key_s = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.ssr_scene_bgl,
                     &[
-                        &scene_view as *const _ as u64,
+                        scene_view as *const _ as u64,
                         &ctx.renderer._post_sampler as *const _ as u64,
                     ],
                 );
+                let hdr_owned = ctx.view_color(hdr).clone();
                 let ssr_scene_bg = ctx.renderer.bg_cache.get_or_create(key_s, || {
                     ctx.renderer
                         .device
@@ -519,7 +657,7 @@ impl SsrPass {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&scene_view),
+                                    resource: wgpu::BindingResource::TextureView(&hdr_owned),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
@@ -531,14 +669,15 @@ impl SsrPass {
                         })
                 });
                 // Depth BG (graph-owned)
-                let depth_view = ctx.view_depth(depth).clone();
+                let depth_view = ctx.view_depth(depth);
                 let key_d = crate::gfx::renderer::bindgroups::BgKey::new(
                     &ctx.renderer.ssr_depth_bgl,
                     &[
-                        &depth_view as *const _ as u64,
+                        depth_view as *const _ as u64,
                         &ctx.renderer.point_sampler as *const _ as u64,
                     ],
                 );
+                let depth_owned = ctx.view_depth(depth).clone();
                 let ssr_depth_bg = ctx.renderer.bg_cache.get_or_create(key_d, || {
                     ctx.renderer
                         .device
@@ -548,7 +687,7 @@ impl SsrPass {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&depth_view),
+                                    resource: wgpu::BindingResource::TextureView(&depth_owned),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
@@ -592,20 +731,40 @@ impl SsrPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
+            .reads(hdr)
             .reads(depth)
-            .writes(color);
+            .writes(post);
     }
 }
 
 pub struct BloomPass;
 impl BloomPass {
-    pub fn declare(builder: &mut GraphBuilder, color: Handle<Img>) {
+    pub fn declare(builder: &mut GraphBuilder, post: Handle<Img>) {
         let _ = builder
             .pass("Bloom", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();
-                let target = ctx.view_color(color).clone();
+                // Build bloom BG before opening the pass to avoid borrow overlap
+                let src_ptr = ctx.view_color(post) as *const _ as u64;
+                let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                    &ctx.renderer.bloom_bgl,
+                    &[src_ptr],
+                );
+                let src_owned = ctx.view_color(post).clone();
+                let bloom_bg = ctx.renderer.bg_cache.get_or_create(key, || {
+                    ctx.renderer
+                        .device
+                        .create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("bloom-bg[graph]"),
+                            layout: &ctx.renderer.bloom_bgl,
+                            entries: &[wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(&src_owned),
+                            }],
+                        })
+                });
+                let target = ctx.view_color(post).clone();
                 let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("bloom-pass(graph)"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -622,8 +781,7 @@ impl BloomPass {
                     timestamp_writes: None,
                 });
                 rp.set_pipeline(&ctx.renderer.bloom_pipeline);
-                // Use existing bloom_bg (built at init); safe placeholder until dynamic layout stored
-                rp.set_bind_group(0, &ctx.renderer.bloom_bg, &[]);
+                rp.set_bind_group(0, &bloom_bg, &[]);
                 rp.draw(0..3, 0..1);
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
@@ -639,7 +797,8 @@ impl BloomPass {
                 };
                 ctx.renderer.render_stats.push(stats);
             })
-            .writes(color);
+            .reads(post)
+            .writes(post);
     }
 }
 

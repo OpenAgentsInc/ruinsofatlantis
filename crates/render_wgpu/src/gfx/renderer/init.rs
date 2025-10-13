@@ -1854,6 +1854,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         present_pipeline,
         blit_scene_read_pipeline,
         bloom_pipeline,
+        bloom_bgl: bloom_bgl.clone(),
         bloom_bg,
         direct_present,
         lights_buf,
