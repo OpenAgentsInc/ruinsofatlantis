@@ -86,7 +86,7 @@ impl Renderer {
             .map(|v| v == "1")
             .unwrap_or(false);
         #[cfg(not(target_arch = "wasm32"))]
-        let mut pop_scope = |label: &str, dev: &wgpu::Device| -> bool {
+        let pop_scope = |label: &str, dev: &wgpu::Device| -> bool {
             if let Some(e) = pollster::block_on(dev.pop_error_scope()) {
                 log::error!("main pass: {}: {:?}", label, e);
                 return true;
