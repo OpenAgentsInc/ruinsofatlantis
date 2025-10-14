@@ -3383,9 +3383,11 @@ impl Renderer {
                 rpass.set_bind_group(1, &self.terrain_model_bg, &[]);
                 // lights are packed into globals (binding=1)
                 rpass.set_vertex_buffer(0, self.terrain_vb.slice(..));
-                rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
-                self.draw_calls += 1;
+                if self.terrain_index_count > 0 {
+                    rpass.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+                    self.draw_calls += 1;
+                }
                 if trace && let Some(e) = pollster::block_on(self.device.pop_error_scope()) {
                     log::error!("validation after terrain: {:?}", e);
                 }

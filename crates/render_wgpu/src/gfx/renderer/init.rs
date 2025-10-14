@@ -837,7 +837,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             label: Some("terrain-empty"),
             size: 4,
             // Use as both a placeholder vertex and index buffer to satisfy set_index_buffer
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDEX,
+            // Include COPY_DST for potential writes in future paths.
+            usage: wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::INDEX
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         (

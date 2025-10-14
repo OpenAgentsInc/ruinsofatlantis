@@ -170,3 +170,22 @@ Results
   - No `Resolve` pass exists.
   - `Main` writes `hdr`/`depth` (no MSAA) and `hdr`/`msaa`/`depth` (with MSAA).
 - Existing self‑conflict IO test already covers read+write same image panics.
+
+--
+
+## Hotfix — Metal validation: terrain-empty INDEX usage + 0-index guard (2025‑10‑14)
+
+- Root cause: wgpu validation on Apple Metal reported `SetIndexBuffer → MissingBufferUsage` for buffer labeled `terrain-empty` — created with `VERTEX` only, later bound as an index buffer during terrain draw when index_count could be 0.
+- Fixes (both applied):
+  - Ensure the placeholder `terrain-empty` buffer includes `INDEX` (and `COPY_DST`) usage at creation.
+    - File: crates/render_wgpu/src/gfx/renderer/init.rs
+    - Change: `usage: VERTEX | INDEX | COPY_DST` for `"terrain-empty"` buffer.
+  - Guard terrain draw calls when `index_count == 0` to avoid binding any index buffer in that case.
+    - Files and sites:
+      - crates/render_wgpu/src/gfx/renderer/passes.rs: terrain section in `main_draw_into` now skips `set_index_buffer`/`draw_indexed` if `terrain_index_count == 0`.
+      - crates/render_wgpu/src/gfx/renderer/render.rs: legacy main terrain draw path guarded the same way.
+      - crates/render_wgpu/src/gfx/mod.rs: legacy monolith terrain draw guarded the same way.
+- Verification:
+  - Build: `cargo check` OK.
+  - Isolation toggles available for local validation: `RA_SPLIT_ENC=1 RA_DISABLE_POST=1 RA_DISABLE_PARTICLES=1 RA_PRESENT_NO_DEPTH=1 RA_NO_HUD=1` — with these, driver errors surface per‑pass; no validation errors observed after the fix.
+  - Normal run path shows no end‑of‑frame `EncoderState(Invalid)` errors on Metal.

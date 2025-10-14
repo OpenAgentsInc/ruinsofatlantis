@@ -113,10 +113,12 @@ impl Renderer {
             rp.set_bind_group(1, &self.terrain_model_bg, &[]);
             self.bg_binds_count = self.bg_binds_count.saturating_add(1);
             rp.set_vertex_buffer(0, self.terrain_vb.slice(..));
-            rp.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
-            self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
-            rp.draw_indexed(0..self.terrain_index_count, 0, 0..1);
-            self.draw_calls += 1;
+            if self.terrain_index_count > 0 {
+                rp.set_index_buffer(self.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+                self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                rp.draw_indexed(0..self.terrain_index_count, 0, 0..1);
+                self.draw_calls += 1;
+            }
             self.batch_add_key_ids(pid, mid, mesh);
             if pop_scope("terrain", &self.device) {
                 return;

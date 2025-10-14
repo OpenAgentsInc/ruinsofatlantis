@@ -1277,9 +1277,11 @@ pub fn render_impl(
                 rp.set_bind_group(0, &r.globals_bg, &[]);
                 rp.set_bind_group(1, &r.terrain_model_bg, &[]);
                 rp.set_vertex_buffer(0, r.terrain_vb.slice(..));
-                rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
-                rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
-                r.draw_calls += 1;
+                if r.terrain_index_count > 0 {
+                    rp.set_index_buffer(r.terrain_ib.slice(..), wgpu::IndexFormat::Uint16);
+                    rp.draw_indexed(0..r.terrain_index_count, 0, 0..1);
+                    r.draw_calls += 1;
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 if trace && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
                     log::error!("validation after terrain: {:?}", e);
