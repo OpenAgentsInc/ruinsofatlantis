@@ -1,11 +1,5 @@
-#!/usr/bin/env bash
-# Re-exec under bash if invoked with sh
-if [ -z "${BASH_VERSION:-}" ]; then
-  if command -v bash >/dev/null 2>&1; then
-    exec bash "$0" "$@"
-  fi
-fi
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
 # Copy to clipboard all files relevant to in-world placement ("worldsmithing")
 # including renderer placement paths for trees/rocks, the platform builder overlay,
@@ -33,10 +27,16 @@ else
   exit 1
 fi
 
-declare -a CURATED=()
+# Temp files
+LIST_CURATED="$(mktemp)"
+LIST_FOUND="$(mktemp)"
+trap 'rm -f "$LIST_CURATED" "$LIST_FOUND" "$tmp_all" "$tmp_trunc" 2>/dev/null || true' EXIT
+
 add() {
-  local p="$1"
-  if [[ -f "$p" ]]; then CURATED+=("$p"); fi
+  p="$1"
+  if [ -f "$p" ]; then
+    printf '%s\n' "$p" >> "$LIST_CURATED"
+  fi
 }
 
 # Platform: builder overlay + event integration
@@ -52,48 +52,38 @@ add "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/update/builder.rs"
 
 # Data runtime: worldsmithing policy in zone manifest
 add "$ROOT_DIR/crates/data_runtime/src/zone.rs"
-if [[ -f "$ROOT_DIR/data/zones/campaign_builder/manifest.json" ]]; then
-  CURATED+=("$ROOT_DIR/data/zones/campaign_builder/manifest.json")
+if [ -f "$ROOT_DIR/data/zones/campaign_builder/manifest.json" ]; then
+  printf '%s\n' "$ROOT_DIR/data/zones/campaign_builder/manifest.json" >> "$LIST_CURATED"
 fi
 
 # Worldsmithing crate: include everything
-if [[ -d "$ROOT_DIR/crates/worldsmithing" ]]; then
-  while IFS= read -r f; do CURATED+=("$f"); done < <(find "$ROOT_DIR/crates/worldsmithing" -type f \( -name "*.rs" -o -name "Cargo.toml" \))
+if [ -d "$ROOT_DIR/crates/worldsmithing" ]; then
+  find "$ROOT_DIR/crates/worldsmithing" -type f \( -name "*.rs" -o -name "Cargo.toml" \) -print >> "$LIST_CURATED"
 fi
 
 # Dynamic search to catch additional relevant files
-declare -a SEARCH_DIRS=(
-  "$ROOT_DIR/crates/render_wgpu/src"
-  "$ROOT_DIR/crates/platform_winit/src"
-  "$ROOT_DIR/crates/data_runtime/src"
-  "$ROOT_DIR/crates/worldsmithing"
-)
-declare -a PATTERNS=(
-  '\\bworldsmithing\\b'
-  '\\bplace(ment)?\\b'
-  '\\bghost\\b'
-  '\\bfoliage\\b'
-  '\\brocks?\\b'
-  '\\btrees?\\b'
-  '\\bbuilder\\b'
-)
+SEARCH_DIRS="$ROOT_DIR/crates/render_wgpu/src
+$ROOT_DIR/crates/platform_winit/src
+$ROOT_DIR/crates/data_runtime/src
+$ROOT_DIR/crates/worldsmithing"
 
-declare -a FOUND=()
-for dir in "${SEARCH_DIRS[@]}"; do
-  [[ -d "$dir" ]] || continue
-  for pat in "${PATTERNS[@]}"; do
-    while IFS= read -r f; do FOUND+=("$f"); done < <(rg -n -l -i -g '!**/target/**' -g '!**/.git/**' "$pat" "$dir" || true)
+# Prefer ripgrep; fallback to grep
+if command -v rg >/dev/null 2>&1; then
+  for dir in $SEARCH_DIRS; do
+    [ -d "$dir" ] || continue
+    rg -n -l -i -g '!**/target/**' -g '!**/.git/**' \
+      -e '\\bworldsmithing\\b|\\bplace(ment)?\\b|\\bghost\\b|\\bfoliage\\b|\\brocks?\\b|\\btrees?\\b|\\bbuilder\\b' \
+      "$dir" || true >> "$LIST_FOUND"
   done
-done
+else
+  for dir in $SEARCH_DIRS; do
+    [ -d "$dir" ] || continue
+    grep -R -n -i -E '\\bworldsmithing\\b|\\bplace(ment)?\\b|\\bghost\\b|\\bfoliage\\b|\\brocks?\\b|\\btrees?\\b|\\bbuilder\\b' "$dir" 2>/dev/null | cut -d: -f1 >> "$LIST_FOUND" || true
+  done
+fi
 
 # Merge and uniq
-{
-  for f in "${CURATED[@]}"; do printf '%s\n' "$f"; done
-  # Guard in case FOUND is empty/unset in some shells
-  if [[ ${#FOUND[@]:-0} -gt 0 ]]; then
-    for f in "${FOUND[@]}"; do printf '%s\n' "$f"; done
-  fi
-} | awk 'NF' | LC_ALL=C sort -u > /tmp/worldsmithing_files_$$.list
+cat "$LIST_CURATED" "$LIST_FOUND" 2>/dev/null | awk 'NF' | LC_ALL=C sort -u > /tmp/worldsmithing_files_$$.list
 
 FILES_LIST=/tmp/worldsmithing_files_$$.list
 if [[ ! -s "$FILES_LIST" ]]; then
@@ -102,7 +92,6 @@ if [[ ! -s "$FILES_LIST" ]]; then
 fi
 
 tmp_all="$(mktemp)"
-trap 'rm -f "$tmp_all" "$FILES_LIST"; [[ -n "${tmp_trunc:-}" ]] && rm -f "$tmp_trunc"' EXIT
 
 while IFS= read -r file; do
   [[ -f "$file" ]] || continue
