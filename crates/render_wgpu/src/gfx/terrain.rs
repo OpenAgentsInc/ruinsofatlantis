@@ -35,6 +35,7 @@ pub struct TerrainBuffers {
     pub index_count: u32,
 }
 
+#[derive(Clone)]
 pub struct TerrainCPU {
     pub size: usize, // grid dimension (N x N vertices)
     pub extent: f32, // world-space half-extent (meters)

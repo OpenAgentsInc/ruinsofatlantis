@@ -31,6 +31,8 @@ mod camera_sys;
 mod deathknight;
 mod draw;
 mod foliage;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod foliage_stream;
 pub mod fx;
 mod material;
 mod npcs;
@@ -659,6 +661,130 @@ struct Debris {
 }
 
 impl Renderer {
+    /// Upload a single tree-kind CPU batch to GPU (fast; called from the UI thread).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn install_tree_cpu_batch(&mut self, b: crate::gfx::foliage_stream::TreeCpuBatch) {
+        use wgpu::util::DeviceExt;
+
+        // Instances
+        let instances = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-instances"),
+                contents: bytemuck::cast_slice(&b.instances),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        // Geometry: verts/indices; if empty, use UV cube fallback
+        let (vb, ib, index_count) = if !b.verts_uv.is_empty() && !b.indices_u16.is_empty() {
+            let vb = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("trees-uv-vb"),
+                    contents: bytemuck::cast_slice(&b.verts_uv),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+            let ib = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("trees-uv-ib"),
+                    contents: bytemuck::cast_slice(&b.indices_u16),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+            (vb, ib, b.indices_u16.len() as u32)
+        } else {
+            crate::gfx::mesh::create_uv_cube(&self.device)
+        };
+
+        // Optional material
+        let material_bg = b.base_tex_rgba8.as_ref().map(|(pixels, w, h)| {
+            let size3 = wgpu::Extent3d {
+                width: *w,
+                height: *h,
+                depth_or_array_layers: 1,
+            };
+            let tex_obj = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("trees-albedo"),
+                size: size3,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            self.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &tex_obj,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * *w),
+                    rows_per_image: Some(*h),
+                },
+                size3,
+            );
+            let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+            let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("trees-sampler"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                ..Default::default()
+            });
+            let mat_xf_buf = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("material-xf"),
+                    contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("trees-material-bg"),
+                layout: &self.material_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: mat_xf_buf.as_entire_binding(),
+                    },
+                ],
+            })
+        });
+
+        // Register as a kind group and also update the default single-batch pointers
+        let batch = TreeBatch {
+            kind: b.kind,
+            instances: instances.clone(),
+            count: b.instances.len() as u32,
+            vb: vb.clone(),
+            ib: ib.clone(),
+            index_count,
+            material_bg,
+        };
+        self.trees_groups.push(batch);
+        // If this is the first batch, wire default pointers for generic draw path
+        if self.trees_groups.len() == 1 {
+            self.trees_instances = instances;
+            self.trees_count = self.trees_groups[0].count;
+            self.trees_vb = vb;
+            self.trees_ib = ib;
+            self.trees_index_count = index_count;
+        }
+    }
     /// Collect world-space positions for all wizard instances (including PC).
     /// Used by the platform demo server to drive simple NPC AI.
     pub fn wizard_positions(&self) -> Vec<glam::Vec3> {
@@ -743,6 +869,11 @@ impl Renderer {
     #[inline]
     pub fn picker_mode(&self) -> bool {
         self.picker_mode
+    }
+    /// Clone the CPU terrain snapshot for background worker usage (native only).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn terrain_cpu_clone(&self) -> crate::gfx::terrain::TerrainCPU {
+        self.terrain_cpu.clone()
     }
     /// Attach or clear zone batches uploaded by the client.
     pub fn set_zone_batches(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
@@ -1001,6 +1132,61 @@ impl Renderer {
                     self.rocks_ib = rg.ib;
                     self.rocks_index_count = rg.index_count;
                 }
+            }
+        }
+    }
+
+    /// Attach zone batches but explicitly defer heavy foliage imports/builds.
+    /// This mirrors `set_zone_batches` but always skips GLTF foliage to avoid
+    /// blocking the UI thread; terrain and rocks still rebuild.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_zone_batches_defer_foliage(&mut self, z: Option<zone_batches::GpuZoneBatches>) {
+        self.zone_batches = z;
+        let policy = self
+            .zone_batches
+            .as_ref()
+            .map(|b| compute_zone_policy_for_slug(b.slug.as_str()))
+            .unwrap_or_default();
+        self.zone_policy = policy;
+        self.picker_mode = matches!(self.zone_batches.as_ref(), Some(b) if b.slug == "<picker>");
+
+        if let Some(b) = &self.zone_batches
+            && b.slug != "<picker>"
+        {
+            // Force foliage deferral
+            self.trees_groups.clear();
+            // Rebuild terrain
+            if let Ok(man) = data_runtime::zone::load_zone_manifest(&b.slug) {
+                let terrain_size = man.terrain.size as usize;
+                let terrain_extent = man.terrain.extent;
+                if let Some(cpu_snap) = terrain::load_terrain_snapshot(&b.slug) {
+                    let bufs = terrain::upload_from_cpu(&self.device, &cpu_snap);
+                    self.terrain_cpu = cpu_snap;
+                    self.terrain_vb = bufs.vb;
+                    self.terrain_ib = bufs.ib;
+                    self.terrain_index_count = bufs.index_count;
+                } else {
+                    let (cpu, bufs) = terrain::create_terrain(
+                        &self.device,
+                        terrain_size,
+                        terrain_extent,
+                        man.terrain.seed,
+                    );
+                    self.terrain_cpu = cpu;
+                    self.terrain_vb = bufs.vb;
+                    self.terrain_ib = bufs.ib;
+                    self.terrain_index_count = bufs.index_count;
+                }
+                self.warned_no_terrain_indices = false;
+            }
+            self.session_trees.clear();
+            // Rocks: rebuild quickly so the scene doesn't look empty
+            if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &b.slug, None) {
+                self.rocks_instances = rg.instances;
+                self.rocks_count = rg.count;
+                self.rocks_vb = rg.vb;
+                self.rocks_ib = rg.ib;
+                self.rocks_index_count = rg.index_count;
             }
         }
     }

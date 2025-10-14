@@ -39,6 +39,14 @@ enum LoaderMsg {
     ),
 }
 
+// Background asset worker (pure CPU) messages
+#[cfg(not(target_arch = "wasm32"))]
+enum AssetMsg {
+    FoliageProgress { kind: String, i: u32, of: u32 },
+    FoliageBatch(render_wgpu::gfx::foliage_stream::TreeCpuBatch),
+    FoliageDone,
+}
+
 #[allow(dead_code)]
 enum BootMode {
     Picker,
@@ -267,6 +275,13 @@ struct App {
     picker: ZonePickerModel,
     // Builder mode state (campaign_builder only)
     builder: BuilderState,
+    // Background asset worker channel (native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    asset_tx: Option<mpsc::Sender<AssetMsg>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    asset_rx: Option<mpsc::Receiver<AssetMsg>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pending_foliage_cpu: Vec<render_wgpu::gfx::foliage_stream::TreeCpuBatch>,
 }
 
 impl Default for App {
@@ -298,6 +313,12 @@ impl Default for App {
             boot: BootMode::Picker,
             picker: Default::default(),
             builder: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            asset_tx: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            asset_rx: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            pending_foliage_cpu: Vec::new(),
         }
     }
 }
@@ -1087,10 +1108,11 @@ impl ApplicationHandler for App {
                         match res {
                             Ok((zp, pc_cpu_opt)) => {
                                 if let Some(st) = self.state.as_mut() {
+                                    // Attach zone quickly without heavy foliage on UI thread
                                     let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
                                         st, &zp,
                                     );
-                                    st.set_zone_batches(Some(gz));
+                                    st.set_zone_batches_defer_foliage(Some(gz));
                                     if let Some(cpu) = pc_cpu_opt {
                                         st.install_pc_cpu(cpu);
                                     } else {
@@ -1107,6 +1129,32 @@ impl ApplicationHandler for App {
                                 if let Some(win) = &self.window {
                                     win.set_title(&format!("RuinsofAtlantis — {}", slug));
                                     win.request_redraw();
+                                }
+                                // Start CPU foliage worker and stream batches back (native only)
+                                #[cfg(not(target_arch = "wasm32"))]
+                                if let Some(st) = self.state.as_ref() {
+                                    let (txa, rxa) = mpsc::channel::<AssetMsg>();
+                                    self.asset_tx = Some(txa.clone());
+                                    self.asset_rx = Some(rxa);
+                                    let terr_cpu = st.terrain_cpu_clone();
+                                    let slug_clone = slug.clone();
+                                    std::thread::spawn(move || {
+                                        use render_wgpu::gfx::foliage_stream::build_foliage_cpu_by_kind;
+                                        if let Ok(batches) =
+                                            build_foliage_cpu_by_kind(&slug_clone, &terr_cpu)
+                                        {
+                                            let total = batches.len() as u32;
+                                            for (i, b) in batches.into_iter().enumerate() {
+                                                let _ = txa.send(AssetMsg::FoliageProgress {
+                                                    kind: b.kind.clone(),
+                                                    i: i as u32 + 1,
+                                                    of: total.max(1),
+                                                });
+                                                let _ = txa.send(AssetMsg::FoliageBatch(b));
+                                            }
+                                        }
+                                        let _ = txa.send(AssetMsg::FoliageDone);
+                                    });
                                 }
                             }
                             Err(e) => {
@@ -1132,6 +1180,42 @@ impl ApplicationHandler for App {
             }
             if let Some(b) = restore.take() {
                 self.boot = b;
+            }
+            // Pump background asset worker and upload a small slice per frame (native only)
+            #[cfg(not(target_arch = "wasm32"))]
+            if let (Some(rx), Some(st)) = (&self.asset_rx, &mut self.state) {
+                let mut got_done = false;
+                // Drain messages quickly, but only queue one batch for this frame
+                while let Ok(msg) = rx.try_recv() {
+                    match msg {
+                        AssetMsg::FoliageProgress { kind: _, i, of } => {
+                            st.hud_reset();
+                            st.draw_picker_overlay(
+                                "Loading — Foliage",
+                                &format!("Building foliage… ({}/{})", i, of),
+                                &[],
+                                0,
+                            );
+                        }
+                        AssetMsg::FoliageBatch(batch) => {
+                            self.pending_foliage_cpu.push(batch);
+                            break;
+                        }
+                        AssetMsg::FoliageDone => got_done = true,
+                    }
+                }
+                if let Some(b) = self.pending_foliage_cpu.pop() {
+                    st.install_tree_cpu_batch(b);
+                    // First content installed: ensure gameplay HUD path is active
+                    if st.picker_mode() {
+                        st.set_picker_mode(false);
+                    }
+                }
+                if got_done {
+                    st.hud_reset();
+                    self.asset_tx = None;
+                    self.asset_rx = None;
+                }
             }
         }
         #[cfg(target_arch = "wasm32")]
