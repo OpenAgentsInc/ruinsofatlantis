@@ -30,10 +30,12 @@ enum LoaderMsg {
         of: u32,
     },
     Done(
-        anyhow::Result<(
-            client_core::zone_client::ZonePresentation,
-            Option<roa_assets::types::SkinnedMeshCPU>,
-        )>,
+        Box<
+            anyhow::Result<(
+                client_core::zone_client::ZonePresentation,
+                Option<roa_assets::types::SkinnedMeshCPU>,
+            )>,
+        >,
     ),
 }
 
@@ -628,10 +630,12 @@ impl ApplicationHandler for App {
                                     });
                                     match zp {
                                         Ok(zp_ok) => {
-                                            let _ = tx.send(LoaderMsg::Done(Ok((zp_ok, pc_cpu))));
+                                            let _ = tx.send(LoaderMsg::Done(Box::new(Ok((
+                                                zp_ok, pc_cpu,
+                                            )))));
                                         }
                                         Err(e) => {
-                                            let _ = tx.send(LoaderMsg::Done(Err(e)));
+                                            let _ = tx.send(LoaderMsg::Done(Box::new(Err(e))));
                                         }
                                     }
                                 });
@@ -809,10 +813,10 @@ impl ApplicationHandler for App {
                             });
                             match zp {
                                 Ok(zp_ok) => {
-                                    let _ = tx.send(LoaderMsg::Done(Ok((zp_ok, pc_cpu))));
+                                    let _ = tx.send(LoaderMsg::Done(Box::new(Ok((zp_ok, pc_cpu)))));
                                 }
                                 Err(e) => {
-                                    let _ = tx.send(LoaderMsg::Done(Err(e)));
+                                    let _ = tx.send(LoaderMsg::Done(Box::new(Err(e))));
                                 }
                             }
                         });
@@ -1054,7 +1058,7 @@ impl ApplicationHandler for App {
                                     );
                                 }
                             }
-                            LoaderMsg::Done(res) => done = Some(res),
+                            LoaderMsg::Done(res) => done = Some(*res),
                         }
                     }
                     if let Some(res) = done.take() {
