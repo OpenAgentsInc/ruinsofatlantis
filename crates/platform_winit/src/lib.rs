@@ -1069,16 +1069,16 @@ impl ApplicationHandler for App {
                                 }
                             }
                             Key::Named(NamedKey::Enter) => {
-                                if chars.iter().any(|c| *c == "enter") {
+                                if chars.contains(&"enter") {
                                     return true;
                                 }
                             }
                             _ => {}
                         }
-                        if let PhysicalKey::Code(code) = kev.physical_key {
-                            if codes.iter().any(|c| *c == code) {
-                                return true;
-                            }
+                        if let PhysicalKey::Code(code) = kev.physical_key
+                            && codes.contains(&code)
+                        {
+                            return true;
                         }
                         false
                     };
