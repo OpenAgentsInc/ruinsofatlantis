@@ -39,7 +39,15 @@ impl Renderer {
                     }
                     // Ignore movement/casting inputs if the PC is dead
                     PhysicalKey::Code(KeyCode::KeyW) if self.pc_alive => {
-                        self.input.forward = pressed
+                        self.input.forward = pressed;
+                        if pressed && !self.logged_first_w {
+                            self.logged_first_w = true;
+                            log::debug!(
+                                "input: first W press observed (pointer_locked={} rmb_down={})",
+                                self.pointer_locked,
+                                self.rmb_down
+                            );
+                        }
                     }
                     PhysicalKey::Code(KeyCode::KeyS) if self.pc_alive => {
                         self.input.backward = pressed;
@@ -327,6 +335,10 @@ impl Renderer {
                     if !self.rmb_down {
                         self.last_cursor_pos = None; // reset deltas
                     }
+                    if self.rmb_down && !self.logged_first_rmb {
+                        self.logged_first_rmb = true;
+                        log::debug!("input: first RMB press observed (will request pointer lock)");
+                    }
                     // Classic profile fallback: temporary capture while RMB held
                     let mut host_events = Vec::new();
                     let ui = client_core::systems::cursor::UiFocus::default();
@@ -397,13 +409,13 @@ impl Renderer {
         }
     }
 
-    /// Handle raw mouse motion deltas (used when the pointer is locked).
+    /// Handle raw mouse motion deltas (preferred when the pointer is locked).
     pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
         use ecs_core::components::ControllerMode;
-        if !self.pointer_locked {
-            return; // only consume raw motion when locked
-        }
-        if self.controller_state.mode() == ControllerMode::Mouselook || self.rmb_down {
+        // Accept raw motion when either pointer is locked or RMB is held (fallback on platforms
+        // where Locked may be unavailable intermittently). CursorMoved path remains the source
+        // when not locked; this avoids double-application because we check pointer_locked there.
+        if self.pointer_locked || self.rmb_down {
             client_core::systems::mouselook::apply_mouse_delta(
                 &self.controller_ml_cfg,
                 &mut self.controller_state,

@@ -662,22 +662,44 @@ impl ApplicationHandler for App {
         // Apply any pointer-lock request emitted by controller systems.
         if let Some(lock) = state.take_pointer_lock_request() {
             use winit::window::CursorGrabMode;
-            let grab_mode = if lock {
-                CursorGrabMode::Locked
-            } else {
-                CursorGrabMode::None
-            };
-            match window.set_cursor_grab(grab_mode) {
-                Ok(()) => {
-                    window.set_cursor_visible(!lock);
-                    state.set_pointer_locked(lock);
+            // Try Locked first; if not supported, try Confined as a fallback.
+            let mut applied_lock = false;
+            if lock {
+                match window.set_cursor_grab(CursorGrabMode::Locked) {
+                    Ok(()) => {
+                        applied_lock = true;
+                        window.set_cursor_visible(false);
+                        state.set_pointer_locked(true);
+                    }
+                    Err(e_locked) => {
+                        log::debug!(
+                            "pointer lock (Locked) failed: {:?}; trying Confined",
+                            e_locked
+                        );
+                        match window.set_cursor_grab(CursorGrabMode::Confined) {
+                            Ok(()) => {
+                                applied_lock = true;
+                                window.set_cursor_visible(false);
+                                state.set_pointer_locked(true);
+                            }
+                            Err(e_confined) => {
+                                log::debug!(
+                                    "pointer grab (Confined) also failed: {:?}; falling back to free cursor",
+                                    e_confined
+                                );
+                                window.set_cursor_visible(true);
+                                state.set_pointer_locked(false);
+                                state.set_mouselook(false);
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    // If locking failed (e.g., WASM denied), fall back to cursor mode
-                    log::debug!("pointer lock request failed: {:?}", e);
-                    window.set_cursor_visible(true);
+            }
+            if !lock || !applied_lock {
+                let _ = window.set_cursor_grab(CursorGrabMode::None);
+                window.set_cursor_visible(true);
+                if !applied_lock {
                     state.set_pointer_locked(false);
-                    state.set_mouselook(false);
                 }
             }
         }

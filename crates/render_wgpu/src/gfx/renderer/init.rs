@@ -2014,6 +2014,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         picker_mode: false,
         warned_no_terrain_indices: false,
         warned_hudonly_no_zone: false,
+        logged_first_w: false,
+        logged_first_rmb: false,
         globals_buf,
         sky_buf,
         _plane_model_buf,

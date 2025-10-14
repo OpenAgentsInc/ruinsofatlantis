@@ -218,7 +218,8 @@ pub fn render_impl(
     // Time and dt
     let t = r.start.elapsed().as_secs_f32();
     let aspect = r.config.width as f32 / r.config.height as f32;
-    let dt = (t - r.last_time).max(0.0);
+    // Clamp dt to avoid stutter on occasional slow frames
+    let dt = (t - r.last_time).clamp(0.0, 0.05);
     r.last_time = t;
     // Replication: drain any incoming deltas and upload chunk meshes (local loop)
     if let Some(rx) = &r.repl_rx {

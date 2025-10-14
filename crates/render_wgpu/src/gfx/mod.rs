@@ -224,6 +224,9 @@ pub struct Renderer {
     // One-shot warnings to avoid log spam
     warned_no_terrain_indices: bool,
     warned_hudonly_no_zone: bool,
+    // One-shot input traces (debugging)
+    logged_first_w: bool,
+    logged_first_rmb: bool,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
