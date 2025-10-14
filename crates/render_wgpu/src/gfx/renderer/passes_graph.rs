@@ -220,49 +220,82 @@ impl PresentPass {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
                 // Build a present BG from the graph HDR view
+                let use_nodepth = std::env::var("RA_PRESENT_NO_DEPTH")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
                 let src_view = ctx.view_color(color);
-                let key = crate::gfx::renderer::bindgroups::BgKey::new(
-                    &ctx.renderer.present_bgl,
-                    &[
-                        src_view as *const _ as u64,
-                        &ctx.renderer.point_sampler as *const _ as u64,
-                        &ctx.renderer.attachments.depth_view as *const _ as u64,
-                        &ctx.renderer.point_sampler as *const _ as u64,
-                    ],
-                );
                 let src_owned = ctx.view_color(color).clone();
-                let present_bg = ctx.renderer.bg_cache.get_or_create(key, || {
-                    ctx.renderer
-                        .device
-                        .create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("present-bg[graph]"),
-                            layout: &ctx.renderer.present_bgl,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&src_owned),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: wgpu::BindingResource::Sampler(
-                                        &ctx.renderer.point_sampler,
-                                    ),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 2,
-                                    resource: wgpu::BindingResource::TextureView(
-                                        &ctx.renderer.attachments.depth_view,
-                                    ),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 3,
-                                    resource: wgpu::BindingResource::Sampler(
-                                        &ctx.renderer.point_sampler,
-                                    ),
-                                },
-                            ],
-                        })
-                });
+                let present_bg = if use_nodepth {
+                    let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                        &ctx.renderer.present_bgl_nodepth,
+                        &[
+                            src_view as *const _ as u64,
+                            &ctx.renderer.point_sampler as *const _ as u64,
+                        ],
+                    );
+                    ctx.renderer.bg_cache.get_or_create(key, || {
+                        ctx.renderer
+                            .device
+                            .create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("present-bg-nodepth[graph]"),
+                                layout: &ctx.renderer.present_bgl_nodepth,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(&src_owned),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(
+                                            &ctx.renderer.point_sampler,
+                                        ),
+                                    },
+                                ],
+                            })
+                    })
+                } else {
+                    let key = crate::gfx::renderer::bindgroups::BgKey::new(
+                        &ctx.renderer.present_bgl,
+                        &[
+                            src_view as *const _ as u64,
+                            &ctx.renderer.point_sampler as *const _ as u64,
+                            &ctx.renderer.attachments.depth_view as *const _ as u64,
+                            &ctx.renderer.point_sampler as *const _ as u64,
+                        ],
+                    );
+                    ctx.renderer.bg_cache.get_or_create(key, || {
+                        ctx.renderer
+                            .device
+                            .create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("present-bg[graph]"),
+                                layout: &ctx.renderer.present_bgl,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(&src_owned),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(
+                                            &ctx.renderer.point_sampler,
+                                        ),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 2,
+                                        resource: wgpu::BindingResource::TextureView(
+                                            &ctx.renderer.attachments.depth_view,
+                                        ),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 3,
+                                        resource: wgpu::BindingResource::Sampler(
+                                            &ctx.renderer.point_sampler,
+                                        ),
+                                    },
+                                ],
+                            })
+                    })
+                };
                 // Present full-screen draw
                 let mut rp = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("present-pass(graph)"),
@@ -284,7 +317,11 @@ impl PresentPass {
                     occlusion_query_set: None,
                     timestamp_writes: None,
                 });
-                rp.set_pipeline(&ctx.renderer.present_pipeline);
+                if use_nodepth {
+                    rp.set_pipeline(&ctx.renderer.present_pipeline_nodepth);
+                } else {
+                    rp.set_pipeline(&ctx.renderer.present_pipeline);
+                }
                 // Layout: [globals_bgl, present_bgl]
                 rp.set_bind_group(0, &ctx.renderer.globals_bg, &[]);
                 rp.set_bind_group(1, &present_bg, &[]);

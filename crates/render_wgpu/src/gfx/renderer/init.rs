@@ -422,8 +422,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     );
     // Present pipeline (SceneColor -> swapchain)
     let present_bgl = pipeline::create_present_bgl(&device);
+    let present_bgl_nodepth = pipeline::create_present_bgl_nodepth(&device);
     let present_pipeline =
         pipeline::create_present_pipeline(&device, &globals_bgl, &present_bgl, config.format);
+    let present_pipeline_nodepth = pipeline::create_present_pipeline_nodepth(
+        &device,
+        &globals_bgl,
+        &present_bgl_nodepth,
+        config.format,
+    );
     let blit_scene_read_pipeline =
         pipeline::create_blit_pipeline(&device, &present_bgl, offscreen_fmt);
     // Bloom
@@ -1949,6 +1956,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ssgi_pipeline,
         ssr_pipeline,
         present_pipeline,
+        present_pipeline_nodepth,
         blit_scene_read_pipeline,
         bloom_pipeline,
         bloom_bgl: bloom_bgl.clone(),
@@ -1956,6 +1964,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         direct_present,
         lights_buf,
         present_bgl: present_bgl.clone(),
+        present_bgl_nodepth: present_bgl_nodepth.clone(),
         post_ao_bgl: post_ao_bgl.clone(),
         ssgi_globals_bgl: ssgi_globals_bgl.clone(),
         ssgi_depth_bgl: ssgi_depth_bgl.clone(),

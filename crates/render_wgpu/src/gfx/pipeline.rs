@@ -806,6 +806,32 @@ pub fn create_present_bgl(device: &wgpu::Device) -> BindGroupLayout {
     })
 }
 
+// Present BGL variant without depth binding (for platforms/drivers sensitive
+// to unused depth bindings when presenting to the swapchain).
+pub fn create_present_bgl_nodepth(device: &wgpu::Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("present-bgl-nodepth"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                count: None,
+            },
+        ],
+    })
+}
+
 pub fn create_present_pipeline(
     device: &wgpu::Device,
     globals_bgl: &BindGroupLayout,
@@ -829,6 +855,53 @@ pub fn create_present_pipeline(
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("present-pipeline"),
+        layout: Some(&layout),
+        vertex: VertexState {
+            module: &shader,
+            entry_point: Some("vs_fullscreen_present_flip"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(FragmentState {
+            module: &shader,
+            entry_point: Some("fs_present"),
+            targets: &[Some(ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
+pub fn create_present_pipeline_nodepth(
+    device: &wgpu::Device,
+    globals_bgl: &BindGroupLayout,
+    present_bgl: &BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> RenderPipeline {
+    let src = [
+        include_str!("fullscreen.wgsl"),
+        include_str!("present.wgsl"),
+    ]
+    .join("\n\n");
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("present-nodepth-shader"),
+        source: ShaderSource::Wgsl(std::borrow::Cow::Owned(src)),
+    });
+    let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        label: Some("present-nodepth-pipeline-layout"),
+        bind_group_layouts: &[globals_bgl, present_bgl],
+        push_constant_ranges: &[],
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("present-nodepth-pipeline"),
         layout: Some(&layout),
         vertex: VertexState {
             module: &shader,

@@ -157,6 +157,7 @@ pub struct Renderer {
     ssgi_pipeline: wgpu::RenderPipeline,
     ssr_pipeline: wgpu::RenderPipeline,
     present_pipeline: wgpu::RenderPipeline,
+    present_pipeline_nodepth: wgpu::RenderPipeline,
     blit_scene_read_pipeline: wgpu::RenderPipeline,
     bloom_pipeline: wgpu::RenderPipeline,
     bloom_bgl: wgpu::BindGroupLayout,
@@ -165,6 +166,7 @@ pub struct Renderer {
     lights_buf: wgpu::Buffer,
     // Stored bind group layouts needed to rebuild views on resize
     present_bgl: wgpu::BindGroupLayout,
+    present_bgl_nodepth: wgpu::BindGroupLayout,
     post_ao_bgl: wgpu::BindGroupLayout,
     #[allow(dead_code)]
     ssgi_globals_bgl: wgpu::BindGroupLayout,
