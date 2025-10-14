@@ -213,7 +213,9 @@ impl PresentPass {
                         return;
                     }
                 };
-                log::debug!("present: acquired frame");
+                if log::log_enabled!(log::Level::Trace) {
+                    log::trace!("present: acquired frame");
+                }
                 let swap_view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
@@ -338,7 +340,9 @@ impl PresentPass {
                 }
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
-                log::debug!("present: drew fullscreen and set pending frame");
+                if log::log_enabled!(log::Level::Trace) {
+                    log::trace!("present: drew fullscreen and set pending frame");
+                }
                 let cpu_ms = t0.elapsed().as_secs_f32() * 1000.0;
                 let stats = crate::gfx::renderer::RenderStats {
                     name: "Present",

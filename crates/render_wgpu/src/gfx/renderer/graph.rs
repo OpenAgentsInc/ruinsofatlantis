@@ -364,11 +364,10 @@ impl Graph {
         self.keep_textures.clear();
         // Behavior-neutral default: alias declared image handles to the current attachments.
         // Optionally allocate real textures per handle if RA_GRAPH_ALLOC=1 is set.
-        // Default to allocating per declared image to avoid aliasing hazards.
-        // Set RA_GRAPH_ALLOC=0 to enable aliasing for lower memory once stable.
+        // Default OFF: alias to existing attachments unless explicitly enabled.
         let do_alloc = std::env::var("RA_GRAPH_ALLOC")
-            .map(|v| v == "1")
-            .unwrap_or(true);
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         let mut arena = ImageArena {
             textures: Vec::with_capacity(self.images.len()),
             views: Vec::with_capacity(self.images.len()),
@@ -802,6 +801,12 @@ impl Graph {
         let split = std::env::var("RA_SPLIT_ENC")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
+        // Gate validation scopes via env to avoid blocking in hot path
+        let validate = cfg!(debug_assertions)
+            && std::env::var("RA_VALIDATE")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+
         for p in self.passes.drain(..) {
             let pass_name = p.name;
             log::debug!("graph: begin pass {}", pass_name);
@@ -818,19 +823,24 @@ impl Graph {
                     encoder: &mut local_encoder,
                     arena: &arena,
                 };
-                #[cfg(not(target_arch = "wasm32"))]
-                ctx.renderer
-                    .device
-                    .push_error_scope(wgpu::ErrorFilter::Validation);
+                if validate {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    ctx.renderer
+                        .device
+                        .push_error_scope(wgpu::ErrorFilter::Validation);
+                }
 
                 (p.exec)(&mut ctx);
 
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
-                        log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
-                        ok = false;
-                        break;
+                if validate {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope())
+                        {
+                            log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
+                            ok = false;
+                            break;
+                        }
                     }
                 }
                 // Drop ctx (and its borrow) before finishing the encoder
@@ -848,19 +858,24 @@ impl Graph {
                     encoder,
                     arena: &arena,
                 };
-                #[cfg(not(target_arch = "wasm32"))]
-                ctx.renderer
-                    .device
-                    .push_error_scope(wgpu::ErrorFilter::Validation);
+                if validate {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    ctx.renderer
+                        .device
+                        .push_error_scope(wgpu::ErrorFilter::Validation);
+                }
 
                 (p.exec)(&mut ctx);
 
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
-                        log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
-                        ok = false;
-                        break;
+                if validate {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope())
+                        {
+                            log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
+                            ok = false;
+                            break;
+                        }
                     }
                 }
                 log::debug!("graph: end pass {}", pass_name);
