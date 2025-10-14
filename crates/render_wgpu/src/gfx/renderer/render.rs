@@ -2291,6 +2291,7 @@ pub fn render_impl(
         return Ok(());
     }
     // Normal scene path (graph)
+    let mut graph_ok_flag = true; // set by Graph::execute
     {
         // Legacy fallback removed; always execute the framegraph
         use super::graph::{Graph, GraphBuilder, ImageKind};
@@ -2354,10 +2355,13 @@ pub fn render_impl(
         // Draw HUD directly to the swapchain inside Present; present reads post_bloom
         PresentPass::declare(&mut gb, post_bloom);
         let g = Graph::compile(gb);
-        g.execute(r, &mut encoder);
+        graph_ok_flag = g.execute(r, &mut encoder);
         // History copy handled via graph pass
     }
-    r.queue.submit(Some(encoder.finish()));
+    // Submit only if the graph executed without validation errors
+    if graph_ok_flag {
+        r.queue.submit(Some(encoder.finish()));
+    }
     // Present any acquired frame from the Present pass before checking validation,
     // to avoid holding a SurfaceTexture across frames on error.
     if let Some(frame) = r.take_pending_frame() {
@@ -2367,7 +2371,7 @@ pub fn render_impl(
     // during encoder.finish() or queue.submit().
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-        log::error!("validation (main pass): {:?}", e);
+        log::error!("validation (frame): {:?}", e);
         // continue to apply deferred resize below even on validation error
     }
     // If a resize was deferred by Present (Lost/Outdated), apply it now after submit/present

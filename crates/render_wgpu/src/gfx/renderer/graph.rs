@@ -354,11 +354,11 @@ impl Graph {
         mut self,
         renderer: &mut crate::gfx::Renderer,
         encoder: &mut wgpu::CommandEncoder,
-    ) {
+    ) -> bool {
         // Never execute the scene graph while the Picker/HUD-only mode is active.
         if renderer.is_picker_batches() || renderer.picker_mode {
             log::debug!("graph: skip execute (picker mode)");
-            return;
+            return true;
         }
         // ensure per-frame allocations do not accumulate
         self.keep_textures.clear();
@@ -796,6 +796,7 @@ impl Graph {
         }
         // Store on renderer for HUD later
         renderer.graph_peak_mem_bytes = peak_bytes;
+        let mut ok = true;
         for p in self.passes.drain(..) {
             let pass_name = p.name;
             log::debug!("graph: begin pass {}", pass_name);
@@ -819,11 +820,13 @@ impl Graph {
                 if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
                     log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
                     // Abort executing subsequent passes this frame; the encoder is invalid.
+                    ok = false;
                     break;
                 }
             }
             log::debug!("graph: end pass {}", pass_name);
         }
+        ok
     }
 }
 
