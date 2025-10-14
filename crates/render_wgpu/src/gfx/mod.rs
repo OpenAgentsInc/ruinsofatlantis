@@ -16,7 +16,9 @@
 
 mod camera;
 mod renderer;
+// Publicly re-export renderer config so integration tests and tools can read constants.
 use renderer::Attachments;
+pub use renderer::config;
 mod gbuffer;
 mod hiz;
 mod mesh;
