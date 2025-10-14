@@ -411,7 +411,8 @@ impl Renderer {
 
     /// Handle raw mouse motion deltas (preferred when the pointer is locked).
     pub fn handle_mouse_motion(&mut self, dx: f32, dy: f32) {
-        use ecs_core::components::ControllerMode;
+        // ControllerMode gating happens in CursorMoved path; raw motion applies when pointer is
+        // locked or RMB is held.
         // Accept raw motion when either pointer is locked or RMB is held (fallback on platforms
         // where Locked may be unavailable intermittently). CursorMoved path remains the source
         // when not locked; this avoids double-application because we check pointer_locked there.
