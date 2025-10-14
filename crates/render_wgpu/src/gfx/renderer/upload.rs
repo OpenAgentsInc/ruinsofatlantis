@@ -126,7 +126,6 @@ impl UploadRing {
 #[cfg(test)]
 mod tests {
     use super::UploadRing;
-    use wgpu::util::DeviceExt;
 
     #[test]
     fn align_up_basics() {

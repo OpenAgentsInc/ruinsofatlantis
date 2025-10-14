@@ -1,7 +1,33 @@
-use super::*;
+use serde::{Deserialize, Serialize};
 
 #[test]
 fn scene_roundtrip_preserves_spawns() {
+    // Local test-only structs mirroring the platform scene types
+    #[derive(Serialize, Deserialize)]
+    struct SpawnMarker {
+        id: String,
+        kind: String,
+        pos: [f32; 3],
+        yaw_deg: f32,
+        #[serde(default)]
+        tags: Vec<String>,
+    }
+    #[derive(Serialize, Deserialize)]
+    struct SceneLogic {
+        triggers: Vec<serde_json::Value>,
+        spawns: Vec<SpawnMarker>,
+        waypoints: Vec<serde_json::Value>,
+        links: Vec<serde_json::Value>,
+    }
+    #[derive(Serialize, Deserialize)]
+    struct SceneDoc {
+        version: String,
+        seed: i64,
+        layers: Vec<serde_json::Value>,
+        instances: Vec<serde_json::Value>,
+        logic: SceneLogic,
+    }
+
     // Build a small scene doc in memory
     let doc = SceneDoc {
         version: "1.0.0".into(),

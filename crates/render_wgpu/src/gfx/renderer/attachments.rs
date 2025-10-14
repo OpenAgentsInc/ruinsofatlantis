@@ -117,7 +117,6 @@ impl Attachments {
 
 #[cfg(test)]
 mod tests {
-    use wgpu::util::DeviceExt;
     use winit::dpi::PhysicalSize;
 
     fn compute_extents(max_dim: u32, requested: PhysicalSize<u32>) -> (u32, u32) {

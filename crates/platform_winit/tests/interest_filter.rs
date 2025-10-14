@@ -4,6 +4,7 @@
 fn projectiles_interest_filtered_matches_radius() {
     // Build a tiny server state stand-in with three projectiles at different radii
     // This test exercises the same logic used in platform_winit to filter projectiles by interest.
+    #[allow(dead_code)]
     #[derive(Clone, Copy)]
     struct P {
         pos: [f32; 3],
