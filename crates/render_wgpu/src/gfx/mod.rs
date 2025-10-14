@@ -770,6 +770,32 @@ impl Renderer {
                 );
                 self.trees_groups.clear();
             }
+            // Rebuild terrain for the attached zone (snapshot if available; else generate from manifest)
+            if let Some(man) = data_runtime::zone::load_zone_manifest(&b.slug).ok() {
+                let terrain_size = man.terrain.size as usize;
+                let terrain_extent = man.terrain.extent;
+                if let Some(cpu_snap) = terrain::load_terrain_snapshot(&b.slug) {
+                    let bufs = terrain::upload_from_cpu(&self.device, &cpu_snap);
+                    self.terrain_cpu = cpu_snap;
+                    self.terrain_vb = bufs.vb;
+                    self.terrain_ib = bufs.ib;
+                    self.terrain_index_count = bufs.index_count;
+                } else {
+                    let (cpu, bufs) = terrain::create_terrain(
+                        &self.device,
+                        terrain_size,
+                        terrain_extent,
+                        man.terrain.seed,
+                    );
+                    self.terrain_cpu = cpu;
+                    self.terrain_vb = bufs.vb;
+                    self.terrain_ib = bufs.ib;
+                    self.terrain_index_count = bufs.index_count;
+                }
+                // reset one-shot warn so we report future problems once per attach
+                self.warned_no_terrain_indices = false;
+            }
+
             // Clear any session-placed trees when switching zones
             self.session_trees.clear();
             #[cfg(not(target_arch = "wasm32"))]
