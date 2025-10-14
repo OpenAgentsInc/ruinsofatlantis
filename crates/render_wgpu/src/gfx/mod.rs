@@ -750,6 +750,23 @@ impl Renderer {
         if let Some(b) = &self.zone_batches
             && b.slug != "<picker>"
         {
+            // Avoid blocking the main thread on large GLTF imports for builder/demo zones.
+            // For the Campaign Builder, skip heavy foliage rebuild here; session-placed trees
+            // still render, and authors can export/import as needed. This keeps the UI responsive
+            // and prevents the loading spinner from stalling.
+            if b.slug == "campaign_builder"
+                || std::env::var("RA_DEFER_FOLIAGE")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false)
+            {
+                log::debug!(
+                    "zone attach: deferring foliage build for slug='{}' (skip heavy GLTF import)",
+                    b.slug
+                );
+                self.trees_groups.clear();
+                // Return early to avoid GLTF work on the UI thread.
+                return;
+            }
             // Clear any session-placed trees when switching zones
             self.session_trees.clear();
             #[cfg(not(target_arch = "wasm32"))]
