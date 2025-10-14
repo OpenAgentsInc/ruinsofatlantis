@@ -20,6 +20,64 @@ pub fn render_impl(
     let view = r.attachments.scene_view.clone();
     // Optional tracing left to RA_TRACE (no default info spam)
 
+    // Absolute early-exit for Picker/Loading: draw HUD-only and return before any scene work.
+    if r.picker_mode || r.is_picker_batches() || !r.has_zone_batches() {
+        #[cfg(not(target_arch = "wasm32"))]
+        r.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let mut encoder = r
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("hud-only encoder"),
+            });
+        // Acquire frame (handle transient errors gracefully)
+        let frame = match r.surface.get_current_texture() {
+            Ok(f) => Some(f),
+            Err(wgpu::SurfaceError::Lost) | Err(wgpu::SurfaceError::Outdated) => {
+                r.deferred_resize = Some(r.size);
+                None
+            }
+            Err(wgpu::SurfaceError::Timeout) => None,
+            Err(wgpu::SurfaceError::OutOfMemory) => None,
+            Err(e) => {
+                log::error!("present(hud-only): acquire failed: {:?}", e);
+                r.deferred_resize = Some(r.size);
+                None
+            }
+        };
+        if let Some(frame) = frame {
+            let swap_view = frame
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            {
+                let rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("picker-clear(early)"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swap_view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+                drop(rp);
+            }
+            r.hud.queue(&r.device, &r.queue);
+            r.hud.draw(&mut encoder, &swap_view);
+            r.queue.submit(Some(encoder.finish()));
+            frame.present();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+            log::error!("validation (picker): {:?}", e);
+        }
+        return Ok(());
+    }
+
     // WASM debug path: draw SKY + TERRAIN into offscreen, then present to swapchain.
     // This isolates pipeline/render-graph step-by-step. Disabled by default now that
     // the full render path is stable on web; re-enable locally by changing the
