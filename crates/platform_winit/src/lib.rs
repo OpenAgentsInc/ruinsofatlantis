@@ -1263,40 +1263,18 @@ impl ApplicationHandler for App {
                                     }
                                     st.hud_reset();
                                     // Configure worldsmithing policy from manifest for native
-                                    if slug.as_str() == "campaign_builder" {
-                                        if let Ok(man) =
+                                    if slug.as_str() == "campaign_builder"
+                                        && let Ok(man) =
                                             data_runtime::zone::load_zone_manifest(&slug)
-                                        {
-                                            let mut rules = worldsmithing::Rules::default();
-                                            let mut caps = worldsmithing::Caps::default();
-                                            let mut kinds: Vec<String> = vec![];
-                                            if let Some(wsp) = man.worldsmithing {
-                                                if !wsp.kinds.is_empty() {
-                                                    for k in wsp.kinds.iter() {
-                                                        rules.allowed_kinds.insert(k.clone());
-                                                        kinds.push(k.clone());
-                                                    }
-                                                } else {
-                                                    rules.allowed_kinds.insert("tree.birch".into());
-                                                    rules
-                                                        .allowed_kinds
-                                                        .insert("tree.giantpine".into());
-                                                    rules
-                                                        .allowed_kinds
-                                                        .insert("rock.building".into());
-                                                    kinds.extend([
-                                                        "tree.birch".to_string(),
-                                                        "tree.giantpine".to_string(),
-                                                        "rock.building".to_string(),
-                                                    ]);
-                                                }
-                                                if let Some(c) = wsp.caps {
-                                                    if let Some(t) = c.trees {
-                                                        caps.max_trees_per_zone = t;
-                                                    }
-                                                    if let Some(p) = c.place_per_second {
-                                                        caps.max_place_per_second = p;
-                                                    }
+                                    {
+                                        let mut rules = worldsmithing::Rules::default();
+                                        let mut caps = worldsmithing::Caps::default();
+                                        let mut kinds: Vec<String> = vec![];
+                                        if let Some(wsp) = man.worldsmithing {
+                                            if !wsp.kinds.is_empty() {
+                                                for k in wsp.kinds.iter() {
+                                                    rules.allowed_kinds.insert(k.clone());
+                                                    kinds.push(k.clone());
                                                 }
                                             } else {
                                                 rules.allowed_kinds.insert("tree.birch".into());
@@ -1308,13 +1286,30 @@ impl ApplicationHandler for App {
                                                     "rock.building".to_string(),
                                                 ]);
                                             }
-                                            self.builder.ws = worldsmithing::Builder::new()
-                                                .caps(caps)
-                                                .rules(rules)
-                                                .build();
-                                            self.builder.kinds = kinds;
-                                            self.builder.kind_idx = 0;
+                                            if let Some(c) = wsp.caps {
+                                                if let Some(t) = c.trees {
+                                                    caps.max_trees_per_zone = t;
+                                                }
+                                                if let Some(p) = c.place_per_second {
+                                                    caps.max_place_per_second = p;
+                                                }
+                                            }
+                                        } else {
+                                            rules.allowed_kinds.insert("tree.birch".into());
+                                            rules.allowed_kinds.insert("tree.giantpine".into());
+                                            rules.allowed_kinds.insert("rock.building".into());
+                                            kinds.extend([
+                                                "tree.birch".to_string(),
+                                                "tree.giantpine".to_string(),
+                                                "rock.building".to_string(),
+                                            ]);
                                         }
+                                        self.builder.ws = worldsmithing::Builder::new()
+                                            .caps(caps)
+                                            .rules(rules)
+                                            .build();
+                                        self.builder.kinds = kinds;
+                                        self.builder.kind_idx = 0;
                                     }
                                 }
                                 #[cfg(feature = "demo_server")]
