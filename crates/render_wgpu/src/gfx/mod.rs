@@ -771,7 +771,7 @@ impl Renderer {
                 self.trees_groups.clear();
             }
             // Rebuild terrain for the attached zone (snapshot if available; else generate from manifest)
-            if let Some(man) = data_runtime::zone::load_zone_manifest(&b.slug).ok() {
+            if let Ok(man) = data_runtime::zone::load_zone_manifest(&b.slug) {
                 let terrain_size = man.terrain.size as usize;
                 let terrain_extent = man.terrain.extent;
                 if let Some(cpu_snap) = terrain::load_terrain_snapshot(&b.slug) {
