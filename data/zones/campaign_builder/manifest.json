@@ -21,11 +21,11 @@
   "start_time_scale": 6.0
   ,
   "allow_casting": false,
-  "show_player_hud": false
+  "show_player_hud": true
   ,
   "worldsmithing": {
     "enabled": true,
-    "kinds": ["quaternius.birch_4", "quaternius.pine_3"],
-    "caps": { "trees": 5000, "place_per_second": 5 }
+    "kinds": ["tree.birch", "tree.giantpine", "rock.building"],
+    "caps": { "trees": 5000, "place_per_second": 10 }
   }
 }
