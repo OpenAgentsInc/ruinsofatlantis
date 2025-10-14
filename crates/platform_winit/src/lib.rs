@@ -6,6 +6,7 @@
 use net_core::snapshot::{SnapshotDecode, SnapshotEncode};
 use net_core::transport::Transport;
 use render_wgpu::gfx::Renderer;
+use std::sync::mpsc;
 use wgpu::SurfaceError;
 use winit::{
     application::ApplicationHandler,
@@ -22,18 +23,27 @@ pub mod picker;
 pub mod replication;
 pub mod telemetry;
 
+enum LoaderMsg {
+    Progress {
+        what: String,
+        step: u32,
+        of: u32,
+    },
+    Done(
+        anyhow::Result<(
+            client_core::zone_client::ZonePresentation,
+            Option<roa_assets::types::SkinnedMeshCPU>,
+        )>,
+    ),
+}
+
 #[allow(dead_code)]
 enum BootMode {
     Picker,
     #[cfg(not(target_arch = "wasm32"))]
     Loading {
         slug: String,
-        handle: std::thread::JoinHandle<
-            anyhow::Result<(
-                client_core::zone_client::ZonePresentation,
-                Option<roa_assets::types::SkinnedMeshCPU>,
-            )>,
-        >,
+        rx: mpsc::Receiver<LoaderMsg>,
     },
     Running {
         slug: String,
@@ -584,31 +594,50 @@ impl ApplicationHandler for App {
                             }
                             #[cfg(not(target_arch = "wasm32"))]
                             {
+                                // Spawn background worker using channel; keep UI responsive
+                                let (tx, rx) = mpsc::channel::<LoaderMsg>();
                                 let slug_clone = slug.clone();
+                                std::thread::spawn(move || {
+                                    let send = |m| {
+                                        let _ = tx.send(m);
+                                    };
+                                    send(LoaderMsg::Progress {
+                                        what: "Reading zone".into(),
+                                        step: 1,
+                                        of: 3,
+                                    });
+                                    let zp = client_core::zone_client::ZonePresentation::load(
+                                        &slug_clone,
+                                    );
+                                    let pc_cpu = if slug_clone == "campaign_builder"
+                                        || slug_clone == "cc_demo"
+                                    {
+                                        None
+                                    } else {
+                                        use roa_assets::skinning::load_gltf_skinned;
+                                        let ubc_path = std::path::Path::new(env!(
+                                            "CARGO_MANIFEST_DIR"
+                                        ))
+                                        .join("../../assets/models/ubc/godot/Superhero_Male.gltf");
+                                        load_gltf_skinned(&ubc_path).ok()
+                                    };
+                                    send(LoaderMsg::Progress {
+                                        what: "Finalizing".into(),
+                                        step: 3,
+                                        of: 3,
+                                    });
+                                    match zp {
+                                        Ok(zp_ok) => {
+                                            let _ = tx.send(LoaderMsg::Done(Ok((zp_ok, pc_cpu))));
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(LoaderMsg::Done(Err(e)));
+                                        }
+                                    }
+                                });
                                 self.boot = BootMode::Loading {
                                     slug: slug.clone(),
-                                    handle: std::thread::spawn(move || {
-                                        let zp = client_core::zone_client::ZonePresentation::load(
-                                            &slug_clone,
-                                        )?;
-                                        // Decode UBC rig CPU-side off the UI thread (best-effort),
-                                        // but skip for authoring/demo zones that should not load actors.
-                                        let pc_cpu = if slug_clone == "campaign_builder"
-                                            || slug_clone == "cc_demo"
-                                        {
-                                            None
-                                        } else {
-                                            use roa_assets::skinning::load_gltf_skinned;
-                                            let ubc_path = std::path::Path::new(env!(
-                                                "CARGO_MANIFEST_DIR"
-                                            ))
-                                            .join(
-                                                "../../assets/models/ubc/godot/Superhero_Male.gltf",
-                                            );
-                                            load_gltf_skinned(&ubc_path).ok()
-                                        };
-                                        Ok((zp, pc_cpu))
-                                    }),
+                                    rx,
                                 };
                                 // Latch HUD-only path throughout Loading
                                 state.set_picker_mode(true);
@@ -752,16 +781,20 @@ impl ApplicationHandler for App {
                     // Spawn background loader so UI remains responsive
                     #[cfg(not(target_arch = "wasm32"))]
                     {
+                        let (tx, rx) = mpsc::channel::<LoaderMsg>();
                         let slug_clone = slug.clone();
-                        self.boot = BootMode::Loading {
-                            slug: slug.clone(),
-                            handle: std::thread::spawn(move || {
-                                let zp =
-                                    client_core::zone_client::ZonePresentation::load(&slug_clone)?;
-                                // Optionally decode PC rig off the UI thread for non-authoring zones
-                                let pc_cpu = if slug_clone == "campaign_builder"
-                                    || slug_clone == "cc_demo"
-                                {
+                        std::thread::spawn(move || {
+                            let send = |m| {
+                                let _ = tx.send(m);
+                            };
+                            send(LoaderMsg::Progress {
+                                what: "Reading zone".into(),
+                                step: 1,
+                                of: 3,
+                            });
+                            let zp = client_core::zone_client::ZonePresentation::load(&slug_clone);
+                            let pc_cpu =
+                                if slug_clone == "campaign_builder" || slug_clone == "cc_demo" {
                                     None
                                 } else {
                                     use roa_assets::skinning::load_gltf_skinned;
@@ -769,8 +802,23 @@ impl ApplicationHandler for App {
                                         .join("../../assets/models/ubc/godot/Superhero_Male.gltf");
                                     load_gltf_skinned(&ubc_path).ok()
                                 };
-                                Ok((zp, pc_cpu))
-                            }),
+                            send(LoaderMsg::Progress {
+                                what: "Finalizing".into(),
+                                step: 3,
+                                of: 3,
+                            });
+                            match zp {
+                                Ok(zp_ok) => {
+                                    let _ = tx.send(LoaderMsg::Done(Ok((zp_ok, pc_cpu))));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(LoaderMsg::Done(Err(e)));
+                                }
+                            }
+                        });
+                        self.boot = BootMode::Loading {
+                            slug: slug.clone(),
+                            rx,
                         };
                         // Keep HUD-only path active until Running so the graph never executes mid-load
                         state.set_picker_mode(true);
@@ -985,22 +1033,43 @@ impl ApplicationHandler for App {
             let mut restore: Option<BootMode> = None;
             let cur = std::mem::replace(&mut self.boot, BootMode::Picker);
             match cur {
-                BootMode::Loading { slug, handle } => {
-                    if handle.is_finished() {
-                        match handle.join() {
-                            Ok(Ok((zp, pc_cpu_opt))) => {
+                BootMode::Loading { slug, rx } => {
+                    // Non-blocking pump of loader messages
+                    let mut done: Option<
+                        anyhow::Result<(
+                            client_core::zone_client::ZonePresentation,
+                            Option<roa_assets::types::SkinnedMeshCPU>,
+                        )>,
+                    > = None;
+                    while let Ok(msg) = rx.try_recv() {
+                        match msg {
+                            LoaderMsg::Progress { what, step, of } => {
+                                if let Some(st) = self.state.as_mut() {
+                                    st.hud_reset();
+                                    st.draw_picker_overlay(
+                                        &format!("Loading — {}", slug),
+                                        &format!("{}… ({}/{})", what, step, of),
+                                        &[],
+                                        0,
+                                    );
+                                }
+                            }
+                            LoaderMsg::Done(res) => done = Some(res),
+                        }
+                    }
+                    if let Some(res) = done.take() {
+                        match res {
+                            Ok((zp, pc_cpu_opt)) => {
                                 if let Some(st) = self.state.as_mut() {
                                     let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
                                         st, &zp,
                                     );
-                                    // Attach scene for next frame; keep HUD-only for the remainder of this tick
                                     st.set_zone_batches(Some(gz));
                                     if let Some(cpu) = pc_cpu_opt {
                                         st.install_pc_cpu(cpu);
                                     } else {
                                         st.ensure_pc_assets();
                                     }
-                                    // Dismiss any HUD loading modal drawn during Loading
                                     st.hud_reset();
                                 }
                                 #[cfg(feature = "demo_server")]
@@ -1011,19 +1080,11 @@ impl ApplicationHandler for App {
                                 self.boot = BootMode::Running { slug: slug.clone() };
                                 if let Some(win) = &self.window {
                                     win.set_title(&format!("RuinsofAtlantis — {}", slug));
-                                    // Nudge a redraw so the next frame can unlatch HUD-only just-in-time
                                     win.request_redraw();
                                 }
                             }
-                            Ok(Err(e)) => {
+                            Err(e) => {
                                 log::error!("zone load failed: {:?}", e);
-                                if let Some(st) = self.state.as_mut() {
-                                    st.hud_reset();
-                                }
-                                self.boot = BootMode::Picker;
-                            }
-                            Err(_) => {
-                                log::error!("zone load thread panicked");
                                 if let Some(st) = self.state.as_mut() {
                                     st.hud_reset();
                                 }
@@ -1031,14 +1092,10 @@ impl ApplicationHandler for App {
                             }
                         }
                     } else {
-                        // Not finished yet; restore state and draw loading overlay
-                        restore = Some(BootMode::Loading {
-                            slug: slug.clone(),
-                            handle,
-                        });
-                        if let (Some(win), Some(st)) = (&self.window, &mut self.state) {
-                            st.draw_picker_overlay("Loading…", "Please wait", &[], 0);
-                            let _ = st.render_with_window(win);
+                        // Still loading; keep mode and UI responsive
+                        restore = Some(BootMode::Loading { slug, rx });
+                        if let Some(win) = &self.window {
+                            win.request_redraw();
                         }
                     }
                 }
