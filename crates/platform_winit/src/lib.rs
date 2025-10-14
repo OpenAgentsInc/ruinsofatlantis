@@ -42,9 +42,9 @@ enum LoaderMsg {
 // Background asset worker (pure CPU) messages
 #[cfg(not(target_arch = "wasm32"))]
 enum AssetMsg {
-    FoliageProgress { kind: String, i: u32, of: u32 },
-    FoliageBatch(render_wgpu::gfx::foliage_stream::TreeCpuBatch),
-    FoliageDone,
+    Progress { i: u32, of: u32 },
+    Batch(render_wgpu::gfx::foliage_stream::TreeCpuBatch),
+    Done,
 }
 
 #[allow(dead_code)]
@@ -1145,15 +1145,14 @@ impl ApplicationHandler for App {
                                         {
                                             let total = batches.len() as u32;
                                             for (i, b) in batches.into_iter().enumerate() {
-                                                let _ = txa.send(AssetMsg::FoliageProgress {
-                                                    kind: b.kind.clone(),
+                                                let _ = txa.send(AssetMsg::Progress {
                                                     i: i as u32 + 1,
                                                     of: total.max(1),
                                                 });
-                                                let _ = txa.send(AssetMsg::FoliageBatch(b));
+                                                let _ = txa.send(AssetMsg::Batch(b));
                                             }
                                         }
-                                        let _ = txa.send(AssetMsg::FoliageDone);
+                                        let _ = txa.send(AssetMsg::Done);
                                     });
                                 }
                             }
@@ -1188,7 +1187,7 @@ impl ApplicationHandler for App {
                 // Drain messages quickly, but only queue one batch for this frame
                 while let Ok(msg) = rx.try_recv() {
                     match msg {
-                        AssetMsg::FoliageProgress { kind: _, i, of } => {
+                        AssetMsg::Progress { i, of } => {
                             st.hud_reset();
                             st.draw_picker_overlay(
                                 "Loading — Foliage",
@@ -1197,11 +1196,11 @@ impl ApplicationHandler for App {
                                 0,
                             );
                         }
-                        AssetMsg::FoliageBatch(batch) => {
+                        AssetMsg::Batch(batch) => {
                             self.pending_foliage_cpu.push(batch);
                             break;
                         }
-                        AssetMsg::FoliageDone => got_done = true,
+                        AssetMsg::Done => got_done = true,
                     }
                 }
                 if let Some(b) = self.pending_foliage_cpu.pop() {

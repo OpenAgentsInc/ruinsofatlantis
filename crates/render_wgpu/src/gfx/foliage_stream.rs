@@ -90,35 +90,34 @@ pub fn build_foliage_cpu_by_kind(
                             }
                         }
                         // Try to capture a reasonable base color texture
-                        if base_tex.is_none() {
-                            if let Some(texinfo) = prim
+                        if base_tex.is_none()
+                            && let Some(texinfo) = prim
                                 .material()
                                 .pbr_metallic_roughness()
                                 .base_color_texture()
-                            {
-                                let img_idx = texinfo.texture().source().index();
-                                if let Some(img) = images.get(img_idx) {
-                                    let (w, h) = (img.width, img.height);
-                                    let pixels = match img.format {
-                                        gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
-                                        gltf::image::Format::R8G8B8 => {
-                                            let mut out = Vec::with_capacity((w * h * 4) as usize);
-                                            for c in img.pixels.chunks_exact(3) {
-                                                out.extend_from_slice(&[c[0], c[1], c[2], 255]);
-                                            }
-                                            out
+                        {
+                            let img_idx = texinfo.texture().source().index();
+                            if let Some(img) = images.get(img_idx) {
+                                let (w, h) = (img.width, img.height);
+                                let pixels = match img.format {
+                                    gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                    gltf::image::Format::R8G8B8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for c in img.pixels.chunks_exact(3) {
+                                            out.extend_from_slice(&[c[0], c[1], c[2], 255]);
                                         }
-                                        gltf::image::Format::R8 => {
-                                            let mut out = Vec::with_capacity((w * h * 4) as usize);
-                                            for &r in &img.pixels {
-                                                out.extend_from_slice(&[r, r, r, 255]);
-                                            }
-                                            out
+                                        out
+                                    }
+                                    gltf::image::Format::R8 => {
+                                        let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                        for &r in &img.pixels {
+                                            out.extend_from_slice(&[r, r, r, 255]);
                                         }
-                                        _ => img.pixels.clone(),
-                                    };
-                                    base_tex = Some((pixels, w, h));
-                                }
+                                        out
+                                    }
+                                    _ => img.pixels.clone(),
+                                };
+                                base_tex = Some((pixels, w, h));
                             }
                         }
                     }
