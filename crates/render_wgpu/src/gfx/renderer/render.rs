@@ -2405,9 +2405,11 @@ pub fn render_impl(
         MainPass::declare(&mut gb, hdr, depth, msaa);
         ParticlesPass::declare(&mut gb, hdr, msaa);
         // Optional post chain
+        // Temporarily default to disabling post until the post suite blends with HDR correctly.
+        // Set RA_DISABLE_POST=0 to force-enable post.
         let disable_post = std::env::var("RA_DISABLE_POST")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+            .unwrap_or(true);
         if !disable_post {
             // Post chain operates on a separate post color
             let post = gb.image(ImageKind::Color {
