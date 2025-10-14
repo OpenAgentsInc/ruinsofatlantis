@@ -1677,7 +1677,11 @@ pub fn render_impl(
     let overlays_disabled = std::env::var("RA_OVERLAYS")
         .map(|v| v == "0")
         .unwrap_or(false);
-    if !overlays_disabled && !r.is_vox_onepath() && !r.has_zone_batches() {
+    // Legacy pre-graph main/overlays (disabled by default). Opt-in with RA_LEGACY_MAIN=1.
+    let legacy_main_on = std::env::var("RA_LEGACY_MAIN")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if legacy_main_on && !overlays_disabled && !r.is_vox_onepath() && !r.has_zone_batches() {
         // Bars for wizards from replicated views (positions + HP), with distance cull for NPCs.
         let mut bar_entries: Vec<(glam::Vec3, f32)> = Vec::new();
         let pc_pos = if let Some(pcw) = r.repl_buf.wizards.iter().find(|w| w.is_pc) {
@@ -1756,7 +1760,7 @@ pub fn render_impl(
     }
 
     // Damage numbers: update, queue, draw (independent of RA_OVERLAYS to ensure visibility)
-    if !r.is_vox_onepath() && !r.has_zone_batches() {
+    if legacy_main_on && !r.is_vox_onepath() && !r.has_zone_batches() {
         r.damage.update(dt);
         r.damage.queue(
             &r.device,
@@ -1821,9 +1825,10 @@ pub fn render_impl(
     }
 
     // Nameplates disabled by default. Set RA_NAMEPLATES=1 to enable.
-    let draw_labels = std::env::var("RA_NAMEPLATES")
-        .map(|v| v == "1")
-        .unwrap_or(false);
+    let draw_labels = legacy_main_on
+        && std::env::var("RA_NAMEPLATES")
+            .map(|v| v == "1")
+            .unwrap_or(false);
     if draw_labels && !r.is_vox_onepath() && !r.has_zone_batches() {
         // Alive wizards only
         let mut wiz_alive: Vec<glam::Mat4> = Vec::new();
@@ -1900,7 +1905,11 @@ pub fn render_impl(
         }
     }
 
-    log::debug!("end: main pass");
+    if legacy_main_on {
+        log::debug!("end: main pass (legacy)");
+    } else {
+        log::debug!("legacy main: disabled");
+    }
 
     if std::env::var("RA_MINIMAL")
         .map(|v| v == "1")
@@ -1921,7 +1930,7 @@ pub fn render_impl(
     let legacy_overlays = std::env::var("RA_LEGACY_OVERLAYS")
         .map(|v| v == "1")
         .unwrap_or(false);
-    if legacy_overlays && !present_only && r.enable_bloom {
+    if legacy_main_on && legacy_overlays && !present_only && r.enable_bloom {
         let mut blit = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("blit-scene-to-read(bloom)"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1942,7 +1951,7 @@ pub fn render_impl(
         blit.draw(0..3, 0..1);
     }
     // SSR overlay
-    if legacy_overlays && !present_only && r.enable_ssr {
+    if legacy_main_on && legacy_overlays && !present_only && r.enable_ssr {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssr-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1965,7 +1974,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // SSGI additive overlay
-    if legacy_overlays && !present_only && r.enable_ssgi {
+    if legacy_main_on && legacy_overlays && !present_only && r.enable_ssgi {
         let mut gi = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("ssgi-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1989,7 +1998,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // Post AO
-    if legacy_overlays && !present_only && r.enable_post_ao {
+    if legacy_main_on && legacy_overlays && !present_only && r.enable_post_ao {
         let mut post = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("post-ao"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2012,7 +2021,7 @@ pub fn render_impl(
         r.draw_calls += 1;
     }
     // Bloom
-    if legacy_overlays && r.enable_bloom {
+    if legacy_main_on && legacy_overlays && r.enable_bloom {
         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("bloom-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -2033,7 +2042,7 @@ pub fn render_impl(
         rp.draw(0..3, 0..1);
     }
     // Present pass when using offscreen
-    if legacy_overlays && !r.direct_present {
+    if legacy_main_on && legacy_overlays && !r.direct_present {
         log::debug!("pass: present");
         let mut present = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("present-pass"),
@@ -2063,8 +2072,7 @@ pub fn render_impl(
     }
 
     // Zone Picker overlay: drawn by platform via Renderer::draw_picker_overlay()
-    // Submit (defer error-scope pop until AFTER submit to catch pass/encoder errors)
-    log::debug!("submit: normal path");
+    // Build HUD text/overlays (drawn later in Present)
     // legacy BossStatus emission removed; HUD is replication-driven
     // HUD
     let pc_hp = r
