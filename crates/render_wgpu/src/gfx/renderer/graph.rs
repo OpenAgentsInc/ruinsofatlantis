@@ -364,9 +364,11 @@ impl Graph {
         self.keep_textures.clear();
         // Behavior-neutral default: alias declared image handles to the current attachments.
         // Optionally allocate real textures per handle if RA_GRAPH_ALLOC=1 is set.
+        // Default to allocating per declared image to avoid aliasing hazards.
+        // Set RA_GRAPH_ALLOC=0 to enable aliasing for lower memory once stable.
         let do_alloc = std::env::var("RA_GRAPH_ALLOC")
             .map(|v| v == "1")
-            .unwrap_or(false);
+            .unwrap_or(true);
         let mut arena = ImageArena {
             textures: Vec::with_capacity(self.images.len()),
             views: Vec::with_capacity(self.images.len()),
@@ -813,6 +815,8 @@ impl Graph {
                 .push_error_scope(wgpu::ErrorFilter::Validation);
 
             (p.exec)(&mut ctx);
+            // Force device to process pending work so validation errors surface at pass scope
+            // Defer to end-of-frame pop for validation; no device.poll here for portability.
 
             #[cfg(not(target_arch = "wasm32"))]
             {
