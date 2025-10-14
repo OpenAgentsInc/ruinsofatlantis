@@ -916,7 +916,7 @@ impl ApplicationHandler for App {
                         util
                     ));
                     lines.push(
-                        "Enter: place   ,/. rotate   X: export   I: import   Z: undo   B: exit"
+                        "B/C: toggle   1..3: kind   Enter: place   ,/.: rotate   X: export   I: import   Z: undo"
                             .into(),
                     );
                     for (i, m) in self.builder.ws.placed.iter().enumerate().take(10) {
@@ -932,7 +932,7 @@ impl ApplicationHandler for App {
                     }
                     state.draw_picker_overlay(
                         "Campaign Builder",
-                        "B toggle   Enter place   ,/. rotate   I import   X export   Z undo",
+                        "B/C toggle   1..3 kind   Enter place   ,/.: rotate   I import   X export   Z undo",
                         &lines,
                         0,
                     );
@@ -1057,8 +1057,64 @@ impl ApplicationHandler for App {
                     && slug.as_str() == "campaign_builder"
                 {
                     use winit::event::ElementState;
-                    use winit::keyboard::KeyCode as KC;
-                    let pressed = matches!(kev.state, ElementState::Pressed);
+                    use winit::keyboard::{Key, KeyCode as KC, NamedKey, PhysicalKey};
+                    let pressed = kev.state == ElementState::Pressed;
+
+                    // IME-safe key matcher: accepts logical (characters) or physical codes
+                    let key_is = |chars: &[&str], codes: &[KC]| -> bool {
+                        match &kev.logical_key {
+                            Key::Character(s) => {
+                                if chars.iter().any(|c| s.eq_ignore_ascii_case(c)) {
+                                    return true;
+                                }
+                            }
+                            Key::Named(NamedKey::Enter) => {
+                                if chars.iter().any(|c| *c == "enter") {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                        if let PhysicalKey::Code(code) = kev.physical_key {
+                            if codes.iter().any(|c| *c == code) {
+                                return true;
+                            }
+                        }
+                        false
+                    };
+
+                    // Toggle builder with B or C
+                    if pressed && key_is(&["b", "c"], &[KC::KeyB, KC::KeyC]) {
+                        self.builder.active = !self.builder.active;
+                        self.builder.ws.set_active(self.builder.active);
+                        if let Some(win) = &self.window {
+                            win.request_redraw();
+                        }
+                        return;
+                    }
+
+                    // Selection 1/2/3 always allowed
+                    if pressed && key_is(&["1"], &[KC::Digit1, KC::Numpad1]) {
+                        self.builder.kind_idx = 0.min(self.builder.kinds.len().saturating_sub(1));
+                        if let Some(win) = &self.window {
+                            win.request_redraw();
+                        }
+                        return;
+                    }
+                    if pressed && key_is(&["2"], &[KC::Digit2, KC::Numpad2]) {
+                        self.builder.kind_idx = 1.min(self.builder.kinds.len().saturating_sub(1));
+                        if let Some(win) = &self.window {
+                            win.request_redraw();
+                        }
+                        return;
+                    }
+                    if pressed && key_is(&["3"], &[KC::Digit3, KC::Numpad3]) {
+                        self.builder.kind_idx = 2.min(self.builder.kinds.len().saturating_sub(1));
+                        if let Some(win) = &self.window {
+                            win.request_redraw();
+                        }
+                        return;
+                    }
                     if let winit::keyboard::PhysicalKey::Code(code) = kev.physical_key {
                         match code {
                             KC::KeyB if pressed => {
