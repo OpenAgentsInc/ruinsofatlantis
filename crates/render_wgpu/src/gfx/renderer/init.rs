@@ -1948,7 +1948,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             wgpu::BufferUsages::COPY_SRC,
             Some("staging"),
         ),
-        bg_cache: crate::gfx::renderer::bindgroups::BgCache::with_capacity(4096),
+        bg_cache: crate::gfx::renderer::bindgroups::BgCache::with_capacity(
+            crate::gfx::renderer::config::BG_CACHE_CAP,
+        ),
         render_stats: Vec::new(),
         pending_frame: None,
         deferred_resize: None,

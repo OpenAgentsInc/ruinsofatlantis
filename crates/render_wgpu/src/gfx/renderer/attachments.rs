@@ -117,6 +117,7 @@ impl Attachments {
 
 #[cfg(test)]
 mod tests {
+    use wgpu::util::DeviceExt;
     use winit::dpi::PhysicalSize;
 
     fn compute_extents(max_dim: u32, requested: PhysicalSize<u32>) -> (u32, u32) {
@@ -140,5 +141,61 @@ mod tests {
         assert_eq!(first, (1280, 720));
         let second = compute_extents(max_dim, PhysicalSize::new(1920, 1080));
         assert_eq!(second, (1920, 1080));
+    }
+
+    fn make_device() -> Option<wgpu::Device> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            force_fallback_adapter: false,
+            compatible_surface: None,
+        }))
+        .ok()?;
+        let (device, _queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some("attachments-tests-device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::default(),
+            }))
+            .ok()?;
+        Some(device)
+    }
+
+    #[test]
+    fn rebuild_noop_on_same_size() {
+        let Some(device) = make_device() else {
+            return;
+        };
+        let mut a = super::Attachments::create(
+            &device,
+            1280,
+            720,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+            wgpu::TextureFormat::Rgba16Float,
+        );
+        let width_before = a.width;
+        let height_before = a.height;
+        a.rebuild(&device, 1280, 720); // same
+        assert_eq!(a.width, width_before);
+        assert_eq!(a.height, height_before);
+    }
+
+    #[test]
+    fn rebuild_updates_sizes_on_change() {
+        let Some(device) = make_device() else {
+            return;
+        };
+        let mut a = super::Attachments::create(
+            &device,
+            800,
+            600,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+            wgpu::TextureFormat::Rgba16Float,
+        );
+        a.rebuild(&device, 1024, 768);
+        assert_eq!(a.width, 1024);
+        assert_eq!(a.height, 768);
     }
 }

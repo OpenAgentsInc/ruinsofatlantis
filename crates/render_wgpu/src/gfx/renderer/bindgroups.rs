@@ -126,6 +126,22 @@ mod tests {
         })
     }
 
+    fn make_tex_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("bgcache-test-bgl-tex"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }],
+        })
+    }
+
     fn make_uniform(device: &wgpu::Device) -> wgpu::Buffer {
         let data = [0u8; 16];
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -242,5 +258,124 @@ mod tests {
         });
         assert_eq!(cache.len(), 2);
         assert_eq!(cache.evictions, 1);
+    }
+
+    #[test]
+    fn bgcache_hits_with_stable_view_pointer() {
+        let Some((device, _q)) = make_device() else {
+            return;
+        };
+
+        let bgl = make_tex_layout(&device);
+
+        // One texture + view kept alive across "frames" (what we want in production).
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("t0"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut cache = BgCache::with_capacity(1024);
+        let key = BgKey::new(&bgl, &[&view as *const _ as u64]);
+
+        let _bg0 = cache.get_or_create(key.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("bg0"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                }],
+            })
+        });
+
+        // Same key again => must hit, not miss.
+        let _bg1 = cache.get_or_create(key.clone(), || unreachable!("should have hit"));
+        assert_eq!(cache.misses, 1);
+        assert_eq!(cache.hits, 1);
+        assert_eq!(cache.evictions, 0);
+    }
+
+    #[test]
+    fn bgcache_miss_on_different_view_pointer() {
+        let Some((device, _q)) = make_device() else {
+            return;
+        };
+
+        let bgl = make_tex_layout(&device);
+
+        // Simulate old buggy behavior: new texture/view each "frame".
+        let tex0 = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("t0"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let v0 = tex0.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let tex1 = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("t1"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let v1 = tex1.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut cache = BgCache::with_capacity(1024);
+
+        let k0 = BgKey::new(&bgl, &[&v0 as *const _ as u64]);
+        let _ = cache.get_or_create(k0.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("bg0"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&v0),
+                }],
+            })
+        });
+
+        let k1 = BgKey::new(&bgl, &[&v1 as *const _ as u64]);
+        let _ = cache.get_or_create(k1.clone(), || {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("bg1"),
+                layout: &bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&v1),
+                }],
+            })
+        });
+
+        // We expect two misses, zero hits (distinct pointers). This illustrates
+        // why per-frame allocations tank the cache.
+        assert_eq!(cache.misses, 2);
+        assert_eq!(cache.hits, 0);
     }
 }
