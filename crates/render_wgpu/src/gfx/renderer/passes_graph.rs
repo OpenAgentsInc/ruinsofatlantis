@@ -328,11 +328,16 @@ impl PresentPass {
                 rp.draw(0..3, 0..1);
                 // Drop RP so HUD can open its own pass targeting the same swapchain view
                 drop(rp);
-                // Draw HUD directly to the swapchain (UI pipelines are built for swapchain format)
-                ctx.renderer
-                    .hud
-                    .queue(&ctx.renderer.device, &ctx.renderer.queue);
-                ctx.renderer.hud.draw(ctx.encoder, &swap_view);
+                // Draw HUD directly to the swapchain unless RA_NO_HUD=1
+                let no_hud = std::env::var("RA_NO_HUD")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                if !no_hud {
+                    ctx.renderer
+                        .hud
+                        .queue(&ctx.renderer.device, &ctx.renderer.queue);
+                    ctx.renderer.hud.draw(ctx.encoder, &swap_view);
+                }
                 // Defer present until after submission; store the frame on the renderer
                 ctx.renderer.set_pending_frame(frame);
                 log::debug!("present: drew fullscreen and set pending frame");

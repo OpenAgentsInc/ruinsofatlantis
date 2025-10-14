@@ -2393,34 +2393,43 @@ pub fn render_impl(
         SkyPass::declare(&mut gb, hdr, msaa);
         MainPass::declare(&mut gb, hdr, depth, msaa);
         ParticlesPass::declare(&mut gb, hdr, msaa);
-        // Post chain operates on a separate post color
-        let post = gb.image(ImageKind::Color {
-            format: wgpu::TextureFormat::Rgba16Float,
-            size,
-            msaa: 1,
-        });
-        BlitHdrToPostPass::declare(&mut gb, hdr, post);
-        PostAoPass::declare(&mut gb, post, depth);
-        SsgiPass::declare(&mut gb, post, hdr, depth);
-        SsrPass::declare(&mut gb, post, hdr, depth);
-        // Create a post_src to sample from during bloom
-        let post_src = gb.image(ImageKind::Color {
-            format: wgpu::TextureFormat::Rgba16Float,
-            size,
-            msaa: 1,
-        });
-        super::passes_graph::BlitPostToSrcPass::declare(&mut gb, post, post_src);
-        // Bloom output goes to post_bloom, a new target
-        let post_bloom = gb.image(ImageKind::Color {
-            format: wgpu::TextureFormat::Rgba16Float,
-            size,
-            msaa: 1,
-        });
-        BloomPass::declare(&mut gb, post_bloom, post_src);
-        // Copy bloom output into history before UI (pre-UI history)
-        super::passes_graph::HistoryCopyPass::declare(&mut gb, post_bloom);
-        // Draw HUD directly to the swapchain inside Present; present reads post_bloom
-        PresentPass::declare(&mut gb, post_bloom);
+        // Optional post chain
+        let disable_post = std::env::var("RA_DISABLE_POST")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if !disable_post {
+            // Post chain operates on a separate post color
+            let post = gb.image(ImageKind::Color {
+                format: wgpu::TextureFormat::Rgba16Float,
+                size,
+                msaa: 1,
+            });
+            BlitHdrToPostPass::declare(&mut gb, hdr, post);
+            PostAoPass::declare(&mut gb, post, depth);
+            SsgiPass::declare(&mut gb, post, hdr, depth);
+            SsrPass::declare(&mut gb, post, hdr, depth);
+            // Create a post_src to sample from during bloom
+            let post_src = gb.image(ImageKind::Color {
+                format: wgpu::TextureFormat::Rgba16Float,
+                size,
+                msaa: 1,
+            });
+            super::passes_graph::BlitPostToSrcPass::declare(&mut gb, post, post_src);
+            // Bloom output goes to post_bloom, a new target
+            let post_bloom = gb.image(ImageKind::Color {
+                format: wgpu::TextureFormat::Rgba16Float,
+                size,
+                msaa: 1,
+            });
+            BloomPass::declare(&mut gb, post_bloom, post_src);
+            // Copy bloom output into history before UI (pre-UI history)
+            super::passes_graph::HistoryCopyPass::declare(&mut gb, post_bloom);
+            // Present reads post_bloom
+            PresentPass::declare(&mut gb, post_bloom);
+        } else {
+            // No post: Present reads HDR directly
+            PresentPass::declare(&mut gb, hdr);
+        }
         let g = Graph::compile(gb);
         graph_ok_flag = g.execute(r, &mut encoder);
         // History copy handled via graph pass
