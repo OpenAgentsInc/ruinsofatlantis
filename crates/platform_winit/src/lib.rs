@@ -1064,6 +1064,17 @@ impl ApplicationHandler for App {
                             KC::KeyB if pressed => {
                                 self.builder.active = !self.builder.active;
                                 self.builder.ws.set_active(self.builder.active);
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
+                            }
+                            // Alias 'C' to toggle builder (creator) as requested
+                            KC::KeyC if pressed => {
+                                self.builder.active = !self.builder.active;
+                                self.builder.ws.set_active(self.builder.active);
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
                             }
                             KC::Enter | KC::NumpadEnter if pressed && self.builder.active => {
                                 // Place ~10ft ahead of player facing
@@ -1129,24 +1140,61 @@ impl ApplicationHandler for App {
                             KC::Digit1 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     0.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
                             }
                             KC::Digit2 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     1.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
                             }
                             KC::Digit3 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     2.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
+                            }
+                            // Numpad aliases for selection
+                            KC::Numpad1 if pressed && self.builder.active => {
+                                self.builder.kind_idx =
+                                    0.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
+                            }
+                            KC::Numpad2 if pressed && self.builder.active => {
+                                self.builder.kind_idx =
+                                    1.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
+                            }
+                            KC::Numpad3 if pressed && self.builder.active => {
+                                self.builder.kind_idx =
+                                    2.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
                             }
                             KC::Comma if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
                                     (self.builder.yaw_deg - 15.0).rem_euclid(360.0);
                                 self.builder.ws.current_yaw_deg = self.builder.yaw_deg;
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
                             }
                             KC::Period if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
                                     (self.builder.yaw_deg + 15.0).rem_euclid(360.0);
                                 self.builder.ws.current_yaw_deg = self.builder.yaw_deg;
+                                if let Some(win) = &self.window {
+                                    win.request_redraw();
+                                }
                             }
                             KC::KeyZ if pressed && self.builder.active => {
                                 let _ = self.builder.ws.undo_last();
