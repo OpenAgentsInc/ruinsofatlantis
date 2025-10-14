@@ -2291,6 +2291,7 @@ pub fn render_impl(
         return Ok(());
     }
     // Normal scene path (graph)
+    #[allow(unused_assignments)]
     let mut graph_ok_flag = true; // set by Graph::execute
     {
         // Legacy fallback removed; always execute the framegraph
