@@ -14,11 +14,9 @@ impl SkyPass {
     pub fn declare(builder: &mut GraphBuilder, hdr: Handle<Img>, msaa: Option<Handle<Img>>) {
         let _ = builder
             .pass("Sky", move |ctx: &mut ExecCtx| {
-                // In Picker mode, just clear the background; do not draw the gradient sky.
-                let picker_mode = ctx.renderer.is_picker_batches()
-                    || std::env::var("ROA_ZONE")
-                        .map(|s| s.is_empty() || s == "<picker>")
-                        .unwrap_or(false);
+                // In Picker/Loading (latched by platform), just clear background (no gradient sky).
+                // Rely on renderer's runtime latch rather than process env.
+                let picker_mode = ctx.renderer.is_picker_batches() || ctx.renderer.picker_mode();
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
                 let t0 = std::time::Instant::now();

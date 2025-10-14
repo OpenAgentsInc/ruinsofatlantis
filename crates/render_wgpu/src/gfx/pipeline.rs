@@ -853,6 +853,13 @@ pub fn create_present_pipeline(
         bind_group_layouts: &[globals_bgl, present_bgl],
         push_constant_ranges: &[],
     });
+    // Choose FS entry point based on swapchain format sRGB-ness
+    let fs_entry = match color_format {
+        wgpu::TextureFormat::Bgra8UnormSrgb | wgpu::TextureFormat::Rgba8UnormSrgb => {
+            "fs_present_linear"
+        }
+        _ => "fs_present",
+    };
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("present-pipeline"),
         layout: Some(&layout),
@@ -864,7 +871,7 @@ pub fn create_present_pipeline(
         },
         fragment: Some(FragmentState {
             module: &shader,
-            entry_point: Some("fs_present"),
+            entry_point: Some(fs_entry),
             targets: &[Some(ColorTargetState {
                 format: color_format,
                 blend: Some(wgpu::BlendState::REPLACE),
@@ -900,6 +907,13 @@ pub fn create_present_pipeline_nodepth(
         bind_group_layouts: &[globals_bgl, present_bgl],
         push_constant_ranges: &[],
     });
+    // Choose FS entry point based on swapchain format sRGB-ness
+    let fs_entry = match color_format {
+        wgpu::TextureFormat::Bgra8UnormSrgb | wgpu::TextureFormat::Rgba8UnormSrgb => {
+            "fs_present_linear"
+        }
+        _ => "fs_present",
+    };
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("present-nodepth-pipeline"),
         layout: Some(&layout),
@@ -911,7 +925,7 @@ pub fn create_present_pipeline_nodepth(
         },
         fragment: Some(FragmentState {
             module: &shader,
-            entry_point: Some("fs_present"),
+            entry_point: Some(fs_entry),
             targets: &[Some(ColorTargetState {
                 format: color_format,
                 blend: Some(wgpu::BlendState::REPLACE),

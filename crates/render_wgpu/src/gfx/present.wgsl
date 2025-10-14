@@ -66,3 +66,13 @@ fn fs_present(in: VsOut) -> @location(0) vec4<f32> {
   let out_rgb = linear_to_srgb(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)));
   return vec4<f32>(out_rgb, 1.0);
 }
+
+// Variant for sRGB swapchains: output linear color and let the surface perform sRGB encode.
+@fragment
+fn fs_present_linear(in: VsOut) -> @location(0) vec4<f32> {
+  let sz = vec2<f32>(textureDimensions(scene_tex));
+  let eps = vec2<f32>(0.5) / sz;
+  let uv = clamp(in.uv, eps, vec2<f32>(1.0) - eps);
+  var col = textureSampleLevel(scene_tex, samp_color, uv, 0.0).rgb;
+  return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
