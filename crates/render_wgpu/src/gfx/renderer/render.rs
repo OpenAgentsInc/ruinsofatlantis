@@ -22,6 +22,15 @@ pub fn render_impl(
 
     // Absolute early-exit for Picker/Loading: draw HUD-only and return before any scene work.
     if r.picker_mode || r.is_picker_batches() || !r.has_zone_batches() {
+        // If we are not in Picker batches but still have no zone batches attached,
+        // warn once so it's obvious why the scene is empty.
+        if !r.is_picker_batches() && !r.has_zone_batches() && !r.warned_hudonly_no_zone {
+            r.warned_hudonly_no_zone = true;
+            log::warn!(
+                "hud-only: no zone batches attached (picker_mode={}) — scene will render HUD only",
+                r.picker_mode
+            );
+        }
         #[cfg(not(target_arch = "wasm32"))]
         r.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut encoder = r

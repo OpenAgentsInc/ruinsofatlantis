@@ -118,6 +118,17 @@ impl Renderer {
                 self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
                 rp.draw_indexed(0..self.terrain_index_count, 0, 0..1);
                 self.draw_calls += 1;
+            } else if !self.warned_no_terrain_indices {
+                self.warned_no_terrain_indices = true;
+                let slug = self
+                    .zone_batches
+                    .as_ref()
+                    .map(|b| b.slug.as_str())
+                    .unwrap_or("<none>");
+                log::warn!(
+                    "terrain: no indices after zone attach (slug={}) — scene may render empty",
+                    slug
+                );
             }
             self.batch_add_key_ids(pid, mid, mesh);
             if pop_scope("terrain", &self.device) {

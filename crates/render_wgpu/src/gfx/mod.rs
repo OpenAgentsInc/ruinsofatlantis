@@ -221,6 +221,9 @@ pub struct Renderer {
     pub(crate) vb_ib_sets_count: u32,
     // True when the platform has put us into the Zone Picker (no scene graph).
     picker_mode: bool,
+    // One-shot warnings to avoid log spam
+    warned_no_terrain_indices: bool,
+    warned_hudonly_no_zone: bool,
 
     // --- Scene Buffers ---
     globals_buf: wgpu::Buffer,
@@ -661,6 +664,9 @@ impl Renderer {
         }
         out
     }
+}
+
+impl Renderer {
     pub(crate) fn empty_skinned_cpu() -> SkinnedMeshCPU {
         SkinnedMeshCPU {
             vertices: Vec::new(),

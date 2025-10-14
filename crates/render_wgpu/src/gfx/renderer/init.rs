@@ -2012,6 +2012,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         bg_binds_count: 0,
         vb_ib_sets_count: 0,
         picker_mode: false,
+        warned_no_terrain_indices: false,
+        warned_hudonly_no_zone: false,
         globals_buf,
         sky_buf,
         _plane_model_buf,
