@@ -834,7 +834,10 @@ impl Graph {
                     }
                 }
                 // Drop ctx (and its borrow) before finishing the encoder
-                drop(ctx);
+                #[allow(clippy::drop_non_drop)]
+                {
+                    let _ = &ctx;
+                }
                 let finished = local_encoder.finish();
                 renderer.queue.submit(Some(finished));
                 log::debug!("graph: end pass {}", pass_name);
