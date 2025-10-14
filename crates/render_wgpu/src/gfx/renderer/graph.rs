@@ -799,36 +799,69 @@ impl Graph {
         // Store on renderer for HUD later
         renderer.graph_peak_mem_bytes = peak_bytes;
         let mut ok = true;
+        let split = std::env::var("RA_SPLIT_ENC")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         for p in self.passes.drain(..) {
             let pass_name = p.name;
             log::debug!("graph: begin pass {}", pass_name);
-            let mut ctx = ExecCtx {
-                renderer,
-                encoder,
-                arena: &arena,
-            };
-            // Per-pass validation scope so we can attribute the first error,
-            // and early-bail to avoid "Encoder is invalid" spam.
-            #[cfg(not(target_arch = "wasm32"))]
-            ctx.renderer
-                .device
-                .push_error_scope(wgpu::ErrorFilter::Validation);
+            if split {
+                // Fresh encoder per pass so drivers surface errors at submit
+                let mut local_encoder =
+                    renderer
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some(pass_name),
+                        });
+                let mut ctx = ExecCtx {
+                    renderer,
+                    encoder: &mut local_encoder,
+                    arena: &arena,
+                };
+                #[cfg(not(target_arch = "wasm32"))]
+                ctx.renderer
+                    .device
+                    .push_error_scope(wgpu::ErrorFilter::Validation);
 
-            (p.exec)(&mut ctx);
-            // Force device to process pending work so validation errors surface at pass scope
-            // Defer to end-of-frame pop for validation; no device.poll here for portability.
+                (p.exec)(&mut ctx);
 
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                // Resolve the pass-scoped error now.
-                if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
-                    log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
-                    // Abort executing subsequent passes this frame; the encoder is invalid.
-                    ok = false;
-                    break;
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
+                        log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
+                        ok = false;
+                        break;
+                    }
                 }
+                // Drop ctx (and its borrow) before finishing the encoder
+                drop(ctx);
+                let finished = local_encoder.finish();
+                renderer.queue.submit(Some(finished));
+                log::debug!("graph: end pass {}", pass_name);
+                log::debug!("graph: submitted pass {}", pass_name);
+            } else {
+                let mut ctx = ExecCtx {
+                    renderer,
+                    encoder,
+                    arena: &arena,
+                };
+                #[cfg(not(target_arch = "wasm32"))]
+                ctx.renderer
+                    .device
+                    .push_error_scope(wgpu::ErrorFilter::Validation);
+
+                (p.exec)(&mut ctx);
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    if let Some(err) = pollster::block_on(ctx.renderer.device.pop_error_scope()) {
+                        log::error!("wgpu validation in pass '{}': {:?}", pass_name, err);
+                        ok = false;
+                        break;
+                    }
+                }
+                log::debug!("graph: end pass {}", pass_name);
             }
-            log::debug!("graph: end pass {}", pass_name);
         }
         ok
     }

@@ -364,6 +364,13 @@ impl ParticlesPass {
     pub fn declare(builder: &mut GraphBuilder, hdr: Handle<Img>, msaa: Option<Handle<Img>>) {
         let _ = builder
             .pass("Particles", move |ctx: &mut ExecCtx| {
+                // Allow disabling particles entirely for isolation
+                let disable_particles = std::env::var("RA_DISABLE_PARTICLES")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                if disable_particles {
+                    return;
+                }
                 let dc0 = ctx.renderer.draw_calls;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
