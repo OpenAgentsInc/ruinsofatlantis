@@ -211,7 +211,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Use FIFO everywhere for stability across drivers; opt-in overrides can come later.
     let present_mode = wgpu::PresentMode::Fifo;
     let alpha_mode = caps.alpha_modes[0];
-    let max_dim_cfg = crate::gfx::renderer::config::DEFAULT_MAX_DIM as u32;
+    let max_dim_cfg = crate::gfx::renderer::config::DEFAULT_MAX_DIM;
     let max_dim = device
         .limits()
         .max_texture_dimension_2d

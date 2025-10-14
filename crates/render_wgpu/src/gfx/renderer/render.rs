@@ -87,13 +87,9 @@ pub fn render_impl(
             r.queue.submit(Some(encoder.finish()));
             frame.present();
         }
-        if validate {
-            #[cfg(not(target_arch = "wasm32"))]
-            if validate {
-                if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                    log::error!("validation (picker): {:?}", e);
-                }
-            }
+        #[cfg(not(target_arch = "wasm32"))]
+        if validate && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+            log::error!("validation (picker): {:?}", e);
         }
         return Ok(());
     }
@@ -1524,10 +1520,8 @@ pub fn render_impl(
             // Ruins
             if r.ruins_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {
                 log::debug!("draw: ruins x{}", r.ruins_count);
-                if trace {
-                    if validate {
-                        r.device.push_error_scope(wgpu::ErrorFilter::Validation);
-                    }
+                if trace && validate {
+                    r.device.push_error_scope(wgpu::ErrorFilter::Validation);
                 }
                 let inst_pipe = if r.wire_enabled {
                     r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
@@ -1623,13 +1617,9 @@ pub fn render_impl(
                 );
                 r.draw_pc_only(&mut rp);
                 r.draw_calls += 1;
-                if validate {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if validate {
-                        if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                            log::error!("validation after PC draw: {:?}", e);
-                        }
-                    }
+                #[cfg(not(target_arch = "wasm32"))]
+                if validate && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+                    log::error!("validation after PC draw: {:?}", e);
                 }
                 // No HUD marker in normal builds; keep logs only
             } else {
@@ -2496,13 +2486,9 @@ pub fn render_impl(
     }
     // Pop the validation scope after submit/present; capture any errors raised
     // during encoder.finish() or queue.submit().
-    if validate {
-        #[cfg(not(target_arch = "wasm32"))]
-        if validate {
-            if let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
-                log::error!("validation (frame): {:?}", e);
-            }
-        }
+    #[cfg(not(target_arch = "wasm32"))]
+    if validate && let Some(e) = pollster::block_on(r.device.pop_error_scope()) {
+        log::error!("validation (frame): {:?}", e);
     }
     // If a resize was deferred by Present (Lost/Outdated), apply it now after submit/present
     if let Some(size) = r.deferred_resize.take() {
