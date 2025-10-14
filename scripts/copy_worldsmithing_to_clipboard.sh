@@ -49,6 +49,9 @@ add "$ROOT_DIR/crates/render_wgpu/src/gfx/rocks.rs"
 add "$ROOT_DIR/crates/render_wgpu/src/gfx/scene.rs"
 add "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/render.rs"
 add "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/update/builder.rs"
+# Recent changes: background foliage streaming and renderer init wiring
+add "$ROOT_DIR/crates/render_wgpu/src/gfx/foliage_stream.rs"
+add "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/init.rs"
 
 # Data runtime: worldsmithing policy in zone manifest
 add "$ROOT_DIR/crates/data_runtime/src/zone.rs"
