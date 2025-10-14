@@ -1985,3 +1985,141 @@ impl App {
         }
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod asset_stream_tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    use render_wgpu::gfx::foliage_stream::TreeCpuBatch;
+
+    /// Minimal stand‑in for the renderer pieces we touch during streaming.
+    struct StubRenderer {
+        installs: usize,
+        picker: bool,
+        hud_draws: usize,
+    }
+
+    impl StubRenderer {
+        fn new() -> Self {
+            Self {
+                installs: 0,
+                picker: true,
+                hud_draws: 0,
+            }
+        }
+        fn install_tree_cpu_batch(&mut self, _b: TreeCpuBatch) {
+            self.installs += 1;
+        }
+        fn picker_mode(&self) -> bool {
+            self.picker
+        }
+        fn set_picker_mode(&mut self, on: bool) {
+            self.picker = on;
+        }
+        fn hud_reset(&mut self) {}
+        fn draw_picker_overlay(
+            &mut self,
+            _title: &str,
+            _sub: &str,
+            _lines: &[String],
+            _sel: usize,
+        ) {
+            self.hud_draws += 1;
+        }
+    }
+
+    /// Mirror the asset-pump section of `about_to_wait`, but on our stub.
+    fn pump_once(
+        st: &mut StubRenderer,
+        rx: &mpsc::Receiver<AssetMsg>,
+        pending: &mut Vec<TreeCpuBatch>,
+    ) -> bool {
+        let mut got_done = false;
+        // Drain messages without blocking; queue exactly one batch per frame
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                AssetMsg::Progress { .. } => {
+                    st.hud_reset();
+                    st.draw_picker_overlay("Loading — Foliage", "Building foliage…", &[], 0);
+                }
+                AssetMsg::Batch(batch) => {
+                    pending.push(batch);
+                    break; // budget: at most one upload per frame
+                }
+                AssetMsg::Done => got_done = true,
+            }
+        }
+        if let Some(b) = pending.pop() {
+            st.install_tree_cpu_batch(b);
+            // Release HUD latch after first content arrives
+            if st.picker_mode() {
+                st.set_picker_mode(false);
+            }
+        }
+        got_done
+    }
+
+    fn make_batch(kind: &str) -> TreeCpuBatch {
+        TreeCpuBatch {
+            kind: kind.to_string(),
+            instances: Vec::new(),
+            verts_uv: Vec::new(),
+            indices_u16: Vec::new(),
+            base_tex_rgba8: None,
+        }
+    }
+
+    #[test]
+    fn streams_one_batch_per_tick_and_releases_picker() {
+        let (tx, rx) = mpsc::channel::<AssetMsg>();
+        // Simulate worker: progress spam + three batches + done
+        tx.send(AssetMsg::Progress { i: 1, of: 3 }).unwrap();
+        tx.send(AssetMsg::Batch(make_batch("birch"))).unwrap();
+        tx.send(AssetMsg::Progress { i: 2, of: 3 }).unwrap();
+        tx.send(AssetMsg::Batch(make_batch("pine"))).unwrap();
+        tx.send(AssetMsg::Batch(make_batch("giantpine"))).unwrap();
+        tx.send(AssetMsg::Done).unwrap();
+
+        let mut st = StubRenderer::new();
+        let mut pending = Vec::new();
+
+        // First pump installs exactly one batch and drops latch
+        let done1 = pump_once(&mut st, &rx, &mut pending);
+        assert_eq!(st.installs, 1, "exactly one batch per tick");
+        assert!(
+            !st.picker_mode(),
+            "picker/HUD latch must be released after first batch"
+        );
+        assert!(!done1, "not done yet");
+
+        // Second pump installs second batch
+        let done2 = pump_once(&mut st, &rx, &mut pending);
+        assert_eq!(st.installs, 2);
+        assert!(!done2);
+
+        // Third pump installs third batch; there is also a trailing Done message
+        let done3 = pump_once(&mut st, &rx, &mut pending);
+        assert_eq!(st.installs, 3);
+        // One more pump will observe the queued Done (if not already flushed)
+        let done4 = pump_once(&mut st, &rx, &mut pending);
+        assert!(done3 || done4, "eventually reports done");
+    }
+
+    #[test]
+    fn progress_messages_do_not_trigger_uploads() {
+        let (tx, rx) = mpsc::channel::<AssetMsg>();
+        for i in 0..10 {
+            tx.send(AssetMsg::Progress { i, of: 10 }).unwrap();
+        }
+        let mut st = StubRenderer::new();
+        let mut pending = Vec::new();
+        let done = pump_once(&mut st, &rx, &mut pending);
+        assert_eq!(st.installs, 0, "progress must not cause uploads");
+        assert!(
+            st.picker_mode(),
+            "no batch yet -> still latched in HUD-only"
+        );
+        assert!(!done);
+    }
+}

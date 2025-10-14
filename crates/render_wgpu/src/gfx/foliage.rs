@@ -618,4 +618,32 @@ mod tests {
         }
         assert!(!snapshot_is_collapsed(&models_many));
     }
+
+    #[test]
+    fn should_skip_kind_pine_depends_on_asset_presence() {
+        // Policy: pine family gets skipped iff the resolved mesh path is missing locally.
+        let p = path_for_kind("pine");
+        assert_eq!(should_skip_kind("pine"), !p.exists());
+        // A quaternius pine variant should behave the same
+        let p2 = path_for_kind("quaternius.pine_3");
+        assert_eq!(should_skip_kind("quaternius.pine_3"), !p2.exists());
+    }
+
+    #[test]
+    fn quaternius_kind_mapping_is_cased_and_suffixed() {
+        let p = path_for_kind("quaternius.cherryblossom_2");
+        let s = p.to_string_lossy();
+        assert!(
+            s.ends_with("assets/trees/quaternius/glTF/CherryBlossom_2.gltf"),
+            "got path: {}",
+            s
+        );
+        let p2 = path_for_kind("quaternius.giantpine"); // default to _1 if index missing
+        let s2 = p2.to_string_lossy();
+        assert!(
+            s2.ends_with("assets/trees/quaternius/glTF/GiantPine_1.gltf"),
+            "got {}",
+            s2
+        );
+    }
 }
