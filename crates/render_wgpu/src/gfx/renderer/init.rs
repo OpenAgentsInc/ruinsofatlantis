@@ -836,7 +836,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         let dummy = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("terrain-empty"),
             size: 4,
-            usage: wgpu::BufferUsages::VERTEX,
+            // Use as both a placeholder vertex and index buffer to satisfy set_index_buffer
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDEX,
             mapped_at_creation: false,
         });
         (
