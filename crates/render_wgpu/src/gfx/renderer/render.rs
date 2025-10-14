@@ -1473,6 +1473,22 @@ pub fn render_impl(
                         r.draw_calls += 1;
                     }
                 }
+                // Session rocks (if any)
+                if let Some(b) = r.session_rocks.as_ref() {
+                    let inst_pipe = if r.wire_enabled {
+                        r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
+                    } else {
+                        &r.inst_pipeline
+                    };
+                    rp.set_pipeline(inst_pipe);
+                    rp.set_bind_group(0, &r.globals_bg, &[]);
+                    rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                    rp.set_vertex_buffer(0, b.vb.slice(..));
+                    rp.set_vertex_buffer(1, b.instances.slice(..));
+                    rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
+                    rp.draw_indexed(0..b.index_count, 0, 0..b.count);
+                    r.draw_calls += 1;
+                }
             }
             // Rocks
             if r.rocks_count > 0 && !r.is_vox_onepath() && !r.is_picker_batches() && !pc_debug {

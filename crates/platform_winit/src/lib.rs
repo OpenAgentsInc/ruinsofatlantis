@@ -95,6 +95,91 @@ mod input_guard_tests {
     }
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod builder_routing_tests {
+    use super::*;
+
+    #[test]
+    fn normalize_tree_and_rock_kinds() {
+        let (r1, k1) = super::normalize_builder_kind("tree.birch");
+        assert_eq!(r1, super::BuildRoute::Tree);
+        assert_eq!(k1, "birch");
+
+        let (r2, k2) = super::normalize_builder_kind("tree.GiantPine");
+        assert_eq!(r2, super::BuildRoute::Tree);
+        assert_eq!(k2, "giantpine");
+
+        let (r3, k3) = super::normalize_builder_kind("quaternius.Pine_3");
+        assert_eq!(r3, super::BuildRoute::Tree);
+        assert_eq!(k3, "quaternius.pine_3");
+
+        let (r4, k4) = super::normalize_builder_kind("rock.building");
+        assert_eq!(r4, super::BuildRoute::Rock);
+        assert_eq!(k4, "rock.building");
+    }
+
+    #[test]
+    fn builder_policy_from_manifest_sets_menu() {
+        use data_runtime::zone::*;
+        let man = ZoneManifest {
+            zone_id: 99,
+            slug: "campaign_builder".into(),
+            display_name: "Builder".into(),
+            plane: ZonePlane::Material,
+            terrain: TerrainSpec {
+                size: 129,
+                extent: 64.0,
+                seed: 42,
+            },
+            weather: None,
+            vegetation: None,
+            start_time_frac: None,
+            start_paused: None,
+            start_time_scale: None,
+            allow_casting: None,
+            show_player_hud: None,
+            worldsmithing: Some(WorldsmithingPolicy {
+                enabled: Some(true),
+                kinds: vec![
+                    "tree.birch".into(),
+                    "tree.giantpine".into(),
+                    "rock.building".into(),
+                ],
+                caps: Some(WorldsmithingCaps {
+                    trees: Some(25),
+                    place_per_second: Some(5),
+                }),
+            }),
+        };
+        let mut rules = worldsmithing::Rules::default();
+        let mut caps = worldsmithing::Caps::default();
+        let mut kinds: Vec<String> = vec![];
+        if let Some(wsp) = man.worldsmithing.clone() {
+            for k in wsp.kinds.iter() {
+                rules.allowed_kinds.insert(k.clone());
+                kinds.push(k.clone());
+            }
+            if let Some(c) = wsp.caps {
+                if let Some(t) = c.trees {
+                    caps.max_trees_per_zone = t;
+                }
+                if let Some(p) = c.place_per_second {
+                    caps.max_place_per_second = p;
+                }
+            }
+        }
+        let mut ws = worldsmithing::Builder::new()
+            .caps(caps.clone())
+            .rules(rules)
+            .build();
+        let now = 0u64;
+        let pos = [0.0, 0.0, 0.0];
+        assert!(ws.place(&kinds[0], pos, 0.0, now).is_ok());
+        assert_eq!(kinds, vec!["tree.birch", "tree.giantpine", "rock.building"]);
+        let _ = caps;
+    }
+}
+
 #[derive(Default, Clone)]
 struct ZoneEntry {
     slug: String,
@@ -344,10 +429,51 @@ impl Default for BuilderState {
             active: false,
             yaw_deg: 0.0,
             ws,
-            kinds: vec!["tree.default".into()],
+            kinds: vec![
+                "tree.birch".into(),
+                "tree.giantpine".into(),
+                "rock.building".into(),
+            ],
             kind_idx: 0,
         }
     }
+}
+
+/// Which asset family the builder should route to for a given kind key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BuildRoute {
+    Tree,
+    Rock,
+    Other,
+}
+
+/// Normalize a builder "kind" string into (route, renderer_key).
+/// - Accepts: "tree.birch", "tree.giantpine", "quaternius.Pine_3", "rock.building", etc.
+/// - Renderer key for trees strips "tree." and lowercases; for rocks we keep the full key.
+fn normalize_builder_kind(kind: &str) -> (BuildRoute, String) {
+    let k = kind.trim();
+    if let Some(rest) = k.strip_prefix("tree.") {
+        return (BuildRoute::Tree, rest.to_ascii_lowercase());
+    }
+    if k.starts_with("rock.") {
+        return (BuildRoute::Rock, k.to_ascii_lowercase());
+    }
+    if k.starts_with("quaternius.")
+        || matches!(
+            k,
+            "birch"
+                | "pine"
+                | "giantpine"
+                | "common"
+                | "tallthick"
+                | "twistedtree"
+                | "deadtree"
+                | "cherryblossom"
+        )
+    {
+        return (BuildRoute::Tree, k.to_ascii_lowercase());
+    }
+    (BuildRoute::Other, k.to_ascii_lowercase())
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -768,12 +894,12 @@ impl ApplicationHandler for App {
                         .get(self.builder.kind_idx)
                         .cloned()
                         .unwrap_or_else(|| "tree.default".into());
-                    let kk = if let Some(rest) = k.strip_prefix("tree.") {
-                        rest.to_ascii_lowercase()
-                    } else {
-                        k.to_ascii_lowercase()
-                    };
-                    state.set_ghost_kind(&kk);
+                    let (route, render_key) = normalize_builder_kind(&k);
+                    match route {
+                        BuildRoute::Tree => state.set_ghost_kind(&render_key),
+                        BuildRoute::Rock => state.set_ghost_kind("rock.building"),
+                        BuildRoute::Other => state.set_ghost_kind(&render_key),
+                    }
                     let mut lines: Vec<String> = Vec::new();
                     let util = (self.builder.ws.cap_utilization() * 100.0).round();
                     let cur_kind = self
@@ -909,7 +1035,15 @@ impl ApplicationHandler for App {
                                 .caps(caps)
                                 .rules(rules)
                                 .build();
-                            self.builder.kinds = kinds;
+                            if kinds.is_empty() {
+                                self.builder.kinds = vec![
+                                    "tree.birch".into(),
+                                    "tree.giantpine".into(),
+                                    "rock.building".into(),
+                                ];
+                            } else {
+                                self.builder.kinds = kinds;
+                            }
                             self.builder.kind_idx = 0;
                         }
                     } else {
@@ -970,18 +1104,23 @@ impl ApplicationHandler for App {
                                             [-s, 0.0, c, 0.0],
                                             [pos[0], pos[1], pos[2], 1.0],
                                         ];
-                                        // Map kind -> renderer key (strip optional "tree.")
-                                        let kk = if let Some(rest) = k.strip_prefix("tree.") {
-                                            rest.to_ascii_lowercase()
-                                        } else {
-                                            k.to_ascii_lowercase()
-                                        };
+                                        // Normalize and route to tree vs rock
+                                        let (route, render_key) = normalize_builder_kind(&k);
                                         log::info!(
-                                            "builder: placed '{}' (total={})",
+                                            "builder: placed '{}' via {:?} (total={})",
                                             k,
+                                            route,
                                             self.builder.ws.placed.len()
                                         );
-                                        state.add_session_tree(&kk, model);
+                                        match route {
+                                            BuildRoute::Tree => {
+                                                state.add_session_tree(&render_key, model)
+                                            }
+                                            BuildRoute::Rock => state.add_session_rock(model),
+                                            BuildRoute::Other => {
+                                                state.add_session_tree(&render_key, model)
+                                            }
+                                        }
                                     }
                                     Err(e) => log::warn!("builder: place rejected: {e}"),
                                 }
@@ -994,6 +1133,10 @@ impl ApplicationHandler for App {
                             KC::Digit2 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     1.min(self.builder.kinds.len().saturating_sub(1));
+                            }
+                            KC::Digit3 if pressed && self.builder.active => {
+                                self.builder.kind_idx =
+                                    2.min(self.builder.kinds.len().saturating_sub(1));
                             }
                             KC::Comma if pressed && self.builder.active => {
                                 self.builder.yaw_deg =
@@ -1119,6 +1262,60 @@ impl ApplicationHandler for App {
                                         st.ensure_pc_assets();
                                     }
                                     st.hud_reset();
+                                    // Configure worldsmithing policy from manifest for native
+                                    if slug.as_str() == "campaign_builder" {
+                                        if let Ok(man) =
+                                            data_runtime::zone::load_zone_manifest(&slug)
+                                        {
+                                            let mut rules = worldsmithing::Rules::default();
+                                            let mut caps = worldsmithing::Caps::default();
+                                            let mut kinds: Vec<String> = vec![];
+                                            if let Some(wsp) = man.worldsmithing {
+                                                if !wsp.kinds.is_empty() {
+                                                    for k in wsp.kinds.iter() {
+                                                        rules.allowed_kinds.insert(k.clone());
+                                                        kinds.push(k.clone());
+                                                    }
+                                                } else {
+                                                    rules.allowed_kinds.insert("tree.birch".into());
+                                                    rules
+                                                        .allowed_kinds
+                                                        .insert("tree.giantpine".into());
+                                                    rules
+                                                        .allowed_kinds
+                                                        .insert("rock.building".into());
+                                                    kinds.extend([
+                                                        "tree.birch".to_string(),
+                                                        "tree.giantpine".to_string(),
+                                                        "rock.building".to_string(),
+                                                    ]);
+                                                }
+                                                if let Some(c) = wsp.caps {
+                                                    if let Some(t) = c.trees {
+                                                        caps.max_trees_per_zone = t;
+                                                    }
+                                                    if let Some(p) = c.place_per_second {
+                                                        caps.max_place_per_second = p;
+                                                    }
+                                                }
+                                            } else {
+                                                rules.allowed_kinds.insert("tree.birch".into());
+                                                rules.allowed_kinds.insert("tree.giantpine".into());
+                                                rules.allowed_kinds.insert("rock.building".into());
+                                                kinds.extend([
+                                                    "tree.birch".to_string(),
+                                                    "tree.giantpine".to_string(),
+                                                    "rock.building".to_string(),
+                                                ]);
+                                            }
+                                            self.builder.ws = worldsmithing::Builder::new()
+                                                .caps(caps)
+                                                .rules(rules)
+                                                .build();
+                                            self.builder.kinds = kinds;
+                                            self.builder.kind_idx = 0;
+                                        }
+                                    }
                                 }
                                 #[cfg(feature = "demo_server")]
                                 if let Some(srv) = self.demo_server.as_mut() {

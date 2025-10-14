@@ -289,6 +289,8 @@ pub struct Renderer {
     trees_groups: Vec<TreeBatch>,
     // Ephemeral, client-session trees placed via worldsmithing
     session_trees: Vec<SessionBatch>,
+    // Ephemeral, client-session rocks (single mesh reused)
+    session_rocks: Option<SessionBatch>,
 
     // Rocks (instanced static mesh)
     rocks_instances: wgpu::Buffer,
@@ -889,28 +891,28 @@ impl Renderer {
         self.picker_mode = matches!(self.zone_batches.as_ref(), Some(b) if b.slug == "<picker>");
 
         // Rebuild zone-dependent instancing (trees, rocks) when a real zone is attached.
-        if let Some(b) = &self.zone_batches
-            && b.slug != "<picker>"
+        if let Some(slug) = self.zone_batches.as_ref().map(|b| b.slug.clone())
+            && slug != "<picker>"
         {
             // Avoid blocking the main thread on large GLTF imports for builder/demo zones.
             // For the Campaign Builder (and RA_DEFER_FOLIAGE=1), skip heavy foliage rebuild here;
             // session-placed trees still render. Do NOT return; continue with zone attach.
-            let defer_foliage = b.slug == "campaign_builder"
+            let defer_foliage = slug.as_str() == "campaign_builder"
                 || std::env::var("RA_DEFER_FOLIAGE")
                     .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                     .unwrap_or(false);
             if defer_foliage {
                 log::debug!(
                     "zone attach: deferring foliage build for slug='{}' (skip heavy GLTF import)",
-                    b.slug
+                    slug
                 );
                 self.trees_groups.clear();
             }
             // Rebuild terrain for the attached zone (snapshot if available; else generate from manifest)
-            if let Ok(man) = data_runtime::zone::load_zone_manifest(&b.slug) {
+            if let Ok(man) = data_runtime::zone::load_zone_manifest(&slug) {
                 let terrain_size = man.terrain.size as usize;
                 let terrain_extent = man.terrain.extent;
-                if let Some(cpu_snap) = terrain::load_terrain_snapshot(&b.slug) {
+                if let Some(cpu_snap) = terrain::load_terrain_snapshot(&slug) {
                     let bufs = terrain::upload_from_cpu(&self.device, &cpu_snap);
                     self.terrain_cpu = cpu_snap;
                     self.terrain_vb = bufs.vb;
@@ -932,13 +934,14 @@ impl Renderer {
                 self.warned_no_terrain_indices = false;
             }
 
-            // Clear any session-placed trees when switching zones
+            // Clear any session-placed instances when switching zones
             self.session_trees.clear();
+            self.clear_session_rocks();
             #[cfg(not(target_arch = "wasm32"))]
             {
                 if !defer_foliage {
                     // Trees: prefer baked snapshot (by_kind) for slug; fall back to procedural using manifest vegetation
-                    let veg = data_runtime::zone::load_zone_manifest(&b.slug)
+                    let veg = data_runtime::zone::load_zone_manifest(&slug)
                         .ok()
                         .and_then(|m| m.vegetation)
                         .map(|v| (v.tree_count as usize, v.tree_seed));
@@ -946,7 +949,7 @@ impl Renderer {
                         &self.device,
                         &self.queue,
                         &self.terrain_cpu,
-                        &b.slug,
+                        &slug,
                     ) {
                         // Create material bind groups per kind by sampling baseColor from GLTF
                         let make_bg = |mesh_path: std::path::PathBuf| -> Option<wgpu::BindGroup> {
@@ -1114,7 +1117,7 @@ impl Renderer {
                             self.trees_index_count = g0.index_count;
                         }
                     } else if let Ok(tg) =
-                        foliage::build_trees(&self.device, &self.terrain_cpu, &b.slug, veg)
+                        foliage::build_trees(&self.device, &self.terrain_cpu, &slug, veg)
                     {
                         self.trees_groups.clear();
                         self.trees_instances = tg.instances;
@@ -1125,7 +1128,7 @@ impl Renderer {
                     }
                 }
                 // Rocks: rebuild too so distribution is deterministic per-zone
-                if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &b.slug, None) {
+                if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &slug, None) {
                     self.rocks_instances = rg.instances;
                     self.rocks_count = rg.count;
                     self.rocks_vb = rg.vb;
@@ -1150,16 +1153,16 @@ impl Renderer {
         self.zone_policy = policy;
         self.picker_mode = matches!(self.zone_batches.as_ref(), Some(b) if b.slug == "<picker>");
 
-        if let Some(b) = &self.zone_batches
-            && b.slug != "<picker>"
+        if let Some(slug) = self.zone_batches.as_ref().map(|b| b.slug.clone())
+            && slug != "<picker>"
         {
             // Force foliage deferral
             self.trees_groups.clear();
             // Rebuild terrain
-            if let Ok(man) = data_runtime::zone::load_zone_manifest(&b.slug) {
+            if let Ok(man) = data_runtime::zone::load_zone_manifest(&slug) {
                 let terrain_size = man.terrain.size as usize;
                 let terrain_extent = man.terrain.extent;
-                if let Some(cpu_snap) = terrain::load_terrain_snapshot(&b.slug) {
+                if let Some(cpu_snap) = terrain::load_terrain_snapshot(&slug) {
                     let bufs = terrain::upload_from_cpu(&self.device, &cpu_snap);
                     self.terrain_cpu = cpu_snap;
                     self.terrain_vb = bufs.vb;
@@ -1180,8 +1183,9 @@ impl Renderer {
                 self.warned_no_terrain_indices = false;
             }
             self.session_trees.clear();
+            self.clear_session_rocks();
             // Rocks: rebuild quickly so the scene doesn't look empty
-            if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &b.slug, None) {
+            if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &slug, None) {
                 self.rocks_instances = rg.instances;
                 self.rocks_count = rg.count;
                 self.rocks_vb = rg.vb;
@@ -1499,10 +1503,66 @@ impl Renderer {
         self.session_trees.clear();
     }
 
+    /// Append a single session rock instance (uses the already loaded rocks mesh).
+    pub fn add_session_rock(&mut self, model: [[f32; 4]; 4]) {
+        let inst = crate::gfx::types::Instance {
+            model,
+            color: [1.0, 1.0, 1.0],
+            selected: 0.25,
+        };
+        if let Some(b) = self.session_rocks.as_mut() {
+            b.cpu.push(inst);
+            b.count = b.cpu.len() as u32;
+            b.instances = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("session-rocks-instances"),
+                    contents: bytemuck::cast_slice(&b.cpu),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+        } else {
+            let cpu = vec![inst];
+            let instances = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("session-rocks-instances"),
+                    contents: bytemuck::cast_slice(&cpu),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+            self.session_rocks = Some(SessionBatch {
+                kind: "rock.building".into(),
+                instances,
+                cpu,
+                count: 1,
+                vb: self.rocks_vb.clone(),
+                ib: self.rocks_ib.clone(),
+                index_count: self.rocks_index_count,
+                material_bg: None,
+            });
+        }
+    }
+
+    /// Remove all session-placed rocks (used when switching zones).
+    pub fn clear_session_rocks(&mut self) {
+        self.session_rocks = None;
+    }
+
     fn ghost_mesh_for_kind(
         &mut self,
         kind_key: &str,
     ) -> Option<(wgpu::Buffer, wgpu::Buffer, u32, Option<wgpu::BindGroup>)> {
+        if kind_key.starts_with("rock.") {
+            let key = "rock.preview";
+            if let Some(c) = self.ghost_mesh_cache.get(key) {
+                return Some((c.0.clone(), c.1.clone(), c.2, c.3.clone()));
+            }
+            let vb = self.rocks_vb.clone();
+            let ib = self.rocks_ib.clone();
+            let ic = self.rocks_index_count;
+            self.ghost_mesh_cache
+                .insert(key.to_string(), (vb.clone(), ib.clone(), ic, None));
+            return Some((vb, ib, ic, None));
+        }
         if let Some(c) = self.ghost_mesh_cache.get(kind_key) {
             return Some((c.0.clone(), c.1.clone(), c.2, c.3.clone()));
         }
