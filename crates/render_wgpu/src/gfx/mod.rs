@@ -751,136 +751,142 @@ impl Renderer {
             && b.slug != "<picker>"
         {
             // Avoid blocking the main thread on large GLTF imports for builder/demo zones.
-            // For the Campaign Builder, skip heavy foliage rebuild here; session-placed trees
-            // still render, and authors can export/import as needed. This keeps the UI responsive
-            // and prevents the loading spinner from stalling.
-            if b.slug == "campaign_builder"
+            // For the Campaign Builder (and RA_DEFER_FOLIAGE=1), skip heavy foliage rebuild here;
+            // session-placed trees still render. Do NOT return; continue with zone attach.
+            let defer_foliage = b.slug == "campaign_builder"
                 || std::env::var("RA_DEFER_FOLIAGE")
                     .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                    .unwrap_or(false)
-            {
+                    .unwrap_or(false);
+            if defer_foliage {
                 log::debug!(
                     "zone attach: deferring foliage build for slug='{}' (skip heavy GLTF import)",
                     b.slug
                 );
                 self.trees_groups.clear();
-                // Return early to avoid GLTF work on the UI thread.
-                return;
             }
             // Clear any session-placed trees when switching zones
             self.session_trees.clear();
             #[cfg(not(target_arch = "wasm32"))]
             {
-                // Trees: prefer baked snapshot (by_kind) for slug; fall back to procedural using manifest vegetation
-                let veg = data_runtime::zone::load_zone_manifest(&b.slug)
-                    .ok()
-                    .and_then(|m| m.vegetation)
-                    .map(|v| (v.tree_count as usize, v.tree_seed));
-                if let Some(groups) = foliage::build_trees_by_kind(
-                    &self.device,
-                    &self.queue,
-                    &self.terrain_cpu,
-                    &b.slug,
-                ) {
-                    // Create material bind groups per kind by sampling baseColor from GLTF
-                    let make_bg = |mesh_path: std::path::PathBuf| -> Option<wgpu::BindGroup> {
-                        if let Ok((doc, _buffers, images)) = gltf::import(&mesh_path) {
-                            use gltf::material::AlphaMode;
-                            let mut chosen: Option<wgpu::BindGroup> = None;
-                            let mut chosen_mask = true; // prefer to replace mask with opaque when seen
-                            for mesh in doc.meshes() {
-                                for prim in mesh.primitives() {
-                                    if let Some(texinfo) = prim
-                                        .material()
-                                        .pbr_metallic_roughness()
-                                        .base_color_texture()
-                                    {
-                                        let is_mask =
-                                            matches!(prim.material().alpha_mode(), AlphaMode::Mask);
-                                        if chosen.is_some() && !is_mask && !chosen_mask {
-                                            // already picked an opaque; keep it
-                                            continue;
-                                        }
-                                        let img_idx = texinfo.texture().source().index();
-                                        if let Some(img) = images.get(img_idx) {
-                                            let (w, h) = (img.width, img.height);
-                                            let pixels = match img.format {
-                                                gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
-                                                gltf::image::Format::R8G8B8 => {
-                                                    let mut out =
-                                                        Vec::with_capacity((w * h * 4) as usize);
-                                                    for c in img.pixels.chunks_exact(3) {
-                                                        out.extend_from_slice(&[
-                                                            c[0], c[1], c[2], 255,
-                                                        ]);
+                if !defer_foliage {
+                    // Trees: prefer baked snapshot (by_kind) for slug; fall back to procedural using manifest vegetation
+                    let veg = data_runtime::zone::load_zone_manifest(&b.slug)
+                        .ok()
+                        .and_then(|m| m.vegetation)
+                        .map(|v| (v.tree_count as usize, v.tree_seed));
+                    if let Some(groups) = foliage::build_trees_by_kind(
+                        &self.device,
+                        &self.queue,
+                        &self.terrain_cpu,
+                        &b.slug,
+                    ) {
+                        // Create material bind groups per kind by sampling baseColor from GLTF
+                        let make_bg = |mesh_path: std::path::PathBuf| -> Option<wgpu::BindGroup> {
+                            if let Ok((doc, _buffers, images)) = gltf::import(&mesh_path) {
+                                use gltf::material::AlphaMode;
+                                let mut chosen: Option<wgpu::BindGroup> = None;
+                                let mut chosen_mask = true; // prefer to replace mask with opaque when seen
+                                for mesh in doc.meshes() {
+                                    for prim in mesh.primitives() {
+                                        if let Some(texinfo) = prim
+                                            .material()
+                                            .pbr_metallic_roughness()
+                                            .base_color_texture()
+                                        {
+                                            let is_mask = matches!(
+                                                prim.material().alpha_mode(),
+                                                AlphaMode::Mask
+                                            );
+                                            if chosen.is_some() && !is_mask && !chosen_mask {
+                                                // already picked an opaque; keep it
+                                                continue;
+                                            }
+                                            let img_idx = texinfo.texture().source().index();
+                                            if let Some(img) = images.get(img_idx) {
+                                                let (w, h) = (img.width, img.height);
+                                                let pixels = match img.format {
+                                                    gltf::image::Format::R8G8B8A8 => {
+                                                        img.pixels.clone()
                                                     }
-                                                    out
-                                                }
-                                                gltf::image::Format::R8 => {
-                                                    let mut out =
-                                                        Vec::with_capacity((w * h * 4) as usize);
-                                                    for &r in &img.pixels {
-                                                        out.extend_from_slice(&[r, r, r, 255]);
+                                                    gltf::image::Format::R8G8B8 => {
+                                                        let mut out = Vec::with_capacity(
+                                                            (w * h * 4) as usize,
+                                                        );
+                                                        for c in img.pixels.chunks_exact(3) {
+                                                            out.extend_from_slice(&[
+                                                                c[0], c[1], c[2], 255,
+                                                            ]);
+                                                        }
+                                                        out
                                                     }
-                                                    out
-                                                }
-                                                _ => img.pixels.clone(),
-                                            };
-                                            let size3 = wgpu::Extent3d {
-                                                width: w,
-                                                height: h,
-                                                depth_or_array_layers: 1,
-                                            };
-                                            let tex_obj = self.device.create_texture(
-                                                &wgpu::TextureDescriptor {
-                                                    label: Some("trees-albedo"),
-                                                    size: size3,
-                                                    mip_level_count: 1,
-                                                    sample_count: 1,
-                                                    dimension: wgpu::TextureDimension::D2,
-                                                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                                                    usage: wgpu::TextureUsages::TEXTURE_BINDING
-                                                        | wgpu::TextureUsages::COPY_DST,
-                                                    view_formats: &[],
-                                                },
-                                            );
-                                            self.queue.write_texture(
-                                                wgpu::TexelCopyTextureInfo {
-                                                    texture: &tex_obj,
-                                                    mip_level: 0,
-                                                    origin: wgpu::Origin3d::ZERO,
-                                                    aspect: wgpu::TextureAspect::All,
-                                                },
-                                                &pixels,
-                                                wgpu::TexelCopyBufferLayout {
-                                                    offset: 0,
-                                                    bytes_per_row: Some(4 * w),
-                                                    rows_per_image: Some(h),
-                                                },
-                                                size3,
-                                            );
-                                            let view = tex_obj.create_view(
-                                                &wgpu::TextureViewDescriptor::default(),
-                                            );
-                                            let sampler = self.device.create_sampler(
-                                                &wgpu::SamplerDescriptor {
-                                                    label: Some("trees-sampler"),
-                                                    mag_filter: wgpu::FilterMode::Linear,
-                                                    min_filter: wgpu::FilterMode::Linear,
-                                                    mipmap_filter: wgpu::FilterMode::Nearest,
-                                                    address_mode_u: wgpu::AddressMode::ClampToEdge,
-                                                    address_mode_v: wgpu::AddressMode::ClampToEdge,
-                                                    ..Default::default()
-                                                },
-                                            );
-                                            let mat_xf_buf = self.device.create_buffer_init(
-                                                &wgpu::util::BufferInitDescriptor {
-                                                    label: Some("material-xf"),
-                                                    contents: bytemuck::bytes_of(&[0.0f32; 8]),
-                                                    usage: wgpu::BufferUsages::UNIFORM,
-                                                },
-                                            );
-                                            let bg =
+                                                    gltf::image::Format::R8 => {
+                                                        let mut out = Vec::with_capacity(
+                                                            (w * h * 4) as usize,
+                                                        );
+                                                        for &r in &img.pixels {
+                                                            out.extend_from_slice(&[r, r, r, 255]);
+                                                        }
+                                                        out
+                                                    }
+                                                    _ => img.pixels.clone(),
+                                                };
+                                                let size3 = wgpu::Extent3d {
+                                                    width: w,
+                                                    height: h,
+                                                    depth_or_array_layers: 1,
+                                                };
+                                                let tex_obj = self.device.create_texture(
+                                                    &wgpu::TextureDescriptor {
+                                                        label: Some("trees-albedo"),
+                                                        size: size3,
+                                                        mip_level_count: 1,
+                                                        sample_count: 1,
+                                                        dimension: wgpu::TextureDimension::D2,
+                                                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                                            | wgpu::TextureUsages::COPY_DST,
+                                                        view_formats: &[],
+                                                    },
+                                                );
+                                                self.queue.write_texture(
+                                                    wgpu::TexelCopyTextureInfo {
+                                                        texture: &tex_obj,
+                                                        mip_level: 0,
+                                                        origin: wgpu::Origin3d::ZERO,
+                                                        aspect: wgpu::TextureAspect::All,
+                                                    },
+                                                    &pixels,
+                                                    wgpu::TexelCopyBufferLayout {
+                                                        offset: 0,
+                                                        bytes_per_row: Some(4 * w),
+                                                        rows_per_image: Some(h),
+                                                    },
+                                                    size3,
+                                                );
+                                                let view = tex_obj.create_view(
+                                                    &wgpu::TextureViewDescriptor::default(),
+                                                );
+                                                let sampler = self.device.create_sampler(
+                                                    &wgpu::SamplerDescriptor {
+                                                        label: Some("trees-sampler"),
+                                                        mag_filter: wgpu::FilterMode::Linear,
+                                                        min_filter: wgpu::FilterMode::Linear,
+                                                        mipmap_filter: wgpu::FilterMode::Nearest,
+                                                        address_mode_u:
+                                                            wgpu::AddressMode::ClampToEdge,
+                                                        address_mode_v:
+                                                            wgpu::AddressMode::ClampToEdge,
+                                                        ..Default::default()
+                                                    },
+                                                );
+                                                let mat_xf_buf = self.device.create_buffer_init(
+                                                    &wgpu::util::BufferInitDescriptor {
+                                                        label: Some("material-xf"),
+                                                        contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                                                        usage: wgpu::BufferUsages::UNIFORM,
+                                                    },
+                                                );
+                                                let bg =
                                                 self.device
                                                     .create_bind_group(&wgpu::BindGroupDescriptor {
                                                     label: Some("trees-material-bg"),
@@ -907,47 +913,48 @@ impl Renderer {
                                                         },
                                                     ],
                                                 });
-                                            chosen = Some(bg);
-                                            chosen_mask = is_mask;
+                                                chosen = Some(bg);
+                                                chosen_mask = is_mask;
+                                            }
                                         }
                                     }
                                 }
+                                return chosen;
                             }
-                            return chosen;
+                            None
+                        };
+                        self.trees_groups = groups
+                            .into_iter()
+                            .map(|(kind_key, g)| {
+                                let kind_mesh = foliage::path_for_kind(&kind_key);
+                                TreeBatch {
+                                    kind: kind_key,
+                                    instances: g.instances,
+                                    count: g.count,
+                                    vb: g.vb,
+                                    ib: g.ib,
+                                    index_count: g.index_count,
+                                    material_bg: make_bg(kind_mesh),
+                                }
+                            })
+                            .collect();
+                        if let Some(g0) = self.trees_groups.first() {
+                            self.trees_instances = g0.instances.clone();
+                            self.trees_count = g0.count;
+                            self.trees_vb = g0.vb.clone();
+                            self.trees_ib = g0.ib.clone();
+                            self.trees_index_count = g0.index_count;
                         }
-                        None
-                    };
-                    self.trees_groups = groups
-                        .into_iter()
-                        .map(|(kind_key, g)| {
-                            let kind_mesh = foliage::path_for_kind(&kind_key);
-                            TreeBatch {
-                                kind: kind_key,
-                                instances: g.instances,
-                                count: g.count,
-                                vb: g.vb,
-                                ib: g.ib,
-                                index_count: g.index_count,
-                                material_bg: make_bg(kind_mesh),
-                            }
-                        })
-                        .collect();
-                    if let Some(g0) = self.trees_groups.first() {
-                        self.trees_instances = g0.instances.clone();
-                        self.trees_count = g0.count;
-                        self.trees_vb = g0.vb.clone();
-                        self.trees_ib = g0.ib.clone();
-                        self.trees_index_count = g0.index_count;
+                    } else if let Ok(tg) =
+                        foliage::build_trees(&self.device, &self.terrain_cpu, &b.slug, veg)
+                    {
+                        self.trees_groups.clear();
+                        self.trees_instances = tg.instances;
+                        self.trees_count = tg.count;
+                        self.trees_vb = tg.vb;
+                        self.trees_ib = tg.ib;
+                        self.trees_index_count = tg.index_count;
                     }
-                } else if let Ok(tg) =
-                    foliage::build_trees(&self.device, &self.terrain_cpu, &b.slug, veg)
-                {
-                    self.trees_groups.clear();
-                    self.trees_instances = tg.instances;
-                    self.trees_count = tg.count;
-                    self.trees_vb = tg.vb;
-                    self.trees_ib = tg.ib;
-                    self.trees_index_count = tg.index_count;
                 }
                 // Rocks: rebuild too so distribution is deterministic per-zone
                 if let Ok(rg) = rocks::build_rocks(&self.device, &self.terrain_cpu, &b.slug, None) {
