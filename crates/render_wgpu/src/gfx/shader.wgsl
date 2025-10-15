@@ -245,7 +245,10 @@ fn vs_inst_tex(input: TexInstIn) -> TexInstOut {
 
 @fragment
 fn fs_inst_tex(in: TexInstOut) -> @location(0) vec4<f32> {
-  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
+  let rgba = textureSample(base_tex, base_sam, in.uv);
+  // Alpha cutout for foliage/decals
+  if (rgba.a < 0.3) { discard; }
+  let albedo = rgba.rgb;
   let light_dir = normalize(globals.sunDirTime.xyz);
   let ndl = max(dot(in.nrm, light_dir), 0.0);
   // SH ambient
@@ -283,13 +286,15 @@ fn fs_inst_tex(in: TexInstOut) -> @location(0) vec4<f32> {
     }
   }
   base += add;
-  return vec4<f32>(base, 1.0);
+  return vec4<f32>(base, rgba.a);
 }
 
 // Ghost variant (semi-transparent) for worldsmithing preview
 @fragment
 fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
-  let albedo = textureSample(base_tex, base_sam, in.uv).rgb;
+  let rgba = textureSample(base_tex, base_sam, in.uv);
+  if (rgba.a < 0.2) { discard; }
+  let albedo = rgba.rgb;
   let light_dir = normalize(globals.sunDirTime.xyz);
   let ndl = max(dot(in.nrm, light_dir), 0.0);
   // SH ambient
@@ -313,7 +318,7 @@ fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
   let amb_term = mix(0.5, 0.05, nf) * amb_int;
   var base = albedo * (base_term + amb_term + 0.8 * ndl);
   // No dynamic lights; keep preview cheap
-  return vec4<f32>(base, 0.35);
+  return vec4<f32>(base, 0.35 * rgba.a);
 }
 
 // Wizard material lighting uses the same lights buffer

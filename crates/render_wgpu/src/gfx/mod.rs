@@ -1533,7 +1533,8 @@ impl Renderer {
     pub fn add_session_rock(&mut self, model: [[f32; 4]; 4]) {
         let inst = crate::gfx::types::Instance {
             model,
-            color: [1.0, 1.0, 1.0],
+            // Slightly gray so rocks don't render stark white
+            color: [0.7, 0.7, 0.7],
             selected: 0.25,
         };
         if let Some(b) = self.session_rocks.as_mut() {
@@ -1637,10 +1638,6 @@ impl Renderer {
                         }
                     }
                     if mat_bg.is_none()
-                        && !matches!(
-                            prim.material().alpha_mode(),
-                            gltf::material::AlphaMode::Mask
-                        )
                         && let Some(texinfo) = prim
                             .material()
                             .pbr_metallic_roughness()
