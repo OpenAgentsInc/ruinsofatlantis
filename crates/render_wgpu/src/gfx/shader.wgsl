@@ -229,6 +229,8 @@ struct TexInstOut {
   @location(0) nrm: vec3<f32>,
   @location(1) world: vec3<f32>,
   @location(2) uv: vec2<f32>,
+  // Preview tint (from instance color); unused by regular textured pass
+  @location(3) icolor: vec3<f32>,
 };
 
 @vertex
@@ -240,6 +242,7 @@ fn vs_inst_tex(input: TexInstIn) -> TexInstOut {
   out.nrm = normalize((model_u.model * inst * vec4<f32>(input.nrm, 0.0)).xyz);
   out.pos = globals.view_proj * vec4<f32>(world_pos, 1.0);
   out.uv = input.uv;
+  out.icolor = input.icolor;
   return out;
 }
 
@@ -293,11 +296,19 @@ fn fs_inst_tex(in: TexInstOut) -> @location(0) vec4<f32> {
 @fragment
 fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
   let rgba = textureSample(base_tex, base_sam, in.uv);
-  if (rgba.a < 0.2) { discard; }
+  // Keep cutout but allow thinner edges for a lighter silhouette
+  if (rgba.a < 0.15) { discard; }
+  // Time-driven pulse to make the preview read as non-final content
+  let t = globals.camRightTime.w;
+  let pulse = 0.85 + 0.15 * sin(t * 4.0);
+  // Desaturate base and strongly tint toward the instance color
   let albedo = rgba.rgb;
+  let gray = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
+  let desat = mix(albedo, vec3<f32>(gray, gray, gray), 0.6);
+  let tinted = mix(desat, in.icolor, 0.85);
+  // Simple lambert + ambient for readability (cheap)
   let light_dir = normalize(globals.sunDirTime.xyz);
   let ndl = max(dot(in.nrm, light_dir), 0.0);
-  // SH ambient
   let n = in.nrm;
   let shb = array<f32,9>(
     0.282095,
@@ -314,11 +325,12 @@ fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
   for (var i:u32=0u; i<9u; i++) { amb += globals.sh[i].xyz * shb[i]; }
   let amb_int = max(dot(amb, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
   let nf = smoothstep(0.0, 0.2, -globals.sunDirTime.y);
-  let base_term = mix(0.2, 0.02, nf);
-  let amb_term = mix(0.5, 0.05, nf) * amb_int;
-  var base = albedo * (base_term + amb_term + 0.8 * ndl);
-  // No dynamic lights; keep preview cheap
-  return vec4<f32>(base, 0.35 * rgba.a);
+  let base_term = mix(0.15, 0.02, nf);
+  let amb_term = mix(0.35, 0.05, nf) * amb_int;
+  var base = tinted * (base_term + amb_term + 0.6 * ndl);
+  // Lower alpha so preview is clearly ghostlike and apply pulse
+  let a = 0.18 * rgba.a * pulse;
+  return vec4<f32>(base, a);
 }
 
 // Wizard material lighting uses the same lights buffer
