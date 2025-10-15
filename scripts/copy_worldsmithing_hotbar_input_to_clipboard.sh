@@ -48,6 +48,7 @@ add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/rocks.rs"
 add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/render.rs"
 add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/init.rs"
 add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/input.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/passes.rs"
 
 # UI/HUD modules
 add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/ui/mod.rs"
@@ -58,6 +59,18 @@ add_file "$ROOT_DIR/crates/ux_hud/src/lib.rs"
 # Data: zone manifest used by Campaign Builder
 add_file "$ROOT_DIR/data/zones/campaign_builder/manifest.json"
 add_file "$ROOT_DIR/crates/data_runtime/src/zone.rs"
+
+# Worldsmithing core lib
+add_file "$ROOT_DIR/crates/worldsmithing/src/lib.rs"
+
+# Renderer modules referenced by changes
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/mod.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/foliage.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/rocks.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/terrain.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/foliage_stream.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/shader.wgsl"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/types.rs"
 
 # 3) Dynamic search (fallback)
 if command -v rg >/dev/null 2>&1; then
@@ -90,4 +103,3 @@ esac
 
 kb=$(awk -v b="$size" 'BEGIN{printf "%.1f", b/1024}')
 echo "Copied ${kb} KiB to clipboard (truncated=${truncated})"
-

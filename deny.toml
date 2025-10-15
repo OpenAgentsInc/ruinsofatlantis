@@ -1,13 +1,10 @@
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
-vulnerability = "deny"
-unsound = "deny"
-# Advisory categories: use warn-level in CI so we surface signal without failing the build
-# (old values like "none" are invalid in cargo-deny >=0.17).
-unmaintained = "none"
-yanked = "warn"
-# 'notice' field removed in cargo-deny >=0.17; use defaults
+# cargo-deny >=0.17: removed `vulnerability` and `unsound` keys; use defaults.
+# Keep CI non-failing for maintenance churn and yanked crates.
+unmaintained = "none"   # allowed values: all|workspace|transitive|none
+yanked = "warn"          # allowed values: allow|warn|deny
 ignore = []
 
 [bans]
@@ -17,11 +14,9 @@ deny = []
 skip = []
 
 [licenses]
-unlicensed = "deny"
+# cargo-deny >=0.17: removed `unlicensed`, `copyleft`, `allow-osi-fsf-free`, and `deny` keys.
+# Rely on the explicit allow-list below and default behavior for the rest.
 allow = ["Apache-2.0", "MIT", "BSD-3-Clause", "ISC", "Zlib"]
-deny = []
-copyleft = "warn"
-allow-osi-fsf-free = "either"
 
 [sources]
 unknown-registry = "deny"
