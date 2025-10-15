@@ -121,13 +121,16 @@ pub fn retarget_animations(
             let mut r_vals = Vec::with_capacity(times.len());
             let mut s_vals = Vec::with_capacity(times.len());
             for &t in &times {
+                // Interpolated sampling
                 let t_s = sample_vec3(&nt_s, t).unwrap_or(src.base_t[*ns]);
                 let r_s = sample_quat(&nr_s, t).unwrap_or(src.base_r[*ns]);
                 let s_s = sample_vec3(&ns_s, t).unwrap_or(src.base_s[*ns]);
+                // Rest-pose correction into destination local space
                 let mut m = Mat4::from_scale_rotation_translation(s_s, r_s, t_s);
                 m = corr * m;
-                let (t_l, r_l, mut s_l) = decompose(m);
-                s_l *= scale;
+                let (mut t_l, r_l, s_l) = decompose(m);
+                // Apply rig scale to translations only
+                t_l *= scale;
                 t_vals.push(t_l);
                 r_vals.push(r_l.normalize());
                 s_vals.push(s_l);
@@ -160,15 +163,13 @@ pub fn retarget_animations(
                 rig_d.node_of_bone[HumanoidBone::Hips as usize],
             )
         {
-            if let Some(src_t) = clip.t_tracks.get(&ns_root).cloned() {
+            // Preserve translated hip (scaled). Keep previously retargeted rotation.
+            if let Some(src_t) = clip.t_tracks.get(&ns_root) {
                 let mut scaled = src_t.clone();
                 for v in &mut scaled.values {
                     *v *= scale;
                 }
                 out.t_tracks.insert(nd_root, scaled);
-            }
-            if let Some(src_r) = clip.r_tracks.get(&ns_root).cloned() {
-                out.r_tracks.insert(nd_root, src_r);
             }
         }
         dst.animations.insert(out.name.clone(), out);
@@ -190,30 +191,60 @@ fn union_times(a: &[f32], b: &[f32], c: &[f32]) -> Vec<f32> {
 }
 
 fn sample_vec3(tr: &TrackVec3, t: f32) -> Option<Vec3> {
-    if tr.times.is_empty() {
+    let n = tr.times.len();
+    if n == 0 {
         return None;
     }
-    let mut last = 0usize;
-    for (i, &tt) in tr.times.iter().enumerate() {
-        if tt > t {
-            break;
-        }
-        last = i;
+    if n == 1 || t <= tr.times[0] {
+        return Some(tr.values[0]);
     }
-    tr.values.get(last).copied()
+    if t >= tr.times[n - 1] {
+        return Some(tr.values[n - 1]);
+    }
+    let mut lo = 0usize;
+    let mut hi = n - 1;
+    while lo + 1 < hi {
+        let mid = (lo + hi) / 2;
+        if tr.times[mid] <= t {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let t0 = tr.times[lo];
+    let t1 = tr.times[lo + 1];
+    let v0 = tr.values[lo];
+    let v1 = tr.values[lo + 1];
+    let a = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
+    Some(v0.lerp(v1, a))
 }
 fn sample_quat(tr: &TrackQuat, t: f32) -> Option<Quat> {
-    if tr.times.is_empty() {
+    let n = tr.times.len();
+    if n == 0 {
         return None;
     }
-    let mut last = 0usize;
-    for (i, &tt) in tr.times.iter().enumerate() {
-        if tt > t {
-            break;
-        }
-        last = i;
+    if n == 1 || t <= tr.times[0] {
+        return Some(tr.values[0]);
     }
-    tr.values.get(last).copied()
+    if t >= tr.times[n - 1] {
+        return Some(tr.values[n - 1]);
+    }
+    let mut lo = 0usize;
+    let mut hi = n - 1;
+    while lo + 1 < hi {
+        let mid = (lo + hi) / 2;
+        if tr.times[mid] <= t {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let t0 = tr.times[lo];
+    let t1 = tr.times[lo + 1];
+    let q0 = tr.values[lo];
+    let q1 = tr.values[lo + 1];
+    let a = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
+    Some(q0.slerp(q1, a).normalize())
 }
 fn decompose(m: Mat4) -> (Vec3, Quat, Vec3) {
     let (s, r, t) = m.to_scale_rotation_translation();

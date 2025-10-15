@@ -3225,7 +3225,7 @@ impl Renderer {
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         use roa_assets::skinning::load_gltf_skinned;
         let model_rel = std::env::var("RA_PC_MODEL")
-            .unwrap_or_else(|_| "assets/models/sorceror.glb".to_string());
+            .unwrap_or_else(|_| "assets/models/warrior.glb".to_string());
         let model_path = asset_path(&model_rel);
         let mut cpu_pc = match load_gltf_skinned(&model_path) {
             Ok(c) => c,
@@ -3235,34 +3235,42 @@ impl Renderer {
             }
         };
         // Retarget external animation library (folder or single GLB) so PC has Idle/Walk/Run/Cast clips.
-        let anim_var = std::env::var("RA_PC_ANIM_LIB").ok();
-        let try_files: Vec<std::path::PathBuf> = match anim_var {
-            Some(p) => {
-                let p = asset_path(&p);
-                if p.is_dir() {
-                    std::fs::read_dir(&p)
-                        .map(|rd| {
-                            rd.filter_map(|e| e.ok())
-                                .map(|e| e.path())
-                                .filter(|f| {
-                                    matches!(
-                                        f.extension().and_then(|e| e.to_str()).map(|s| s.to_ascii_lowercase()),
-                                        Some(ref ext) if ext == "glb" || ext == "gltf"
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
-                } else if p.is_file() {
-                    vec![p]
+        fn is_anim_file(p: &std::path::Path) -> bool {
+            matches!(p.extension().and_then(|e| e.to_str()).map(|s| s.to_ascii_lowercase()),
+                     Some(ref ext) if ext == "glb" || ext == "gltf")
+        }
+        fn collect_anim_files(p: &std::path::Path) -> Vec<std::path::PathBuf> {
+            if p.is_dir() {
+                let mut v: Vec<_> = std::fs::read_dir(p)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|f| is_anim_file(f))
+                    .collect();
+                v.sort();
+                v
+            } else if is_anim_file(p) {
+                vec![p.to_path_buf()]
+            } else {
+                Vec::new()
+            }
+        }
+        let try_files: Vec<std::path::PathBuf> = match std::env::var("RA_PC_ANIM_LIB").ok() {
+            Some(path) => {
+                let p = asset_path(&path);
+                let files = collect_anim_files(&p);
+                if files.is_empty() {
+                    log::warn!(
+                        "RA_PC_ANIM_LIB {:?} had no .glb/.gltf; falling back to universal",
+                        p
+                    );
+                    vec![asset_path("assets/anims/universal/AnimationLibrary.glb")]
                 } else {
-                    Vec::new()
+                    files
                 }
             }
-            None => {
-                // Fallback to bundled universal library
-                vec![asset_path("assets/anims/universal/AnimationLibrary.glb")]
-            }
+            None => vec![asset_path("assets/anims/universal/AnimationLibrary.glb")],
         };
         if !try_files.is_empty() {
             use roa_assets::{RetargetOptions, retarget_animations};
