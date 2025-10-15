@@ -2108,6 +2108,46 @@ impl Renderer {
             return Some((c.0.clone(), c.1.clone(), c.2, c.3.clone()));
         }
         let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
+        #[cfg(target_arch = "wasm32")]
+        {
+            // On web, import via assets crate loader (embedded slices)
+            if let Ok(cpu) = roa_assets::gltf::load_gltf_mesh(&mesh_path) {
+                let vtx: Vec<crate::gfx::types::VertexPosNrmUv> = cpu
+                    .vertices
+                    .iter()
+                    .map(|v| crate::gfx::types::VertexPosNrmUv {
+                        pos: v.pos,
+                        nrm: v.nrm,
+                        uv: [0.0, 0.0],
+                    })
+                    .collect();
+                let vb = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("ghost-tree-vb"),
+                        contents: bytemuck::cast_slice(&vtx),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+                let ib = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("ghost-tree-ib"),
+                        contents: bytemuck::cast_slice(&cpu.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    });
+                let ic = cpu.indices.len() as u32;
+                let mat_bg =
+                    Some(self.make_solid_material_bg([170, 200, 120, 255], "ghost-tree-solid"));
+                self.ghost_mesh_cache.insert(
+                    kind_key.to_string(),
+                    (vb.clone(), ib.clone(), ic, mat_bg.clone()),
+                );
+                return Some((vb, ib, ic, mat_bg));
+            } else {
+                return None;
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if let Ok((doc, buffers, images)) = gltf::import(&mesh_path) {
             let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
             let mut idx: Vec<u16> = Vec::new();

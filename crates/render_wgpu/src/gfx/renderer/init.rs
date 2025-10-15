@@ -1129,8 +1129,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                     cpu_pc.joints_nodes.len()
                 );
             }
-            // Merge universal animation library if present
+            // Merge/retarget animation library
             let lib_path = super::super::asset_path("assets/anims/universal/AnimationLibrary.glb");
+            #[cfg(not(target_arch = "wasm32"))]
             if lib_path.exists() {
                 if let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path) {
                     log::warn!(
@@ -1146,6 +1147,55 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                     );
                     log::info!("PC: available clips: {}", names.join(", "));
                 }
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                use roa_assets::skinning::load_gltf_skinned as load_skinned;
+                use roa_assets::{RetargetOptions, retarget_animations};
+                if let Ok(src) = load_skinned(&lib_path) {
+                    let _ = retarget_animations(
+                        &src,
+                        &mut cpu_pc,
+                        &RetargetOptions {
+                            preserve_root_motion: true,
+                            apply_rest_correction: true,
+                            scale_override: None,
+                            allowlist: None,
+                        },
+                    );
+                    // Alias common clip names to expected *_Loop forms
+                    fn alias(
+                        from: &str,
+                        to: &str,
+                        m: &mut std::collections::HashMap<String, roa_assets::types::AnimClip>,
+                    ) {
+                        if let Some(c) = m.get(from).cloned() {
+                            m.insert(to.to_string(), c);
+                        }
+                    }
+                    alias("Idle", "Idle_Loop", &mut cpu_pc.animations);
+                    alias("Walk", "Walk_Loop", &mut cpu_pc.animations);
+                    alias("Run", "Run_Loop", &mut cpu_pc.animations);
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            if cpu_pc.animations.is_empty() {
+                // Fallback safety: inject minimal Idle/Walk clips if retarget failed.
+                use std::collections::HashMap;
+                let mk = |name: &str| roa_assets::types::AnimClip {
+                    name: name.to_string(),
+                    duration: 2.0,
+                    t_tracks: HashMap::new(),
+                    r_tracks: HashMap::new(),
+                    s_tracks: HashMap::new(),
+                };
+                cpu_pc
+                    .animations
+                    .insert("Idle_Loop".into(), mk("Idle_Loop"));
+                cpu_pc
+                    .animations
+                    .insert("Walk_Loop".into(), mk("Walk_Loop"));
+                log::info!("PC: injected synthetic Idle/Walk clips on wasm");
             }
             // Build VB/IB for PC if loaded
             if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {

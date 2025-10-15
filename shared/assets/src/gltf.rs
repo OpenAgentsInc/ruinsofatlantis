@@ -29,6 +29,17 @@ pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
             let (doc, buffers, _images) =
                 gltf::import_slice(bytes).context("import glTF (rock.glb slice)")?;
             merge_doc_to_cpu(&doc, &buffers)
+        } else if p.contains("assets/models/trees/CommonTree_3/CommonTree_3.gltf") {
+            let bytes: &'static [u8] =
+                include_bytes!("../../../assets/models/trees/CommonTree_3/CommonTree_3.gltf");
+            let (doc, buffers, _images) =
+                gltf::import_slice(bytes).context("import glTF (CommonTree_3.gltf slice)")?;
+            merge_doc_to_cpu(&doc, &buffers)
+        } else if p.contains("assets/trees/Birch_4GLB.glb") {
+            let bytes: &'static [u8] = include_bytes!("../../../assets/trees/Birch_4GLB.glb");
+            let (doc, buffers, _images) =
+                gltf::import_slice(bytes).context("import glTF (Birch_4GLB.glb slice)")?;
+            merge_doc_to_cpu(&doc, &buffers)
         } else {
             anyhow::bail!("wasm: unsupported static glTF path: {}", p);
         }
