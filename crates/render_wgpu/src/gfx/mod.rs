@@ -3289,8 +3289,9 @@ impl Renderer {
         }
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
         use roa_assets::skinning::load_gltf_skinned;
+        // Default back to the stable Superhero asset; warrior remains opt-in via RA_PC_MODEL
         let model_rel = std::env::var("RA_PC_MODEL")
-            .unwrap_or_else(|_| "assets/models/warrior.glb".to_string());
+            .unwrap_or_else(|_| "assets/models/ubc/godot/Superhero_Male.gltf".to_string());
         let model_path = asset_path(&model_rel);
         let mut cpu_pc = match load_gltf_skinned(&model_path) {
             Ok(c) => c,
