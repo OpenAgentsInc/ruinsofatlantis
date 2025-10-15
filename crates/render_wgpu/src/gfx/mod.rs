@@ -1652,11 +1652,10 @@ impl Renderer {
                             prim.material().alpha_mode(),
                             gltf::material::AlphaMode::Mask
                         );
-                        let should_set = match (mat_bg.is_some(), chosen_is_mask, is_mask) {
-                            (false, _, _) => true,
-                            (true, true, false) => true,
-                            _ => false,
-                        };
+                        let should_set = matches!(
+                            (mat_bg.is_some(), chosen_is_mask, is_mask),
+                            (false, _, _) | (true, true, false)
+                        );
                         if !should_set {
                             continue;
                         }
