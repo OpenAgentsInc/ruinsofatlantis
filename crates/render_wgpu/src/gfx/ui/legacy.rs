@@ -1715,6 +1715,192 @@ impl Hud {
         }
     }
 
+    /// Build a worldsmithing HUD: HP/Mana bars and a bottom quickbar listing
+    /// the available kinds (e.g., tree.birch, rock.building) with numeric keys.
+    pub fn build_worldsmithing(
+        &mut self,
+        surface_w: u32,
+        surface_h: u32,
+        pc_hp: i32,
+        pc_hp_max: i32,
+        pc_mana: i32,
+        pc_mana_max: i32,
+        kinds: &[String],
+        selected_idx: usize,
+    ) {
+        self.bars_verts.clear();
+        self.text_verts.clear();
+
+        // --- Player HP (top-left)
+        let pad = 10.0f32;
+        let bar_w = 220.0f32;
+        let bar_h = 16.0f32;
+        let x0 = pad;
+        let y0 = pad;
+        let x1 = x0 + bar_w;
+        let y1 = y0 + bar_h;
+        // Border (dark)
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0 - 2.0,
+            y0 - 2.0,
+            x1 + 2.0,
+            y1 + 2.0,
+            [0.05, 0.05, 0.05, 0.95],
+        );
+        // Background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0,
+            y0,
+            x1,
+            y1,
+            [0.10, 0.10, 0.10, 0.85],
+        );
+        // Fill
+        let frac = if pc_hp_max > 0 {
+            (pc_hp.max(0) as f32) / (pc_hp_max as f32)
+        } else {
+            0.0
+        };
+        if frac > 0.0 {
+            let fx1 = x0 + bar_w * frac.clamp(0.0, 1.0);
+            // green->yellow->red gradient similar to HealthBars
+            let col = if frac >= 0.5 {
+                let t = (frac - 0.5) / 0.5;
+                [1.0 - t, 1.0, 0.0, 1.0]
+            } else {
+                let t = frac / 0.5;
+                [1.0, t, 0.0, 1.0]
+            };
+            self.push_rect(surface_w, surface_h, x0, y0, fx1, y1, col);
+        }
+        // HP text
+        let label = format!("HP {} / {}", pc_hp.max(0), pc_hp_max.max(1));
+        self.push_text_line(
+            surface_w,
+            surface_h,
+            x0 + 6.0,
+            y0 + bar_h - 3.0,
+            &label,
+            [0.0, 0.0, 0.0, 0.95],
+        );
+
+        // --- Player Mana (below HP)
+        let my0 = y1 + 6.0;
+        let my1 = my0 + bar_h;
+        // Border
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0 - 2.0,
+            my0 - 2.0,
+            x1 + 2.0,
+            my1 + 2.0,
+            [0.05, 0.05, 0.05, 0.95],
+        );
+        // Background
+        self.push_rect(
+            surface_w,
+            surface_h,
+            x0,
+            my0,
+            x1,
+            my1,
+            [0.10, 0.10, 0.10, 0.85],
+        );
+        let mfrac = if pc_mana_max > 0 {
+            (pc_mana.max(0) as f32) / (pc_mana_max as f32)
+        } else {
+            0.0
+        };
+        if mfrac > 0.0 {
+            let fx1 = x0 + bar_w * mfrac.clamp(0.0, 1.0);
+            // blue/cyan gradient
+            let col = [0.2, 0.6 + 0.4 * mfrac, 1.8, 1.0];
+            self.push_rect(surface_w, surface_h, x0, my0, fx1, my1, col);
+        }
+        let mlabel = format!("Mana {} / {}", pc_mana.max(0), pc_mana_max.max(1));
+        self.push_text_line(
+            surface_w,
+            surface_h,
+            x0 + 6.0,
+            my0 + bar_h - 3.0,
+            &mlabel,
+            [0.0, 0.0, 0.0, 0.95],
+        );
+
+        // --- Worldsmithing quickbar (bottom-center): N slots from kinds
+        let slots = kinds.len().min(9);
+        if slots > 0 {
+            let slot_px = 48.0f32;
+            let gap = 6.0f32;
+            let total_w = slots as f32 * slot_px + (slots as f32 - 1.0) * gap;
+            let cx = (surface_w as f32) * 0.5;
+            let yb = (surface_h as f32) - (slot_px + 10.0);
+            let mut x = cx - total_w * 0.5;
+            for i in 0..slots {
+                let x0 = x;
+                let y0 = yb;
+                let x1 = x + slot_px;
+                let y1 = yb + slot_px;
+                // Border + background (highlight selected)
+                let sel = i == selected_idx;
+                let border = if sel {
+                    [0.85, 0.75, 0.25, 0.95]
+                } else {
+                    [0.05, 0.05, 0.05, 0.9]
+                };
+                let bg = if sel {
+                    [0.24, 0.22, 0.12, 0.95]
+                } else {
+                    [0.18, 0.18, 0.18, 0.9]
+                };
+                self.push_rect(
+                    surface_w,
+                    surface_h,
+                    x0 - 2.0,
+                    y0 - 2.0,
+                    x1 + 2.0,
+                    y1 + 2.0,
+                    border,
+                );
+                self.push_rect(surface_w, surface_h, x0, y0, x1, y1, bg);
+                // Key label (1..9)
+                let key = char::from_digit((i + 1) as u32, 10).unwrap_or(' ');
+                let key_s = key.to_string();
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y0 + 14.0,
+                    &key_s,
+                    [0.9, 0.9, 0.9, 0.95],
+                );
+                // Kind label (truncate if long)
+                let mut label = kinds[i].as_str();
+                let tmp;
+                if label.len() > 18 {
+                    tmp = format!("{}…", &label[..18]);
+                    label = &tmp;
+                }
+                self.push_text_line(
+                    surface_w,
+                    surface_h,
+                    x0 + 4.0,
+                    y1 - 6.0,
+                    label,
+                    [0.95, 0.95, 0.95, 0.95],
+                );
+                x += slot_px + gap;
+            }
+        }
+
+        self.bars_vcount = self.bars_verts.len() as u32;
+        self.text_vcount = self.text_verts.len() as u32;
+    }
     /// Clear any queued HUD geometry for building a custom overlay.
     pub fn reset(&mut self) {
         self.bars_verts.clear();

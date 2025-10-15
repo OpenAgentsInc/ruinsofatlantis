@@ -2294,6 +2294,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         picker_selected: 0,
         picker_chosen_slug: None,
         zone_policy: Default::default(),
+        worldsmithing_kinds: Vec::new(),
+        worldsmithing_selected: 0,
         present_recoveries: 0,
     };
 

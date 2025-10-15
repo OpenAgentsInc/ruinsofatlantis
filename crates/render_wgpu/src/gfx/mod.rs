@@ -501,6 +501,10 @@ pub struct Renderer {
     // Zone UI/controls policy (derived from zone slug or manifest)
     zone_policy: ZonePolicy,
 
+    // Worldsmithing HUD palette (shown when casting is disabled)
+    worldsmithing_kinds: Vec<String>,
+    worldsmithing_selected: usize,
+
     // --- Destructible (voxel) state ---
     #[cfg(feature = "vox_onepath_demo")]
     destruct_cfg: DestructibleConfig,
@@ -1259,6 +1263,28 @@ impl Renderer {
     /// Set the preview kind so the ghost matches the selected asset.
     pub fn set_ghost_kind(&mut self, key: &str) {
         self.ghost_kind = Some(key.to_string());
+    }
+
+    /// Override whether the casting UI (spells hotbar) is allowed to render.
+    /// Useful to suppress spells when authoring in worldsmithing mode.
+    pub fn set_allow_casting_ui(&mut self, allow: bool) {
+        self.zone_policy.allow_casting = allow;
+    }
+
+    /// Install the worldsmithing palette (kinds shown on the quickbar) and selected index.
+    pub fn set_worldsmithing_palette(&mut self, kinds: Vec<String>, selected: usize) {
+        self.worldsmithing_kinds = kinds;
+        self.worldsmithing_selected =
+            selected.min(self.worldsmithing_kinds.len().saturating_sub(1));
+    }
+
+    /// Update the selected worldsmithing kind index (clamped to current palette).
+    pub fn set_worldsmithing_selected(&mut self, selected: usize) {
+        if self.worldsmithing_kinds.is_empty() {
+            self.worldsmithing_selected = 0;
+        } else {
+            self.worldsmithing_selected = selected.min(self.worldsmithing_kinds.len() - 1);
+        }
     }
 
     /// Append a single session tree instance for a given kind key.

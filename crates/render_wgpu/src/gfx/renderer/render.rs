@@ -2190,27 +2190,56 @@ pub fn render_impl(
             None
         };
         if !r.is_vox_onepath() {
-            // Compute seconds remaining for numeric cooldown labels
-            let cd1_secs = cd1 * r.firebolt_cd_dur;
-            let cd2_secs = cd2 * r.magic_missile_cd_dur;
-            let cd3_secs = cd3 * r.fireball_cd_dur;
             if show_hud {
-                r.hud.build(
-                    r.size.width,
-                    r.size.height,
-                    pc_hp,
-                    r.wizard_hp_max,
-                    r.repl_buf.hud.mana as i32,
-                    r.repl_buf.hud.mana_max as i32,
-                    cast_frac,
-                    cd1,
-                    cd2,
-                    cd3,
-                    cd1_secs,
-                    cd2_secs,
-                    cd3_secs,
-                    cast_label,
-                );
+                if r.zone_policy.allow_casting {
+                    // Spell hotbar path
+                    // Compute seconds remaining for numeric cooldown labels
+                    let cd1_secs = cd1 * r.firebolt_cd_dur;
+                    let cd2_secs = cd2 * r.magic_missile_cd_dur;
+                    let cd3_secs = cd3 * r.fireball_cd_dur;
+                    r.hud.build(
+                        r.size.width,
+                        r.size.height,
+                        pc_hp,
+                        r.wizard_hp_max,
+                        r.repl_buf.hud.mana as i32,
+                        r.repl_buf.hud.mana_max as i32,
+                        cast_frac,
+                        cd1,
+                        cd2,
+                        cd3,
+                        cd1_secs,
+                        cd2_secs,
+                        cd3_secs,
+                        cast_label,
+                    );
+                } else {
+                    // Worldsmithing quickbar path (suppresses spell hotbar)
+                    // Use palette provided by platform; if empty and in campaign_builder, fall back.
+                    let mut kinds: Vec<String> = r.worldsmithing_kinds.clone();
+                    if kinds.is_empty() {
+                        if let Some(z) = r.zone_batches.as_ref() {
+                            if z.slug == "campaign_builder" {
+                                kinds = vec![
+                                    "tree.birch".to_string(),
+                                    "tree.giantpine".to_string(),
+                                    "rock.building".to_string(),
+                                ];
+                            }
+                        }
+                    }
+                    let selected = r.worldsmithing_selected.min(kinds.len().saturating_sub(1));
+                    r.hud.build_worldsmithing(
+                        r.size.width,
+                        r.size.height,
+                        pc_hp,
+                        r.wizard_hp_max,
+                        r.repl_buf.hud.mana as i32,
+                        r.repl_buf.hud.mana_max as i32,
+                        &kinds,
+                        selected,
+                    );
+                }
             } else {
                 r.hud.reset();
             }

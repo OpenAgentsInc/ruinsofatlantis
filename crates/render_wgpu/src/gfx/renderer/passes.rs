@@ -196,6 +196,89 @@ impl Renderer {
                 return;
             }
         }
+        // Worldsmithing ghost (preview a single instance of the selected kind)
+        if self.ghost_present {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let mut drew = false;
+            if let Some(ref k) = self.ghost_kind {
+                // Try to reuse a session batch for the same kind for its mesh + material
+                if let Some(b) = self.session_trees.iter().find(|b| &b.kind == k) {
+                    let pid = ptr_id(&self.inst_tex_ghost_pipeline);
+                    rp.set_pipeline(&self.inst_tex_ghost_pipeline);
+                    self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+                    rp.set_bind_group(0, &self.globals_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    rp.set_bind_group(2, &self.palettes_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    let mat_bg = b.material_bg.as_ref().unwrap_or(&self.default_material_bg);
+                    rp.set_bind_group(3, mat_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    rp.set_vertex_buffer(0, b.vb.slice(..));
+                    rp.set_vertex_buffer(1, self.ghost_inst.slice(..));
+                    rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
+                    self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                    rp.draw_indexed(0..b.index_count, 0, 0..1);
+                    self.draw_calls += 1;
+                    self.batch_add_key_ids(pid, ptr_id(mat_bg), ptr_id(&b.ib));
+                    drew = true;
+                }
+            }
+            if !drew {
+                // Try on-demand ghost mesh load for the selected kind
+                if let Some(k) = self.ghost_kind.clone()
+                    && let Some((vb, ib, ic, mat_bg)) = self.ghost_mesh_for_kind(&k)
+                {
+                    let pid = ptr_id(&self.inst_tex_ghost_pipeline);
+                    rp.set_pipeline(&self.inst_tex_ghost_pipeline);
+                    self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+                    rp.set_bind_group(0, &self.globals_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    rp.set_bind_group(2, &self.palettes_bg, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    let mb = mat_bg.as_ref().unwrap_or(&self.default_material_bg);
+                    rp.set_bind_group(3, mb, &[]);
+                    self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                    rp.set_vertex_buffer(0, vb.slice(..));
+                    rp.set_vertex_buffer(1, self.ghost_inst.slice(..));
+                    rp.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                    self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                    rp.draw_indexed(0..ic, 0, 0..1);
+                    self.draw_calls += 1;
+                    self.batch_add_key_ids(pid, ptr_id(mb), ptr_id(&ib));
+                    drew = true;
+                }
+            }
+            if !drew {
+                // Final fallback: unit cube (non-textured)
+                let inst_pipe = if self.wire_enabled {
+                    self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+                } else {
+                    &self.inst_pipeline
+                };
+                let pid = ptr_id(inst_pipe);
+                rp.set_pipeline(inst_pipe);
+                self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+                rp.set_bind_group(0, &self.globals_bg, &[]);
+                self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                rp.set_vertex_buffer(0, self.ghost_vb.slice(..));
+                rp.set_vertex_buffer(1, self.ghost_inst.slice(..));
+                rp.set_index_buffer(self.ghost_ib.slice(..), wgpu::IndexFormat::Uint16);
+                self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                rp.draw_indexed(0..self.ghost_index_count, 0, 0..1);
+                self.draw_calls += 1;
+                self.batch_add_key_ids(pid, ptr_id(&self.shard_model_bg), ptr_id(&self.ghost_ib));
+            }
+            if pop_scope("ghost", &self.device) {
+                return;
+            }
+        }
         // Trees (instanced static mesh; textured pipeline for UV support)
         if self.trees_count > 0 && !self.is_picker_batches() {
             #[cfg(not(target_arch = "wasm32"))]
@@ -222,6 +305,43 @@ impl Renderer {
             let mesh = ptr_id(&self.trees_ib);
             self.batch_add_key_ids(pid, mid, mesh);
             if pop_scope("trees", &self.device) {
+                return;
+            }
+        }
+        // Session-placed trees (always textured instanced path per batch)
+        if !self.session_trees.is_empty() {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let inst_pipe = &self.inst_tex_pipeline;
+            let pid = ptr_id(inst_pipe);
+            rp.set_pipeline(inst_pipe);
+            self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+            rp.set_bind_group(0, &self.globals_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_bind_group(1, &self.shard_model_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_bind_group(2, &self.palettes_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            let mut sess_keys: Vec<[u32; 3]> = Vec::new();
+            for b in &self.session_trees {
+                if b.count == 0 {
+                    continue;
+                }
+                let mat_bg = b.material_bg.as_ref().unwrap_or(&self.default_material_bg);
+                rp.set_bind_group(3, mat_bg, &[]);
+                self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                rp.set_vertex_buffer(0, b.vb.slice(..));
+                rp.set_vertex_buffer(1, b.instances.slice(..));
+                rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
+                self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                rp.draw_indexed(0..b.index_count, 0, 0..b.count);
+                self.draw_calls += 1;
+                sess_keys.push([pid, ptr_id(mat_bg), ptr_id(&b.ib)]);
+            }
+            for [pid, mid, mesh] in sess_keys.into_iter() {
+                self.batch_add_key_ids(pid, mid, mesh);
+            }
+            if pop_scope("session_trees", &self.device) {
                 return;
             }
         }
@@ -252,6 +372,33 @@ impl Renderer {
             let mesh = ptr_id(&self.rocks_ib);
             self.batch_add_key_ids(pid, mid, mesh);
             if pop_scope("rocks", &self.device) {
+                return;
+            }
+        }
+        // Session-placed rocks (reuse rocks mesh/material-less pipeline)
+        if let Some(b) = self.session_rocks.as_ref() {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let inst_pipe = if self.wire_enabled {
+                self.wire_pipeline.as_ref().unwrap_or(&self.inst_pipeline)
+            } else {
+                &self.inst_pipeline
+            };
+            let pid = ptr_id(inst_pipe);
+            rp.set_pipeline(inst_pipe);
+            self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+            rp.set_bind_group(0, &self.globals_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_bind_group(1, &self.shard_model_bg, &[]);
+            self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+            rp.set_vertex_buffer(0, b.vb.slice(..));
+            rp.set_vertex_buffer(1, b.instances.slice(..));
+            rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
+            self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+            rp.draw_indexed(0..b.index_count, 0, 0..b.count);
+            self.draw_calls += 1;
+            self.batch_add_key_ids(pid, ptr_id(&self.shard_model_bg), ptr_id(&b.ib));
+            if pop_scope("session_rocks", &self.device) {
                 return;
             }
         }

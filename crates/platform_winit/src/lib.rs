@@ -1087,6 +1087,30 @@ impl ApplicationHandler for App {
                     if pressed && key_is(&["b", "c"], &[KC::KeyB, KC::KeyC]) {
                         self.builder.active = !self.builder.active;
                         self.builder.ws.set_active(self.builder.active);
+                        if let Some(st) = self.state.as_mut() {
+                            // Suppress spell hotbar while building (but keep disabled in builder zone)
+                            if slug.as_str() != "campaign_builder" {
+                                st.set_allow_casting_ui(!self.builder.active);
+                            }
+                            if self.builder.active {
+                                // Drop mouselook/pointer lock so keys are visible and cursor usable
+                                st.set_mouselook(false);
+                                use winit::window::CursorGrabMode;
+                                let _ = window.set_cursor_grab(CursorGrabMode::None);
+                                window.set_cursor_visible(true);
+                            } else {
+                                // Hide any lingering ghost when leaving builder
+                                st.set_ghost_instance(None);
+                            }
+                        }
+                        log::info!(
+                            "builder: {}",
+                            if self.builder.active {
+                                "ON (B/C toggle)"
+                            } else {
+                                "OFF (B/C toggle)"
+                            }
+                        );
                         if let Some(win) = &self.window {
                             win.request_redraw();
                         }
@@ -1096,6 +1120,12 @@ impl ApplicationHandler for App {
                     // Selection 1/2/3 always allowed
                     if pressed && key_is(&["1"], &[KC::Digit1, KC::Numpad1]) {
                         self.builder.kind_idx = 0.min(self.builder.kinds.len().saturating_sub(1));
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_worldsmithing_selected(self.builder.kind_idx);
+                        }
+                        if let Some(k) = self.builder.kinds.get(self.builder.kind_idx) {
+                            log::info!("builder: select 1 → {}", k);
+                        }
                         if let Some(win) = &self.window {
                             win.request_redraw();
                         }
@@ -1103,6 +1133,12 @@ impl ApplicationHandler for App {
                     }
                     if pressed && key_is(&["2"], &[KC::Digit2, KC::Numpad2]) {
                         self.builder.kind_idx = 1.min(self.builder.kinds.len().saturating_sub(1));
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_worldsmithing_selected(self.builder.kind_idx);
+                        }
+                        if let Some(k) = self.builder.kinds.get(self.builder.kind_idx) {
+                            log::info!("builder: select 2 → {}", k);
+                        }
                         if let Some(win) = &self.window {
                             win.request_redraw();
                         }
@@ -1110,6 +1146,12 @@ impl ApplicationHandler for App {
                     }
                     if pressed && key_is(&["3"], &[KC::Digit3, KC::Numpad3]) {
                         self.builder.kind_idx = 2.min(self.builder.kinds.len().saturating_sub(1));
+                        if let Some(st) = self.state.as_mut() {
+                            st.set_worldsmithing_selected(self.builder.kind_idx);
+                        }
+                        if let Some(k) = self.builder.kinds.get(self.builder.kind_idx) {
+                            log::info!("builder: select 3 → {}", k);
+                        }
                         if let Some(win) = &self.window {
                             win.request_redraw();
                         }
@@ -1120,6 +1162,27 @@ impl ApplicationHandler for App {
                             KC::KeyB if pressed => {
                                 self.builder.active = !self.builder.active;
                                 self.builder.ws.set_active(self.builder.active);
+                                if let Some(st) = self.state.as_mut() {
+                                    if slug.as_str() != "campaign_builder" {
+                                        st.set_allow_casting_ui(!self.builder.active);
+                                    }
+                                    if self.builder.active {
+                                        st.set_mouselook(false);
+                                        use winit::window::CursorGrabMode;
+                                        let _ = window.set_cursor_grab(CursorGrabMode::None);
+                                        window.set_cursor_visible(true);
+                                    } else {
+                                        st.set_ghost_instance(None);
+                                    }
+                                }
+                                log::info!(
+                                    "builder: {}",
+                                    if self.builder.active {
+                                        "ON (KeyB)"
+                                    } else {
+                                        "OFF (KeyB)"
+                                    }
+                                );
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1128,6 +1191,27 @@ impl ApplicationHandler for App {
                             KC::KeyC if pressed => {
                                 self.builder.active = !self.builder.active;
                                 self.builder.ws.set_active(self.builder.active);
+                                if let Some(st) = self.state.as_mut() {
+                                    if slug.as_str() != "campaign_builder" {
+                                        st.set_allow_casting_ui(!self.builder.active);
+                                    }
+                                    if self.builder.active {
+                                        st.set_mouselook(false);
+                                        use winit::window::CursorGrabMode;
+                                        let _ = window.set_cursor_grab(CursorGrabMode::None);
+                                        window.set_cursor_visible(true);
+                                    } else {
+                                        st.set_ghost_instance(None);
+                                    }
+                                }
+                                log::info!(
+                                    "builder: {}",
+                                    if self.builder.active {
+                                        "ON (KeyC)"
+                                    } else {
+                                        "OFF (KeyC)"
+                                    }
+                                );
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1196,6 +1280,9 @@ impl ApplicationHandler for App {
                             KC::Digit1 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     0.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(st) = self.state.as_mut() {
+                                    st.set_worldsmithing_selected(self.builder.kind_idx);
+                                }
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1203,6 +1290,9 @@ impl ApplicationHandler for App {
                             KC::Digit2 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     1.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(st) = self.state.as_mut() {
+                                    st.set_worldsmithing_selected(self.builder.kind_idx);
+                                }
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1210,6 +1300,9 @@ impl ApplicationHandler for App {
                             KC::Digit3 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     2.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(st) = self.state.as_mut() {
+                                    st.set_worldsmithing_selected(self.builder.kind_idx);
+                                }
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1218,6 +1311,9 @@ impl ApplicationHandler for App {
                             KC::Numpad1 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     0.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(st) = self.state.as_mut() {
+                                    st.set_worldsmithing_selected(self.builder.kind_idx);
+                                }
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1225,6 +1321,9 @@ impl ApplicationHandler for App {
                             KC::Numpad2 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     1.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(st) = self.state.as_mut() {
+                                    st.set_worldsmithing_selected(self.builder.kind_idx);
+                                }
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1232,6 +1331,9 @@ impl ApplicationHandler for App {
                             KC::Numpad3 if pressed && self.builder.active => {
                                 self.builder.kind_idx =
                                     2.min(self.builder.kinds.len().saturating_sub(1));
+                                if let Some(st) = self.state.as_mut() {
+                                    st.set_worldsmithing_selected(self.builder.kind_idx);
+                                }
                                 if let Some(win) = &self.window {
                                     win.request_redraw();
                                 }
@@ -1414,6 +1516,14 @@ impl ApplicationHandler for App {
                                             .build();
                                         self.builder.kinds = kinds;
                                         self.builder.kind_idx = 0;
+                                        if let Some(st) = self.state.as_mut() {
+                                            st.set_worldsmithing_palette(
+                                                self.builder.kinds.clone(),
+                                                self.builder.kind_idx,
+                                            );
+                                            // Hide spell hotbar by default in builder zone
+                                            st.set_allow_casting_ui(false);
+                                        }
                                     }
                                 }
                                 #[cfg(feature = "demo_server")]
