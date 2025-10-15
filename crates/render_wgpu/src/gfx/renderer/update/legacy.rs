@@ -1342,7 +1342,7 @@ impl Renderer {
         // Respect jump height: clamp to max(current Y, ground)
         let pos = glam::vec3(
             self.player.pos.x,
-            self.player.pos.y.max(h),
+            (self.player.pos.y).max(h + self.pc_y_offset),
             self.player.pos.z,
         );
         let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot, pos);

@@ -82,6 +82,43 @@ use voxel_mesh::MeshBuffers;
 use voxel_proxy::VoxelGrid;
 use winit::window::Window;
 
+fn compute_pc_feet_offset(cpu: &SkinnedMeshCPU) -> f32 {
+    fn node_global_y(cpu: &SkinnedMeshCPU, i: usize) -> f32 {
+        let mut chain: Vec<usize> = Vec::new();
+        let mut cur = Some(i);
+        while let Some(ix) = cur {
+            chain.push(ix);
+            cur = cpu.parent[ix];
+        }
+        let mut m = glam::Mat4::IDENTITY;
+        for ix in chain.into_iter().rev() {
+            let local = glam::Mat4::from_scale_rotation_translation(
+                cpu.base_s[ix],
+                cpu.base_r[ix],
+                cpu.base_t[ix],
+            );
+            m *= local;
+        }
+        let (_s, _r, t) = m.to_scale_rotation_translation();
+        t.y
+    }
+    let mut min_y = f32::INFINITY;
+    for (i, name) in cpu.node_names.iter().enumerate() {
+        let low = name.to_lowercase();
+        if low.contains("foot") || low.contains("toe") || low.contains("ball") {
+            let y = node_global_y(cpu, i);
+            if y < min_y {
+                min_y = y;
+            }
+        }
+    }
+    if !min_y.is_finite() {
+        0.0
+    } else {
+        (-min_y).clamp(0.0, 3.0)
+    }
+}
+
 /// Batch of instanced trees for a single kind/model.
 pub struct TreeBatch {
     pub kind: String,
@@ -347,6 +384,8 @@ pub struct Renderer {
     pc_cpu: Option<SkinnedMeshCPU>,
     pc_mat_bg: Option<wgpu::BindGroup>,
     pc_prev_pos: glam::Vec3,
+    // Vertical offset from model origin to feet (meters)
+    pc_y_offset: f32,
     pc_anim_cfg: data_runtime::configs::pc_animations::PcAnimCfg,
     pc_anim_missing_warned: HashSet<String>,
     // Jump state tracking for animation selection
@@ -668,7 +707,14 @@ struct Debris {
     life: f32,
 }
 
+#[allow(dead_code)]
 impl Renderer {
+    /// Approximate model-origin-to-feet offset (meters) using node names.
+    /// Scans for foot/toe bones, computes global rest Y per node, and returns -min(Y).
+    /// Falls back to 0.0 if no candidates found.
+    fn compute_feet_offset_for(&self, cpu: &SkinnedMeshCPU) -> f32 {
+        compute_pc_feet_offset(cpu)
+    }
     fn make_solid_material_bg(&self, rgba: [u8; 4], label: &str) -> wgpu::BindGroup {
         let size3 = wgpu::Extent3d {
             width: 1,
@@ -3136,6 +3182,7 @@ impl Renderer {
             wizard_hp: vec![100; scene_build.wizard_count as usize],
             wizard_hp_max: 100,
             pc_alive: true,
+            pc_y_offset: 0.0,
             // Lighting M1 scaffolding (disabled by default to avoid outline artifacts)
             gbuffer: Some(gbuffer),
             hiz: Some(hiz),
@@ -3302,6 +3349,13 @@ impl Renderer {
         if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
             return;
         }
+        // Compute vertical offset so feet rest on terrain.
+        // Allow override via RA_PC_Y_OFFSET for quick tuning.
+        let y_off_env = std::env::var("RA_PC_Y_OFFSET")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok());
+        let auto_offset = compute_pc_feet_offset(&cpu_pc);
+        self.pc_y_offset = y_off_env.unwrap_or(auto_offset);
         // Build VB/IB
         let verts: Vec<VertexSkinned> = cpu_pc
             .vertices

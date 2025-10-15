@@ -2245,6 +2245,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         pc_mat_bg,
         pc_prev_pos: pc_initial_pos,
         pc_rep_id_last: None,
+        pc_y_offset: 0.0,
         sorc_palettes_buf,
         sorc_palettes_bg,
         ghost_vb,
