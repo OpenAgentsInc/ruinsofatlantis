@@ -894,7 +894,7 @@ impl ApplicationHandler for App {
                         .unwrap_or_else(|| "tree.default".into());
                     let (route, render_key) = normalize_builder_kind(&k);
                     let tint = match route {
-                        BuildRoute::Rock => [0.6, 0.6, 0.6],
+                        BuildRoute::Rock => [0.4, 0.4, 0.4],
                         _ => [0.2, 0.8, 0.3],
                     };
                     state.set_ghost_transform(model, tint);

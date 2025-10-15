@@ -1984,7 +1984,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         ssr_scene_bgl: ssr_scene_bgl.clone(),
         palettes_bgl: palettes_bgl.clone(),
         material_bgl: material_bgl.clone(),
-        default_material_bg,
+        default_material_bg: default_material_bg.clone(),
         globals_bg,
         post_ao_bg,
         ssgi_globals_bg,
@@ -1998,6 +1998,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         terrain_model_bg: plane_model_bg,
         shard_model_bg,
         present_bg,
+        trees_solid_bg: default_material_bg, // temporary; will be replaced below
         // With direct-present on web, disable post passes that rely on
         // offscreen SceneColor/SceneRead for now to match desktop visuals.
         enable_post_ao: false,
@@ -2466,6 +2467,77 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 })
             });
         });
+    // Build solid bark fallback BG after renderer is fully constructed
+    {
+        let size3 = wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        };
+        let tex = renderer.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("trees-solid-bark-tex"),
+            size: size3,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let rgba = [120u8, 78, 50, 255];
+        renderer.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            size3,
+        );
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = renderer.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("trees-solid-bark-sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+        let mat_xf_buf = renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-solid-bark-xf"),
+                contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        renderer.trees_solid_bg = renderer
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("trees-solid-bark-bg"),
+                layout: &renderer.material_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: mat_xf_buf.as_entire_binding(),
+                    },
+                ],
+            });
+    }
 
     // If a demo voxel grid was created, enqueue all chunks once so it renders immediately
     #[cfg(feature = "vox_onepath_demo")]

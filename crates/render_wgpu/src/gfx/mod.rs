@@ -197,6 +197,8 @@ pub struct Renderer {
     terrain_model_bg: wgpu::BindGroup,
     shard_model_bg: wgpu::BindGroup,
     present_bg: wgpu::BindGroup,
+    // Solid-color fallback material for trees when a texture isn't available
+    trees_solid_bg: wgpu::BindGroup,
     // frame overlay removed
 
     // Lighting toggles

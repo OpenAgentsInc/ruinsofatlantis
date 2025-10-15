@@ -1457,21 +1457,21 @@ pub fn render_impl(
                         log::error!("validation after trees: {:?}", e);
                     }
                 } else if r.trees_count > 0 {
-                    log::debug!("draw: trees x{}", r.trees_count);
+                    log::debug!("draw: trees x{} (single-batch, solid bark)", r.trees_count);
                     if trace {
                         #[cfg(not(target_arch = "wasm32"))]
                         if validate {
                             r.device.push_error_scope(wgpu::ErrorFilter::Validation);
                         }
                     }
-                    let inst_pipe = if r.wire_enabled {
-                        r.wire_pipeline.as_ref().unwrap_or(&r.inst_pipeline)
-                    } else {
-                        &r.inst_pipeline
-                    };
+                    // Use textured pipeline since the buffer contains UVs
+                    let inst_pipe = &r.inst_tex_pipeline;
                     rp.set_pipeline(inst_pipe);
                     rp.set_bind_group(0, &r.globals_bg, &[]);
                     rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                    rp.set_bind_group(2, &r.palettes_bg, &[]);
+                    // Solid bark fallback material
+                    rp.set_bind_group(3, &r.trees_solid_bg, &[]);
                     rp.set_vertex_buffer(0, r.trees_vb.slice(..));
                     rp.set_vertex_buffer(1, r.trees_instances.slice(..));
                     rp.set_index_buffer(r.trees_ib.slice(..), wgpu::IndexFormat::Uint16);
