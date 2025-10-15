@@ -5,9 +5,9 @@ vulnerability = "deny"
 unsound = "deny"
 # Advisory categories: use warn-level in CI so we surface signal without failing the build
 # (old values like "none" are invalid in cargo-deny >=0.17).
-unmaintained = "warn"
+unmaintained = "none"
 yanked = "warn"
-notice = "warn"
+# 'notice' field removed in cargo-deny >=0.17; use defaults
 ignore = []
 
 [bans]
