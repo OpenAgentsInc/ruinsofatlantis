@@ -301,11 +301,9 @@ fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
   // Time-driven pulse to make the preview read as non-final content
   let t = globals.camRightTime.w;
   let pulse = 0.85 + 0.15 * sin(t * 4.0);
-  // Desaturate base and strongly tint toward the instance color
-  let albedo = rgba.rgb;
-  let gray = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
-  let desat = mix(albedo, vec3<f32>(gray, gray, gray), 0.6);
-  let tinted = mix(desat, in.icolor, 0.85);
+  // Force a neutral white preview (ignore original albedo/tint)
+  // We still keep some simple lighting so form reads.
+  let tinted = vec3<f32>(1.0, 1.0, 1.0);
   // Simple lambert + ambient for readability (cheap)
   let light_dir = normalize(globals.sunDirTime.xyz);
   let ndl = max(dot(in.nrm, light_dir), 0.0);
@@ -327,9 +325,9 @@ fn fs_inst_tex_ghost(in: TexInstOut) -> @location(0) vec4<f32> {
   let nf = smoothstep(0.0, 0.2, -globals.sunDirTime.y);
   let base_term = mix(0.15, 0.02, nf);
   let amb_term = mix(0.35, 0.05, nf) * amb_int;
-  var base = tinted * (base_term + amb_term + 0.6 * ndl);
-  // Lower alpha so preview is clearly ghostlike and apply pulse
-  let a = 0.18 * rgba.a * pulse;
+  var base = tinted * (0.35 + 0.15 * amb_term + 0.5 * ndl);
+  // Lower alpha so preview is clearly ghostlike; apply pulse
+  let a = 0.25 * rgba.a * pulse;
   return vec4<f32>(base, a);
 }
 

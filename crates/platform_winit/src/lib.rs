@@ -893,10 +893,9 @@ impl ApplicationHandler for App {
                         .cloned()
                         .unwrap_or_else(|| "tree.default".into());
                     let (route, render_key) = normalize_builder_kind(&k);
-                    let tint = match route {
-                        BuildRoute::Rock => [0.4, 0.4, 0.4],
-                        _ => [0.2, 0.8, 0.3],
-                    };
+                    // Force a neutral white tint for ghost preview; shader will
+                    // further desaturate and handle translucency.
+                    let tint = [1.0, 1.0, 1.0];
                     state.set_ghost_transform(model, tint);
                     // Ensure ghost mesh matches selected kind
                     match route {
@@ -1651,19 +1650,30 @@ impl ApplicationHandler for App {
                                 // For campaign builder, default to builder hotbar (disable spells)
                                 if slug == "campaign_builder" {
                                     state.set_allow_casting_ui(false);
-                                    // Provide a stable worldsmithing palette and select first item
-                                    state.set_worldsmithing_palette(
-                                        vec![
-                                            "tree.birch".to_string(),
-                                            "tree.giantpine".to_string(),
-                                            "rock.building".to_string(),
-                                        ],
-                                        0,
-                                    );
+                                    // Default allowed kinds and caps on web (since we can't read local files)
+                                    let kinds = vec![
+                                        "tree.birch".to_string(),
+                                        "tree.giantpine".to_string(),
+                                        "rock.building".to_string(),
+                                    ];
+                                    // Configure worldsmithing rules/caps for this session
+                                    let mut rules = worldsmithing::Rules::default();
+                                    for k in kinds.iter() {
+                                        rules.allowed_kinds.insert(k.clone());
+                                    }
+                                    let caps = worldsmithing::Caps::default();
+                                    self.builder.ws = worldsmithing::Builder::new()
+                                        .caps(caps)
+                                        .rules(rules)
+                                        .build();
+
+                                    // Provide a stable palette and select first item
+                                    state.set_worldsmithing_palette(kinds.clone(), 0);
+                                    self.builder.kinds = kinds;
+                                    self.builder.kind_idx = 0;
                                     // Auto-activate builder overlay and prime the ghost so 'C' shows a tree
                                     self.builder.active = true;
                                     self.builder.ws.set_active(true);
-                                    self.builder.kind_idx = 0;
                                     state.set_worldsmithing_selected(self.builder.kind_idx);
                                     state.set_ghost_kind("tree.birch");
                                 }

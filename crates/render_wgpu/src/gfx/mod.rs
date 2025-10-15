@@ -1794,6 +1794,12 @@ impl Renderer {
     }
 
     fn preload_worldsmithing_assets(&mut self) {
+        // On web/wasm, skip filesystem-based GLTF preloads; we'll fall back to
+        // drawing from zone-baked/session batches and on-demand meshes.
+        #[cfg(target_arch = "wasm32")]
+        {
+            return;
+        }
         // Preload any tree kinds from the hotbar palette; ignore rocks/others for now.
         for k in self.worldsmithing_kinds.clone() {
             let (is_tree, norm) = Self::normalize_builder_kind(&k);
