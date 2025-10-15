@@ -9,7 +9,8 @@ ignore = []
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+# Internal workspace uses path dependencies without versions; do not fail CI on these.
+wildcards = "warn"
 deny = []
 skip = []
 
