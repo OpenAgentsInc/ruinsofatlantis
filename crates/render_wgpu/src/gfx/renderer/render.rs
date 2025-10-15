@@ -2217,16 +2217,15 @@ pub fn render_impl(
                     // Worldsmithing quickbar path (suppresses spell hotbar)
                     // Use palette provided by platform; if empty and in campaign_builder, fall back.
                     let mut kinds: Vec<String> = r.worldsmithing_kinds.clone();
-                    if kinds.is_empty() {
-                        if let Some(z) = r.zone_batches.as_ref() {
-                            if z.slug == "campaign_builder" {
-                                kinds = vec![
-                                    "tree.birch".to_string(),
-                                    "tree.giantpine".to_string(),
-                                    "rock.building".to_string(),
-                                ];
-                            }
-                        }
+                    if kinds.is_empty()
+                        && let Some(z) = r.zone_batches.as_ref()
+                        && z.slug == "campaign_builder"
+                    {
+                        kinds = vec![
+                            "tree.birch".to_string(),
+                            "tree.giantpine".to_string(),
+                            "rock.building".to_string(),
+                        ];
                     }
                     let selected = r.worldsmithing_selected.min(kinds.len().saturating_sub(1));
                     r.hud.build_worldsmithing(

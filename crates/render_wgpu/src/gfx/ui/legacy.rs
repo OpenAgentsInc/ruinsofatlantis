@@ -1717,6 +1717,7 @@ impl Hud {
 
     /// Build a worldsmithing HUD: HP/Mana bars and a bottom quickbar listing
     /// the available kinds (e.g., tree.birch, rock.building) with numeric keys.
+    #[allow(clippy::too_many_arguments)]
     pub fn build_worldsmithing(
         &mut self,
         surface_w: u32,
@@ -1841,7 +1842,7 @@ impl Hud {
             let cx = (surface_w as f32) * 0.5;
             let yb = (surface_h as f32) - (slot_px + 10.0);
             let mut x = cx - total_w * 0.5;
-            for i in 0..slots {
+            for (i, k) in kinds.iter().enumerate().take(slots) {
                 let x0 = x;
                 let y0 = yb;
                 let x1 = x + slot_px;
@@ -1880,7 +1881,7 @@ impl Hud {
                     [0.9, 0.9, 0.9, 0.95],
                 );
                 // Kind label (truncate if long)
-                let mut label = kinds[i].as_str();
+                let mut label = k.as_str();
                 let tmp;
                 if label.len() > 18 {
                     tmp = format!("{}…", &label[..18]);
