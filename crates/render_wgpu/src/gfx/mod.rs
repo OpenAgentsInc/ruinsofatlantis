@@ -667,6 +667,73 @@ struct Debris {
 }
 
 impl Renderer {
+    fn make_solid_material_bg(&self, rgba: [u8; 4], label: &str) -> wgpu::BindGroup {
+        let size3 = wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        };
+        let tex = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: size3,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            size3,
+        );
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("solid-sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+        let mat_xf_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("solid-material-xf"),
+                contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("solid-material-bg"),
+            layout: &self.material_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: mat_xf_buf.as_entire_binding(),
+                },
+            ],
+        })
+    }
     /// Upload a single tree-kind CPU batch to GPU (fast; called from the UI thread).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn install_tree_cpu_batch(&mut self, b: crate::gfx::foliage_stream::TreeCpuBatch) {
@@ -972,8 +1039,8 @@ impl Renderer {
                                                 prim.material().alpha_mode(),
                                                 AlphaMode::Mask
                                             );
-                                            if chosen.is_some() && !is_mask && !chosen_mask {
-                                                // already picked an opaque; keep it
+                                            // Prefer opaque; if we already picked MASK and this is OPAQUE, replace
+                                            if !(chosen.is_none() || (chosen_mask && !is_mask)) {
                                                 continue;
                                             }
                                             let img_idx = texinfo.texture().source().index();
@@ -1093,6 +1160,13 @@ impl Renderer {
                                             }
                                         }
                                     }
+                                }
+                                if chosen.is_none() {
+                                    // Solid fallback bark color
+                                    return Some(self.make_solid_material_bg(
+                                        [120, 78, 50, 255],
+                                        "trees-solid-bark",
+                                    ));
                                 }
                                 return chosen;
                             }
@@ -1316,7 +1390,7 @@ impl Renderer {
         }
         // Create a new batch: load mesh & optional material for this kind.
         let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
-        let (vb, ib, index_count, material_bg) = match gltf::import(&mesh_path) {
+        let (vb, ib, index_count, mut material_bg) = match gltf::import(&mesh_path) {
             Ok((doc, buffers, images)) => {
                 // Build VertexPosNrmUv + indices
                 // We'll accumulate into Vecs then build buffers.
@@ -1505,9 +1579,14 @@ impl Renderer {
                 (vb, ib, ic, None)
             }
         };
+        if material_bg.is_none() {
+            // Solid bark-brown fallback
+            let bg = self.make_solid_material_bg([120, 78, 50, 255], "session-tree-solid-bark");
+            material_bg = Some(bg);
+        }
         let inst = crate::gfx::types::Instance {
             model,
-            color: [1.0, 1.0, 1.0],
+            color: [0.8, 0.75, 0.7],
             selected: 0.25,
         };
         let cpu = vec![inst];
@@ -1539,8 +1618,8 @@ impl Renderer {
     pub fn add_session_rock(&mut self, model: [[f32; 4]; 4]) {
         let inst = crate::gfx::types::Instance {
             model,
-            // Slightly gray so rocks don't render stark white
-            color: [0.7, 0.7, 0.7],
+            // Darker gray so shading/ambient doesn’t blow it to white
+            color: [0.5, 0.5, 0.5],
             selected: 0.25,
         };
         if let Some(b) = self.session_rocks.as_mut() {
@@ -1767,6 +1846,10 @@ impl Renderer {
                     usage: wgpu::BufferUsages::INDEX,
                 });
             let ic = idx.len() as u32;
+            if mat_bg.is_none() {
+                mat_bg =
+                    Some(self.make_solid_material_bg([120, 78, 50, 255], "ghost-tree-solid-bark"));
+            }
             self.ghost_mesh_cache.insert(
                 kind_key.to_string(),
                 (vb.clone(), ib.clone(), ic, mat_bg.clone()),
