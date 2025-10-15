@@ -1323,6 +1323,7 @@ impl Renderer {
                 let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
                 let mut idx: Vec<u16> = Vec::new();
                 let mut mat_bg: Option<wgpu::BindGroup> = None;
+                let mut chosen_is_mask = false;
                 for mesh in doc.meshes() {
                     for prim in mesh.primitives() {
                         let reader =
@@ -1372,10 +1373,14 @@ impl Renderer {
                                 prim.material().alpha_mode(),
                                 gltf::material::AlphaMode::Mask
                             );
-                            // If we already picked a texture and it was from an opaque mat, keep it.
-                            if mat_bg.is_some() && !is_mask {
-                                // already have something (likely opaque), do not override
-                            } else {
+                            // Prefer OPAQUE over MASK. If we don't have a choice yet, or we currently
+                            // hold a MASK and this candidate is OPAQUE, replace.
+                            let should_set = match (mat_bg.is_some(), chosen_is_mask, is_mask) {
+                                (false, _, _) => true,       // nothing chosen yet
+                                (true, true, false) => true, // replace MASK with OPAQUE
+                                _ => false,                  // keep existing
+                            };
+                            if should_set {
                                 let img_idx = texinfo.texture().source().index();
                                 if let Some(img) = images.get(img_idx) {
                                     let (w, h) = (img.width, img.height);
@@ -1472,6 +1477,7 @@ impl Renderer {
                                             ],
                                         },
                                     ));
+                                    chosen_is_mask = is_mask;
                                 }
                             }
                         }
@@ -1598,7 +1604,7 @@ impl Renderer {
             let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
             let mut idx: Vec<u16> = Vec::new();
             let mut mat_bg: Option<wgpu::BindGroup> = None;
-            // Prefer opaque material
+            let mut chosen_is_mask = false; // Prefer opaque material for preview
             for mesh in doc.meshes() {
                 for prim in mesh.primitives() {
                     let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
@@ -1637,12 +1643,23 @@ impl Renderer {
                             idx.push((v + base) as u16);
                         }
                     }
-                    if mat_bg.is_none()
-                        && let Some(texinfo) = prim
-                            .material()
-                            .pbr_metallic_roughness()
-                            .base_color_texture()
+                    if let Some(texinfo) = prim
+                        .material()
+                        .pbr_metallic_roughness()
+                        .base_color_texture()
                     {
+                        let is_mask = matches!(
+                            prim.material().alpha_mode(),
+                            gltf::material::AlphaMode::Mask
+                        );
+                        let should_set = match (mat_bg.is_some(), chosen_is_mask, is_mask) {
+                            (false, _, _) => true,
+                            (true, true, false) => true,
+                            _ => false,
+                        };
+                        if !should_set {
+                            continue;
+                        }
                         let img_idx = texinfo.texture().source().index();
                         if let Some(img) = images.get(img_idx) {
                             let (w, h) = (img.width, img.height);
@@ -1731,6 +1748,7 @@ impl Renderer {
                                         },
                                     ],
                                 }));
+                            chosen_is_mask = is_mask;
                         }
                     }
                 }
