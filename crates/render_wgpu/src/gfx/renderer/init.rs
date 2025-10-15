@@ -41,7 +41,18 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Decide what to load:
     // - In Picker mode (no ROA_ZONE or "<picker>"), avoid loading heavy assets entirely.
     // - Otherwise, NPC/demo actors (wizard ring, zombies, DK, Sorceress) gate on policy.
-    let zone_slug = std::env::var("ROA_ZONE").unwrap_or_default();
+    let zone_slug = {
+        #[cfg(target_arch = "wasm32")]
+        {
+            option_env!("ROA_ZONE_DEFAULT")
+                .unwrap_or("campaign_builder")
+                .to_string()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::env::var("ROA_ZONE").unwrap_or_default()
+        }
+    };
     let is_picker = zone_slug.is_empty() || zone_slug == "<picker>";
     let pol = compute_zone_policy_for_slug(zone_slug.as_str());
     let load_pc_assets = !is_picker;
@@ -161,13 +172,19 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         log::error!("wgpu uncaptured error: {:?}", e);
     }));
 
-    // Small debug note about zone + policy
+    // Small debug note about zone + policy (use resolved slug rather than env on web)
+    #[cfg(target_arch = "wasm32")]
+    let debug_slug: String = option_env!("ROA_ZONE_DEFAULT")
+        .unwrap_or("campaign_builder")
+        .to_string();
+    #[cfg(not(target_arch = "wasm32"))]
+    let debug_slug: String = std::env::var("ROA_ZONE").unwrap_or_else(|_| "<picker>".into());
+    let debug_slug = debug_slug.as_str();
     log::info!(
         "init: zone='{}' policy allow_casting={} show_hud={}",
-        std::env::var("ROA_ZONE").unwrap_or_else(|_| "<picker>".into()),
+        debug_slug,
         load_npc_assets,
-        compute_zone_policy_for_slug(&std::env::var("ROA_ZONE").unwrap_or_else(|_| "".into()))
-            .show_player_hud
+        compute_zone_policy_for_slug(debug_slug).show_player_hud
     );
     // --- Surface configuration (with clamping to device limits) ---
     let size = window.inner_size();
@@ -591,27 +608,38 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Sky uniforms and zone setup
     // On wasm, avoid std::fs and synthesize the zone manifest to mirror desktop.
     #[cfg(target_arch = "wasm32")]
-    let zone: ZoneManifest = ZoneManifest {
-        zone_id: 1001,
-        slug: "wizard_woods".to_string(),
-        display_name: "Wizard Woods".to_string(),
-        plane: data_runtime::zone::ZonePlane::Material,
-        terrain: data_runtime::zone::TerrainSpec {
-            size: 129,
-            extent: 150.0,
-            seed: 1337,
-        },
-        weather: Some(data_runtime::zone::WeatherSpec {
-            turbidity: 3.0,
-            ground_albedo: [0.10, 0.10, 0.10],
-        }),
-        vegetation: Some(data_runtime::zone::VegetationSpec {
-            tree_count: 0,
-            tree_seed: 20250926,
-        }),
-        start_time_frac: Some(0.95),
-        start_paused: Some(true),
-        start_time_scale: Some(6.0),
+    let zone: ZoneManifest = {
+        // Build-time default zone for web: set via ROA_ZONE_DEFAULT at trunk build.
+        let slug = option_env!("ROA_ZONE_DEFAULT").unwrap_or("wizard_woods");
+        ZoneManifest {
+            zone_id: 1001,
+            slug: slug.to_string(),
+            display_name: match slug {
+                "campaign_builder" => "Campaign Builder",
+                _ => "Web Zone",
+            }
+            .to_string(),
+            plane: data_runtime::zone::ZonePlane::Material,
+            terrain: data_runtime::zone::TerrainSpec {
+                size: 129,
+                extent: 150.0,
+                seed: 1337,
+            },
+            weather: Some(data_runtime::zone::WeatherSpec {
+                turbidity: 3.0,
+                ground_albedo: [0.10, 0.10, 0.10],
+            }),
+            vegetation: Some(data_runtime::zone::VegetationSpec {
+                tree_count: 0,
+                tree_seed: 20250926,
+            }),
+            start_time_frac: Some(0.95),
+            start_paused: Some(true),
+            start_time_scale: Some(6.0),
+            allow_casting: Some(false),
+            show_player_hud: Some(true),
+            worldsmithing: None,
+        }
     };
     #[cfg(not(target_arch = "wasm32"))]
     // For desktop, prefer the selected zone (ROA_ZONE) for baseline sky/terrain
@@ -2338,9 +2366,19 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         // Pipeline layout expects palettes (2) and material (3)
         rp.set_bind_group(2, &renderer.palettes_bg, &[]);
         rp.set_bind_group(3, &renderer.default_material_bg, &[]);
-        // Bind any buffers matching the layout (dummy ones are fine); draw zero verts
-        rp.set_vertex_buffer(0, renderer.trees_vb.slice(..));
-        rp.set_vertex_buffer(1, renderer.trees_instances.slice(..));
+        // Bind any buffers matching the layout; avoid empty slices on wasm
+        let vb0 = if renderer.trees_index_count > 0 {
+            renderer.trees_vb.slice(..)
+        } else {
+            renderer.ruins_vb.slice(..)
+        };
+        let inst1 = if renderer.trees_count > 0 {
+            renderer.trees_instances.slice(..)
+        } else {
+            renderer.ghost_inst.slice(..)
+        };
+        rp.set_vertex_buffer(0, vb0);
+        rp.set_vertex_buffer(1, inst1);
         rp.draw(0..0, 0..0);
         drop(rp);
         renderer.queue.submit(Some(encoder.finish()));

@@ -227,6 +227,67 @@ impl Renderer {
                 }
             }
             if !drew {
+                // Try preloaded static first (draw bark+leaves if available)
+                let ghost_key = self.ghost_kind.clone().unwrap_or_default();
+                let base_key = ghost_key
+                    .strip_suffix(".opaque")
+                    .or_else(|| ghost_key.strip_suffix(".mask"))
+                    .unwrap_or(ghost_key.as_str());
+                if let Some(set_ref) = self.preloaded_static.get(base_key) {
+                    // Clone data required to avoid borrowing self across draw helpers
+                    let vb_clone = set_ref.vb.slice(..);
+                    let _opaque_part = set_ref
+                        .opaque
+                        .as_ref()
+                        .map(|p| (p.ib.slice(..), p.index_count, ptr_id(&p.material_bg)));
+                    let _mask_part = set_ref
+                        .mask
+                        .as_ref()
+                        .map(|p| (p.ib.slice(..), p.index_count, ptr_id(&p.material_bg)));
+                    let _pid = ptr_id(&self.inst_tex_ghost_pipeline);
+                    // Draw opaque part
+                    if let Some(ref part) = set_ref.opaque {
+                        rp.set_pipeline(&self.inst_tex_ghost_pipeline);
+                        self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+                        rp.set_bind_group(0, &self.globals_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_bind_group(2, &self.palettes_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_bind_group(3, &part.material_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_vertex_buffer(0, vb_clone);
+                        rp.set_vertex_buffer(1, self.ghost_inst.slice(..));
+                        rp.set_index_buffer(part.ib.slice(..), wgpu::IndexFormat::Uint16);
+                        self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                        rp.draw_indexed(0..part.index_count, 0, 0..1);
+                        self.draw_calls += 1;
+                        // skip batch key add here to avoid mutable borrow collision
+                        drew = true;
+                    }
+                    // Draw mask part
+                    if let Some(ref part) = set_ref.mask {
+                        rp.set_pipeline(&self.inst_tex_ghost_pipeline);
+                        self.pipeline_binds_count = self.pipeline_binds_count.saturating_add(1);
+                        rp.set_bind_group(0, &self.globals_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_bind_group(1, &self.shard_model_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_bind_group(2, &self.palettes_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_bind_group(3, &part.material_bg, &[]);
+                        self.bg_binds_count = self.bg_binds_count.saturating_add(1);
+                        rp.set_vertex_buffer(0, vb_clone);
+                        rp.set_vertex_buffer(1, self.ghost_inst.slice(..));
+                        rp.set_index_buffer(part.ib.slice(..), wgpu::IndexFormat::Uint16);
+                        self.vb_ib_sets_count = self.vb_ib_sets_count.saturating_add(1);
+                        rp.draw_indexed(0..part.index_count, 0, 0..1);
+                        self.draw_calls += 1;
+                        // skip batch key add here as well
+                        drew = true;
+                    }
+                }
                 // Try on-demand ghost mesh load for the selected kind
                 if let Some(k) = self.ghost_kind.clone()
                     && let Some((vb, ib, ic, mat_bg)) = self.ghost_mesh_for_kind(&k)

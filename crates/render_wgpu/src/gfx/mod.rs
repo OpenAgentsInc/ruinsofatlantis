@@ -750,6 +750,34 @@ impl Renderer {
     fn compute_feet_offset_for(&self, cpu: &SkinnedMeshCPU) -> f32 {
         compute_pc_feet_offset(cpu)
     }
+    /// WASM: replace trees instance list with baked transforms from ZonePresentation.
+    /// Accepts an array of 4x4 model matrices; builds an instances buffer.
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_tree_instances(&mut self, models: &Vec<[[f32; 4]; 4]>) {
+        use wgpu::util::DeviceExt;
+        let mut inst: Vec<crate::gfx::types::Instance> = Vec::with_capacity(models.len());
+        for m in models {
+            inst.push(crate::gfx::types::Instance {
+                model: *m,
+                color: [1.0, 1.0, 1.0],
+                selected: 0.25,
+            });
+        }
+        let buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("trees-instances(wasm)"),
+                contents: bytemuck::cast_slice(&inst),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        self.trees_instances = buf;
+        self.trees_count = inst.len() as u32;
+    }
+    /// WASM: clear trees instances (keep geometry/material intact).
+    #[cfg(target_arch = "wasm32")]
+    pub fn clear_tree_instances(&mut self) {
+        self.trees_count = 0;
+    }
     fn make_solid_material_bg(&self, rgba: [u8; 4], label: &str) -> wgpu::BindGroup {
         let size3 = wgpu::Extent3d {
             width: 1,

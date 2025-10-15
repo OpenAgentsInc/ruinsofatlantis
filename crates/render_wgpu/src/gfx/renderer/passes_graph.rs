@@ -8,6 +8,10 @@
 #![allow(dead_code)]
 
 use super::graph::{ExecCtx, GraphBuilder, Handle, Img};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 pub struct SkyPass;
 impl SkyPass {
@@ -19,7 +23,7 @@ impl SkyPass {
                 let picker_mode = ctx.renderer.is_picker_batches() || ctx.renderer.picker_mode();
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 let hdr_view = ctx.view_color(hdr).clone();
                 if let Some(msaa_h) = msaa {
                     let msaa_view = ctx.view_color(msaa_h).clone();
@@ -113,7 +117,7 @@ impl MainPass {
                 let vb0 = ctx.renderer.vb_ib_sets_count;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 let (color_view, resolve_to) = if let Some(msaa_h) = msaa {
                     (
                         ctx.view_color(msaa_h).clone(),
@@ -177,7 +181,7 @@ impl PresentPass {
             .pass("Present", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 // If a previous frame is still pending (e.g., last frame bailed early),
                 // present it now to avoid holding a swapchain image across frames.
                 if let Some(prev) = ctx.renderer.take_pending_frame() {
@@ -376,7 +380,7 @@ impl ParticlesPass {
                 let dc0 = ctx.renderer.draw_calls;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 if ctx.renderer.fx_count > 0 {
                     let (view, resolve_to) = if let Some(msaa_h) = msaa {
                         (
@@ -397,7 +401,14 @@ impl ParticlesPass {
                                 store: wgpu::StoreOp::Store,
                             },
                         })],
-                        depth_stencil_attachment: None,
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &ctx.renderer.attachments.depth_view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            }),
+                            stencil_ops: None,
+                        }),
                         occlusion_query_set: None,
                         timestamp_writes: None,
                     });
@@ -431,7 +442,7 @@ impl UiPass {
                 let dc0 = ctx.renderer.draw_calls;
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 let (device, queue) = (&ctx.renderer.device, &ctx.renderer.queue);
                 ctx.renderer.hud.queue(device, queue);
                 let view = ctx.view_color(color).clone();
@@ -462,7 +473,7 @@ impl PostAoPass {
             .pass("PostAO", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 let target = ctx.view_color(post).clone();
                 // Build a depth BG from graph view via BgCache
                 let depth_view = ctx.view_depth(depth);
@@ -761,7 +772,7 @@ impl SsgiPass {
             .pass("SSGI", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 let target = ctx.view_color(post).clone();
                 // Depth BG
                 let depth_view = ctx.view_depth(depth);
@@ -875,7 +886,7 @@ impl SsrPass {
             .pass("SSR", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 let target = ctx.view_color(post).clone();
                 let scene_view = ctx.view_color(hdr);
                 let key_s = crate::gfx::renderer::bindgroups::BgKey::new(
@@ -982,7 +993,7 @@ impl BloomPass {
             .pass("Bloom", move |ctx: &mut ExecCtx| {
                 let h0 = ctx.renderer.bg_cache.hits;
                 let m0 = ctx.renderer.bg_cache.misses;
-                let t0 = std::time::Instant::now();
+                let t0 = Instant::now();
                 // Build bloom BG before opening the pass to avoid borrow overlap
                 let src_ptr = ctx.view_color(src) as *const _ as u64;
                 let key = crate::gfx::renderer::bindgroups::BgKey::new(

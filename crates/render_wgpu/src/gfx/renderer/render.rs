@@ -218,7 +218,10 @@ pub fn render_impl(
         present.draw(0..3, 0..1);
         drop(present);
         r.queue.submit(Some(encoder.finish()));
-        frame.present();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            frame.present();
+        }
         return Ok(());
     }
 

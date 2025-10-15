@@ -1672,6 +1672,10 @@ impl Renderer {
     }
 
     pub(crate) fn process_pc_cast(&mut self, t: f32) {
+        // Disable casting timeline if zone policy does not allow casting (e.g., builder zone on web)
+        if !self.zone_policy.allow_casting {
+            return;
+        }
         // If no animation clips are available (e.g., demo Picker or stripped build),
         // skip casting timeline to avoid clip selection panics.
         if self.skinned_cpu.animations.is_empty() {

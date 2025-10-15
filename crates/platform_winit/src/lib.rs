@@ -1648,6 +1648,25 @@ impl ApplicationHandler for App {
                                 } else {
                                     state.clear_tree_instances();
                                 }
+                                // For campaign builder, default to builder hotbar (disable spells)
+                                if slug == "campaign_builder" {
+                                    state.set_allow_casting_ui(false);
+                                    // Provide a stable worldsmithing palette and select first item
+                                    state.set_worldsmithing_palette(
+                                        vec![
+                                            "tree.birch".to_string(),
+                                            "tree.giantpine".to_string(),
+                                            "rock.building".to_string(),
+                                        ],
+                                        0,
+                                    );
+                                    // Auto-activate builder overlay and prime the ghost so 'C' shows a tree
+                                    self.builder.active = true;
+                                    self.builder.ws.set_active(true);
+                                    self.builder.kind_idx = 0;
+                                    state.set_worldsmithing_selected(self.builder.kind_idx);
+                                    state.set_ghost_kind("tree.birch");
+                                }
                                 // Ensure PC rig assets are available when skipping the Picker via URL
                                 state.ensure_pc_assets();
                                 self.boot = BootMode::Running { slug };
