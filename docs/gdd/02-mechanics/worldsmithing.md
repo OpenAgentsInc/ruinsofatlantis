@@ -1,7 +1,30 @@
-### Worldsmithing (In‑World Creation)
+### Worldsmithing (Profession)
+
+Overview
+- Worldsmithing lets players design and stage playable spaces—placing trees, ruins, props, and encounter markers—either in a dedicated Campaign Builder zone or in‑world as a leveled profession.
+- Two modes of work: rapid editing in the Campaign Builder zone; on‑character tooling for live tweaks during play. The same camera, input, and renderer are used—no separate editor.
+- As you advance in Worldsmithing, you unlock broader kits, higher placement budgets, and more expressive tools.
+
+Key Features
+- In‑world toolkit: select kind → ghost preview → rotate → place → undo.
+- Server‑authoritative & safe: allowed‑kind rules, placement caps, and validations.
+- Deterministic exports: clean snapshot/import flow for sharing and version control.
+- Creator progression: level Worldsmithing to unlock kits, budgets, and brushes.
+- Two modes: Campaign Builder zone for speed; on‑character for live tweaks.
+
+Who It’s For
+- DMs building full adventures and set pieces.
+- Guild officers curating hubs or event spaces.
+- Players who enjoy shaping the world between quests.
+
+Getting Started
+- Enter the Campaign Builder zone to prototype quickly, then bring those scenes into your adventures as your Worldsmithing profession grows. See `docs/gdd/11-technical/worldsmithing.md` for technical details.
+
+Naming (editorial guidance)
+- “Dungeon Master” is the role; “DMing” or “Dungeon Mastering” describe the act.
 
 Intent
-- Let creators place world elements without leaving the game. No separate editor; the same camera, input, and renderer are used. Changes persist via the existing zone data pipeline.
+- Let creators place world elements without leaving the game; changes persist via the existing zone data pipeline.
 
 Scope (V1)
 - Verb: Place Tree (instanced static foliage) in the `campaign_builder` zone.

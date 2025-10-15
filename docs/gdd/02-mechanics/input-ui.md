@@ -9,9 +9,11 @@
 
 #### Worldsmithing Controls (V1)
 
+- `B / C` — toggle Builder/Combat modes (IME‑safe on macOS; prefer physical scancodes)
 - `1` — select Place Tree (in zones where worldsmithing is enabled)
 - `Q/E` or Mouse Wheel — rotate ±15°
 - `Ctrl` + Wheel — fine rotate ±1°
+- `,` / `.` — rotate left/right with wrap (alternative to Q/E)
 - `Enter` / Left Click — confirm placement
 - `B` — toggle builder overlay (help + counts)
 - `X` / `I` — export / import authoring data
