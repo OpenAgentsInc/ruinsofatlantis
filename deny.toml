@@ -3,11 +3,11 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 vulnerability = "deny"
 unsound = "deny"
-# Scope for additional advisory checks (cargo-deny >=0.14 expects one of: "all", "workspace", "transitive", "none").
-# We disable these categories in CI to avoid failing on ecosystem churn; enable locally as needed.
-unmaintained = "none"
-yanked = "none"
-notice = "none"
+# Advisory categories: use warn-level in CI so we surface signal without failing the build
+# (old values like "none" are invalid in cargo-deny >=0.17).
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
 ignore = []
 
 [bans]
