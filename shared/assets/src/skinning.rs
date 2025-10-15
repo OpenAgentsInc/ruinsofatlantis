@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result, bail};
 use glam::{Mat4, Quat, Vec3};
-use gltf::animation::util::{ReadInputs, ReadOutputs};
 use gltf::mesh::util::ReadIndices;
 use std::collections::HashMap;
 use std::path::Path;
@@ -403,8 +402,7 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
         let acc = skin
             .inverse_bind_matrices()
             .context("skin has no inv bind")?;
-        let view = acc.view().context("read inv bind")?;
-        view.chunks(16).map(|c| Mat4::from_cols_array(c)).collect()
+        read_accessor_mats4_f32(&acc, &buffers).context("read inverse bind mats")?
     };
     let joints_nodes: Vec<usize> = skin.joints().map(|n| n.index()).collect();
 
@@ -422,15 +420,13 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
             let output = sampler.output();
             let target = ch.target();
             let node_ix = target.node().index();
-            let times: Vec<f32> = input.read_inputs().into_f32().collect();
+            let times: Vec<f32> = read_accessor_scalar_f32(&input, &buffers).unwrap_or_default();
             duration = duration.max(times.last().copied().unwrap_or(0.0));
             match target.property() {
                 gltf::animation::Property::Translation => {
-                    let values: Vec<Vec3> = output
-                        .read_translations()
-                        .expect("translations")
-                        .into_f32()
-                        .map(Vec3::from)
+                    let values: Vec<Vec3> = read_accessor_vec_f32(&output, &buffers, 3)
+                        .chunks(3)
+                        .map(|c| Vec3::new(c[0], c[1], c[2]))
                         .collect();
                     t_tracks.insert(
                         node_ix,
@@ -441,12 +437,9 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     );
                 }
                 gltf::animation::Property::Rotation => {
-                    let values: Vec<Quat> = output
-                        .read_rotations()
-                        .expect("rotations")
-                        .into_f32()
-                        .map(Quat::from_array)
-                        .map(|q| q.normalize())
+                    let values: Vec<Quat> = read_accessor_vec_f32(&output, &buffers, 4)
+                        .chunks(4)
+                        .map(|c| Quat::from_array([c[0], c[1], c[2], c[3]]).normalize())
                         .collect();
                     r_tracks.insert(
                         node_ix,
@@ -457,11 +450,9 @@ pub fn load_gltf_skinned(path: &Path) -> Result<SkinnedMeshCPU> {
                     );
                 }
                 gltf::animation::Property::Scale => {
-                    let values: Vec<Vec3> = output
-                        .read_scales()
-                        .expect("scales")
-                        .into_f32()
-                        .map(Vec3::from)
+                    let values: Vec<Vec3> = read_accessor_vec_f32(&output, &buffers, 3)
+                        .chunks(3)
+                        .map(|c| Vec3::new(c[0], c[1], c[2]))
                         .collect();
                     s_tracks.insert(
                         node_ix,
@@ -654,6 +645,80 @@ fn decompose_node(n: &gltf::Node) -> (Vec3, Quat, Vec3) {
     }
 }
 
+// ---- Accessor reading helpers (minimal, f32 only) ----
+fn read_accessor_scalar_f32(
+    acc: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+) -> Option<Vec<f32>> {
+    let view = acc.view()?;
+    let buf = &buffers[view.buffer().index()].0;
+    let off = view.offset() + acc.offset();
+    let stride = view.stride().unwrap_or(4);
+    let count = acc.count();
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let idx = off + i * stride;
+        let mut bytes = [0u8; 4];
+        bytes.copy_from_slice(&buf[idx..idx + 4]);
+        out.push(f32::from_le_bytes(bytes));
+    }
+    Some(out)
+}
+
+fn read_accessor_vec_f32(
+    acc: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+    dims: usize,
+) -> Vec<f32> {
+    // Best-effort: assume tightly-packed f32 vectors
+    let view = if let Some(v) = acc.view() {
+        v
+    } else {
+        return Vec::new();
+    };
+    let buf = &buffers[view.buffer().index()].0;
+    let off = view.offset() + acc.offset();
+    let comp = 4usize;
+    let width = dims * comp;
+    let stride = view.stride().unwrap_or(width);
+    let count = acc.count();
+    let mut out = Vec::with_capacity(count * dims);
+    for i in 0..count {
+        let idx = off + i * stride;
+        for k in 0..dims {
+            let mut bytes = [0u8; 4];
+            let start = idx + k * 4;
+            bytes.copy_from_slice(&buf[start..start + 4]);
+            out.push(f32::from_le_bytes(bytes));
+        }
+    }
+    out
+}
+
+fn read_accessor_mats4_f32(
+    acc: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+) -> Option<Vec<Mat4>> {
+    let view = acc.view()?;
+    let buf = &buffers[view.buffer().index()].0;
+    let off = view.offset() + acc.offset();
+    let stride = view.stride().unwrap_or(16 * 4);
+    let count = acc.count();
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let base = off + i * stride;
+        let mut m = [0.0f32; 16];
+        for (k, mk) in m.iter_mut().enumerate() {
+            let mut bytes = [0u8; 4];
+            let idx = base + k * 4;
+            bytes.copy_from_slice(&buf[idx..idx + 4]);
+            *mk = f32::from_le_bytes(bytes);
+        }
+        out.push(Mat4::from_cols_array(&m));
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -686,6 +751,3 @@ mod tests {
         );
     }
 }
-
-pub mod humanoid;
-pub mod retarget;

@@ -1,10 +1,4 @@
 //! Humanoid rig detection (canonical bone names) for retargeting.
-//!
-//! This module provides a conservative mapping from arbitrary GLTF node names to
-//! a small set of canonical humanoid bones. It relies on heuristic name matching
-//! and optional laterality hints in names (e.g., `.L`/`_R`).
-
-// (No glam imports needed in this module)
 
 use crate::types::SkinnedMeshCPU;
 
@@ -41,8 +35,8 @@ impl HumanoidBone {
 
 #[derive(Clone, Debug)]
 pub struct HumanoidRig {
-    pub bone_of_node: Vec<Option<HumanoidBone>>,
-    pub node_of_bone: [Option<usize>; HumanoidBone::COUNT],
+    pub bone_of_node: Vec<Option<HumanoidBone>>, // node index -> canonical (if any)
+    pub node_of_bone: [Option<usize>; HumanoidBone::COUNT], // canonical -> node index
     pub root_node: usize,
 }
 
@@ -79,7 +73,6 @@ fn match_bone(n: &str, is_left: bool, is_right: bool) -> Option<HumanoidBone> {
             l.contains($k)
         };
     }
-
     let left = is_left || l.contains("left") || (l.ends_with('l') && !l.contains("leg"));
     let right = is_right || l.contains("right") || (l.ends_with('r') && !l.contains("leg"));
 
@@ -102,7 +95,6 @@ fn match_bone(n: &str, is_left: bool, is_right: bool) -> Option<HumanoidBone> {
         return Some(HumanoidBone::Head);
     }
 
-    // Arms
     if has!("clavicle") && left {
         return Some(HumanoidBone::ClavicleL);
     }
@@ -128,7 +120,6 @@ fn match_bone(n: &str, is_left: bool, is_right: bool) -> Option<HumanoidBone> {
         return Some(HumanoidBone::HandR);
     }
 
-    // Legs
     if (has!("upperleg") || (has!("thigh") && !has!("lower"))) && left {
         return Some(HumanoidBone::UpperLegL);
     }
@@ -164,11 +155,11 @@ pub fn detect_humanoid(sk: &SkinnedMeshCPU) -> HumanoidRig {
     for (i, name) in sk.node_names.iter().enumerate() {
         let is_left = name.contains(".L") || name.contains("_L");
         let is_right = name.contains(".R") || name.contains("_R");
-        if let Some(b) = match_bone(name.as_str(), is_left, is_right) {
-            if node_of_bone[b as usize].is_none() {
-                bone_of_node[i] = Some(b);
-                node_of_bone[b as usize] = Some(i);
-            }
+        if let Some(b) = match_bone(name.as_str(), is_left, is_right)
+            && node_of_bone[b as usize].is_none()
+        {
+            bone_of_node[i] = Some(b);
+            node_of_bone[b as usize] = Some(i);
         }
     }
     let root_node = node_of_bone[HumanoidBone::Hips as usize]
