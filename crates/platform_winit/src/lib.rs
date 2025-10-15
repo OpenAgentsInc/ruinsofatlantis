@@ -885,9 +885,7 @@ impl ApplicationHandler for App {
                         [-s, 0.0, c, 0.0],
                         [pos[0], pos[1], pos[2], 1.0],
                     ];
-                    // Semi-transparent green ghost
-                    state.set_ghost_transform(model, [0.2, 0.8, 0.3]);
-                    // Ensure ghost mesh matches selected kind
+                    // Ghost tint: trees green, rocks gray
                     let k = self
                         .builder
                         .kinds
@@ -895,6 +893,12 @@ impl ApplicationHandler for App {
                         .cloned()
                         .unwrap_or_else(|| "tree.default".into());
                     let (route, render_key) = normalize_builder_kind(&k);
+                    let tint = match route {
+                        BuildRoute::Rock => [0.6, 0.6, 0.6],
+                        _ => [0.2, 0.8, 0.3],
+                    };
+                    state.set_ghost_transform(model, tint);
+                    // Ensure ghost mesh matches selected kind
                     match route {
                         BuildRoute::Tree => state.set_ghost_kind(&render_key),
                         BuildRoute::Rock => state.set_ghost_kind("rock.building"),

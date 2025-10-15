@@ -1320,31 +1320,44 @@ pub fn render_impl(
                 }
                 let mut drew = false;
                 if let Some(ref k) = r.ghost_kind {
-                    // Try session batch first, else zone-baked batch by kind
-                    if let Some(b) = r.session_trees.iter().find(|b| &b.kind == k) {
-                        rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                    let is_rock = k.starts_with("rock.");
+                    if is_rock {
+                        // Draw non-textured rock ghost using rocks VB/IB with standard instanced pipeline
+                        rp.set_pipeline(&r.inst_pipeline);
                         rp.set_bind_group(0, &r.globals_bg, &[]);
                         rp.set_bind_group(1, &r.shard_model_bg, &[]);
-                        rp.set_bind_group(2, &r.palettes_bg, &[]);
-                        let mat_bg = b.material_bg.as_ref().unwrap_or(&r.default_material_bg);
-                        rp.set_bind_group(3, mat_bg, &[]);
-                        rp.set_vertex_buffer(0, b.vb.slice(..));
+                        rp.set_vertex_buffer(0, r.rocks_vb.slice(..));
                         rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
-                        rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
-                        rp.draw_indexed(0..b.index_count, 0, 0..1);
+                        rp.set_index_buffer(r.rocks_ib.slice(..), wgpu::IndexFormat::Uint16);
+                        rp.draw_indexed(0..r.rocks_index_count, 0, 0..1);
                         drew = true;
-                    } else if let Some(g) = r.trees_groups.iter().find(|g| &g.kind == k) {
-                        rp.set_pipeline(&r.inst_tex_ghost_pipeline);
-                        rp.set_bind_group(0, &r.globals_bg, &[]);
-                        rp.set_bind_group(1, &r.shard_model_bg, &[]);
-                        rp.set_bind_group(2, &r.palettes_bg, &[]);
-                        let mat_bg = g.material_bg.as_ref().unwrap_or(&r.default_material_bg);
-                        rp.set_bind_group(3, mat_bg, &[]);
-                        rp.set_vertex_buffer(0, g.vb.slice(..));
-                        rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
-                        rp.set_index_buffer(g.ib.slice(..), wgpu::IndexFormat::Uint16);
-                        rp.draw_indexed(0..g.index_count, 0, 0..1);
-                        drew = true;
+                    } else {
+                        // Try session batch first, else zone-baked batch by kind
+                        if let Some(b) = r.session_trees.iter().find(|b| &b.kind == k) {
+                            rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                            rp.set_bind_group(0, &r.globals_bg, &[]);
+                            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                            rp.set_bind_group(2, &r.palettes_bg, &[]);
+                            let mat_bg = b.material_bg.as_ref().unwrap_or(&r.default_material_bg);
+                            rp.set_bind_group(3, mat_bg, &[]);
+                            rp.set_vertex_buffer(0, b.vb.slice(..));
+                            rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                            rp.set_index_buffer(b.ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rp.draw_indexed(0..b.index_count, 0, 0..1);
+                            drew = true;
+                        } else if let Some(g) = r.trees_groups.iter().find(|g| &g.kind == k) {
+                            rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                            rp.set_bind_group(0, &r.globals_bg, &[]);
+                            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                            rp.set_bind_group(2, &r.palettes_bg, &[]);
+                            let mat_bg = g.material_bg.as_ref().unwrap_or(&r.default_material_bg);
+                            rp.set_bind_group(3, mat_bg, &[]);
+                            rp.set_vertex_buffer(0, g.vb.slice(..));
+                            rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                            rp.set_index_buffer(g.ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rp.draw_indexed(0..g.index_count, 0, 0..1);
+                            drew = true;
+                        }
                     }
                 }
                 if !drew {
@@ -1352,16 +1365,32 @@ pub fn render_impl(
                     if let Some(k) = r.ghost_kind.clone()
                         && let Some((vb, ib, ic, mat_bg)) = r.ghost_mesh_for_kind(&k)
                     {
-                        rp.set_pipeline(&r.inst_tex_ghost_pipeline);
-                        rp.set_bind_group(0, &r.globals_bg, &[]);
-                        rp.set_bind_group(1, &r.shard_model_bg, &[]);
-                        rp.set_bind_group(2, &r.palettes_bg, &[]);
-                        let mb = mat_bg.as_ref().unwrap_or(&r.default_material_bg);
-                        rp.set_bind_group(3, mb, &[]);
-                        rp.set_vertex_buffer(0, vb.slice(..));
-                        rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
-                        rp.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
-                        rp.draw_indexed(0..ic, 0, 0..1);
+                        let is_rock = r
+                            .ghost_kind
+                            .as_ref()
+                            .map(|s| s.starts_with("rock."))
+                            .unwrap_or(false);
+                        if is_rock {
+                            // VB/IB are rocks; use non-textured instanced pipeline
+                            rp.set_pipeline(&r.inst_pipeline);
+                            rp.set_bind_group(0, &r.globals_bg, &[]);
+                            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                            rp.set_vertex_buffer(0, vb.slice(..));
+                            rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                            rp.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rp.draw_indexed(0..ic, 0, 0..1);
+                        } else {
+                            rp.set_pipeline(&r.inst_tex_ghost_pipeline);
+                            rp.set_bind_group(0, &r.globals_bg, &[]);
+                            rp.set_bind_group(1, &r.shard_model_bg, &[]);
+                            rp.set_bind_group(2, &r.palettes_bg, &[]);
+                            let mb = mat_bg.as_ref().unwrap_or(&r.default_material_bg);
+                            rp.set_bind_group(3, mb, &[]);
+                            rp.set_vertex_buffer(0, vb.slice(..));
+                            rp.set_vertex_buffer(1, r.ghost_inst.slice(..));
+                            rp.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                            rp.draw_indexed(0..ic, 0, 0..1);
+                        }
                         drew = true;
                     }
                 }
