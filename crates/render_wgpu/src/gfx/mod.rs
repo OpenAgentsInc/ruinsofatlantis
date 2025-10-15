@@ -1104,7 +1104,7 @@ impl Renderer {
                             if let Ok((doc, _buffers, images)) = gltf::import(&mesh_path) {
                                 use gltf::material::AlphaMode;
                                 let mut chosen: Option<wgpu::BindGroup> = None;
-                                let mut chosen_mask = true; // prefer to replace mask with opaque when seen
+                                let mut chosen_mask = true; // prefer OPAQUE (bark) when available
                                 for mesh in doc.meshes() {
                                     for prim in mesh.primitives() {
                                         if let Some(texinfo) = prim
@@ -1116,7 +1116,7 @@ impl Renderer {
                                                 prim.material().alpha_mode(),
                                                 AlphaMode::Mask
                                             );
-                                            // Prefer opaque; if we already picked MASK and this is OPAQUE, replace
+                                            // Prefer OPAQUE over MASK; if we already picked MASK and this is OPAQUE, replace
                                             if !(chosen.is_none() || (chosen_mask && !is_mask)) {
                                                 continue;
                                             }
@@ -1543,7 +1543,7 @@ impl Renderer {
                                 idx.push((v + base) as u16);
                             }
                         }
-                        // Select a base color texture, preferring opaque (bark) over mask (leaves)
+                        // Select a base color texture, preferring MASK (leaves) over OPAQUE (bark)
                         if let Some(texinfo) = prim
                             .material()
                             .pbr_metallic_roughness()
@@ -1553,11 +1553,11 @@ impl Renderer {
                                 prim.material().alpha_mode(),
                                 gltf::material::AlphaMode::Mask
                             );
-                            // Prefer OPAQUE over MASK. If we don't have a choice yet, or we currently
-                            // hold a MASK and this candidate is OPAQUE, replace.
+                            // Prefer MASK over OPAQUE. If we don't have a choice yet, or we currently
+                            // hold OPAQUE and this candidate is MASK, replace.
                             let should_set = match (mat_bg.is_some(), chosen_is_mask, is_mask) {
                                 (false, _, _) => true,       // nothing chosen yet
-                                (true, true, false) => true, // replace MASK with OPAQUE
+                                (true, false, true) => true, // replace OPAQUE with MASK
                                 _ => false,                  // keep existing
                             };
                             if should_set {
@@ -1763,7 +1763,7 @@ impl Renderer {
                     let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
                     let mut idx: Vec<u16> = Vec::new();
                     let mut mat_bg: Option<wgpu::BindGroup> = None;
-                    let mut chosen_mask = true; // prefer to replace mask with opaque when found
+                    let mut chosen_mask = true; // prefer to replace MASK with OPAQUE when found
                     for mesh in doc.meshes() {
                         for prim in mesh.primitives() {
                             let reader =
@@ -1813,6 +1813,7 @@ impl Renderer {
                                     prim.material().alpha_mode(),
                                     gltf::material::AlphaMode::Mask
                                 );
+                                // Prefer OPAQUE (bark) over MASK (leaves)
                                 if mat_bg.is_none() || (chosen_mask && !is_mask) {
                                     let img_idx = texinfo.texture().source().index();
                                     if let Some(img) = images.get(img_idx) {
@@ -1936,11 +1937,13 @@ impl Renderer {
                                     contents: bytemuck::cast_slice(&idx),
                                     usage: wgpu::BufferUsages::INDEX,
                                 });
+                        // Ensure a non-white fallback
+                        let mat_final = mat_bg.or_else(|| Some(self.trees_solid_bg.clone()));
                         Some(PreloadedStatic {
                             vb,
                             ib,
                             index_count: idx.len() as u32,
-                            material_bg: mat_bg,
+                            material_bg: mat_final,
                         })
                     }
                 }
@@ -2027,7 +2030,7 @@ impl Renderer {
             let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
             let mut idx: Vec<u16> = Vec::new();
             let mut mat_bg: Option<wgpu::BindGroup> = None;
-            let mut chosen_is_mask = false; // Prefer opaque material for preview
+            let mut chosen_is_mask = true; // Prefer OPAQUE (bark) for preview
             for mesh in doc.meshes() {
                 for prim in mesh.primitives() {
                     let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
@@ -2075,6 +2078,7 @@ impl Renderer {
                             prim.material().alpha_mode(),
                             gltf::material::AlphaMode::Mask
                         );
+                        // Prefer OPAQUE over MASK
                         let should_set = matches!(
                             (mat_bg.is_some(), chosen_is_mask, is_mask),
                             (false, _, _) | (true, true, false)

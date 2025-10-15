@@ -2334,8 +2334,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         // Warm textured instancing (trees) and basic instancing
         rp.set_pipeline(&renderer.inst_tex_pipeline);
         rp.set_bind_group(0, &renderer.globals_bg, &[]);
-        rp.set_bind_group(1, &renderer.terrain_model_bg, &[]);
-        rp.draw(0..3, 0..1);
+        rp.set_bind_group(1, &renderer.shard_model_bg, &[]);
+        // Pipeline layout expects palettes (2) and material (3)
+        rp.set_bind_group(2, &renderer.palettes_bg, &[]);
+        rp.set_bind_group(3, &renderer.default_material_bg, &[]);
+        // Bind any buffers matching the layout (dummy ones are fine); draw zero verts
+        rp.set_vertex_buffer(0, renderer.trees_vb.slice(..));
+        rp.set_vertex_buffer(1, renderer.trees_instances.slice(..));
+        rp.draw(0..0, 0..0);
         drop(rp);
         renderer.queue.submit(Some(encoder.finish()));
     }
