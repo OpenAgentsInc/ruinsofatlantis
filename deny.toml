@@ -16,7 +16,17 @@ skip = []
 [licenses]
 # cargo-deny >=0.17: removed `unlicensed`, `copyleft`, `allow-osi-fsf-free`, and `deny` keys.
 # Rely on the explicit allow-list below and default behavior for the rest.
-allow = ["Apache-2.0", "MIT", "BSD-3-Clause", "ISC", "Zlib"]
+allow = [
+  "Apache-2.0",
+  "MIT",
+  "BSD-3-Clause",
+  "BSD-2-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+]
+# Treat internal workspace crates without a license field as private (do not fail CI)
+private = { ignore = true }
 
 [sources]
 unknown-registry = "deny"
