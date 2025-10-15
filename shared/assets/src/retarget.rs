@@ -54,8 +54,28 @@ pub fn retarget_animations(
             map.push((ns, nd, hb));
         }
     }
+    // Extend mapping by normalized name equality to cover fingers/twists/etc.
+    // Keep existing humanoid mappings; only add when destination node is unmapped.
+    let mut dst_taken = std::collections::HashSet::new();
+    for &(_, nd, _) in &map {
+        dst_taken.insert(nd);
+    }
+    let mut name_to_src: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for (i, n) in src.node_names.iter().enumerate() {
+        name_to_src.insert(norm_name(n), i);
+    }
+    for (j, dn) in dst.node_names.iter().enumerate() {
+        if dst_taken.contains(&j) {
+            continue;
+        }
+        if let Some(&isrc) = name_to_src.get(&norm_name(dn)) {
+            map.push((isrc, j, HumanoidBone::Hips)); // bone enum unused below
+            dst_taken.insert(j);
+        }
+    }
     if map.is_empty() {
-        bail!("retarget: no overlapping humanoid bones");
+        bail!("retarget: no overlapping bones by humanoid or name");
     }
 
     let scale = if let Some(s) = opts.scale_override {
@@ -249,4 +269,30 @@ fn sample_quat(tr: &TrackQuat, t: f32) -> Option<Quat> {
 fn decompose(m: Mat4) -> (Vec3, Quat, Vec3) {
     let (s, r, t) = m.to_scale_rotation_translation();
     (t, r, s)
+}
+
+fn norm_name(s: &str) -> String {
+    let mut out = s.to_lowercase();
+    for pref in [
+        "mixamorig:",
+        "armature|",
+        "armature/",
+        "armature:",
+        "skeleton|",
+        "skeleton/",
+        "skeleton:",
+        "def-",
+        "rig|",
+        "rig/",
+        "rig:",
+    ] {
+        out = out.replace(pref, "");
+    }
+    out = out.replace([' ', '_', '-', '.', '|'], "");
+    out = out
+        .replace("hips", "pelvis")
+        .replace("forearm", "lowerarm")
+        .replace("shoulder", "clavicle")
+        .replace("shin", "calf");
+    out
 }

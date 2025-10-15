@@ -112,21 +112,29 @@ fn compute_pc_feet_offset(cpu: &SkinnedMeshCPU) -> f32 {
             }
         }
     }
-    // Also consider mesh vertices: min vertex Y approximates lowest geometry point
-    let min_vert_y = cpu
+    // Consider mesh vertices: min/max vertex Y approximates mesh AABB in rest
+    let (min_vert_y, max_vert_y) = cpu
         .vertices
         .iter()
-        .map(|v| v.pos[1])
-        .fold(f32::INFINITY, |a, b| a.min(b));
-    if min_vert_y.is_finite() {
-        min_y = min_y.min(min_vert_y);
-    }
-    // Final offset: distance from origin to lowest point (feet/mesh) + small clearance
-    if !min_y.is_finite() {
-        0.0
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(mn, mx), v| {
+            (mn.min(v.pos[1]), mx.max(v.pos[1]))
+        });
+    let mut offset = if min_y.is_finite() {
+        (-min_y).max(0.0) + 0.02
     } else {
-        ((-min_y) + 0.02).clamp(0.0, 3.0)
+        0.0
+    };
+    if min_vert_y.is_finite() {
+        offset = offset.max((-min_vert_y).max(0.0) + 0.02);
     }
+    // If we still failed to get a sensible offset, fallback to ~47% of mesh height (humanoid)
+    if offset < 0.05 && min_vert_y.is_finite() && max_vert_y.is_finite() {
+        let h = (max_vert_y - min_vert_y).abs();
+        if h > 0.5 {
+            offset = 0.47 * h;
+        }
+    }
+    offset.clamp(0.0, 3.0)
 }
 
 /// Batch of instanced trees for a single kind/model.
