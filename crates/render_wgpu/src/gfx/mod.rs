@@ -112,10 +112,20 @@ fn compute_pc_feet_offset(cpu: &SkinnedMeshCPU) -> f32 {
             }
         }
     }
+    // Also consider mesh vertices: min vertex Y approximates lowest geometry point
+    let min_vert_y = cpu
+        .vertices
+        .iter()
+        .map(|v| v.pos[1])
+        .fold(f32::INFINITY, |a, b| a.min(b));
+    if min_vert_y.is_finite() {
+        min_y = min_y.min(min_vert_y);
+    }
+    // Final offset: distance from origin to lowest point (feet/mesh) + small clearance
     if !min_y.is_finite() {
         0.0
     } else {
-        (-min_y).clamp(0.0, 3.0)
+        ((-min_y) + 0.02).clamp(0.0, 3.0)
     }
 }
 
