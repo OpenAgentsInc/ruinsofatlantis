@@ -25,6 +25,7 @@ allow = [
   "ISC",
   "Zlib",
   "Unicode-3.0",
+  "OpenSSL",
 ]
 # Treat internal workspace crates without a license field as private (do not fail CI)
 private = { ignore = true }

@@ -16,6 +16,9 @@ pub mod util;
 pub use gltf::load_gltf_mesh;
 pub use obj::load_obj_mesh as load_obj_static;
 pub use skinning::{load_gltf_skinned, merge_gltf_animations};
+// Humanoid rig detection + animation retargeting helpers
+pub use skinning::humanoid::detect_humanoid;
+pub use skinning::retarget::{RetargetOptions, retarget_animations};
 pub use types::{
     AnimClip, CpuMesh, SkinnedMeshCPU, TextureCPU, TrackQuat, TrackVec3, Vertex, VertexSkinCPU,
 };

@@ -3216,41 +3216,80 @@ impl Renderer {
         }
     }
 
-    /// Ensure the separate PC (UBC) rig is available after a zone is selected.
+    /// Ensure the separate PC (player character) rig is available after a zone is selected.
     /// Safe to call multiple times; no-ops if already created or if GLTF fails.
     pub fn ensure_pc_assets(&mut self) {
         if self.pc_vb.is_some() {
             return;
         }
         use crate::gfx::types::{InstanceSkin, VertexSkinned};
-        use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
-        let ubc_rel = "assets/models/ubc/godot/Superhero_Male.gltf";
-        let ubc_path = asset_path(ubc_rel);
-        let mut cpu_pc = match load_gltf_skinned(&ubc_path) {
+        use roa_assets::skinning::load_gltf_skinned;
+        let model_rel = std::env::var("RA_PC_MODEL")
+            .unwrap_or_else(|_| "assets/models/sorceror.glb".to_string());
+        let model_path = asset_path(&model_rel);
+        let mut cpu_pc = match load_gltf_skinned(&model_path) {
             Ok(c) => c,
             Err(e) => {
-                log::debug!("ensure_pc_assets: failed to load {:?}: {:?}", ubc_path, e);
+                log::debug!("ensure_pc_assets: failed to load {:?}: {:?}", model_path, e);
                 return;
             }
         };
-        // Merge universal animation library so PC has Idle/Walk/Run/Cast clips.
-        let lib_path = asset_path("assets/anims/universal/AnimationLibrary.glb");
-        #[cfg(target_arch = "wasm32")]
-        {
-            // On wasm, assets are embedded; attempt merge unconditionally.
-            if let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path) {
-                log::debug!(
-                    "ensure_pc_assets(wasm): merge anim lib failed at {:?}: {:?}",
-                    lib_path,
-                    e
-                );
+        // Retarget external animation library (folder or single GLB) so PC has Idle/Walk/Run/Cast clips.
+        let anim_var = std::env::var("RA_PC_ANIM_LIB").ok();
+        let try_files: Vec<std::path::PathBuf> = match anim_var {
+            Some(p) => {
+                let p = asset_path(&p);
+                if p.is_dir() {
+                    std::fs::read_dir(&p)
+                        .map(|rd| {
+                            rd.filter_map(|e| e.ok())
+                                .map(|e| e.path())
+                                .filter(|f| {
+                                    matches!(
+                                        f.extension().and_then(|e| e.to_str()).map(|s| s.to_ascii_lowercase()),
+                                        Some(ref ext) if ext == "glb" || ext == "gltf"
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                } else if p.is_file() {
+                    vec![p]
+                } else {
+                    Vec::new()
+                }
             }
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        if lib_path.exists()
-            && let Err(e) = merge_gltf_animations(&mut cpu_pc, &lib_path)
-        {
-            log::debug!("ensure_pc_assets: merge anim lib failed: {:?}", e);
+            None => {
+                // Fallback to bundled universal library
+                vec![asset_path("assets/anims/universal/AnimationLibrary.glb")]
+            }
+        };
+        if !try_files.is_empty() {
+            use roa_assets::{RetargetOptions, retarget_animations};
+            let mut merged = 0usize;
+            for f in try_files {
+                match load_gltf_skinned(&f) {
+                    Ok(src) => {
+                        let before = cpu_pc.animations.len();
+                        if let Err(e) = retarget_animations(
+                            &src,
+                            &mut cpu_pc,
+                            &RetargetOptions {
+                                preserve_root_motion: true,
+                                apply_rest_correction: true,
+                                scale_override: None,
+                                allowlist: None,
+                            },
+                        ) {
+                            log::debug!("retarget {:?} failed: {:?}", f, e);
+                        } else {
+                            merged += cpu_pc.animations.len().saturating_sub(before);
+                        }
+                    }
+                    Err(e) => log::debug!("skip anim {:?}: {:?}", f, e),
+                }
+            }
+            log::info!("pc anims merged: {}", merged);
         }
         if cpu_pc.vertices.is_empty() || cpu_pc.indices.is_empty() {
             return;

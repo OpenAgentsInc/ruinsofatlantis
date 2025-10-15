@@ -3,6 +3,7 @@ name = "ruinsofatlantis"
 version = "0.1.0"
 edition = "2024"
 default-run = "ruinsofatlantis"
+license = "Apache-2.0"
 
 [workspace]
 members = [
