@@ -2065,6 +2065,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         trees_groups: Vec::new(),
         session_trees: Vec::new(),
         session_rocks: None,
+        preloaded_static: std::collections::HashMap::new(),
         rocks_instances,
         rocks_count,
         rocks_vb,
@@ -2300,6 +2301,44 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         worldsmithing_selected: 0,
         present_recoveries: 0,
     };
+
+    // Warm up a couple of frequently used pipelines to avoid first-use shader compilation hitch.
+    {
+        let mut encoder = renderer
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("warmup-encoder"),
+            });
+        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("warmup-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &renderer.attachments.scene_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &renderer.attachments.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+        // Warm textured instancing (trees) and basic instancing
+        rp.set_pipeline(&renderer.inst_tex_pipeline);
+        rp.set_bind_group(0, &renderer.globals_bg, &[]);
+        rp.set_bind_group(1, &renderer.terrain_model_bg, &[]);
+        rp.draw(0..3, 0..1);
+        drop(rp);
+        renderer.queue.submit(Some(encoder.finish()));
+    }
 
     // Apply default input profile from config if provided
     let prof = crate::gfx::renderer::controls::parse_profile_name(icfg.profile.as_deref());

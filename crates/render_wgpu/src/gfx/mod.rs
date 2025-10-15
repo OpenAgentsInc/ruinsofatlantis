@@ -137,6 +137,14 @@ fn compute_pc_feet_offset(cpu: &SkinnedMeshCPU) -> f32 {
     offset.clamp(0.0, 3.0)
 }
 
+// Preloaded GPU mesh for static textured instancing (e.g., trees placed from hotbar).
+struct PreloadedStatic {
+    vb: wgpu::Buffer,
+    ib: wgpu::Buffer,
+    index_count: u32,
+    material_bg: Option<wgpu::BindGroup>,
+}
+
 /// Batch of instanced trees for a single kind/model.
 pub struct TreeBatch {
     pub kind: String,
@@ -348,6 +356,9 @@ pub struct Renderer {
     session_trees: Vec<SessionBatch>,
     // Ephemeral, client-session rocks (single mesh reused)
     session_rocks: Option<SessionBatch>,
+
+    // Preloaded static GPU meshes for hotbar kinds (normalized keys, e.g., "birch")
+    preloaded_static: HashMap<String, PreloadedStatic>,
 
     // Rocks (instanced static mesh)
     rocks_instances: wgpu::Buffer,
@@ -1416,6 +1427,8 @@ impl Renderer {
         self.worldsmithing_kinds = kinds;
         self.worldsmithing_selected =
             selected.min(self.worldsmithing_kinds.len().saturating_sub(1));
+        // Preload hotbar assets now to avoid first-touch hitch on placement
+        self.preload_worldsmithing_assets();
     }
 
     /// Update the selected worldsmithing kind index (clamped to current palette).
@@ -1455,6 +1468,33 @@ impl Renderer {
             return;
         }
         // Create a new batch: load mesh & optional material for this kind.
+        // Prefer a preloaded static if available
+        if let Some(p) = self.preloaded_static.get(kind_key) {
+            let inst = crate::gfx::types::Instance {
+                model,
+                color: [0.8, 0.75, 0.7],
+                selected: 0.25,
+            };
+            let cpu = vec![inst];
+            let instances = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("session-trees-instances"),
+                    contents: bytemuck::cast_slice(&cpu),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+            self.session_trees.push(SessionBatch {
+                kind: kind_key.to_string(),
+                instances,
+                cpu,
+                count: 1,
+                vb: p.vb.clone(),
+                ib: p.ib.clone(),
+                index_count: p.index_count,
+                material_bg: p.material_bg.clone(),
+            });
+            return;
+        }
         let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
         let (vb, ib, index_count, mut material_bg) = match gltf::import(&mesh_path) {
             Ok((doc, buffers, images)) => {
@@ -1678,6 +1718,244 @@ impl Renderer {
     /// Remove all session-placed trees (used when switching zones).
     pub fn clear_session_trees(&mut self) {
         self.session_trees.clear();
+    }
+
+    // --- Hotbar Preload ---
+    fn normalize_builder_kind(kind: &str) -> (bool, String) {
+        // Returns (is_tree, normalized_key)
+        let k = kind.trim();
+        if let Some(rest) = k.strip_prefix("tree.") {
+            return (true, rest.to_ascii_lowercase());
+        }
+        if k.starts_with("quaternius.")
+            || matches!(
+                k,
+                "birch"
+                    | "pine"
+                    | "giantpine"
+                    | "common"
+                    | "tallthick"
+                    | "twistedtree"
+                    | "deadtree"
+                    | "cherryblossom"
+            )
+        {
+            return (true, k.to_ascii_lowercase());
+        }
+        (false, k.to_ascii_lowercase())
+    }
+
+    fn preload_worldsmithing_assets(&mut self) {
+        // Preload any tree kinds from the hotbar palette; ignore rocks/others for now.
+        for k in self.worldsmithing_kinds.clone() {
+            let (is_tree, norm) = Self::normalize_builder_kind(&k);
+            if !is_tree {
+                continue;
+            }
+            if self.preloaded_static.contains_key(&norm) {
+                continue;
+            }
+            let mesh_path = crate::gfx::foliage::path_for_kind(&norm);
+            // Try to import GLTF and upload a VB/IB (+ material) matching instanced textured pipeline
+            let pre = match gltf::import(&mesh_path) {
+                Ok((doc, buffers, images)) => {
+                    // Build VertexPosNrmUv and indices
+                    let mut vtx: Vec<crate::gfx::types::VertexPosNrmUv> = Vec::new();
+                    let mut idx: Vec<u16> = Vec::new();
+                    let mut mat_bg: Option<wgpu::BindGroup> = None;
+                    let mut chosen_mask = true; // prefer to replace mask with opaque when found
+                    for mesh in doc.meshes() {
+                        for prim in mesh.primitives() {
+                            let reader =
+                                prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                            let pos = reader
+                                .read_positions()
+                                .map(|it| it.collect::<Vec<_>>())
+                                .unwrap_or_default();
+                            let nrm = reader
+                                .read_normals()
+                                .map(|it| it.collect::<Vec<_>>())
+                                .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+                            let uv = reader
+                                .read_tex_coords(0)
+                                .map(|c| c.into_f32().collect::<Vec<_>>())
+                                .unwrap_or_else(|| vec![[0.0, 0.0]; pos.len()]);
+                            let base = vtx.len() as u32;
+                            for i in 0..pos.len() {
+                                vtx.push(crate::gfx::types::VertexPosNrmUv {
+                                    pos: pos[i],
+                                    nrm: nrm[i],
+                                    uv: uv[i],
+                                });
+                            }
+                            let idx_u32: Vec<u32> = match reader.read_indices() {
+                                Some(gltf::mesh::util::ReadIndices::U16(it)) => {
+                                    it.map(|v| v as u32).collect()
+                                }
+                                Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                                Some(gltf::mesh::util::ReadIndices::U8(it)) => {
+                                    it.map(|v| v as u32).collect()
+                                }
+                                None => (0..pos.len() as u32).collect(),
+                            };
+                            for v in idx_u32 {
+                                let rb = v + base;
+                                if rb <= u16::MAX as u32 {
+                                    idx.push(rb as u16);
+                                }
+                            }
+                            if let Some(texinfo) = prim
+                                .material()
+                                .pbr_metallic_roughness()
+                                .base_color_texture()
+                            {
+                                let is_mask = matches!(
+                                    prim.material().alpha_mode(),
+                                    gltf::material::AlphaMode::Mask
+                                );
+                                if mat_bg.is_none() || (chosen_mask && !is_mask) {
+                                    let img_idx = texinfo.texture().source().index();
+                                    if let Some(img) = images.get(img_idx) {
+                                        let (w, h) = (img.width, img.height);
+                                        let pixels = match img.format {
+                                            gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                                            gltf::image::Format::R8G8B8 => {
+                                                let mut out =
+                                                    Vec::with_capacity((w * h * 4) as usize);
+                                                for c in img.pixels.chunks_exact(3) {
+                                                    out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                                }
+                                                out
+                                            }
+                                            gltf::image::Format::R8 => {
+                                                let mut out =
+                                                    Vec::with_capacity((w * h * 4) as usize);
+                                                for &r in &img.pixels {
+                                                    out.extend_from_slice(&[r, r, r, 255]);
+                                                }
+                                                out
+                                            }
+                                            _ => img.pixels.clone(),
+                                        };
+                                        let size3 = wgpu::Extent3d {
+                                            width: w,
+                                            height: h,
+                                            depth_or_array_layers: 1,
+                                        };
+                                        let tex_obj =
+                                            self.device.create_texture(&wgpu::TextureDescriptor {
+                                                label: Some("preload-tree-albedo"),
+                                                size: size3,
+                                                mip_level_count: 1,
+                                                sample_count: 1,
+                                                dimension: wgpu::TextureDimension::D2,
+                                                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                                    | wgpu::TextureUsages::COPY_DST,
+                                                view_formats: &[],
+                                            });
+                                        self.queue.write_texture(
+                                            wgpu::TexelCopyTextureInfo {
+                                                texture: &tex_obj,
+                                                mip_level: 0,
+                                                origin: wgpu::Origin3d::ZERO,
+                                                aspect: wgpu::TextureAspect::All,
+                                            },
+                                            &pixels,
+                                            wgpu::TexelCopyBufferLayout {
+                                                offset: 0,
+                                                bytes_per_row: Some(4 * w),
+                                                rows_per_image: Some(h),
+                                            },
+                                            size3,
+                                        );
+                                        let view = tex_obj
+                                            .create_view(&wgpu::TextureViewDescriptor::default());
+                                        let sampler =
+                                            self.device.create_sampler(&wgpu::SamplerDescriptor {
+                                                label: Some("preload-tree-sampler"),
+                                                mag_filter: wgpu::FilterMode::Linear,
+                                                min_filter: wgpu::FilterMode::Linear,
+                                                mipmap_filter: wgpu::FilterMode::Nearest,
+                                                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                                ..Default::default()
+                                            });
+                                        let mat_xf_buf = self.device.create_buffer_init(
+                                            &wgpu::util::BufferInitDescriptor {
+                                                label: Some("preload-material-xf"),
+                                                contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                                                usage: wgpu::BufferUsages::UNIFORM,
+                                            },
+                                        );
+                                        mat_bg = Some(self.device.create_bind_group(
+                                            &wgpu::BindGroupDescriptor {
+                                                label: Some("preloaded-tree-material-bg"),
+                                                layout: &self.material_bgl,
+                                                entries: &[
+                                                    wgpu::BindGroupEntry {
+                                                        binding: 0,
+                                                        resource:
+                                                            wgpu::BindingResource::TextureView(
+                                                                &view,
+                                                            ),
+                                                    },
+                                                    wgpu::BindGroupEntry {
+                                                        binding: 1,
+                                                        resource: wgpu::BindingResource::Sampler(
+                                                            &sampler,
+                                                        ),
+                                                    },
+                                                    wgpu::BindGroupEntry {
+                                                        binding: 2,
+                                                        resource: mat_xf_buf.as_entire_binding(),
+                                                    },
+                                                ],
+                                            },
+                                        ));
+                                        chosen_mask = is_mask;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if vtx.is_empty() || idx.is_empty() {
+                        None
+                    } else {
+                        let vb =
+                            self.device
+                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("preloaded-trees-vb"),
+                                    contents: bytemuck::cast_slice(&vtx),
+                                    usage: wgpu::BufferUsages::VERTEX,
+                                });
+                        let ib =
+                            self.device
+                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("preloaded-trees-ib"),
+                                    contents: bytemuck::cast_slice(&idx),
+                                    usage: wgpu::BufferUsages::INDEX,
+                                });
+                        Some(PreloadedStatic {
+                            vb,
+                            ib,
+                            index_count: idx.len() as u32,
+                            material_bg: mat_bg,
+                        })
+                    }
+                }
+                Err(_) => None,
+            };
+            if let Some(p) = pre {
+                self.preloaded_static.insert(norm.clone(), p);
+                log::info!("hotbar: preloaded tree kind '{}'", norm);
+            } else {
+                log::warn!(
+                    "hotbar: failed to preload kind '{}' (using fallback on place)",
+                    norm
+                );
+            }
+        }
     }
 
     /// Append a single session rock instance (uses the already loaded rocks mesh).
