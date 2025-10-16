@@ -717,6 +717,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
         },
         WishCmd::Run {
             wish,
+            id,
             timeout_mins,
             max_iters,
         } => {
@@ -728,7 +729,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 require_consecutive_greens: 2,
             };
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(async move { run_wish_orchestration(&wish, cfg).await })?;
+            rt.block_on(async move { run_wish_orchestration(&wish, id.as_deref(), cfg).await })?;
             Ok(())
         }
     }
@@ -743,7 +744,11 @@ struct RunnerConfig {
     require_consecutive_greens: u32,
 }
 
-async fn run_wish_orchestration(wish_text: &str, cfg: RunnerConfig) -> anyhow::Result<()> {
+async fn run_wish_orchestration(
+    wish_text: &str,
+    wish_id_arg: Option<&str>,
+    cfg: RunnerConfig,
+) -> anyhow::Result<()> {
     use anyhow::Context;
     use sha2::{Digest, Sha256};
     use std::{
@@ -754,13 +759,13 @@ async fn run_wish_orchestration(wish_text: &str, cfg: RunnerConfig) -> anyhow::R
 
     let mut h = Sha256::new();
     h.update(wish_text.as_bytes());
-    let wish_id = format!(
-        "{}-{}",
-        chrono::Utc::now().format("%Y%m%d%H%M%S"),
-        hex::encode(h.finalize())[..8].to_string()
+    let generated_id = format!(
+        "W-{}-{}",
+        chrono::Utc::now().format("%Y%m%d-%H%M%S"),
+        hex::encode(h.finalize())[..4].to_string()
     );
-
-    ensure_wishes_md(&wish_id, wish_text)?;
+    let (wish_id, allowed_paths, accept_cmd) =
+        ensure_wishes_md_and_get_meta(wish_id_arg, &generated_id, wish_text)?;
 
     let repo_root = std::env::current_dir()?;
     git_assert_clean(&repo_root).context("working tree not clean")?;
@@ -877,12 +882,17 @@ async fn run_wish_orchestration(wish_text: &str, cfg: RunnerConfig) -> anyhow::R
             &["build", "--workspace", "--all-targets"],
         )
         .await?;
-        let (ok_test, _) = run_cmd(
-            &repo_root,
-            "cargo",
-            &["test", "--workspace", "--all-features", "-q"],
-        )
-        .await?;
+        let (ok_test, _) = match &accept_cmd {
+            Some(cmd) => run_shell(&repo_root, cmd).await?,
+            None => {
+                run_cmd(
+                    &repo_root,
+                    "cargo",
+                    &["test", "--workspace", "--all-features", "-q"],
+                )
+                .await?
+            }
+        };
         if ok_build && ok_test {
             consecutive_greens += 1;
             if consecutive_greens >= cfg.require_consecutive_greens {
@@ -1056,6 +1066,191 @@ fn mark_wish_completed(wish_id: &str, wish_text: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Default, Debug, Clone)]
+struct WishMeta {
+    id: Option<String>,
+    scope: Vec<String>,
+    accept: Option<String>,
+    raw: String,
+}
+
+#[derive(Debug, Clone)]
+struct WishLine {
+    line_idx: usize,
+    checked: bool,
+    text: String,
+    meta: WishMeta,
+}
+
+fn parse_wishes_md() -> anyhow::Result<(Vec<String>, Vec<WishLine>)> {
+    let path = std::path::Path::new("WISHES.md");
+    let s = std::fs::read_to_string(path)?;
+    let mut lines: Vec<String> = s.lines().map(|l| l.to_string()).collect();
+    let mut items = Vec::new();
+    for (i, l) in lines.iter().enumerate() {
+        let t = l.trim();
+        if !t.starts_with("- [") {
+            continue;
+        }
+        let checked = t.starts_with("- [x]") || t.starts_with("- [X]");
+        // Extract text before comment
+        let (left, comment) = if let Some(idx) = t.find("<!--") {
+            (&t[..idx].trim(), Some(&t[idx..]))
+        } else {
+            (t, None)
+        };
+        // After checkbox token, there is a space then text
+        let after_cb = left
+            .trim_start_matches("- [x]")
+            .trim_start_matches("- [X]")
+            .trim_start_matches("- [ ]")
+            .trim();
+        let text = after_cb
+            .trim()
+            .trim_end_matches(|c: char| c.is_whitespace())
+            .to_string();
+        let meta = parse_meta_comment(comment.unwrap_or(""));
+        items.push(WishLine {
+            line_idx: i,
+            checked,
+            text,
+            meta,
+        });
+    }
+    Ok((lines, items))
+}
+
+fn parse_meta_comment(c: &str) -> WishMeta {
+    let mut m = WishMeta {
+        raw: c.to_string(),
+        ..Default::default()
+    };
+    let c = c.trim();
+    if !c.starts_with("<!--") {
+        return m;
+    }
+    if let Some(start) = c.find("wish:") {
+        let inner = &c[start + 5..];
+        let end = inner.find("-->").map(|i| &inner[..i]).unwrap_or(inner);
+        // Split on spaces not inside quotes/brackets
+        let mut tokens = Vec::new();
+        let mut cur = String::new();
+        let mut depth = 0i32;
+        let mut in_str = false;
+        for ch in end.chars() {
+            match ch {
+                '"' => {
+                    in_str = !in_str;
+                    cur.push(ch);
+                }
+                '[' => {
+                    depth += 1;
+                    cur.push(ch);
+                }
+                ']' => {
+                    depth -= 1;
+                    cur.push(ch);
+                }
+                ' ' | '\n' | '\t' if !in_str && depth == 0 => {
+                    if !cur.trim().is_empty() {
+                        tokens.push(cur.trim().to_string());
+                    }
+                    cur.clear();
+                }
+                _ => cur.push(ch),
+            }
+        }
+        if !cur.trim().is_empty() {
+            tokens.push(cur.trim().to_string());
+        }
+        for tok in tokens {
+            let mut parts = tok.splitn(2, '=');
+            let key = parts.next().unwrap_or("").trim();
+            let val = parts.next().unwrap_or("").trim();
+            if key.is_empty() {
+                continue;
+            }
+            match key {
+                "id" => m.id = Some(val.trim_matches('"').to_string()),
+                "accept" => m.accept = Some(val.trim_matches('"').to_string()),
+                "scope" => {
+                    if val.starts_with('[') {
+                        if let Ok(v) = serde_json::from_str::<Vec<String>>(val) {
+                            m.scope = v;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    m
+}
+
+fn ensure_wishes_md_and_get_meta(
+    wish_id_arg: Option<&str>,
+    generated: &str,
+    wish_text: &str,
+) -> anyhow::Result<(String, Vec<String>, Option<String>)> {
+    use std::fs;
+    let path = std::path::Path::new("WISHES.md");
+    let (mut lines, items) = parse_wishes_md()?;
+    // Find matching line by id or text
+    let mut target: Option<WishLine> = None;
+    if let Some(id) = wish_id_arg {
+        target = items
+            .iter()
+            .find(|it| it.meta.id.as_deref() == Some(id) && !it.checked)
+            .cloned();
+    }
+    if target.is_none() {
+        target = items
+            .iter()
+            .find(|it| it.text == wish_text && !it.checked)
+            .cloned();
+    }
+    let mut id = wish_id_arg
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| generated.to_string());
+    let mut scope: Vec<String> = vec![];
+    let mut accept: Option<String> = None;
+    if let Some(mut it) = target {
+        if it.meta.id.is_none() {
+            // Inject id into the comment or append a new one
+            let line = &lines[it.line_idx];
+            let new_line = if line.contains("<!--") {
+                line.replacen("-->", &format!(" id=\"{}\" -->", id), 1)
+            } else {
+                format!("{} <!-- wish:id=\"{}\" -->", line, id)
+            };
+            lines[it.line_idx] = new_line;
+            fs::write(path, lines.join("\n") + "\n")?;
+        } else {
+            id = it.meta.id.unwrap();
+        }
+        scope = it.meta.scope;
+        accept = it.meta.accept;
+    } else {
+        // No existing line; append to Pending
+        let mut inserted = false;
+        for (i, l) in lines.iter().enumerate() {
+            if l.trim() == "## Completed" {
+                let new_line = format!("- [ ] {} <!-- wish:id=\"{}\" -->", wish_text, id);
+                lines.insert(i, "".into());
+                lines.insert(i, new_line);
+                inserted = true;
+                break;
+            }
+        }
+        if !inserted {
+            lines.push("".into());
+            lines.push(format!("- [ ] {} <!-- wish:id=\"{}\" -->", wish_text, id));
+        }
+        fs::write(path, lines.join("\n") + "\n")?;
+    }
+    Ok((id, scope, accept))
+}
+
 fn write_ledger(wish_id: &str, reason: &str, commits: &[String]) -> anyhow::Result<()> {
     let entry = serde_json::json!({ "wish_id": wish_id, "stop_reason": reason, "commits": commits, "ts": chrono::Utc::now().to_rfc3339() });
     let path = PathBuf::from(".wish-ledger");
@@ -1111,7 +1306,39 @@ async fn run_cmd(
     Ok((status.success(), out))
 }
 
-fn ensure_patch_in_scope(_patch: &str, _allowed: &[String]) -> anyhow::Result<()> {
+fn ensure_patch_in_scope(patch: &str, allowed: &[String]) -> anyhow::Result<()> {
+    use globset::{Glob, GlobSetBuilder};
+    let mut builder = GlobSetBuilder::new();
+    for g in allowed {
+        builder.add(Glob::new(g).map_err(|e| anyhow::anyhow!("bad glob {}: {}", g, e))?);
+    }
+    let set = builder
+        .build()
+        .map_err(|e| anyhow::anyhow!("glob build: {}", e))?;
+    let mut targets: Vec<String> = Vec::new();
+    for line in patch.lines() {
+        if let Some(rest) = line.strip_prefix("+++ ") {
+            let path = rest.trim().trim_matches('"');
+            let path = path.strip_prefix("b/").unwrap_or(path);
+            if path != "/dev/null" {
+                targets.push(path.to_string());
+            }
+        } else if let Some(rest) = line.strip_prefix("diff --git ") {
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            if let Some(last) = parts.last() {
+                let p = last.strip_prefix("b/").unwrap_or(last);
+                targets.push(p.to_string());
+            }
+        }
+    }
+    for p in &targets {
+        if !set.is_match(p) {
+            return Err(anyhow::anyhow!(format!(
+                "scope violation: {} not allowed by {:?}",
+                p, allowed
+            )));
+        }
+    }
     Ok(())
 }
 

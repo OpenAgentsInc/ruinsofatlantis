@@ -18,8 +18,9 @@ serde_yaml = "0.9"
 wishcraft_openai = { version = "0.1.0", path = "../crates/wishcraft_openai" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
 dirs = "5"
+globset = "0.4"
+hex = "0.4.3"
 sha2 = "0.10.9"
 chrono = "0.4.42"
 tempfile = "3.23.0"
 blake3 = "1.8.2"
-hex = "0.4.3"
