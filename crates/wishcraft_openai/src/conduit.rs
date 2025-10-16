@@ -11,6 +11,19 @@ impl OpenAIConduit {
     }
 }
 
+fn codex_base_instructions_for_model(model: &str) -> &'static str {
+    // Mirror codex-rs: gpt-5-codex and codex-* use the GPT_5_CODEX prompt; others use prompt.md
+    const PROMPT_BASE: &str =
+        include_str!("../../../third_party/openai-codex/codex-rs/core/prompt.md");
+    const PROMPT_G5_CODEX: &str =
+        include_str!("../../../third_party/openai-codex/codex-rs/core/gpt_5_codex_prompt.md");
+    if model.starts_with("gpt-5-codex") || model.starts_with("codex-") {
+        PROMPT_G5_CODEX
+    } else {
+        PROMPT_BASE
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct PlanInput {
     pub repo: String,
@@ -85,16 +98,25 @@ impl ConduitExec for OpenAIConduit {
             });
         }
 
-        // Commit mode: call ChatGPT backend /codex using Responses wire (`/responses`).
+        // Commit mode: Use Responses API payload shape exactly like codex-rs
+        let instructions = codex_base_instructions_for_model(&self.client.cfg.model);
+        let input_items = vec![serde_json::json!({
+            "type": "message",
+            "role": "user",
+            "content": [ {"type": "input_text", "text": prompt } ]
+        })];
+        let tools_json: Vec<serde_json::Value> = vec![]; // no tools for planning text output
         let body = serde_json::json!({
             "model": self.client.cfg.model,
-            "input": [
-                {"role":"system","content":"You are a cautious code planner."},
-                {"role":"user","content": prompt}
-            ],
-            "temperature": self.client.cfg.temperature.unwrap_or(0.2),
+            "instructions": instructions,
+            "input": input_items,
+            "tools": tools_json,
+            "tool_choice": "auto",
+            "parallel_tool_calls": false,
             "store": false,
-            "stream": true
+            "stream": true,
+            "include": [],
+            // omit prompt_cache_key/text fields for now
         });
         let resp = match self.client.chatgpt_codex_post(body.clone()).await {
             Ok(v) => v,
@@ -102,12 +124,20 @@ impl ConduitExec for OpenAIConduit {
                 let msg = e.to_string();
                 if msg.contains("Instructions are required") || msg.contains("Not Found") {
                     // Fallback to Chat Completions wire
+                    let tools = serde_json::json!([
+                      {"type":"function","function":{
+                        "name":"plan",
+                        "description":"Propose a step-by-step plan and acceptance checks for the requested objective.",
+                        "parameters": {"type":"object","properties":{},"additionalProperties": true}
+                      }}
+                    ]);
                     let chat_body = serde_json::json!({
                         "model": self.client.cfg.model,
                         "messages": [
                             {"role":"system","content":"You are a cautious code planner."},
                             {"role":"user","content": prompt}
                         ],
+                        "tools": tools,
                         "stream": true
                     });
                     self.client.chatgpt_codex_post_chat(chat_body).await?

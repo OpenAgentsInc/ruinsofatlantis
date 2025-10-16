@@ -121,6 +121,14 @@ impl OpenAIClient {
         let mut tried_refresh = false;
         loop {
             attempts += 1;
+            eprintln!(
+                "[wishcraft_openai] POST {}",
+                if attempts == 1 {
+                    &url_primary
+                } else {
+                    &url_fallback
+                }
+            );
             let res = self
                 .http
                 .post(if attempts == 1 {
@@ -144,27 +152,72 @@ impl OpenAIClient {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
                     return Ok(v);
                 }
-                // Fallback: parse as SSE transcript. Take the last data: line and parse JSON.
-                let last_json = text
-                    .lines()
-                    .filter_map(|line| {
-                        let l = line.trim_start();
-                        if let Some(rest) = l.strip_prefix("data: ") {
-                            Some(rest)
-                        } else {
-                            None
+                // Fallback: parse as SSE transcript. Accumulate output_text and usage/model from events.
+                let mut out_text = String::new();
+                let mut model: Option<String> = None;
+                let mut usage: Option<Value> = None;
+                for line in text.lines() {
+                    let l = line.trim_start();
+                    if !l.starts_with("data: ") {
+                        continue;
+                    }
+                    let payload = &l[6..];
+                    if payload == "[DONE]" {
+                        continue;
+                    }
+                    let Ok(mut ev): Result<Value, _> = serde_json::from_str(payload) else {
+                        continue;
+                    };
+                    if let Some(kind) = ev.get("type").and_then(|v| v.as_str()) {
+                        match kind {
+                            "response.delta" => {
+                                if let Some(delta) = ev.get("delta").and_then(|d| d.as_str()) {
+                                    out_text.push_str(delta);
+                                }
+                            }
+                            "response.output_item.done" => {
+                                if let Some(item) = ev.get("item") {
+                                    if item.get("type").and_then(|t| t.as_str()) == Some("message")
+                                    {
+                                        if let Some(contents) =
+                                            item.get("content").and_then(|c| c.as_array())
+                                        {
+                                            for c in contents {
+                                                if c.get("type").and_then(|t| t.as_str())
+                                                    == Some("output_text")
+                                                {
+                                                    if let Some(t) =
+                                                        c.get("text").and_then(|s| s.as_str())
+                                                    {
+                                                        out_text.push_str(t);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            "response.completed" => {
+                                if let Some(resp) = ev.get("response") {
+                                    model = resp
+                                        .get("model")
+                                        .and_then(|m| m.as_str())
+                                        .map(|s| s.to_string());
+                                    usage = resp.get("usage").cloned();
+                                }
+                            }
+                            _ => {}
                         }
-                    })
-                    .filter(|s| !s.eq(&"[DONE]"))
-                    .last()
-                    .ok_or_else(|| OpenAIError::Decode("empty SSE".into()))?;
-                let v: Value = serde_json::from_str(last_json)
-                    .map_err(|e| OpenAIError::Decode(format!("sse parse: {e}")))?;
-                // If wrapped as {"response": {...}}, unwrap to the response object to match Responses shape.
-                if let Some(r) = v.get("response").cloned() {
-                    return Ok(r);
+                    }
                 }
-                return Ok(v);
+                let mut root = serde_json::json!({ "output_text": out_text });
+                if let Some(m) = model {
+                    root["model"] = Value::String(m);
+                }
+                if let Some(u) = usage {
+                    root["usage"] = u;
+                }
+                return Ok(root);
             } else if status.as_u16() == 401 || status.as_u16() == 403 {
                 if !tried_refresh {
                     if let Some(rt) = refresh_token_opt.clone() {
@@ -275,6 +328,7 @@ impl OpenAIClient {
         let mut tried_refresh = false;
         loop {
             attempts += 1;
+            eprintln!("[wishcraft_openai] POST {} (chat)", &url);
             let res = self
                 .http
                 .post(&url)
