@@ -86,13 +86,22 @@ impl ConduitExec for OpenAIConduit {
         }
 
         // Commit mode: call ChatGPT backend /codex using Chat Completions-like payload
+        // Minimal tools array to mirror Codex tools presence (function tool)
+        let tools = serde_json::json!([
+          {"type":"function","function":{
+            "name":"plan",
+            "description":"Propose a step-by-step plan and acceptance checks for the requested objective.",
+            "parameters": {"type":"object","properties":{},"additionalProperties": true}
+          }}
+        ]);
         let body = serde_json::json!({
             "model": self.client.cfg.model,
             "messages": [
                 {"role":"system","content":"You are a cautious code planner."},
                 {"role":"user","content": prompt}
             ],
-            "stream": false
+            "tools": tools,
+            "stream": true
         });
         let resp = self.client.chatgpt_codex_post(body).await?;
         let (steps, notes, model, tokens) = parse_chatgpt_plan(&resp)?;

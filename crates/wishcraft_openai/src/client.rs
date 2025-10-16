@@ -1,6 +1,6 @@
 use crate::config::OpenAIConfig;
 use base64::Engine as _;
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
@@ -63,6 +63,7 @@ impl OpenAIClient {
             AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
         );
+        headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
         headers.insert(
             HeaderName::from_static("chatgpt-account-id"),
             HeaderValue::from_str(&account_id).unwrap(),
