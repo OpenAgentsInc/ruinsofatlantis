@@ -115,3 +115,5 @@ Runtime Flow.
 
 Telemetry.
 - Track Time‑to‑First‑Impact, Overheat Rate, Rollback Frequency, Template Reuse.
+
+See also: `docs/gdd/11-technical/wishcrafting-conduits.md` for the Conduits (Wish Enablement Layer) specification and registry model.

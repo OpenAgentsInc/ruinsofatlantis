@@ -46,6 +46,17 @@ enum WishCmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Conduit registry utilities
+    Conduits {
+        #[command(subcommand)]
+        cmd: ConduitCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConduitCmd {
+    /// List available conduits from data/conduits/registry.yaml
+    List,
 }
 
 fn run(cmd: &mut Command) -> Result<()> {
@@ -517,22 +528,30 @@ fn wish_read(file: &PathBuf) -> Result<wishcraft::Wish> {
     Ok(w)
 }
 
-struct AllowAll;
-impl wishcraft::GenieRegistry for AllowAll {
-    fn get(&self, id: &str) -> Option<wishcraft::GenieCapability> {
-        Some(wishcraft::GenieCapability {
-            id: id.to_string(),
-            persona: wishcraft::Persona::Literalist,
-            allowed: true,
-        })
+struct YamlRegistry {
+    list: Vec<wishcraft::conduit::ConduitDescriptor>,
+}
+impl wishcraft::conduit::ConduitRegistry for YamlRegistry {
+    fn get(&self, id: &str) -> Option<wishcraft::conduit::ConduitDescriptor> {
+        self.list.iter().find(|d| d.id == id).cloned()
     }
+}
+
+fn load_conduits_registry() -> Result<YamlRegistry> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let path = root.join("data/conduits/registry.yaml");
+    let txt = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let list: Vec<wishcraft::conduit::ConduitDescriptor> =
+        serde_yaml::from_str(&txt).with_context(|| "parse registry yaml")?;
+    Ok(YamlRegistry { list })
 }
 
 fn wish_cmd(cmd: WishCmd) -> Result<()> {
     match cmd {
         WishCmd::Lint { file } => {
             let w = wish_read(&file)?;
-            let rep = wishcraft::lint_wish(&w, &AllowAll);
+            let reg = load_conduits_registry()?;
+            let rep = wishcraft::lint_wish(&w, &reg);
             if !rep.errors.is_empty() {
                 eprintln!("errors:");
                 for e in &rep.errors {
@@ -576,5 +595,14 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
             }
             Ok(())
         }
+        WishCmd::Conduits { cmd } => match cmd {
+            ConduitCmd::List => {
+                let reg = load_conduits_registry()?;
+                for d in reg.list.iter() {
+                    println!("{}\t{}", d.id, d.label);
+                }
+                Ok(())
+            }
+        },
     }
 }

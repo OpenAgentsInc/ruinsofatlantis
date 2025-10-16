@@ -1,0 +1,50 @@
+- id: "openai.codex.v2025.plan"
+  label: "OpenAI Codex (Plan Builder)"
+  disposition: Literalist
+  domains: [Code]
+  scopes:
+    - repo: "ruinsofatlantis"
+      paths: ["**"]
+      actions: ["plan"]
+  cost_profile:
+    tokens_per_call: "~3k"
+    rate_per_min: 20
+  risk_class: Medium
+  determinism: Stochastic
+  latency_class: Short
+  permissions: ["code.plan"]
+  limits:
+    per_wish_calls: 10
+    per_day_calls: 200
+  audit_fields: ["prompt_hash", "model", "tokens_used"]
+
+- id: "openai.codex.v2025.apply"
+  label: "OpenAI Codex (Apply Patch)"
+  disposition: Maximizer
+  domains: [Code]
+  scopes:
+    - repo: "ruinsofatlantis"
+      actions: ["open_pr"]
+  risk_class: High
+  determinism: Stochastic
+  latency_class: Short
+  permissions: ["code.diff", "code.open_pr"]
+  limits:
+    per_wish_calls: 3
+  audit_fields: ["diff_hash", "pr_url", "model"]
+
+- id: "worldsmith.place"
+  label: "Worldsmithing Placement"
+  disposition: Literalist
+  domains: [WorldAuthoring]
+  scopes:
+    - zone: "*"
+      actions: ["place", "remove"]
+  risk_class: Low
+  determinism: Deterministic
+  latency_class: Instant
+  permissions: ["place", "remove"]
+  limits:
+    per_wish_entities: 500
+  audit_fields: ["placements_count"]
+

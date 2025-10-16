@@ -1,4 +1,4 @@
-use crate::{GenieRegistry, schema::Wish};
+use crate::{conduit::ConduitRegistry, schema::Wish};
 
 #[derive(Debug, Default, Clone)]
 pub struct LintReport {
@@ -12,7 +12,7 @@ impl LintReport {
     }
 }
 
-pub fn lint_wish(w: &Wish, registry: &dyn GenieRegistry) -> LintReport {
+pub fn lint_wish(w: &Wish, registry: &dyn ConduitRegistry) -> LintReport {
     let mut r = LintReport::default();
 
     if w.objective.trim().is_empty() {
@@ -27,8 +27,9 @@ pub fn lint_wish(w: &Wish, registry: &dyn GenieRegistry) -> LintReport {
         r.warnings.push("no invariants provided".into());
     }
     for t in &w.tools {
-        if !registry.allow_tool(t) {
-            r.errors.push(format!("tool not allowed or unknown: {}", t));
+        if !registry.allow(t) {
+            r.errors
+                .push(format!("conduit missing or disallowed: {}", t));
         }
     }
     // heuristic: warn on ambiguous pronouns in the objective

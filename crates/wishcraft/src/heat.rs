@@ -1,3 +1,4 @@
+use crate::conduit::{ConduitRegistry, Determinism, Disposition, RiskClass};
 use crate::{schema::Wish, score::score_wish};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,4 +68,34 @@ pub fn estimate_heat(w: &Wish, novelty: f32) -> HeatBreakdown {
         clarity_penalty,
         chain_len_factor,
     }
+}
+
+pub fn estimate_heat_with_conduits(
+    w: &Wish,
+    novelty: f32,
+    registry: &dyn ConduitRegistry,
+) -> HeatBreakdown {
+    let mut hb = estimate_heat(w, novelty);
+    let mut factor = 1.0f32;
+    for id in &w.tools {
+        if let Some(desc) = registry.get(id) {
+            let risk = match desc.risk_class {
+                RiskClass::Low => 1.0,
+                RiskClass::Medium => 1.15,
+                RiskClass::High => 1.3,
+            };
+            let det = match desc.determinism {
+                Determinism::Deterministic => 1.0,
+                Determinism::Mockable => 1.0,
+                Determinism::Stochastic => 1.2,
+            };
+            let disp = match desc.disposition {
+                Disposition::Maximizer => 1.1,
+                _ => 1.0,
+            };
+            factor *= risk * det * disp;
+        }
+    }
+    hb.total *= factor;
+    hb
 }

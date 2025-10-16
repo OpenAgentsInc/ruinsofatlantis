@@ -1,16 +1,21 @@
-use wishcraft::{
-    estimate_heat, lint_wish,
-    schema::{Budget, Scope, Wish},
-    score_wish,
-};
+use wishcraft::{Budget, Scope, Wish, estimate_heat, lint_wish, score_wish};
 
 struct AllowAll;
-impl wishcraft::GenieRegistry for AllowAll {
-    fn get(&self, id: &str) -> Option<wishcraft::GenieCapability> {
-        Some(wishcraft::GenieCapability {
+impl wishcraft::conduit::ConduitRegistry for AllowAll {
+    fn get(&self, id: &str) -> Option<wishcraft::conduit::ConduitDescriptor> {
+        Some(wishcraft::conduit::ConduitDescriptor {
             id: id.to_string(),
-            persona: wishcraft::Persona::Literalist,
-            allowed: true,
+            label: id.to_string(),
+            disposition: wishcraft::conduit::Disposition::Literalist,
+            domains: vec![],
+            scopes: vec![],
+            cost_profile: Default::default(),
+            risk_class: wishcraft::conduit::RiskClass::Low,
+            determinism: wishcraft::conduit::Determinism::Deterministic,
+            latency_class: wishcraft::conduit::Latency::Instant,
+            permissions: vec![],
+            limits: Default::default(),
+            audit_fields: vec![],
         })
     }
 }
