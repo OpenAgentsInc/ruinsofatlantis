@@ -3,6 +3,12 @@
 Overview
 - Wishcrafting is the design, binding, simulation, and execution of high‑impact changes to the world using structured “wishes.” It bridges fantasy genie lore with a real agentic planning loop: intention → constraints → shadow‑run → adjudication → commit → audit.
 - Identity: Wishcrafters craft safe, precise, rules‑lawyerable wishes. You still “cast” a wish at the end, but the gameplay is in specification and validation.
+ - Name: Wishcrafting (profession); practitioners are Wishcrafters.
+
+Design Tenets
+- Promises, not spells: wishes are structured promises made enforceable by bindings and audits.
+- Monkey’s Paw as gameplay: ambiguity and side‑effects are story engines you can predict and manage.
+- Same scaffolding, two layers: schema, court, and ledger mirror the real agentic toolchain powering development.
 
 Core Loop (Prompt → Plan → Safe Commit)
 - Intention: author a natural‑language wish.
@@ -19,17 +25,18 @@ Safety & Constraints (Elegant Nerfs)
 - Budgeted Reach: wishes consume Chrono‑Sand (reagent), Genie Slots (concurrency), and Binding Seals (permissions).
 - Reversibility Score: big wishes must include a rollback plan; low reversibility raises scrutiny and heat.
 
+Scope Tiers & Cadence
+- Micro: personal/party, local cell; frequent (daily).
+- Meso: zone/sub‑region; occasional (weekly).
+- Macro: region/server‑level; rare, scheduled events (monthly/seasonal).
+- Each tier sets caps on budgets, court thresholds, and max Heat deltas.
+
 Progression Tree (Tooling Roadmap)
 - Clarity (prompt engineering): Concrete Speech, Guarded Negations, Schema Casting (semi‑structured Wish Schema).
 - Reach (tool access): unlock Weather/Trade/Cartography/Logistics; Choral Wishes (co‑op orchestration); Realm Hooks.
 - Stability (simulation/safety): faster Shadow‑Runs, Invariance Lattices (templates), Echo Dampeners.
 - Jurisprudence (governance/negotiation): Wish Court Advocate, Genie Rapport, Public Mandate (petition signatures reduce heat).
 - Capstones: Wishwright (multi‑stage reforms), Paradox Auditor (detect/patch ripples), Grand Compiler (turn lore into wish templates).
-
-Synergies
-- Worldsmithing: request temporary scaffolding (ghost towns, rehearsal dungeons) to test a wish; Worldsmiths craft Binding Seals.
-- Dragonriding: test aerial logistics and storm routes during Shadow‑Runs to earn heat discounts.
-- Blacksmithing/Alchemy: supply Chrono‑Sand, Runic Inks, Echo Dampeners; receive logistics wishes that optimize their loops.
 
 Multiplayer
 - Petitions & Signatures: post wishes publicly; backers contribute resources/seals or cooling rituals.
@@ -60,7 +67,7 @@ Wish Schema (Lightweight)
 ```
 wish:
   title: "Stabilize the Western Sea Lanes"
-  objective: "Reduce pirate attacks by 40% over 14 days without increasing naval casualties."
+  objective: "Reduce pirate attacks by 40% over 14 days without increasing naval or civilian casualties."
   scope:
     region: "Western Sea"
     duration_days: 14
@@ -79,7 +86,7 @@ wish:
     - "Diplomacy.Broker"
   plan:
     - "Map low-risk corridors using last 90d incident data"
-    - "Coordinate 6 convoy windows; hire Dragonriders as scouts"
+    - "Coordinate 6 convoy windows; hire airborne scouts"
     - "Broker ceasefire with Corsair factions via bonded oaths"
   safety_tests:
     - "Sim pirate displacement effects"
@@ -93,10 +100,24 @@ Economy & Social Systems
 - Insurance: Heat Insurance funds cooling rituals on overheats.
 - Open Templates: high‑quality schemas become Wishcards; owning one reduces commit cost.
 
-UX Touches
-- Before/After Diff Cards for predicted vs. actual world diffs.
-- Ambiguity Meter with live feedback; perks reduce it.
-- Genie Personas (literalist, maximizer, egalitarian) matter to interpretation.
+UX Pillars
+- Ambiguity Meter: live feedback on risky phrasing; shows which clauses reduce drift.
+- Before/After Diff Cards: predicted vs. actual world diffs post‑commit.
+- Persona‑Aware Genie Picker: match genie temperament to wish type; expose risk tradeoffs.
+
+Telemetry & KPIs
+- Time‑to‑First‑Impact (new Wishcrafter → first successful micro wish).
+- Average Clarity Score and Ambiguity Meter dwell time.
+- Heat generated per commit by tier; Overheat Rate.
+- Rollback Frequency and Amendment Acceptance Rate.
+- Template Reuse Rate (Wishcard adoption).
+- Choral Participation (unique participants; retention across events).
+
+Live‑Ops & Tuning Hooks
+- Anchor Rune Rotation to adjust invariants seasonally.
+- Heat Decay Curves per global/region to control cadence.
+- Court Strictness thresholds per tier to manage throughput.
+- Echo Tables to vary “fun failure” families over time.
 
 Open Questions (Design Meditations)
 - Anchor Invariants: what must never be wishable?
@@ -109,8 +130,24 @@ Open Questions (Design Meditations)
 - Risk & Ethics: clear permission scopes; guardrails vs. lawful‑but‑awful griefing.
 
 Scope (V1 Slice)
-- Petition Board + Schema Linting limited to micro‑scope wishes in a single region.
+- Petition Board + Schema Linting, limited to micro‑scope wishes in one region.
 - Shadow‑Run Diff Viewer (map diff + NPC routine deltas).
-- Heat Meter + two Cooling Rituals.
-- One Choral Wish Raid to stabilize a harbor via logistics, weather, and diplomacy.
+- Heat Meter + 2 Cooling Rituals.
+- One Choral Wish Event to stabilize a harbor via logistics, weather, and diplomacy.
 
+Optional Tuning Knobs (Ready for Balancing)
+```
+Heat = Base * ScopeFactor * NoveltyFactor * SpeedFactor * ReversibilityPenalty * ClarityPenalty * ChainLengthFactor - Mitigations
+
+ScopeFactor: Micro 0.5, Meso 1.0, Macro 2.0
+NoveltyFactor: 0.8…1.5 (vetted templates lower it)
+SpeedFactor: 1.0 (normal) → 1.4 (instant)
+ReversibilityPenalty: 0.8 (strong rollback) → 1.3 (weak)
+ClarityPenalty: 0.8 (high clarity) → 1.4 (ambiguous)
+Mitigations: cooling rituals, public mandate, genie match bonus
+```
+
+Court Thresholds (Example)
+- Micro: Clarity ≥ 70, Safety ≥ 60, Reversibility ≥ 60
+- Meso: Clarity ≥ 75, Safety ≥ 70, Reversibility ≥ 70
+- Macro: Clarity ≥ 85, Safety ≥ 85, Reversibility ≥ 80 + petition quorum
