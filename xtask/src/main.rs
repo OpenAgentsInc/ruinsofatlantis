@@ -51,12 +51,33 @@ enum WishCmd {
         #[command(subcommand)]
         cmd: ConduitCmd,
     },
+    /// OpenAI Codex helpers
+    Codex {
+        #[command(subcommand)]
+        cmd: CodexCmd,
+    },
 }
 
 #[derive(Subcommand)]
 enum ConduitCmd {
     /// List available conduits from data/conduits/registry.yaml
     List,
+}
+
+#[derive(Subcommand)]
+enum CodexCmd {
+    /// Build a plan via the OpenAI planning conduit (ShadowRun by default)
+    Plan {
+        #[arg(long)]
+        file: PathBuf,
+        #[arg(long, default_value = "wizard_woods")]
+        region: String,
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// If set, perform a live API call (requires OPENAI_API_KEY). Otherwise ShadowRun stub.
+        #[arg(long, default_value_t = false)]
+        live: bool,
+    },
 }
 
 fn run(cmd: &mut Command) -> Result<()> {
@@ -600,6 +621,55 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 let reg = load_conduits_registry()?;
                 for d in reg.list.iter() {
                     println!("{}\t{}", d.id, d.label);
+                }
+                Ok(())
+            }
+        },
+        WishCmd::Codex { cmd } => match cmd {
+            CodexCmd::Plan {
+                file,
+                region: _region,
+                out,
+                live,
+            } => {
+                let w = wish_read(&file)?;
+                // Build PlanInput from wish
+                let input = wishcraft_openai::conduit::PlanInput {
+                    repo: "ruinsofatlantis".to_string(),
+                    paths: vec!["**".to_string()],
+                    objective: w.objective.clone(),
+                    invariants: w.invariants.clone(),
+                    context_snippets: vec![],
+                };
+                let cfg = wishcraft_openai::config::OpenAIConfig::from_env_defaults()
+                    .unwrap_or_else(|_| wishcraft_openai::config::OpenAIConfig {
+                        base_url: "https://api.openai.com/v1".into(),
+                        api_key: "no-key".into(),
+                        organization: None,
+                        project: None,
+                        model: std::env::var("OPENAI_MODEL")
+                            .unwrap_or_else(|_| "gpt-4o-mini".into()),
+                        temperature: Some(0.2),
+                        timeout_secs: 30,
+                        azure: false,
+                        azure_api_version: None,
+                    });
+                let client = wishcraft_openai::client::OpenAIClient::new(cfg);
+                let conduit = wishcraft_openai::OpenAIConduit::new(client);
+                let mode = if live {
+                    wishcraft::conduit::ExecMode::Commit
+                } else {
+                    wishcraft::conduit::ExecMode::ShadowRun
+                };
+                let rt = tokio::runtime::Runtime::new()?;
+                let out_val = rt.block_on(async move {
+                    conduit.exec("openai.codex.v2025.plan", input, mode).await
+                })?;
+                let s = serde_json::to_string_pretty(&out_val)?;
+                if let Some(path) = out {
+                    fs::write(path, s)?;
+                } else {
+                    println!("{}", s);
                 }
                 Ok(())
             }

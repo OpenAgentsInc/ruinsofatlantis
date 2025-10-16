@@ -15,3 +15,5 @@ naga = { version = "26.0.0", features = ["wgsl-in"] }
 walkdir = "2.5.0"
 wishcraft = { version = "0.1.0", path = "../crates/wishcraft" }
 serde_yaml = "0.9"
+wishcraft_openai = { version = "0.1.0", path = "../crates/wishcraft_openai" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

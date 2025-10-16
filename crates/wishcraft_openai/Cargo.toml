@@ -1,0 +1,17 @@
+[package]
+name = "wishcraft_openai"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[features]
+default = ["responses"]
+responses = []
+chat = []
+azure = []
+stream = []
+
+[dependencies]
+async-trait = "0.1"
+wishcraft = { path = "../wishcraft" }
+
