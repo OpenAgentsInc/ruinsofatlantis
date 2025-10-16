@@ -1346,7 +1346,24 @@ fn audit_and_maybe_revert(
             violations.push(p.to_string());
         }
     }
-    if violations.is_empty() {
+    // Detect deletions inside the allowed scope and block them by policy
+    let out_del = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["diff", "--name-status", base_sha, "HEAD"])
+        .output()?;
+    let mut delete_violations: Vec<String> = Vec::new();
+    if out_del.status.success() {
+        let s = String::from_utf8_lossy(&out_del.stdout);
+        for line in s.lines() {
+            if let Some(rest) = line.strip_prefix('D') {
+                let path = rest.trim().trim_start_matches('\t');
+                if set.is_match(path) {
+                    delete_violations.push(path.to_string());
+                }
+            }
+        }
+    }
+    if violations.is_empty() && delete_violations.is_empty() {
         return Ok(());
     }
     // Revert to base_sha
@@ -1357,10 +1374,19 @@ fn audit_and_maybe_revert(
     if !reset.success() {
         anyhow::bail!("git reset --hard failed");
     }
-    eprintln!(
-        "[codex-run] scope.violation: reverted files outside scope: {:?}",
-        violations
-    );
+    if !violations.is_empty() {
+        eprintln!(
+            "[codex-run] scope.violation: reverted files outside scope: {:?}",
+            violations
+        );
+    }
+    if !delete_violations.is_empty() {
+        eprintln!(
+            "[codex-run] delete.policy.violation: reverted deletions under allowed scope: {:?}",
+            delete_violations
+        );
+        anyhow::bail!("delete policy violation under allowed scope");
+    }
     Ok(())
 }
 

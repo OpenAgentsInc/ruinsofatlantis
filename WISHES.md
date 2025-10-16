@@ -8,4 +8,6 @@
 
 - [ ] Convert the SRD PDF fully to Markdown in appropriate files/folders. All text must be reproduced verbatim with specific page numbers cited. (This work has already begun; you should review what's already done in docs/srd/) <!-- wish:id="W-20251016-173223-2f49" -->
 
+- [ ]  <!-- wish:id="W-20251016-201253-e3b0" -->
+
 ## Completed
