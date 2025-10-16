@@ -51,6 +51,9 @@ This section is split for maintainability. Start with the overview, then see foc
 - docs/gdd/02-mechanics/monetization.md
 - docs/gdd/02-mechanics/player-experience-targets.md
   - Repairs are environment events the sim can schedule (restore object integrity, clear hazards), not combat stats. Policies can choose to prioritize repairs during lulls or after encounters.
+  
+  Additional focused topics:
+  - docs/gdd/02-mechanics/wishcrafting.md
 
 ### Dynamic World Events & World Bosses
 
