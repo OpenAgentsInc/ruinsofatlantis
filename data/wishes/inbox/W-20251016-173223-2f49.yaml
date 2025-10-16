@@ -1,0 +1,26 @@
+title: Wish W-20251016-173223-2f49
+objective: Convert the SRD PDF fully to Markdown in appropriate files/folders. All text must be reproduced verbatim with specific page numbers cited. (This work has already begun; you should review what's already done in docs/srd/)
+scope:
+  region: repo
+  duration_days: 7
+invariants:
+- Keep build green
+budget:
+  chrono_sand: 1
+  genie_slots: 2
+  gold_cap: 0
+tools:
+- openai.codex.v2025.plan
+plan:
+- Plan
+- Apply
+- Test
+safety_tests:
+- Build & test
+rollback:
+- git revert
+tier: meso
+meta:
+  author_id: null
+  petition_id: null
+  created_at: null

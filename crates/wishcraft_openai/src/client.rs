@@ -2,6 +2,7 @@ use crate::config::OpenAIConfig;
 use base64::Engine as _;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
+use sha2::Digest as _;
 use std::fs;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -69,8 +70,13 @@ impl OpenAIClient {
             AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
         );
-        // ChatGPT codex backend prefers streaming responses
-        headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
+        // Choose Accept header based on requested stream mode
+        let want_stream = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(true);
+        if want_stream {
+            headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
+        } else {
+            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        }
         headers.insert(
             HeaderName::from_static("chatgpt-account-id"),
             HeaderValue::from_str(&account_id).unwrap(),
@@ -129,6 +135,49 @@ impl OpenAIClient {
                     &url_fallback
                 }
             );
+            // Log request shape for visibility (without dumping full prompts)
+            if let Some(model) = body.get("model").and_then(|m| m.as_str()) {
+                let instr_len = body
+                    .get("instructions")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.len())
+                    .unwrap_or(0);
+                let user_len = body
+                    .get("input")
+                    .and_then(|i| i.as_array())
+                    .and_then(|arr| arr.get(0))
+                    .and_then(|v| v.get("content"))
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.get(0))
+                    .and_then(|v| v.get("text"))
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.len())
+                    .unwrap_or(0);
+                // Best-effort prompt hash: hash of instructions + first user text
+                let mut hasher = sha2::Sha256::new();
+                if let Some(ins) = body.get("instructions").and_then(|v| v.as_str()) {
+                    use sha2::Digest;
+                    hasher.update(ins.as_bytes());
+                }
+                if let Some(txt) = body
+                    .get("input")
+                    .and_then(|i| i.as_array())
+                    .and_then(|arr| arr.get(0))
+                    .and_then(|v| v.get("content"))
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.get(0))
+                    .and_then(|v| v.get("text"))
+                    .and_then(|t| t.as_str())
+                {
+                    use sha2::Digest;
+                    hasher.update(txt.as_bytes());
+                }
+                let prompt_hash = format!("{:x}", hasher.finalize());
+                eprintln!(
+                    "[wishcraft_openai] model={} instr_len={} user_len={} prompt_hash={}",
+                    model, instr_len, user_len, prompt_hash
+                );
+            }
             let res = self
                 .http
                 .post(if attempts == 1 {
@@ -143,16 +192,22 @@ impl OpenAIClient {
                 .map_err(|e| OpenAIError::Network(e.to_string()))?;
             let status = res.status();
             let hdrs = res.headers().clone();
-            let text = res
-                .text()
+            // Read raw bytes to avoid decode issues; fall back to lossy string
+            let bytes = res
+                .bytes()
                 .await
-                .map_err(|e| OpenAIError::Network(e.to_string()))?;
+                .map_err(|e| OpenAIError::Network(format!("bytes: {}", e)))?;
+            let text = String::from_utf8_lossy(&bytes).to_string();
             if status.is_success() {
-                // Try to parse as plain JSON first.
-                if let Ok(v) = serde_json::from_str::<Value>(&text) {
-                    return Ok(v);
+                // Non-streaming: plain JSON body expected
+                if !want_stream {
+                    if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                        return Ok(v);
+                    } else {
+                        return Err(OpenAIError::Decode("json body".into()));
+                    }
                 }
-                // Fallback: parse as SSE transcript. Accumulate output_text and usage/model from events.
+                // Streaming (SSE): parse transcript. Accumulate output_text and usage/model from events.
                 let mut out_text = String::new();
                 let mut model: Option<String> = None;
                 let mut usage: Option<Value> = None;
