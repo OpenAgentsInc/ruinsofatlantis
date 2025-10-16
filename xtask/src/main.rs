@@ -671,16 +671,17 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 };
                 let cfg = wishcraft_openai::config::OpenAIConfig::from_env_defaults()
                     .unwrap_or_else(|_| wishcraft_openai::config::OpenAIConfig {
-                        base_url: "https://api.openai.com/v1".into(),
-                        api_key: "no-key".into(),
-                        organization: None,
-                        project: None,
+                        chatgpt_base_url: std::env::var("CHATGPT_BASE_URL")
+                            .unwrap_or_else(|_| "https://chatgpt.com/backend-api".into()),
+                        codex_home: std::env::var("CODEX_HOME")
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_else(|_| {
+                                dirs::home_dir().unwrap_or_default().join(".codex")
+                            }),
                         model: std::env::var("OPENAI_MODEL")
                             .unwrap_or_else(|_| "gpt-4o-mini".into()),
                         temperature: Some(0.2),
                         timeout_secs: 30,
-                        azure: false,
-                        azure_api_version: None,
                     });
                 let client = wishcraft_openai::client::OpenAIClient::new(cfg);
                 let conduit = wishcraft_openai::OpenAIConduit::new(client);
