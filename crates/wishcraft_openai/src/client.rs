@@ -54,8 +54,9 @@ impl OpenAIClient {
     }
 
     pub async fn chatgpt_codex_post(&self, body: Value) -> Result<Value, OpenAIError> {
-        let (access_token, account_id) = load_chatgpt_tokens(self.cfg.codex_home.clone())
-            .map_err(|e| OpenAIError::Auth(format!("auth load: {e}")))?;
+        let (mut access_token, mut account_id, refresh_token_opt) =
+            load_chatgpt_tokens(self.cfg.codex_home.clone())
+                .map_err(|e| OpenAIError::Auth(format!("auth load: {e}")))?;
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
@@ -68,6 +69,7 @@ impl OpenAIClient {
         );
         let url = format!("{}/codex", self.cfg.chatgpt_base_url.trim_end_matches('/'));
         let mut attempts = 0u32;
+        let mut tried_refresh = false;
         loop {
             attempts += 1;
             let res = self
@@ -89,6 +91,32 @@ impl OpenAIClient {
                     serde_json::from_str(&text).map_err(|e| OpenAIError::Decode(e.to_string()))?;
                 return Ok(v);
             } else if status.as_u16() == 401 || status.as_u16() == 403 {
+                if !tried_refresh {
+                    if let Some(rt) = refresh_token_opt.clone() {
+                        if let Err(e) =
+                            refresh_chatgpt_tokens(self.cfg.codex_home.clone(), &self.http, &rt)
+                                .await
+                        {
+                            return Err(OpenAIError::Auth(format!("refresh failed: {e}")));
+                        }
+                        if let Ok((new_access, new_acc, _)) =
+                            load_chatgpt_tokens(self.cfg.codex_home.clone())
+                        {
+                            access_token = new_access;
+                            account_id = new_acc;
+                            headers.insert(
+                                AUTHORIZATION,
+                                HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
+                            );
+                            headers.insert(
+                                HeaderName::from_static("chatgpt-account-id"),
+                                HeaderValue::from_str(&account_id).unwrap(),
+                            );
+                        }
+                        tried_refresh = true;
+                        continue;
+                    }
+                }
                 return Err(OpenAIError::Auth(format!("{}", status)));
             } else if status.as_u16() == 429 && attempts <= self.max_retries {
                 let mut delay_ms = self.backoff_millis;
@@ -120,7 +148,7 @@ impl OpenAIClient {
 
 use reqwest::header::HeaderName;
 
-fn load_chatgpt_tokens(codex_home: PathBuf) -> std::io::Result<(String, String)> {
+fn load_chatgpt_tokens(codex_home: PathBuf) -> std::io::Result<(String, String, Option<String>)> {
     let auth_path = codex_home.join("auth.json");
     let raw = fs::read_to_string(&auth_path)?;
     let v: serde_json::Value = serde_json::from_str(&raw)
@@ -141,7 +169,11 @@ fn load_chatgpt_tokens(codex_home: PathBuf) -> std::io::Result<(String, String)>
         .ok_or(std::io::Error::other(
             "missing account_id in tokens or id_token",
         ))?;
-    Ok((access_token, account_id))
+    let refresh_token = tokens
+        .get("refresh_token")
+        .and_then(|s| s.as_str())
+        .map(|s| s.to_string());
+    Ok((access_token, account_id, refresh_token))
 }
 
 fn decode_account_from_id_token(id_token_opt: Option<&str>) -> Option<String> {
@@ -161,4 +193,73 @@ fn decode_account_from_id_token(id_token_opt: Option<&str>) -> Option<String> {
         }
     }
     None
+}
+
+const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+
+async fn refresh_chatgpt_tokens(
+    codex_home: PathBuf,
+    client: &reqwest::Client,
+    refresh_token: &str,
+) -> std::io::Result<()> {
+    let url = "https://auth.openai.com/oauth/token";
+    let body = serde_json::json!({
+        "client_id": CLIENT_ID,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "scope": "openid profile email"
+    });
+    let res = client
+        .post(url)
+        .header(CONTENT_TYPE, "application/json")
+        .body(body.to_string())
+        .send()
+        .await
+        .map_err(std::io::Error::other)?;
+    if !res.status().is_success() {
+        return Err(std::io::Error::other(format!(
+            "refresh status {}",
+            res.status()
+        )));
+    }
+    let v: serde_json::Value = res.json().await.map_err(std::io::Error::other)?;
+    let id_token = v
+        .get("id_token")
+        .and_then(|s| s.as_str())
+        .ok_or(std::io::Error::other("missing id_token in refresh"))?
+        .to_string();
+    let access_token = v
+        .get("access_token")
+        .and_then(|s| s.as_str())
+        .map(|s| s.to_string());
+    let new_refresh = v
+        .get("refresh_token")
+        .and_then(|s| s.as_str())
+        .map(|s| s.to_string());
+
+    let path = codex_home.join("auth.json");
+    let raw = fs::read_to_string(&path)?;
+    let mut root: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| std::io::Error::other(format!("parse auth.json: {e}")))?;
+    let tokens = root
+        .get_mut("tokens")
+        .ok_or(std::io::Error::other("missing tokens"))?;
+    if let Some(obj) = tokens.as_object_mut() {
+        obj.insert("id_token".into(), serde_json::Value::String(id_token));
+        if let Some(acc) = access_token {
+            obj.insert("access_token".into(), serde_json::Value::String(acc));
+        }
+        if let Some(rt) = new_refresh {
+            obj.insert("refresh_token".into(), serde_json::Value::String(rt));
+        }
+    }
+    // Update last_refresh to now (RFC3339)
+    let now = chrono::Utc::now().to_rfc3339();
+    root.as_object_mut()
+        .unwrap()
+        .insert("last_refresh".into(), serde_json::Value::String(now));
+    fs::write(
+        path,
+        serde_json::to_string_pretty(&root).map_err(std::io::Error::other)?,
+    )
 }
