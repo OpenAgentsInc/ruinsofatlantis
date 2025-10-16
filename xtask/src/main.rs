@@ -1126,6 +1126,9 @@ fn codex_run(
     cmd.arg("exec")
         .arg("--json")
         .arg("--full-auto")
+        .arg("--include-plan-tool")
+        .arg("-c")
+        .arg("include_apply_patch_tool=true")
         .arg("-C")
         .arg(cwd.cloned().unwrap_or(repo_root.clone()))
         .arg(wish_text)
@@ -1429,6 +1432,23 @@ fn translate_and_emit_codex_line(
     let mut data = serde_json::json!({});
     let t = v.get("type").and_then(|s| s.as_str()).unwrap_or("");
     match t {
+        // lowercase variants from codex-rs jsonl
+        "thread.started" => {
+            kind = Some("codex.session");
+            if let Some(id) = v.get("thread_id").and_then(|s| s.as_str()) {
+                data = serde_json::json!({"session_id": id});
+            }
+        }
+        "turn.completed" => {
+            kind = Some("wish.success");
+            if let Some(u) = v.get("usage") {
+                data = u.clone();
+            }
+        }
+        "turn.failed" => {
+            kind = Some("wish.failed");
+        }
+        // legacy/camelcase variants
         "ThreadStarted" => {
             kind = Some("codex.session");
             if let Some(id) = v.get("thread_id").and_then(|s| s.as_str()) {
@@ -1439,6 +1459,7 @@ fn translate_and_emit_codex_line(
             if let Some(details) = v.get("item").and_then(|i| i.get("details")) {
                 let dty = details.get("type").and_then(|s| s.as_str()).unwrap_or("");
                 match dty {
+                    "reasoning" | "agent_message" => { /* ignore chatty items */ }
                     "TodoList" => {
                         if t == "ItemStarted" {
                             kind = Some("plan.started");
