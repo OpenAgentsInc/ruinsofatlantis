@@ -1231,7 +1231,15 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     }
                     if merged_ok {
-                        let names: Vec<String> = clip_names_affecting_skin(&base);
+                        let mut names: Vec<String> = clip_names_affecting_skin(&base);
+                        if names.is_empty() {
+                            names = base.animations.keys().cloned().collect();
+                            names.sort();
+                            log::warn!(
+                                "viewer: no joint-affecting clips after merge; falling back to {} raw names",
+                                names.len()
+                            );
+                        }
                         **anim =
                             AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
                         *anims = names;
@@ -1294,7 +1302,15 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                         }
                         if merged_any {
-                            let names: Vec<String> = clip_names_affecting_skin(&base);
+                            let mut names: Vec<String> = clip_names_affecting_skin(&base);
+                            if names.is_empty() {
+                                names = base.animations.keys().cloned().collect();
+                                names.sort();
+                                log::warn!(
+                                    "viewer: no joint-affecting clips after auto-merge; falling back to {} raw names",
+                                    names.len()
+                                );
+                            }
                             **anim = AnimData::from_skinned_with_options(
                                 &base,
                                 &names,
