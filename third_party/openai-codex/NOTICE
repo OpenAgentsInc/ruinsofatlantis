@@ -1,0 +1,6 @@
+This directory vendors code from the OpenAI Codex project for reference only.
+
+Project: https://github.com/openai/codex
+License: Apache-2.0
+Vendored workspace path: third_party/openai-codex/codex-rs
+Provenance: see CODEX_VENDOR.toml for upstream commit and timestamp

@@ -99,6 +99,7 @@ fn cargo(args: &[&str]) -> Result<()> {
 
 fn ci() -> Result<()> {
     warn_hooks();
+    third_party_workspace_guard()?;
     // Enforce formatting without modifying the working tree here; the pre-commit
     // hook auto-formats and stages changes. Use --check to fail fast in CI.
     cargo(&["fmt", "--all", "--", "--check"])?;
@@ -164,6 +165,32 @@ fn ci() -> Result<()> {
         eprintln!(
             "xtask: skipping render_wgpu feature-combo checks (set RA_CHECK_RENDER_FEATURE_COMBO=1 to enable)"
         );
+    }
+    Ok(())
+}
+
+fn third_party_workspace_guard() -> Result<()> {
+    // Ensure no third_party crates are part of the workspace members
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let cargo_toml = std::fs::read_to_string(root.join("Cargo.toml"))?;
+    let mut in_members = false;
+    for line in cargo_toml.lines() {
+        let t = line.trim();
+        if t.starts_with("[workspace]") {
+            continue;
+        }
+        if t.starts_with("members") {
+            in_members = true;
+        }
+        if in_members {
+            if t.starts_with("[") && !t.starts_with("[workspace]") && !t.starts_with("members") {
+                // left the members table
+                in_members = false;
+            }
+            if t.contains("third_party/") {
+                bail!("workspace includes third_party path: {}", t);
+            }
+        }
     }
     Ok(())
 }

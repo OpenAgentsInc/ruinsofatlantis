@@ -1,0 +1,4 @@
+upstream_repo = "https://github.com/openai/codex"
+upstream_commit = "c146585cdb45e5ca219ad2677e8696e76e39826a"
+vendored_at = "2025-10-16T03:02:02Z"
+notes = "Vendored for reference only; not part of the Cargo workspace."

@@ -36,6 +36,13 @@ Current integration (recommended baseline)
   - ShadowRun returns a safe stub plan; Commit posts to `/v1/responses` using `reqwest`.
   - This keeps `wishcraft` (core) vendor‑agnostic and the dependency surface minimal.
 
+Adapter boundary (stable seam)
+- Trait: `crates/wishcraft_openai::provider::PlanProvider` defines `fn plan(&self, PlanInput, ExecMode) -> Result<PlanOutput>`.
+- Implementations:
+  - `OpenAIThinClient` (default): wraps `OpenAIConduit` and calls the OpenAI Responses API.
+  - `OpenAICodexAdapter` (future, feature‑gated): optional adapter if we reuse codex‑rs components.
+- Policy: never expose codex types or APIs outside the adapter; keep RoA code using only `PlanProvider` and Wishcraft DTOs.
+
 Optional deeper integration (later)
 1) Reuse specific codex-rs modules as libraries
    - Identify library‑grade crates (e.g., `responses-api-proxy`, provider config, retry helpers).
@@ -62,9 +69,10 @@ Policy and safety
 Dev notes
 - Upstream commit: run `git -C /Users/christopherdavid/code/codex-openai rev-parse HEAD` to record version when updating.
 - To update vendor: `rsync -a --exclude='.git' --exclude='target' --exclude='node_modules' <path>/codex-rs/ third_party/openai-codex/codex-rs/`.
+- Provenance file: `third_party/openai-codex/CODEX_VENDOR.toml` records repo URL, commit, and timestamp.
+- License/notice: `third_party/openai-codex/LICENSE` and `NOTICE` included; add THIRD_PARTY_NOTICES if we copy individual files.
 
 Next steps (optional)
 - Evaluate `codex-rs/responses-api-proxy` for JSON shapes and retry/backoff logic.
 - Add an adapter feature in `wishcraft_openai` that swaps our `client.rs` for the proxy if available.
 - Add a small bridge to push Conduit audit fields into our Wish Ledger automatically on Commit.
-
