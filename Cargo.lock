@@ -6823,6 +6823,7 @@ dependencies = [
  "anyhow",
  "clap",
  "data_runtime",
+ "dirs",
  "jsonschema",
  "naga",
  "serde",
