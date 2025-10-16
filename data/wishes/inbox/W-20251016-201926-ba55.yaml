@@ -1,0 +1,26 @@
+title: Wish W-20251016-201926-ba55
+objective: SRD Markdown conversion — letter 'B' only. Convert/verify SRD spells whose names start with 'B' under docs/srd/03-spells/spell-descriptions/B/**. Add missing pages, fix formatting and include page citations where applicable. Do NOT delete or rename any files; only add or update within this B folder. No changes outside the scoped path. Keep changes minimal, matching existing style.
+scope:
+  region: repo
+  duration_days: 7
+invariants:
+- Keep build green
+budget:
+  chrono_sand: 1
+  genie_slots: 2
+  gold_cap: 0
+tools:
+- openai.codex.v2025.plan
+plan:
+- Plan
+- Apply
+- Test
+safety_tests:
+- Build & test
+rollback:
+- git revert
+tier: meso
+meta:
+  author_id: null
+  petition_id: null
+  created_at: null

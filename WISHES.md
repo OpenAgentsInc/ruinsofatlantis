@@ -10,4 +10,6 @@
 
 - [ ]  <!-- wish:id="W-20251016-201253-e3b0" -->
 
+- [ ] SRD Markdown conversion — letter 'B' only. Convert/verify SRD spells whose names start with 'B' under docs/srd/03-spells/spell-descriptions/B/**. Add missing pages, fix formatting and include page citations where applicable. Do NOT delete or rename any files; only add or update within this B folder. No changes outside the scoped path. Keep changes minimal, matching existing style. <!-- wish:id="W-20251016-201926-ba55" -->
+
 ## Completed

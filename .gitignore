@@ -5,4 +5,6 @@
 
 docs/srd/.tmp/
 .codex
+.codex_run*.out
+.codex_report_watcher.sh
 .wish-ledger/
