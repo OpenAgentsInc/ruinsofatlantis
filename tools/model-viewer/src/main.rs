@@ -1062,7 +1062,7 @@ async fn run(cli: Cli) -> Result<()> {
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
                 // Collect only clips that affect skinned joints (skip camera/object-only tracks)
-                let names: Vec<String> = clip_names_affecting_skin(&skinned);
+                let mut names: Vec<String> = clip_names_affecting_skin(&skinned);
                 if names.is_empty() && !skinned.animations.is_empty() {
                     let sample: Vec<String> = skinned.animations.keys().cloned().take(6).collect();
                     log::warn!(
@@ -1070,6 +1070,10 @@ async fn run(cli: Cli) -> Result<()> {
                         skinned.animations.len(),
                         sample.join(", ")
                     );
+                    // Fallback: expose all raw clip names to allow manual testing
+                    names = skinned.animations.keys().cloned().collect();
+                    names.sort();
+                    log::warn!("viewer: falling back to all {} raw clip names", names.len());
                 }
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
