@@ -1,4 +1,5 @@
 use crate::config::OpenAIConfig;
+use base64::Engine as _;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::fs;
