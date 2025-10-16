@@ -550,9 +550,20 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
                 s_tracks.insert(di, sr.clone());
             }
         }
-        // Only merge clips that actually mapped at least one track
-        let mapped_count = t_tracks.len() + r_tracks.len() + s_tracks.len();
+        // Only merge clips that actually mapped at least one track; log mapping counts
+        let mapped_t = t_tracks.len();
+        let mapped_r = r_tracks.len();
+        let mapped_s = s_tracks.len();
+        let mapped_count = mapped_t + mapped_r + mapped_s;
         if mapped_count > 0 {
+            log::info!(
+                "merge: '{}' mapped tracks → T:{} R:{} S:{} (dur {:.3}s)",
+                name,
+                mapped_t,
+                mapped_r,
+                mapped_s,
+                clip.duration
+            );
             base.animations.insert(
                 name.clone(),
                 AnimClip {
