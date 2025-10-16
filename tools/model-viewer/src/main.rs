@@ -31,77 +31,9 @@ use wgpu::util::DeviceExt;
 use wgpu::{SurfaceTargetUnsafe, rwh::HasDisplayHandle, rwh::HasWindowHandle};
 use winit::{dpi::PhysicalSize, event::*, event_loop::EventLoop, window::WindowAttributes};
 
-use crate::panels::{UiVertex, build_text_quads, glyph5x7_rows};
+use crate::panels::{UiVertex, build_text_quads};
 
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct UiVertex {
-    pos: [f32; 2],
-    color: [f32; 4],
-}
-
-fn build_text_quads(
-    lines: &[String],
-    start_px: (f32, f32),
-    surface_px: (f32, f32),
-    out: &mut Vec<UiVertex>,
-    color: [f32; 4],
-    cell: f32,
-) {
-    let (sx, sy) = start_px;
-    let (sw, sh) = surface_px;
-    let glyph_w = 5.0 * cell;
-    let glyph_h = 7.0 * cell;
-    let line_gap = cell * 2.0;
-    for (li, line) in lines.iter().enumerate() {
-        let y_line = sy + li as f32 * (glyph_h + line_gap);
-        let mut x_cursor = sx;
-        for ch in line.chars() {
-            let rows = glyph5x7_rows(ch);
-            for (ry, row) in rows.iter().enumerate() {
-                for cx in 0..5 {
-                    if (row >> (4 - cx)) & 1 == 1 {
-                        let px0 = x_cursor + cx as f32 * cell;
-                        let py0 = y_line + ry as f32 * cell;
-                        let px1 = px0 + cell;
-                        let py1 = py0 + cell;
-                        let x0 = -1.0 + px0 * 2.0 / sw;
-                        let y0 = 1.0 - py0 * 2.0 / sh;
-                        let x1 = -1.0 + px1 * 2.0 / sw;
-                        let y1 = 1.0 - py1 * 2.0 / sh;
-                        out.extend_from_slice(&[
-                            UiVertex {
-                                pos: [x0, y0],
-                                color,
-                            },
-                            UiVertex {
-                                pos: [x1, y0],
-                                color,
-                            },
-                            UiVertex {
-                                pos: [x1, y1],
-                                color,
-                            },
-                            UiVertex {
-                                pos: [x0, y0],
-                                color,
-                            },
-                            UiVertex {
-                                pos: [x1, y1],
-                                color,
-                            },
-                            UiVertex {
-                                pos: [x0, y1],
-                                color,
-                            },
-                        ]);
-                    }
-                }
-            }
-            x_cursor += glyph_w + cell; // 1 cell spacing
-        }
-    }
-}
+// Ui glyphs and quad builder now live in `panels` module.
 
 #[derive(Clone)]
 struct LibAnim {
@@ -528,7 +460,7 @@ struct Cli {
     snapshot: Option<PathBuf>,
 
     /// UI scale for text (1.0 = default). Lower to see more lines.
-    #[arg(long, default_value_t = 1.0)]
+    #[arg(long, default_value_t = 0.7)]
     ui_scale: f32,
 
     /// Optional path to an animation library (GLTF/GLB/FBX) to merge into the loaded model.
@@ -1265,6 +1197,85 @@ async fn run(cli: Cli) -> Result<()> {
                         *active_index = 0;
                     }
                 }
+            } else {
+                // No explicit library provided: attempt auto-merge by filename stem in assets/anims/**
+                if let ModelGpu::Skinned {
+                    base,
+                    anim,
+                    anims,
+                    time,
+                    active_index,
+                    ..
+                } = &mut gpu
+                {
+                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                        let stem_l = stem.to_ascii_lowercase();
+                        let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+                        for dir in [
+                            "assets/anims/converted",
+                            "assets/anims/dragons",
+                            "assets/anims",
+                        ] {
+                            for ext in ["glb", "gltf", "fbx"] {
+                                let cand1 =
+                                    std::path::Path::new(dir).join(format!("{}.{ext}", stem));
+                                if cand1.exists() {
+                                    candidates.push(cand1.clone());
+                                }
+                                // Also try case-insensitive alternate if stem casing differs
+                                let cand2 =
+                                    std::path::Path::new(dir).join(format!("{}.{ext}", stem_l));
+                                if cand2.exists() && !candidates.iter().any(|p| p == &cand2) {
+                                    candidates.push(cand2.clone());
+                                }
+                            }
+                        }
+                        let mut merged_any = false;
+                        for c in candidates {
+                            let ext = c
+                                .extension()
+                                .and_then(|e| e.to_str())
+                                .unwrap_or("")
+                                .to_ascii_lowercase();
+                            if ext == "glb" || ext == "gltf" {
+                                if let Ok(n) = merge_gltf_animations(base.as_mut(), &c) {
+                                    merged_any |= n > 0;
+                                }
+                            } else if ext == "fbx" {
+                                if merge_fbx_animations(base.as_mut(), &c).is_ok() {
+                                    merged_any = true;
+                                } else if let Some(conv) = try_convert_fbx_to_gltf(&c) {
+                                    if let Ok(n) = merge_gltf_animations(base.as_mut(), &conv) {
+                                        merged_any |= n > 0;
+                                    }
+                                }
+                            }
+                        }
+                        if merged_any {
+                            let mut names: Vec<String> = base.animations.keys().cloned().collect();
+                            names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
+                            names.sort();
+                            **anim = AnimData::from_skinned_with_options(
+                                &base,
+                                &names,
+                                cli.head_pitch_deg,
+                            );
+                            *anims = names;
+                            *time = 0.0;
+                            *active_index = 0;
+                            let title = format!(
+                                "Model Viewer — {} | anims: {}",
+                                p.display(),
+                                if anims.is_empty() {
+                                    "(none)".to_string()
+                                } else {
+                                    anims.join(", ")
+                                }
+                            );
+                            window.set_title(&title);
+                        }
+                    }
+                }
             }
             model_gpu = Some(gpu);
         } else {
@@ -1276,6 +1287,10 @@ async fn run(cli: Cli) -> Result<()> {
 
     let mut snapshot_path = cli.snapshot.clone();
     let mut snapshot_done = false;
+    // UI visibility toggles
+    let mut ui_visible = true; // full UI (top-left controls)
+    let mut lists_visible = false; // heavy side lists (models/anims/library)
+
     Ok(event_loop.run(move |event, elwt| match event {
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => elwt.exit(),
         Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
@@ -1288,6 +1303,38 @@ async fn run(cli: Cli) -> Result<()> {
         Event::AboutToWait => {
             // Always animate; request a redraw every frame
             window.request_redraw();
+        }
+        Event::WindowEvent { event: WindowEvent::KeyboardInput { event: kev, .. }, .. } => {
+            use winit::keyboard::{Key, KeyCode, PhysicalKey, NamedKey};
+            // Toggle overlays and cycle animations
+            let log_key = &kev.logical_key;
+            let phys_key = &kev.physical_key;
+            let is_tab = matches!(log_key, Key::Named(NamedKey::Tab)) || matches!(phys_key, PhysicalKey::Code(KeyCode::Tab));
+            let is_l = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("l"));
+            let is_o = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("o"));
+            let is_h = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("h"));
+            let left = matches!(phys_key, PhysicalKey::Code(KeyCode::ArrowLeft)) || matches!(log_key, Key::Character(c) if c.as_ref() == "[");
+            let right = matches!(phys_key, PhysicalKey::Code(KeyCode::ArrowRight)) || matches!(log_key, Key::Character(c) if c.as_ref() == "]");
+            if is_tab { ui_visible = !ui_visible; }
+            if is_l { lists_visible = !lists_visible; }
+            if is_o { autorotate = !autorotate; }
+            if is_h {
+                head_pitch_deg_current = 0.0;
+                if let Some(ModelGpu::Skinned{anim, base, anims, time, ..}) = model_gpu.as_mut() {
+                    **anim = AnimData::from_skinned_with_options(base, anims, head_pitch_deg_current);
+                    *time = 0.0;
+                }
+            }
+            if left {
+                if let Some(ModelGpu::Skinned{anims, active_index, time, ..}) = model_gpu.as_mut() {
+                    if !anims.is_empty() { *active_index = (*active_index + anims.len() - 1) % anims.len(); *time = 0.0; }
+                }
+            }
+            if right {
+                if let Some(ModelGpu::Skinned{anims, active_index, time, ..}) = model_gpu.as_mut() {
+                    if !anims.is_empty() { *active_index = (*active_index + 1) % anims.len(); *time = 0.0; }
+                }
+            }
         }
         Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
             // Update animation palette (if skinned)
@@ -1361,7 +1408,7 @@ async fn run(cli: Cli) -> Result<()> {
                 }
             }
             // Second pass: simple UI checkbox for autorotate in top-left
-            {
+            if ui_visible {
                 let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("ui-pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1380,18 +1427,26 @@ async fn run(cli: Cli) -> Result<()> {
                 // Panel backdrop for readability
                 let panel_x0 = -1.0 + (m - 8.0) * 2.0 / (width as f32);
                 let panel_y0 = 1.0 - (m - 8.0) * 2.0 / (height as f32);
-                // Panel width adjusted to comfortably fit three short control rows and multi-column lists
-                let panel_w = (520.0_f32 * cli.ui_scale.max(0.6)).min(width as f32 - 2.0*m).max(420.0);
-                let panel_h = (height as f32 - 2.0 * m).min(height as f32 * 0.9);
+                // Panel width/height: compact when lists are hidden; expanded when visible
+                let panel_w = if lists_visible {
+                    (520.0_f32 * cli.ui_scale.max(0.6)).min(width as f32 - 2.0*m).max(420.0)
+                } else {
+                    (280.0_f32 * cli.ui_scale.max(0.6)).max(200.0)
+                };
+                let panel_h = if lists_visible {
+                    (height as f32 - 2.0 * m).min(height as f32 * 0.9)
+                } else {
+                    120.0_f32 * cli.ui_scale.max(0.6)
+                };
                 let panel_x1 = -1.0 + (m - 8.0 + panel_w) * 2.0 / (width as f32);
                 let panel_y1 = 1.0 - (m - 8.0 + panel_h) * 2.0 / (height as f32);
                 let mut verts: Vec<UiVertex> = vec![
-                    UiVertex { pos: [panel_x0, panel_y0], color: [0.08, 0.09, 0.12, 0.88] },
-                    UiVertex { pos: [panel_x1, panel_y0], color: [0.08, 0.09, 0.12, 0.88] },
-                    UiVertex { pos: [panel_x1, panel_y1], color: [0.08, 0.09, 0.12, 0.88] },
-                    UiVertex { pos: [panel_x0, panel_y0], color: [0.08, 0.09, 0.12, 0.88] },
-                    UiVertex { pos: [panel_x1, panel_y1], color: [0.08, 0.09, 0.12, 0.88] },
-                    UiVertex { pos: [panel_x0, panel_y1], color: [0.08, 0.09, 0.12, 0.88] },
+                    UiVertex { pos: [panel_x0, panel_y0], color: [0.06, 0.07, 0.10, 0.65] },
+                    UiVertex { pos: [panel_x1, panel_y0], color: [0.06, 0.07, 0.10, 0.65] },
+                    UiVertex { pos: [panel_x1, panel_y1], color: [0.06, 0.07, 0.10, 0.65] },
+                    UiVertex { pos: [panel_x0, panel_y0], color: [0.06, 0.07, 0.10, 0.65] },
+                    UiVertex { pos: [panel_x1, panel_y1], color: [0.06, 0.07, 0.10, 0.65] },
+                    UiVertex { pos: [panel_x0, panel_y1], color: [0.06, 0.07, 0.10, 0.65] },
                 ];
                 let x0 = -1.0 + m * 2.0 / (width as f32);
                 let y0 = 1.0 - m * 2.0 / (height as f32);
@@ -1441,7 +1496,7 @@ async fn run(cli: Cli) -> Result<()> {
                 rpass.set_vertex_buffer(0, ui_vb.slice(..));
                 rpass.draw(0..(verts.len() as u32), 0..1);
 
-                // Text overlay: label next to checkbox + orientation toggle + lists beneath
+                // Text overlay: label next to checkbox + orientation toggle + optional lists beneath
                 // Draw label next to the checkbox (always)
                 let mut text_verts_label: Vec<UiVertex> = Vec::new();
                 let label = vec!["AUTO ROTATE".to_string()];
@@ -1483,38 +1538,40 @@ async fn run(cli: Cli) -> Result<()> {
                     rpass.set_vertex_buffer(0, tvb.slice(..));
                     rpass.draw(0..(head_text.len() as u32), 0..1);
                 }
-                // Anim list text (multi-column)
-                let mut text_verts: Vec<UiVertex> = Vec::new();
-                if let Some(ref gpu) = model_gpu
-                    && let ModelGpu::Skinned { anims, .. } = gpu
-                    && !anims.is_empty()
-                {
-                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
-                    let _glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
-                    // Space list clearly below head controls using label metrics
-                    let label_row_h = 7.0 * label_cell + label_cell * 2.0;
-                    let header_h = glyph_h + line_gap;
-                    // Push list well below head controls (two label rows worth + extra padding)
-                    let anim_header_y = head_y + (2.0 * label_row_h) + 18.0;
-                    let available_h = (height as f32) - anim_header_y - 16.0;
-                    let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
-                    let col_w = 260.0 * cli.ui_scale.max(0.5);
-                    build_text_quads(&vec!["ANIMATIONS:".to_string()], (m, anim_header_y - header_h), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
-                    for (i, name) in anims.iter().enumerate() {
-                        let col = i / rows_per_col;
-                        let row = i % rows_per_col;
-                        let x = m + (col as f32) * col_w;
-                        let y = anim_header_y + (row as f32) * (glyph_h + line_gap);
-                        build_text_quads(&vec![format!("{}: {}", i + 1, name.to_uppercase())], (x, y), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
+                // Anim list text (multi-column) — hidden unless lists are visible
+                if lists_visible {
+                    let mut text_verts: Vec<UiVertex> = Vec::new();
+                    if let Some(ref gpu) = model_gpu
+                        && let ModelGpu::Skinned { anims, .. } = gpu
+                        && !anims.is_empty()
+                    {
+                        let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                        let _glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
+                        // Space list clearly below head controls using label metrics
+                        let label_row_h = 7.0 * label_cell + label_cell * 2.0;
+                        let header_h = glyph_h + line_gap;
+                        // Push list well below head controls (two label rows worth + extra padding)
+                        let anim_header_y = head_y + (2.0 * label_row_h) + 18.0;
+                        let available_h = (height as f32) - anim_header_y - 16.0;
+                        let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
+                        let col_w = 260.0 * cli.ui_scale.max(0.5);
+                        build_text_quads(&vec!["ANIMATIONS:".to_string()], (m, anim_header_y - header_h), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
+                        for (i, name) in anims.iter().enumerate() {
+                            let col = i / rows_per_col;
+                            let row = i % rows_per_col;
+                            let x = m + (col as f32) * col_w;
+                            let y = anim_header_y + (row as f32) * (glyph_h + line_gap);
+                            build_text_quads(&vec![format!("{}: {}", i + 1, name.to_uppercase())], (x, y), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
+                        }
+                        let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-text"), contents: bytemuck::cast_slice(&text_verts), usage: wgpu::BufferUsages::VERTEX });
+                        rpass.set_pipeline(&ui_pipe);
+                        rpass.set_vertex_buffer(0, tvb.slice(..));
+                        rpass.draw(0..(text_verts.len() as u32), 0..1);
                     }
-                    let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-text"), contents: bytemuck::cast_slice(&text_verts), usage: wgpu::BufferUsages::VERTEX });
-                    rpass.set_pipeline(&ui_pipe);
-                    rpass.set_vertex_buffer(0, tvb.slice(..));
-                    rpass.draw(0..(text_verts.len() as u32), 0..1);
                 }
 
-                // Model library list
-                if !lib_models.is_empty() {
+                // Model library list (optional)
+                if lists_visible && !lib_models.is_empty() {
                     let mut model_lines: Vec<String> = vec!["MODELS:".to_string()];
                     for (i, mentry) in lib_models.iter().enumerate() {
                         model_lines.push(format!("{}: {}", i + 1, mentry.name.to_uppercase()));
@@ -1533,8 +1590,8 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
 
-                // Library animations (if any)
-                if !lib_anims.is_empty() {
+                // Library animations (optional)
+                if lists_visible && !lib_anims.is_empty() {
                     let mut lib_lines: Vec<String> = vec!["LIBRARY:".to_string()];
                     for (i, a) in lib_anims.iter().enumerate() { lib_lines.push(format!("{}: {}", i + 1, a.name.to_uppercase())); }
                     let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
@@ -1723,7 +1780,7 @@ async fn run(cli: Cli) -> Result<()> {
                 x_cursor += bw + 18.0;
             }
             // Animation buttons (skinned): click lines under header (multi-column)
-            if let Some(gpu) = model_gpu.as_mut()
+            if lists_visible && let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
                 && !anims.is_empty()
             {
@@ -1747,7 +1804,7 @@ async fn run(cli: Cli) -> Result<()> {
                 }
             }
             // Model entries click handling (replace base model)
-            if !lib_models.is_empty() {
+            if lists_visible && !lib_models.is_empty() {
                 let s: f32 = 20.0; let m: f32 = 16.0;
                 let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
                 let base_y = m + s + 8.0;
@@ -1768,7 +1825,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
 
             // Library entries click handling (merge into loaded model)
-            if let Some(gpu) = model_gpu.as_mut()
+            if lists_visible && let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, anim, base, .. } = gpu
                 && !lib_anims.is_empty()
             {
