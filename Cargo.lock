@@ -2053,7 +2053,7 @@ dependencies = [
  "base64 0.22.1",
  "roa-assets",
  "serde_json",
- "which",
+ "which 8.0.0",
 ]
 
 [[package]]
@@ -2236,6 +2236,15 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "home"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
+dependencies = [
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "http"
@@ -3221,7 +3230,7 @@ dependencies = [
  "pollster",
  "roa-assets",
  "wgpu",
- "which",
+ "which 8.0.0",
  "winit",
 ]
 
@@ -6323,6 +6332,18 @@ dependencies = [
 
 [[package]]
 name = "which"
+version = "6.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ee928febd44d98f2f459a4a79bd4d928591333a494a10a868418ac1b39cf1f"
+dependencies = [
+ "either",
+ "home",
+ "rustix 0.38.44",
+ "winsafe",
+]
+
+[[package]]
+name = "which"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fabb953106c3c8eea8306e4393700d7657561cb43122571b172bbfb7c7ba1d"
@@ -6989,6 +7010,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "walkdir",
+ "which 6.0.3",
  "wishcraft",
  "wishcraft_openai",
 ]

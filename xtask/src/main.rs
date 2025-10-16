@@ -77,6 +77,9 @@ enum WishCmd {
         /// Allow running with a dirty working tree (skips clean check)
         #[arg(long, default_value_t = false)]
         allow_dirty: bool,
+        /// Which engine to use: codex (default) or legacy
+        #[arg(long, default_value = "codex")]
+        engine: String,
     },
 }
 
@@ -99,6 +102,29 @@ enum CodexCmd {
         /// If set, perform a live API call (requires OPENAI_API_KEY). Otherwise ShadowRun stub.
         #[arg(long, default_value_t = false)]
         live: bool,
+    },
+    /// Build the vendored Codex CLI (codex) binary
+    Build,
+    /// Run Codex CLI in headless JSONL mode for a one-off wish
+    Run {
+        /// The single wish text to pass to Codex as the prompt
+        #[arg(long)]
+        wish: String,
+        /// Optional explicit wish id (W-...)
+        #[arg(long)]
+        id: Option<String>,
+        /// Optional JSON array of allowed path globs for scope enforcement
+        #[arg(long)]
+        scope: Option<String>,
+        /// Optional model override for Codex
+        #[arg(long)]
+        model: Option<String>,
+        /// Working directory for Codex (defaults to repo root)
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// Time budget in minutes before the Codex process is killed
+        #[arg(long, default_value_t = 180u64)]
+        timeout_mins: u64,
     },
 }
 
@@ -884,24 +910,502 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
             rt.block_on(async move { bridge::run_bridge(&addr).await })?;
             Ok(())
         }
+        WishCmd::Codex { cmd } => match cmd {
+            CodexCmd::Plan {
+                file,
+                region: _,
+                out,
+                live,
+            } => {
+                // existing plan path kept as-is
+                let input = wishcraft_openai::conduit::PlanInput {
+                    repo: std::env::current_dir()?
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string(),
+                    paths: vec!["**".into()],
+                    objective: std::fs::read_to_string(&file).unwrap_or_else(|_| {
+                        format!("Read wish objective from {} failed", file.display())
+                    }),
+                    invariants: vec![],
+                    context_snippets: vec![],
+                };
+                let cfg = wishcraft_openai::config::OpenAIConfig::from_env_defaults()
+                    .unwrap_or_else(|_| wishcraft_openai::config::OpenAIConfig {
+                        chatgpt_base_url: std::env::var("CHATGPT_BASE_URL")
+                            .unwrap_or_else(|_| "https://chatgpt.com/backend-api/codex".into()),
+                        codex_home: std::env::var("CODEX_HOME")
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_else(|_| {
+                                dirs::home_dir().unwrap_or_default().join(".codex")
+                            }),
+                        model: std::env::var("OPENAI_MODEL")
+                            .unwrap_or_else(|_| "gpt-4o-mini".into()),
+                        temperature: Some(0.2),
+                        timeout_secs: 30,
+                    });
+                let client = wishcraft_openai::client::OpenAIClient::new(cfg);
+                let conduit = wishcraft_openai::OpenAIConduit::new(client);
+                let mode = if live {
+                    wishcraft::conduit::ExecMode::Commit
+                } else {
+                    wishcraft::conduit::ExecMode::ShadowRun
+                };
+                let rt = tokio::runtime::Runtime::new()?;
+                let out_val = rt.block_on(async move {
+                    conduit.exec("openai.codex.v2025.plan", input, mode).await
+                })?;
+                let s = serde_json::to_string_pretty(&out_val)?;
+                if let Some(path) = out {
+                    fs::write(path, s)?;
+                } else {
+                    println!("{}", s);
+                }
+                Ok(())
+            }
+            CodexCmd::Build => {
+                codex_build()?;
+                Ok(())
+            }
+            CodexCmd::Run {
+                wish,
+                id,
+                scope,
+                model,
+                cwd,
+                timeout_mins,
+            } => {
+                // Determine scope
+                let scope_globs: Vec<String> = if let Some(s) = scope {
+                    serde_json::from_str(&s).unwrap_or_else(|_| vec!["**".into()])
+                } else {
+                    vec!["**".into()]
+                };
+                codex_run(
+                    &wish,
+                    id.as_deref(),
+                    &scope_globs,
+                    model.as_deref(),
+                    cwd.as_ref(),
+                    timeout_mins,
+                )?;
+                Ok(())
+            }
+        },
         WishCmd::Run {
             wish,
             timeout_mins,
             max_iters,
             allow_dirty,
+            engine,
         } => {
-            let cfg = RunnerConfig {
-                max_time_minutes: timeout_mins.unwrap_or(180),
-                max_iters: max_iters.unwrap_or(50),
-                stall_window: 5,
-                fix_tries_per_step: 3,
-                require_consecutive_greens: 2,
-            };
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(async move { run_wish_orchestration(&wish, allow_dirty, cfg).await })?;
-            Ok(())
+            if engine.to_lowercase() == "codex" {
+                let cfg = RunnerConfig {
+                    max_time_minutes: timeout_mins.unwrap_or(180),
+                    max_iters: max_iters.unwrap_or(50),
+                    stall_window: 5,
+                    fix_tries_per_step: 3,
+                    require_consecutive_greens: 2,
+                };
+                run_wish_orchestration_codex(&wish, allow_dirty, cfg)?;
+                Ok(())
+            } else {
+                let cfg = RunnerConfig {
+                    max_time_minutes: timeout_mins.unwrap_or(180),
+                    max_iters: max_iters.unwrap_or(50),
+                    stall_window: 5,
+                    fix_tries_per_step: 3,
+                    require_consecutive_greens: 2,
+                };
+                let rt = tokio::runtime::Runtime::new()?;
+                rt.block_on(async move { run_wish_orchestration(&wish, allow_dirty, cfg).await })?;
+                Ok(())
+            }
         }
     }
+}
+
+/// Build the vendored Codex CLI binary, returning its path on success.
+fn codex_build() -> anyhow::Result<std::path::PathBuf> {
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../third_party/openai-codex/codex-rs");
+    let mut cmd = Command::new("cargo");
+    cmd.arg("build")
+        .arg("--release")
+        .arg("-p")
+        .arg("codex-cli")
+        .arg("--manifest-path")
+        .arg(root.join("Cargo.toml"));
+    eprintln!("xtask: building Codex CLI (vendored)...");
+    let status = cmd.status().context("codex build")?;
+    if !status.success() {
+        anyhow::bail!("codex build failed");
+    }
+    let bin = root.join("target/release/codex");
+    if !bin.is_file() {
+        anyhow::bail!(format!("codex binary not found at {}", bin.display()));
+    }
+    Ok(bin)
+}
+
+fn resolve_codex_bin() -> anyhow::Result<std::path::PathBuf> {
+    if let Ok(p) = std::env::var("ROA_CODEX_BIN") {
+        let pb = PathBuf::from(p);
+        if pb.is_file() {
+            return Ok(pb);
+        }
+    }
+    let vendored = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../third_party/openai-codex/codex-rs/target/release/codex");
+    if vendored.is_file() {
+        return Ok(vendored);
+    }
+    // Try PATH
+    if let Ok(path) = which::which("codex") {
+        return Ok(path);
+    }
+    // As a last resort, build it
+    codex_build()
+}
+
+fn codex_run(
+    wish_text: &str,
+    wish_id_opt: Option<&str>,
+    scope_globs: &[String],
+    model: Option<&str>,
+    cwd: Option<&PathBuf>,
+    timeout_mins: u64,
+) -> anyhow::Result<()> {
+    use std::io::Write;
+    let repo_root = std::env::current_dir()?;
+    let (wish_id, allowed_paths, accept_cmd) =
+        ensure_wishes_md_and_get_meta(wish_id_opt, &generate_wish_id(wish_text), wish_text)?;
+    let allowed_paths: Vec<String> = if !scope_globs.is_empty() {
+        scope_globs.to_vec()
+    } else {
+        allowed_paths
+    };
+    let start_sha = git_head_sha(&repo_root)?;
+    persist_wish_schema_file(&wish_id, wish_text)?;
+
+    let codex = resolve_codex_bin()?;
+    let mut cmd = Command::new(codex);
+    cmd.arg("exec")
+        .arg("--json")
+        .arg("--full-auto")
+        .arg("-C")
+        .arg(cwd.cloned().unwrap_or(repo_root.clone()))
+        .arg(wish_text)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(m) = model {
+        cmd.arg("-m").arg(m);
+    }
+
+    eprintln!(
+        "[codex-run] spawning codex exec --json (timeout={}m)",
+        timeout_mins
+    );
+    let mut child = cmd.spawn().context("spawn codex")?;
+
+    let dir = dirs::home_dir().unwrap().join(".roa/wish_runner");
+    std::fs::create_dir_all(&dir)?;
+    let mut events_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(format!("{}.events.jsonl", wish_id)))?;
+
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let mut reader = std::io::BufReader::new(stdout);
+    let mut err_reader = std::io::BufReader::new(stderr);
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_mins * 60);
+    let mut line = String::new();
+    loop {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = write_ledger(&wish_id, "Timeout", &[]);
+            break;
+        }
+        line.clear();
+        // Non-blocking-ish read with small timeout
+        let mut got = false;
+        if let Ok(n) = read_line_nonblocking(&mut reader) {
+            if n > 0 {
+                got = true;
+                line = n;
+            }
+        }
+        if !got {
+            if let Ok(s) = read_line_nonblocking(&mut err_reader) {
+                if !s.is_empty() {
+                    // wrap stderr as terminal output event
+                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": s.trim_end()} });
+                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+                }
+            }
+            // Check child status
+            if let Some(status) = child.try_wait().ok().flatten() {
+                // Process ended
+                let ok = status.success();
+                // Scope audit
+                match audit_and_maybe_revert(&repo_root, &start_sha, &allowed_paths) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "scope.audit.error", "data": {"error": e.to_string()} });
+                        writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+                    }
+                }
+                // Acceptance
+                let (ok_build, _) = futures::executor::block_on(run_cmd(
+                    &repo_root,
+                    "cargo",
+                    &["build", "--workspace", "--all-targets"],
+                ))?;
+                let (ok_test, _) = match &accept_cmd {
+                    Some(cmd) => futures::executor::block_on(run_shell(&repo_root, cmd))?,
+                    None => futures::executor::block_on(run_cmd(
+                        &repo_root,
+                        "cargo",
+                        &["test", "--workspace", "-q"],
+                    ))?,
+                };
+                if ok && ok_build && ok_test {
+                    mark_wish_completed(&wish_id, wish_text)?;
+                    write_ledger(&wish_id, "Success", &[])?;
+                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.success", "data": null });
+                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+                } else {
+                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.failed", "data": {"exit_ok": ok, "build": ok_build, "tests": ok_test} });
+                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+                }
+                break;
+            }
+            // brief sleep to avoid busy loop
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            continue;
+        }
+        // We got a JSONL line from codex exec
+        if let Err(e) = translate_and_emit_codex_line(&wish_id, &line, &mut events_file) {
+            // Fallback: write terminal-wrapped line for debugging
+            let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": line.trim_end(), "error": e.to_string()} });
+            writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+        }
+    }
+    Ok(())
+}
+
+fn generate_wish_id(wish_text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(wish_text.as_bytes());
+    format!(
+        "W-{}-{}",
+        chrono::Utc::now().format("%Y%m%d-%H%M%S"),
+        hex::encode(h.finalize())[..4].to_string()
+    )
+}
+
+fn git_head_sha(root: &std::path::PathBuf) -> anyhow::Result<String> {
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "HEAD"])
+        .output()?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git rev-parse HEAD failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn audit_and_maybe_revert(
+    root: &std::path::PathBuf,
+    base_sha: &str,
+    allowed: &[String],
+) -> anyhow::Result<()> {
+    use globset::{Glob, GlobSetBuilder};
+    let mut builder = GlobSetBuilder::new();
+    for g in allowed {
+        builder.add(Glob::new(g).map_err(|e| anyhow::anyhow!("bad glob {}: {}", g, e))?);
+    }
+    let set = builder
+        .build()
+        .map_err(|e| anyhow::anyhow!("glob build: {}", e))?;
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["diff", "--name-only", base_sha, "HEAD"])
+        .output()?;
+    if !out.status.success() {
+        anyhow::bail!("git diff failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+    let changed = String::from_utf8_lossy(&out.stdout);
+    let mut violations = Vec::new();
+    for p in changed.lines() {
+        if p.trim().is_empty() {
+            continue;
+        }
+        if !set.is_match(p) {
+            violations.push(p.to_string());
+        }
+    }
+    if violations.is_empty() {
+        return Ok(());
+    }
+    // Revert to base_sha
+    let reset = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["reset", "--hard", base_sha])
+        .status()?;
+    if !reset.success() {
+        anyhow::bail!("git reset --hard failed");
+    }
+    eprintln!(
+        "[codex-run] scope.violation: reverted files outside scope: {:?}",
+        violations
+    );
+    Ok(())
+}
+
+fn read_line_nonblocking<R: std::io::BufRead>(reader: &mut R) -> anyhow::Result<String> {
+    use std::io::Read;
+    let mut buf = String::new();
+    let mut byte = [0u8; 1];
+    let mut saw = false;
+    loop {
+        match reader.read(&mut byte) {
+            Ok(0) => break,
+            Ok(_) => {
+                saw = true;
+                let c = byte[0] as char;
+                buf.push(c);
+                if c == '\n' {
+                    break;
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(anyhow::anyhow!(e)),
+        }
+        // Clamp lines to a reasonable size
+        if buf.len() > 1_000_000 {
+            break;
+        }
+    }
+    if saw { Ok(buf) } else { Ok(String::new()) }
+}
+
+fn translate_and_emit_codex_line(
+    wish_id: &str,
+    line: &str,
+    out: &mut std::fs::File,
+) -> anyhow::Result<()> {
+    use std::io::Write;
+    let v: serde_json::Value = serde_json::from_str(line)?;
+    let mut kind = None::<&'static str>;
+    let mut data = serde_json::json!({});
+    let t = v.get("type").and_then(|s| s.as_str()).unwrap_or("");
+    match t {
+        "ItemStarted" | "ItemUpdated" | "ItemCompleted" => {
+            if let Some(details) = v.get("item").and_then(|i| i.get("details")) {
+                let dty = details.get("type").and_then(|s| s.as_str()).unwrap_or("");
+                match dty {
+                    "TodoList" => {
+                        if t == "ItemStarted" {
+                            kind = Some("plan.started");
+                        } else if t == "ItemUpdated" {
+                            kind = Some("plan.updated");
+                        } else {
+                            kind = Some("plan.completed");
+                        }
+                        let steps = details
+                            .get("items")
+                            .and_then(|i| i.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        data = serde_json::json!({"steps": steps});
+                    }
+                    "FileChange" => {
+                        let status = details.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                        if status.eq_ignore_ascii_case("Completed") {
+                            kind = Some("patch.applied");
+                        } else {
+                            kind = Some("patch.failed");
+                        }
+                        let changes = details
+                            .get("changes")
+                            .and_then(|a| a.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        data = serde_json::json!({"changes": changes});
+                    }
+                    _ => {}
+                }
+            }
+        }
+        "TurnCompleted" => {
+            kind = Some("wish.success");
+        }
+        "TurnFailed" => {
+            kind = Some("wish.failed");
+            if let Some(err) = v
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|s| s.as_str())
+            {
+                data = serde_json::json!({"error": err});
+            }
+        }
+        _ => {}
+    }
+    let evt = serde_json::json!({
+        "ts": chrono::Utc::now().to_rfc3339(),
+        "wish_id": wish_id,
+        "iteration": 0,
+        "kind": kind.unwrap_or("wish.event"),
+        "data": if data.as_object().map(|o| o.is_empty()).unwrap_or(true) { serde_json::Value::Null } else { data }
+    });
+    writeln!(out, "{}", serde_json::to_string(&evt)?)?;
+    Ok(())
+}
+
+fn run_wish_orchestration_codex(
+    wish_text: &str,
+    allow_dirty: bool,
+    cfg: RunnerConfig,
+) -> anyhow::Result<()> {
+    let repo_root = std::env::current_dir()?;
+    if !allow_dirty {
+        if let Err(e) = git_assert_clean(&repo_root) {
+            eprintln!(
+                "working tree not clean. Stash or commit changes, or pass --allow-dirty to proceed (will proceed on main). Error: {e}"
+            );
+            return Err(e);
+        }
+    } else {
+        eprintln!("xtask: proceeding with dirty working tree (--allow-dirty)");
+    }
+    // Do not switch branches for Codex engine; operate on current (expected main)
+    // Resolve scope/id from WISHES.md and then spawn codex
+    let (_id, scope, _acc) =
+        ensure_wishes_md_and_get_meta(None, &generate_wish_id(wish_text), wish_text)?;
+    let scope = if scope.is_empty() {
+        vec!["**".to_string()]
+    } else {
+        scope
+    };
+    codex_run(
+        wish_text,
+        None,
+        &scope,
+        None,
+        Some(&repo_root),
+        cfg.max_time_minutes,
+    )?;
+    Ok(())
 }
 
 #[derive(Clone, Copy)]
