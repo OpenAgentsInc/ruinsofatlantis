@@ -383,8 +383,7 @@ mod bridge {
         io::{AsyncReadExt, AsyncSeekExt},
         time::sleep,
     };
-    use tokio_stream::Stream;
-    use tokio_stream::StreamExt as _;
+    use tokio_stream::{Stream, StreamExt};
 
     #[derive(Clone)]
     pub struct AppState;
