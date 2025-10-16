@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use wishcraft::conduit::ConduitExec;
 
 #[derive(Parser)]
 #[command(author, version, about = "Workspace automation tasks", long_about = None)]
@@ -661,10 +662,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 } else {
                     wishcraft::conduit::ExecMode::ShadowRun
                 };
-                let rt = tokio::runtime::Runtime::new()?;
-                let out_val = rt.block_on(async move {
-                    conduit.exec("openai.codex.v2025.plan", input, mode).await
-                })?;
+                let out_val = conduit.exec("openai.codex.v2025.plan", input, mode)?;
                 let s = serde_json::to_string_pretty(&out_val)?;
                 if let Some(path) = out {
                     fs::write(path, s)?;
