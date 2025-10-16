@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use std::fs;
+use std::io::BufRead as _;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use wishcraft::conduit::ConduitExec;
