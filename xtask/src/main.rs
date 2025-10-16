@@ -1527,22 +1527,22 @@ fn latest_wish_id_in_runner() -> Option<String> {
     latest.map(|v| v.0)
 }
 
-fn color_kind(kind: &str) -> &'static str {
+fn color_kind(kind: &str) -> String {
     match kind {
-        "plan.started" => "\x1b[36mplan.started\x1b[0m",
-        "plan.updated" => "\x1b[36mplan.updated\x1b[0m",
-        "plan.completed" => "\x1b[36mplan.completed\x1b[0m",
-        "patch.applied" => "\x1b[32mpatch.applied\x1b[0m",
-        "patch.failed" => "\x1b[31mpatch.failed\x1b[0m",
-        "wish.success" => "\x1b[32mwish.success\x1b[0m",
-        "wish.failed" => "\x1b[31mwish.failed\x1b[0m",
-        "wish.terminal" => "\x1b[90mwish.terminal\x1b[0m",
-        "exec.started" => "\x1b[35mexec.started\x1b[0m",
-        "exec.completed" => "\x1b[35mexec.completed\x1b[0m",
-        "tool.started" => "\x1b[33mtool.started\x1b[0m",
-        "tool.completed" => "\x1b[33mtool.completed\x1b[0m",
-        "codex.session" => "\x1b[34mcodex.session\x1b[0m",
-        _ => kind,
+        "plan.started" => "\x1b[36mplan.started\x1b[0m".to_string(),
+        "plan.updated" => "\x1b[36mplan.updated\x1b[0m".to_string(),
+        "plan.completed" => "\x1b[36mplan.completed\x1b[0m".to_string(),
+        "patch.applied" => "\x1b[32mpatch.applied\x1b[0m".to_string(),
+        "patch.failed" => "\x1b[31mpatch.failed\x1b[0m".to_string(),
+        "wish.success" => "\x1b[32mwish.success\x1b[0m".to_string(),
+        "wish.failed" => "\x1b[31mwish.failed\x1b[0m".to_string(),
+        "wish.terminal" => "\x1b[90mwish.terminal\x1b[0m".to_string(),
+        "exec.started" => "\x1b[35mexec.started\x1b[0m".to_string(),
+        "exec.completed" => "\x1b[35mexec.completed\x1b[0m".to_string(),
+        "tool.started" => "\x1b[33mtool.started\x1b[0m".to_string(),
+        "tool.completed" => "\x1b[33mtool.completed\x1b[0m".to_string(),
+        "codex.session" => "\x1b[34mcodex.session\x1b[0m".to_string(),
+        _ => kind.to_string(),
     }
 }
 
@@ -1557,7 +1557,7 @@ fn tail_events(id: Option<&str>, follow: bool, raw: bool) -> anyhow::Result<()> 
     let raw_path = dir.join(format!("{}.codex.jsonl", wish_id));
     eprintln!("xtask: tailing {}", path.display());
     let mut counts: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
-    let mut fp = std::fs::File::open(&path)?;
+    let fp = std::fs::File::open(&path)?;
     let mut reader = std::io::BufReader::new(fp);
     let mut line = String::new();
     let mut printed = 0usize;
