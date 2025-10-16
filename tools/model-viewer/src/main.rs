@@ -550,6 +550,41 @@ impl VBasic {
     };
 }
 
+fn clip_names_affecting_skin(base: &SkinnedMeshCPU) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for (name, clip) in base.animations.iter() {
+        let mut touches_skin = false;
+        for k in clip.t_tracks.keys() {
+            if base.joints_nodes.contains(k) {
+                touches_skin = true;
+                break;
+            }
+        }
+        if !touches_skin {
+            for k in clip.r_tracks.keys() {
+                if base.joints_nodes.contains(k) {
+                    touches_skin = true;
+                    break;
+                }
+            }
+        }
+        if !touches_skin {
+            for k in clip.s_tracks.keys() {
+                if base.joints_nodes.contains(k) {
+                    touches_skin = true;
+                    break;
+                }
+            }
+        }
+        if touches_skin {
+            names.push(name.clone());
+        }
+    }
+    names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
+    names.sort();
+    names
+}
+
 fn main() -> Result<()> {
     env_logger::init();
     let cli = Cli::parse();
@@ -1219,10 +1254,7 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     }
                     if merged_ok {
-                        let mut names: Vec<String> = base.animations.keys().cloned().collect();
-                        // Filter out unwanted clips
-                        names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
-                        names.sort();
+                        let names: Vec<String> = clip_names_affecting_skin(&base);
                         **anim =
                             AnimData::from_skinned_with_options(&base, &names, cli.head_pitch_deg);
                         *anims = names;
@@ -1285,9 +1317,7 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                         }
                         if merged_any {
-                            let mut names: Vec<String> = base.animations.keys().cloned().collect();
-                            names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
-                            names.sort();
+                            let names: Vec<String> = clip_names_affecting_skin(&base);
                             **anim = AnimData::from_skinned_with_options(
                                 &base,
                                 &names,
