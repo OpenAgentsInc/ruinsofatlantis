@@ -1,4 +1,4 @@
-# Step 2: Determine Origin
+# Step 2: Character Origin
 
 A character’s origin includes background and species. Your background influences your ability score increases (choose one listed ability to increase by 2 and a different one by 1, or increase all three by 1; none can exceed 20), grants a feat, and gives proficiencies (two skills and one tool). Your class also provides proficiencies and Proficiency Bonus (+2 at level 1).
 

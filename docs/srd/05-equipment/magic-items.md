@@ -1,6 +1,6 @@
 <!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.102 -->
 
-# Magic Items (Using, Identifying, Attunement)
+# Magic Items
 
 Identifying a Magic Item: Use the Identify spell or focus on the item during a Short Rest to learn its properties and use; Potions can be sampled to learn effects.
 

@@ -1,4 +1,4 @@
-# Step 4: Choose Alignment
+# Step 4: Alignment
 
 Alignment combines morality (good, evil, neutral) and attitudes toward order (lawful, chaotic, neutral). Summaries:
 - Lawful Good: Do the right thing as expected by society.

@@ -232,6 +232,13 @@ def rebuild() -> None:
     full_text_lower = full_text.lower()
     page_starts, total_len = make_page_index(full_text)
 
+    spell_block_start = full_text_lower.find("\nspell descriptions")
+    if spell_block_start == -1:
+        raise RuntimeError("Unable to locate 'Spell Descriptions' section in PDF.")
+    spell_block_end = full_text_lower.find("\nspell lists", spell_block_start)
+    if spell_block_end == -1:
+        spell_block_end = len(full_text_lower)
+
     starts: list[int] = []
     cursor = 0
     for path in ordered_files:
@@ -243,7 +250,15 @@ def rebuild() -> None:
             pattern = re.compile(
                 rf"(^|\n)\s*{re.escape(heading_lc)}\b(?!\s*\.+\s*\d)",
             )
-        match = pattern.search(full_text_lower, cursor)
+        search_start = cursor
+        search_end = len(full_text_lower)
+        is_spell = "03-spells/spell-descriptions" in str(path)
+        if is_spell:
+            if search_start < spell_block_start or search_start > spell_block_end:
+                search_start = spell_block_start
+            search_end = spell_block_end
+
+        match = pattern.search(full_text_lower, search_start, search_end)
         if not match:
             raise RuntimeError(f"Heading '{heading}' not found in PDF text after offset {cursor} (file {path})")
         start = match.start()

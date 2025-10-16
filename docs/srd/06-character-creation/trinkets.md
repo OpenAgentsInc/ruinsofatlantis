@@ -1,4 +1,4 @@
-# Trinkets (1d100)
+# Trinkets
 
 Roll 1d100 for a random trinket from the SRD list.
 

@@ -93,6 +93,17 @@ enum WishCmd {
         #[arg(long)]
         addr: Option<String>,
     },
+    /// Pretty-print wish events from ~/.roa/wish_runner
+    Tail {
+        /// Wish id (defaults to latest if omitted)
+        id: Option<String>,
+        /// Follow (tail -f)
+        #[arg(long, default_value_t = false)]
+        follow: bool,
+        /// Show raw JSON lines as well
+        #[arg(long, default_value_t = false)]
+        raw: bool,
+    },
     /// Run a hands-off orchestration loop on a single wish string
     Run {
         /// The single wish text
@@ -891,6 +902,10 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
             rt.block_on(async move { bridge::run_bridge(&addr).await })?;
             Ok(())
         }
+        WishCmd::Tail { id, follow, raw } => {
+            tail_events(id.as_deref(), follow, raw)?;
+            Ok(())
+        }
         WishCmd::CodexBuild => {
             codex_build()?;
             Ok(())
@@ -1258,6 +1273,16 @@ fn codex_run(
                 let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.failed", "data": {"exit_ok": ok, "build": ok_build, "tests": ok_test} });
                 writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
             }
+            // Summary footer (changes, patches, tokens, session)
+            if let Err(e) = write_final_summary_event(
+                &wish_id,
+                &events_path,
+                &repo_root,
+                &start_sha,
+                &mut events_file,
+            ) {
+                eprintln!("xtask: final summary failed: {}", e);
+            }
             break;
         }
         // brief sleep to avoid busy loop
@@ -1476,6 +1501,241 @@ fn translate_and_emit_codex_line(
         "data": if data.as_object().map(|o| o.is_empty()).unwrap_or(true) { serde_json::Value::Null } else { data }
     });
     writeln!(out, "{}", serde_json::to_string(&evt)?)?;
+    Ok(())
+}
+
+fn latest_wish_id_in_runner() -> Option<String> {
+    let dir = dirs::home_dir()?.join(".roa/wish_runner");
+    let mut latest: Option<(String, std::time::SystemTime)> = None;
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                if name.ends_with(".events.jsonl") {
+                    if let Ok(meta) = e.metadata() {
+                        if let Ok(mtime) = meta.modified() {
+                            let id = name.trim_end_matches(".events.jsonl").to_string();
+                            if latest.as_ref().map(|l| mtime > l.1).unwrap_or(true) {
+                                latest = Some((id, mtime));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    latest.map(|v| v.0)
+}
+
+fn color_kind(kind: &str) -> &'static str {
+    match kind {
+        "plan.started" => "\x1b[36mplan.started\x1b[0m",
+        "plan.updated" => "\x1b[36mplan.updated\x1b[0m",
+        "plan.completed" => "\x1b[36mplan.completed\x1b[0m",
+        "patch.applied" => "\x1b[32mpatch.applied\x1b[0m",
+        "patch.failed" => "\x1b[31mpatch.failed\x1b[0m",
+        "wish.success" => "\x1b[32mwish.success\x1b[0m",
+        "wish.failed" => "\x1b[31mwish.failed\x1b[0m",
+        "wish.terminal" => "\x1b[90mwish.terminal\x1b[0m",
+        "exec.started" => "\x1b[35mexec.started\x1b[0m",
+        "exec.completed" => "\x1b[35mexec.completed\x1b[0m",
+        "tool.started" => "\x1b[33mtool.started\x1b[0m",
+        "tool.completed" => "\x1b[33mtool.completed\x1b[0m",
+        "codex.session" => "\x1b[34mcodex.session\x1b[0m",
+        _ => kind,
+    }
+}
+
+fn tail_events(id: Option<&str>, follow: bool, raw: bool) -> anyhow::Result<()> {
+    use std::io::BufRead;
+    let wish_id = id
+        .map(|s| s.to_string())
+        .or_else(latest_wish_id_in_runner)
+        .ok_or_else(|| anyhow::anyhow!("no wish id provided and no events found"))?;
+    let dir = dirs::home_dir().unwrap().join(".roa/wish_runner");
+    let path = dir.join(format!("{}.events.jsonl", wish_id));
+    let raw_path = dir.join(format!("{}.codex.jsonl", wish_id));
+    eprintln!("xtask: tailing {}", path.display());
+    let mut counts: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
+    let mut fp = std::fs::File::open(&path)?;
+    let mut reader = std::io::BufReader::new(fp);
+    let mut line = String::new();
+    let mut printed = 0usize;
+    loop {
+        line.clear();
+        let n = reader.read_line(&mut line)?;
+        if n == 0 {
+            if follow {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                continue;
+            } else {
+                break;
+            }
+        }
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+            let ts = v.get("ts").and_then(|s| s.as_str()).unwrap_or("");
+            let kind = v
+                .get("kind")
+                .and_then(|s| s.as_str())
+                .unwrap_or("wish.event");
+            *counts.entry(kind.to_string()).or_insert(0) += 1;
+            printed += 1;
+            // Short data summary
+            let mut summary = String::new();
+            match kind {
+                "patch.applied" => {
+                    if let Some(changes) = v
+                        .get("data")
+                        .and_then(|d| d.get("changes"))
+                        .and_then(|n| n.as_u64())
+                    {
+                        summary = format!("changes={}", changes);
+                    }
+                }
+                "exec.started" | "exec.completed" => {
+                    if let Some(cmd) = v
+                        .get("data")
+                        .and_then(|d| d.get("command"))
+                        .and_then(|s| s.as_str())
+                    {
+                        summary = format!("cmd={}", cmd);
+                    }
+                }
+                "tool.started" | "tool.completed" => {
+                    let server = v
+                        .get("data")
+                        .and_then(|d| d.get("server"))
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("");
+                    let tool = v
+                        .get("data")
+                        .and_then(|d| d.get("tool"))
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("");
+                    summary = format!("{}:{}", server, tool);
+                }
+                "wish.success" => {
+                    if let Some(u) = v.get("data") {
+                        summary = format!("usage={}", u);
+                    }
+                }
+                _ => {}
+            }
+            println!("{} {} {}", ts, color_kind(kind), summary);
+        }
+        if raw {
+            if let Ok(mut rf) = std::fs::File::open(&raw_path) {
+                let mut rr = std::io::BufReader::new(&mut rf);
+                let mut rline = String::new();
+                while rr.read_line(&mut rline).unwrap_or(0) > 0 {}
+                if !rline.is_empty() {
+                    eprintln!("\x1b[90mRAW\x1b[0m {}", rline.trim_end());
+                }
+            }
+        }
+        if !follow && printed % 25 == 0 {}
+        if follow && printed % 25 == 0 {
+            eprintln!("-- counts --");
+            for (k, c) in &counts {
+                eprintln!("{:>6} {}", c, k);
+            }
+        }
+    }
+    eprintln!("-- summary --");
+    let total: u64 = counts.values().copied().sum();
+    for (k, c) in counts {
+        eprintln!(
+            "{:>6} {:<18} {:>5.1}%",
+            c,
+            k,
+            (c as f64 * 100.0) / (total as f64).max(1.0)
+        );
+    }
+    Ok(())
+}
+
+fn write_final_summary_event(
+    wish_id: &str,
+    events_path: &std::path::Path,
+    repo_root: &std::path::Path,
+    base_sha: &str,
+    events_file: &mut std::fs::File,
+) -> anyhow::Result<()> {
+    use std::io::Write;
+    // Count patch.applied and extract session id and usage if present
+    let mut patch_applied = 0u64;
+    let mut session_id: Option<String> = None;
+    let mut usage: Option<serde_json::Value> = None;
+    if let Ok(txt) = std::fs::read_to_string(events_path) {
+        for line in txt.lines() {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                if v.get("kind").and_then(|s| s.as_str()) == Some("patch.applied") {
+                    patch_applied += 1;
+                }
+                if v.get("kind").and_then(|s| s.as_str()) == Some("codex.session") {
+                    if let Some(id) = v
+                        .get("data")
+                        .and_then(|d| d.get("session_id"))
+                        .and_then(|s| s.as_str())
+                    {
+                        session_id = Some(id.to_string());
+                    }
+                }
+                if v.get("kind").and_then(|s| s.as_str()) == Some("wish.success") {
+                    if let Some(d) = v.get("data") {
+                        if !d.is_null() {
+                            usage = Some(d.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Changed files list
+    let out = std::process::Command::new("git")
+        .current_dir(repo_root)
+        .args(["diff", "--name-only", base_sha, "HEAD"])
+        .output()?;
+    let changed_files: Vec<String> = if out.status.success() {
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|s| s.to_string())
+            .filter(|s| !s.trim().is_empty())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    // Emit summary event
+    let data = serde_json::json!({
+        "changed_files": changed_files,
+        "patches_applied": patch_applied,
+        "usage": usage,
+        "session_id": session_id,
+    });
+    let evt = serde_json::json!({
+        "ts": chrono::Utc::now().to_rfc3339(),
+        "wish_id": wish_id,
+        "iteration": 0,
+        "kind": "wish.summary",
+        "data": data,
+    });
+    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+    // Print a short human summary
+    eprintln!(
+        "[summary] files={}, patches={}, session={}",
+        evt["data"]["changed_files"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0),
+        patch_applied,
+        evt["data"]["session_id"].as_str().unwrap_or("")
+    );
+    if let Some(id) = evt["data"]["session_id"].as_str() {
+        eprintln!("[resume] codex resume {}", id);
+    }
     Ok(())
 }
 
