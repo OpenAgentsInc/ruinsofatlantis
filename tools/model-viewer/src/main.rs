@@ -935,7 +935,7 @@ async fn run(cli: Cli) -> Result<()> {
                         resource: skin_buf.as_entire_binding(),
                     }],
                 });
-                // Create a reusable 1x1 white texture for submeshes missing a baseColor
+                // Create a reusable 1x1 fallback texture (neutral grey) for submeshes missing a baseColor
                 let white_tex = device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("white"),
                     size: wgpu::Extent3d {
@@ -957,7 +957,7 @@ async fn run(cli: Cli) -> Result<()> {
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
-                    &[255, 255, 255, 255],
+                    &[184, 184, 184, 255],
                     wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4),
@@ -1057,10 +1057,16 @@ async fn run(cli: Cli) -> Result<()> {
                 let (min_b, max_b) = compute_bounds(&skinned);
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
-                // Collect animation names (filter unwanted like pistol*)
-                let mut names: Vec<String> = skinned.animations.keys().cloned().collect();
-                names.retain(|n| !n.to_ascii_lowercase().contains("pistol"));
-                names.sort();
+                // Collect only clips that affect skinned joints (skip camera/object-only tracks)
+                let names: Vec<String> = clip_names_affecting_skin(&skinned);
+                if names.is_empty() && !skinned.animations.is_empty() {
+                    let sample: Vec<String> = skinned.animations.keys().cloned().take(6).collect();
+                    log::warn!(
+                        "viewer: base has {} clips but none affect skin joints; sample names: {}",
+                        skinned.animations.len(),
+                        sample.join(", ")
+                    );
+                }
                 // Move skinned into model state as base
                 let base = Box::new(skinned);
                 let pitch = match orient_mode {
