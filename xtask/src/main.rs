@@ -717,7 +717,6 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
         },
         WishCmd::Run {
             wish,
-            id,
             timeout_mins,
             max_iters,
         } => {
@@ -729,7 +728,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 require_consecutive_greens: 2,
             };
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(async move { run_wish_orchestration(&wish, id.as_deref(), cfg).await })?;
+            rt.block_on(async move { run_wish_orchestration(&wish, None, cfg).await })?;
             Ok(())
         }
     }
@@ -783,7 +782,11 @@ async fn run_wish_orchestration(
     let mut stall_counter: u32 = 0;
     let mut breaker_counter: u32 = 0;
     let mut consecutive_greens: u32 = 0;
-    let allowed_paths: Vec<String> = vec!["**".to_string()];
+    let allowed_paths: Vec<String> = if allowed_paths.is_empty() {
+        vec!["**".to_string()]
+    } else {
+        allowed_paths
+    };
 
     loop {
         iteration += 1;
@@ -1094,8 +1097,8 @@ fn parse_wishes_md() -> anyhow::Result<(Vec<String>, Vec<WishLine>)> {
         }
         let checked = t.starts_with("- [x]") || t.starts_with("- [X]");
         // Extract text before comment
-        let (left, comment) = if let Some(idx) = t.find("<!--") {
-            (&t[..idx].trim(), Some(&t[idx..]))
+        let (left, comment): (&str, Option<&str>) = if let Some(idx) = t.find("<!--") {
+            (t[..idx].trim(), Some(&t[idx..]))
         } else {
             (t, None)
         };
@@ -1304,6 +1307,10 @@ async fn run_cmd(
         out.push_str(&e);
     }
     Ok((status.success(), out))
+}
+
+async fn run_shell(cwd: &std::path::PathBuf, script: &str) -> anyhow::Result<(bool, String)> {
+    run_cmd(cwd, "bash", &["-lc", script]).await
 }
 
 fn ensure_patch_in_scope(patch: &str, allowed: &[String]) -> anyhow::Result<()> {
