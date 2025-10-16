@@ -1107,17 +1107,24 @@ fn codex_run(
     }
 
     eprintln!(
-        "[codex-run] spawning codex exec --json (timeout={}m)",
-        timeout_mins
+        "[codex-run] spawning codex exec --json (timeout={}m) bin={}",
+        timeout_mins,
+        cmd.get_program().to_string_lossy()
     );
     let mut child = cmd.spawn().context("spawn codex")?;
 
     let dir = dirs::home_dir().unwrap().join(".roa/wish_runner");
     std::fs::create_dir_all(&dir)?;
+    let events_path = dir.join(format!("{}.events.jsonl", wish_id));
     let mut events_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(dir.join(format!("{}.events.jsonl", wish_id)))?;
+        .open(&events_path)?;
+    eprintln!(
+        "[codex-run] wish_id={} events_file={}",
+        wish_id,
+        events_path.display()
+    );
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
@@ -1294,6 +1301,7 @@ fn audit_and_maybe_revert(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn read_line_nonblocking<R: std::io::BufRead>(reader: &mut R) -> anyhow::Result<String> {
     let mut buf = String::new();
     let mut byte = [0u8; 1];
