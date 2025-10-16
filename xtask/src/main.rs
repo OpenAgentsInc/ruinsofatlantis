@@ -57,6 +57,29 @@ enum WishCmd {
         #[command(subcommand)]
         cmd: CodexCmd,
     },
+    /// Convenience alias: build vendored Codex CLI
+    CodexBuild,
+    /// Convenience alias: run Codex CLI once
+    CodexRun {
+        /// The single wish text to pass to Codex as the prompt
+        #[arg(long)]
+        wish: String,
+        /// Optional explicit wish id (W-...)
+        #[arg(long)]
+        id: Option<String>,
+        /// Optional JSON array of allowed path globs for scope enforcement
+        #[arg(long)]
+        scope: Option<String>,
+        /// Optional model override for Codex
+        #[arg(long)]
+        model: Option<String>,
+        /// Working directory for Codex (defaults to repo root)
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// Time budget in minutes before the Codex process is killed
+        #[arg(long, default_value_t = 180u64)]
+        timeout_mins: u64,
+    },
     /// Run a local SSE bridge exposing wish events and WISHES.md
     Bridge {
         /// Address to bind (default 127.0.0.1:7069)
@@ -861,6 +884,33 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
             rt.block_on(async move { bridge::run_bridge(&addr).await })?;
             Ok(())
         }
+        WishCmd::CodexBuild => {
+            codex_build()?;
+            Ok(())
+        }
+        WishCmd::CodexRun {
+            wish,
+            id,
+            scope,
+            model,
+            cwd,
+            timeout_mins,
+        } => {
+            let scope_globs: Vec<String> = if let Some(s) = scope {
+                serde_json::from_str(&s).unwrap_or_else(|_| vec!["**".into()])
+            } else {
+                vec!["**".into()]
+            };
+            codex_run(
+                &wish,
+                id.as_deref(),
+                &scope_globs,
+                model.as_deref(),
+                cwd.as_ref(),
+                timeout_mins,
+            )?;
+            Ok(())
+        }
         WishCmd::Codex { cmd } => match cmd {
             CodexCmd::Plan {
                 file,
@@ -1029,6 +1079,7 @@ fn codex_run(
     timeout_mins: u64,
 ) -> anyhow::Result<()> {
     use std::io::Write;
+    use std::sync::mpsc;
     let repo_root = std::env::current_dir()?;
     let (wish_id, allowed_paths, accept_cmd) =
         ensure_wishes_md_and_get_meta(wish_id_opt, &generate_wish_id(wish_text), wish_text)?;
@@ -1069,80 +1120,102 @@ fn codex_run(
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
-    let mut reader = std::io::BufReader::new(stdout);
-    let mut err_reader = std::io::BufReader::new(stderr);
+    let (tx_out, rx_out) = mpsc::channel::<String>();
+    let (tx_err, rx_err) = mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        let reader = std::io::BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let _ = tx_out.send(l);
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    std::thread::spawn(move || {
+        let reader = std::io::BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    let _ = tx_err.send(l);
+                }
+                Err(_) => break,
+            }
+        }
+    });
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_mins * 60);
-    let mut line = String::new();
+    let mut last_progress = std::time::Instant::now();
+    let mut lines_seen: u64 = 0;
     loop {
         if std::time::Instant::now() > deadline {
             let _ = child.kill();
             let _ = write_ledger(&wish_id, "Timeout", &[]);
             break;
         }
-        line.clear();
-        // Non-blocking-ish read with small timeout
-        let mut got = false;
-        if let Ok(s) = read_line_nonblocking(&mut reader) {
-            if !s.is_empty() {
-                got = true;
-                line = s;
+        // Drain stdout channel
+        while let Ok(line) = rx_out.try_recv() {
+            lines_seen += 1;
+            last_progress = std::time::Instant::now();
+            if let Err(e) = translate_and_emit_codex_line(&wish_id, &line, &mut events_file) {
+                let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": line.trim_end(), "error": e.to_string()} });
+                writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
             }
         }
-        if !got {
-            if let Ok(s) = read_line_nonblocking(&mut err_reader) {
-                if !s.is_empty() {
-                    // wrap stderr as terminal output event
-                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": s.trim_end()} });
-                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
-                }
-            }
-            // Check child status
-            if let Some(status) = child.try_wait().ok().flatten() {
-                // Process ended
-                let ok = status.success();
-                // Scope audit
-                match audit_and_maybe_revert(&repo_root, &start_sha, &allowed_paths) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "scope.audit.error", "data": {"error": e.to_string()} });
-                        writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
-                    }
-                }
-                // Acceptance
-                let rt = tokio::runtime::Runtime::new()?;
-                let (ok_build, _) = rt.block_on(run_cmd(
-                    &repo_root,
-                    "cargo",
-                    &["build", "--workspace", "--all-targets"],
-                ))?;
-                let (ok_test, _) = match &accept_cmd {
-                    Some(cmd) => rt.block_on(run_shell(&repo_root, cmd))?,
-                    None => {
-                        rt.block_on(run_cmd(&repo_root, "cargo", &["test", "--workspace", "-q"]))?
-                    }
-                };
-                if ok && ok_build && ok_test {
-                    mark_wish_completed(&wish_id, wish_text)?;
-                    write_ledger(&wish_id, "Success", &[])?;
-                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.success", "data": null });
-                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
-                } else {
-                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.failed", "data": {"exit_ok": ok, "build": ok_build, "tests": ok_test} });
-                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
-                }
-                break;
-            }
-            // brief sleep to avoid busy loop
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            continue;
-        }
-        // We got a JSONL line from codex exec
-        if let Err(e) = translate_and_emit_codex_line(&wish_id, &line, &mut events_file) {
-            // Fallback: write terminal-wrapped line for debugging
-            let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": line.trim_end(), "error": e.to_string()} });
+        // Drain stderr channel
+        while let Ok(line) = rx_err.try_recv() {
+            last_progress = std::time::Instant::now();
+            let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": line.trim_end()} });
             writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
         }
+        // Keep-alive every ~5s so users see movement
+        if last_progress.elapsed().as_secs() >= 5 {
+            eprintln!(
+                "[codex-run] alive, lines={} ({}s idle)",
+                lines_seen,
+                last_progress.elapsed().as_secs()
+            );
+            last_progress = std::time::Instant::now();
+        }
+        // Check child status
+        if let Some(status) = child.try_wait().ok().flatten() {
+            // Process ended
+            let ok = status.success();
+            // Scope audit
+            match audit_and_maybe_revert(&repo_root, &start_sha, &allowed_paths) {
+                Ok(()) => {}
+                Err(e) => {
+                    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "scope.audit.error", "data": {"error": e.to_string()} });
+                    writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+                }
+            }
+            // Acceptance
+            let rt = tokio::runtime::Runtime::new()?;
+            let (ok_build, _) = rt.block_on(run_cmd(
+                &repo_root,
+                "cargo",
+                &["build", "--workspace", "--all-targets"],
+            ))?;
+            let (ok_test, _) = match &accept_cmd {
+                Some(cmd) => rt.block_on(run_shell(&repo_root, cmd))?,
+                None => {
+                    rt.block_on(run_cmd(&repo_root, "cargo", &["test", "--workspace", "-q"]))?
+                }
+            };
+            if ok && ok_build && ok_test {
+                mark_wish_completed(&wish_id, wish_text)?;
+                write_ledger(&wish_id, "Success", &[])?;
+                let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.success", "data": null });
+                writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+            } else {
+                let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.failed", "data": {"exit_ok": ok, "build": ok_build, "tests": ok_test} });
+                writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
+            }
+            break;
+        }
+        // brief sleep to avoid busy loop
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
     Ok(())
 }
@@ -1221,12 +1294,11 @@ fn audit_and_maybe_revert(
 }
 
 fn read_line_nonblocking<R: std::io::BufRead>(reader: &mut R) -> anyhow::Result<String> {
-    use std::io::Read;
     let mut buf = String::new();
     let mut byte = [0u8; 1];
     let mut saw = false;
     loop {
-        match reader.read(&mut byte) {
+        match std::io::Read::read(reader, &mut byte) {
             Ok(0) => break,
             Ok(_) => {
                 saw = true;
