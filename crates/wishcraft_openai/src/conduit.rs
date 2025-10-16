@@ -72,12 +72,11 @@ fn parse_responses_plan(
     Ok((steps, vec![], model, tokens))
 }
 
-#[async_trait::async_trait]
 impl ConduitExec for OpenAIConduit {
     type Input = PlanInput;
     type Output = PlanOutput;
 
-    async fn exec(
+    fn exec(
         &self,
         _conduit_id: &str,
         input: Self::Input,
@@ -109,13 +108,14 @@ impl ConduitExec for OpenAIConduit {
             });
         }
 
-        // Commit mode: call OpenAI Responses API
+        // Commit mode: call OpenAI Responses API (block on local runtime)
         let body = serde_json::json!({
             "model": self.client.cfg.model,
             "input": [{ "role":"user", "content": prompt }],
             "temperature": self.client.cfg.temperature.unwrap_or(0.2),
         });
-        let resp = self.client.responses_create(body, false).await?;
+        let rt = tokio::runtime::Runtime::new()?;
+        let resp = rt.block_on(self.client.responses_create(body, false))?;
         let (steps, notes, model, tokens) = parse_responses_plan(&resp)?;
         Ok(PlanOutput {
             plan_steps: steps,
