@@ -31,9 +31,15 @@ pub struct OpenAIClient {
 
 impl OpenAIClient {
     pub fn new(cfg: OpenAIConfig) -> Self {
+        // Add default headers similar to codex-rs default_client
+        use reqwest::header::HeaderMap as Hm;
+        let mut default_headers = Hm::new();
+        default_headers.insert("originator", HeaderValue::from_static("codex_cli_rs"));
         let http = reqwest::Client::builder()
             .gzip(true)
             .brotli(true)
+            .user_agent("codex_cli_rs/0.0.0 (roa)")
+            .default_headers(default_headers)
             .timeout(std::time::Duration::from_secs(cfg.timeout_secs))
             .build()
             .expect("client");
