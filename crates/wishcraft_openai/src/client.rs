@@ -68,7 +68,11 @@ impl OpenAIClient {
             HeaderName::from_static("chatgpt-account-id"),
             HeaderValue::from_str(&account_id).unwrap(),
         );
-        let url = format!("{}/codex", self.cfg.chatgpt_base_url.trim_end_matches('/'));
+        // Mirror codex-rs provider: base points at /backend-api/codex, Chat wire adds /chat/completions
+        let url = format!(
+            "{}/chat/completions",
+            self.cfg.chatgpt_base_url.trim_end_matches('/')
+        );
         let mut attempts = 0u32;
         let mut tried_refresh = false;
         loop {
