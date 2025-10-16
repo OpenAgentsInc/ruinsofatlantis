@@ -165,7 +165,7 @@ impl OpenAIClient {
                     if payload == "[DONE]" {
                         continue;
                     }
-                    let Ok(mut ev): Result<Value, _> = serde_json::from_str(payload) else {
+                    let Ok(ev): Result<Value, _> = serde_json::from_str(payload) else {
                         continue;
                     };
                     if let Some(kind) = ev.get("type").and_then(|v| v.as_str()) {
