@@ -2,7 +2,7 @@ use crate::{
     conduit::OpenAIConduit,
     conduit::{PlanInput, PlanOutput},
 };
-use wishcraft::conduit::ExecMode;
+use wishcraft::conduit::{ConduitExec, ExecMode};
 
 pub trait PlanProvider {
     fn plan(&self, input: PlanInput, mode: ExecMode) -> anyhow::Result<PlanOutput>;
