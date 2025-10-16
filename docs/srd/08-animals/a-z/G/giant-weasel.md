@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.355 -->
+
 # Giant Weasel
 
       Medium Beast, Unaligned                                      geoning damage, or 2 (1d4) Bludgeoning damage if the

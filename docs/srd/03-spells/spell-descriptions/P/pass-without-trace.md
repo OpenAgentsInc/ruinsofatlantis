@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.151 -->
+
 # Pass without Trace
 Level 2 Abjuration (Druid, Ranger)
 

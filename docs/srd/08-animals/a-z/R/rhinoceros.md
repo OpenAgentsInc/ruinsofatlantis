@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.360 -->
+
 # Rhinoceros
 
       Large Beast, Unaligned                                        Running Leap. With a 10-foot running start, the tiger

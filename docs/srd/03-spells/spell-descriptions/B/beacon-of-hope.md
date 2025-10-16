@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.112 -->
+
 # Beacon of Hope
 Level 3 Abjuration (Cleric)
 

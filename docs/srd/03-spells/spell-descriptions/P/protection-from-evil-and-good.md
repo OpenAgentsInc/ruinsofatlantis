@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.157 -->
+
 # Protection from Evil and Good
 Level 1 Abjuration (Cleric, Druid, Paladin, Warlock, Wizard)
 

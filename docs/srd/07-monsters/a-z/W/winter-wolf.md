@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.342–343 -->
+
 # Winter Wolf
 
       Large Monstrosity, Neutral Evil                               Medium or Small Undead, Neutral Evil

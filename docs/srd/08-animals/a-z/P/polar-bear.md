@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.359 -->
+
 # Polar Bear
 
       Large Beast, Unaligned                                       Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2)

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.319–320 -->
+
 # Ancient Red Dragon
 
       Gargantuan Dragon (Chromatic), Chaotic Evil                   AC 17                             Initiative +5 (15)

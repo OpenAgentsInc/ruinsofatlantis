@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.362–363 -->
+
 # Swarm of Venomous Snakes
 
       Int 2 −4 −4          Wis 10 +0 +0         Cha 3 −4 −4

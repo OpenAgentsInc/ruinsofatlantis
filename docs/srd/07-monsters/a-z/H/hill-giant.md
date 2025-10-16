@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.298–299 -->
+
 # Hill Giant
 
                                                                     AC 18                            Initiative +3 (13)

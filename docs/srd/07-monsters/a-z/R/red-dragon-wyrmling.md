@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.318–319 -->
+
 # Red Dragon Wyrmling
 
                                                                   Int 16 +3 +3         Wis 13 +1 +7          Cha 23 +6 +6

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.324 -->
+
 # Silver Dragon Wyrmling
 
       Medium Dragon (Metallic), Lawful Good                          49 (11d8) Cold damage. Success: Half damage.

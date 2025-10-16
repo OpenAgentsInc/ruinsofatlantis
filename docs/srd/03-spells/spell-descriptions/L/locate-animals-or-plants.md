@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.144 -->
+
 # Locate Animals or Plants
 Level 2 Divination (Bard, Druid, Ranger)
 

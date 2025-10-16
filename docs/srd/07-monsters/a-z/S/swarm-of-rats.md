@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.362 -->
+
 # Swarm of Rats
 
       Medium Swarm of Tiny Beasts, Unaligned                        Cacophony (Recharge 6). Wisdom Saving Throw: DC

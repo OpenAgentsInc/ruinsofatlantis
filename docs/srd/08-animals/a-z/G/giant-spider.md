@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.353–354 -->
+
 # Giant Spider
 
 Giant Spider

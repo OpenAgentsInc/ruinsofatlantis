@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.150 -->
+
 # Misty Step
 Level 2 Conjuration (Sorcerer, Warlock, Wizard)
 

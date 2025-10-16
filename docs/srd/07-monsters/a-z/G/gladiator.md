@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.289 -->
+
 # Gladiator
 
       Medium or Small Humanoid, Neutral                            Bonus Actions

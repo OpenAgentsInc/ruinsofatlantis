@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.157 -->
+
 # Purify Food and Drink
 Level 1 Transmutation (Cleric, Druid, Paladin)
 

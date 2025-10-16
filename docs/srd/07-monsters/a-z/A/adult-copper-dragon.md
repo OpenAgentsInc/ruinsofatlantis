@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.276 -->
+
 # Adult Copper Dragon
 
       Huge Dragon (Metallic), Chaotic Good                         creature the dragon can see within 90 feet. Failure: 24

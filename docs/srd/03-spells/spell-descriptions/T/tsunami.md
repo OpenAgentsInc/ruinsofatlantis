@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.171 -->
+
 # Tsunami
 Level 8 Conjuration (Druid)
 

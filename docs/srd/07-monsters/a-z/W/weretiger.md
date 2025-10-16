@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.339 -->
+
 # Weretiger
 
       Medium or Small Monstrosity (Lycanthrope), Neutral            Skills Perception +4, Stealth +4

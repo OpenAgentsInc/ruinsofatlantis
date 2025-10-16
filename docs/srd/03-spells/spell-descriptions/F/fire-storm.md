@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.132 -->
+
 # Fire Storm
 Level 7 Evocation (Cleric, Druid, Sorcerer)
 

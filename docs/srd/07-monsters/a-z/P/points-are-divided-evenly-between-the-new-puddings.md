@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.266–267 -->
+
 # Points are divided evenly between the new puddings
 
       (round down).

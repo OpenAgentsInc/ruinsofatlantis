@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.107 -->
+
 # Aid
 Level 2 Abjuration (Bard, Cleric, Druid, Paladin, Ranger)
 

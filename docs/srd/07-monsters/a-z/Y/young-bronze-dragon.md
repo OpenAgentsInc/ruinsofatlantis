@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.270 -->
+
 # Young Bronze Dragon
 
       Large Dragon (Metallic), Lawful Good                          It can replace one attack with a use of (A) Repulsion

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.153 -->
+
 # Plant Growth
 Level 3 Transmutation (Bard, Druid, Ranger)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.278 -->
+
 # Cultist Fanatic
 
       AC 12                            Initiative +2 (12)

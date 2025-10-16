@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.307 -->
+
 # Ice Mephit
 
       Small Elemental, Neutral Evil                                   Fire damage. Success: Half damage.

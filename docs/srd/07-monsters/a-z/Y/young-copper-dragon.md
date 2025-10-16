@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.276 -->
+
 # Young Copper Dragon
 
       Large Dragon (Metallic), Chaotic Good                        Actions

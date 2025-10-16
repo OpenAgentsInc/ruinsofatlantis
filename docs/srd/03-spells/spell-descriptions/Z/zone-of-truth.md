@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.175 -->
+
 # Zone of Truth
 Level 2 Enchantment (Bard, Cleric, Paladin)
 

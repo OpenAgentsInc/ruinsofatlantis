@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.356–357 -->
+
 # Hyena
 
       Medium Beast, Unaligned                                         Senses Blindsight 120 ft.; Passive Perception 13

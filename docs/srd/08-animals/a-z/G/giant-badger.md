@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.349–350 -->
+
 # Giant Badger
 
       Medium Beast, Unaligned                                      creature and the boar moved 20+ feet straight toward it

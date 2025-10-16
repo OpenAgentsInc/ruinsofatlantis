@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.258–259 -->
+
 # Aboleth
 
       Large Aberration, Lawful Evil                                 the aboleth dies or is on a different plane of existence

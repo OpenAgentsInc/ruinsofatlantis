@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.139 -->
+
 # Healing Word
 Level 1 Abjuration (Bard, Cleric, Druid)
 

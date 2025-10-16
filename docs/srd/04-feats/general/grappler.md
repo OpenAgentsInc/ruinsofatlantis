@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.87 -->
+
 # Grappler
 General Feat (Prerequisite: Level 4+, Strength or Dexterity 13+)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.88 -->
+
 # Boon of Combat Prowess
 Epic Boon Feat (Prerequisite: Level 19+)
 

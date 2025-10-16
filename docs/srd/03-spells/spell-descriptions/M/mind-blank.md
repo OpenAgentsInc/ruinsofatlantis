@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.149 -->
+
 # Mind Blank
 Level 8 Abjuration (Bard, Wizard)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.308 -->
+
 # Steam Mephit
 
       Small Elemental, Neutral Evil                                Ocean Spear. Melee or Ranged Attack Roll: +2, reach 5

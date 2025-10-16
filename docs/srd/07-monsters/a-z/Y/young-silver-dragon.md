@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.324–325 -->
+
 # Young Silver Dragon
 
       Large Dragon (Metallic), Lawful Good                           It can replace one attack with a use of (A) Paralyzing

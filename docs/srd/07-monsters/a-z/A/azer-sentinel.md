@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.261 -->
+
 # Azer Sentinel
 
       Medium Elemental, Lawful Neutral                              Legendary Resistance (3/Day). If the balor fails a saving

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.317–318 -->
+
 # Quasit
 
                                                                      creatures under the effect of a Bless spell

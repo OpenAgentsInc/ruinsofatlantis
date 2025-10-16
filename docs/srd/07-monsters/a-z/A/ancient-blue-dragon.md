@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.267–268 -->
+
 # Ancient Blue Dragon
 
       Gargantuan Dragon (Chromatic), Lawful Evil

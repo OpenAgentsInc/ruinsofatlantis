@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.261–262 -->
+
 # Balor
 
       Huge Fiend (Demon), Chaotic Evil                              HP 11 (2d8 + 2)

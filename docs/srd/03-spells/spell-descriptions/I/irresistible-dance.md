@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.143 -->
+
 # Irresistible Dance
 Level 6 Enchantment (Bard)
 

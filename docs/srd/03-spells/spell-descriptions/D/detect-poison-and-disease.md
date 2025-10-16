@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.123 -->
+
 # Detect Poison and Disease
 Level 1 Divination (Cleric, Druid, Paladin, Ranger)
 

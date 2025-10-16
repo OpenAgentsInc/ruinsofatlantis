@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.348 -->
+
 # Eagle
 
       Small Beast, Unaligned                                      CR 1/4 (XP 50; PB +2)

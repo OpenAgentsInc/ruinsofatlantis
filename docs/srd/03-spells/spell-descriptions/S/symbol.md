@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.167 -->
+
 # Symbol
 Level 7 Abjuration (Bard, Cleric, Druid, Wizard)
 

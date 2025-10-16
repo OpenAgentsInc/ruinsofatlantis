@@ -80,6 +80,12 @@ enum WishCmd {
         /// Time budget in minutes before the Codex process is killed
         #[arg(long, default_value_t = 180u64)]
         timeout_mins: u64,
+        /// Mirror raw Codex JSONL to stderr as it arrives
+        #[arg(long, default_value_t = false)]
+        verbose: bool,
+        /// Save raw Codex JSONL to this file (defaults to ~/.roa/wish_runner/<id>.codex.jsonl)
+        #[arg(long)]
+        raw_file: Option<PathBuf>,
     },
     /// Run a local SSE bridge exposing wish events and WISHES.md
     Bridge {
@@ -896,6 +902,8 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
             model,
             cwd,
             timeout_mins,
+            verbose,
+            raw_file,
         } => {
             let scope_globs: Vec<String> = if let Some(s) = scope {
                 serde_json::from_str(&s).unwrap_or_else(|_| vec!["**".into()])
@@ -909,6 +917,8 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 model.as_deref(),
                 cwd.as_ref(),
                 timeout_mins,
+                verbose,
+                raw_file.as_ref(),
             )?;
             Ok(())
         }
@@ -1078,6 +1088,8 @@ fn codex_run(
     model: Option<&str>,
     cwd: Option<&PathBuf>,
     timeout_mins: u64,
+    verbose: bool,
+    raw_file: Option<&PathBuf>,
 ) -> anyhow::Result<()> {
     use std::io::Write;
     use std::sync::mpsc;
@@ -1130,11 +1142,24 @@ fn codex_run(
     let stderr = child.stderr.take().unwrap();
     let (tx_out, rx_out) = mpsc::channel::<String>();
     let (tx_err, rx_err) = mpsc::channel::<String>();
+    let raw_path = raw_file
+        .cloned()
+        .unwrap_or_else(|| dir.join(format!("{}.codex.jsonl", wish_id)));
+    let stderr_path = dir.join(format!("{}.stderr.log", wish_id));
+    let raw_path_clone = raw_path.clone();
     std::thread::spawn(move || {
         let reader = std::io::BufReader::new(stdout);
+        let mut raw = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(raw_path_clone)
+            .ok();
         for line in reader.lines() {
             match line {
                 Ok(l) => {
+                    if let Some(f) = raw.as_mut() {
+                        let _ = writeln!(f, "{}", l);
+                    }
                     let _ = tx_out.send(l);
                 }
                 Err(_) => break,
@@ -1143,9 +1168,17 @@ fn codex_run(
     });
     std::thread::spawn(move || {
         let reader = std::io::BufReader::new(stderr);
+        let mut ferr = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(stderr_path)
+            .ok();
         for line in reader.lines() {
             match line {
                 Ok(l) => {
+                    if let Some(f) = ferr.as_mut() {
+                        let _ = writeln!(f, "{}", l);
+                    }
                     let _ = tx_err.send(l);
                 }
                 Err(_) => break,
@@ -1166,6 +1199,9 @@ fn codex_run(
         while let Ok(line) = rx_out.try_recv() {
             lines_seen += 1;
             last_progress = std::time::Instant::now();
+            if verbose {
+                eprintln!("[codex-run][raw] {}", line);
+            }
             if let Err(e) = translate_and_emit_codex_line(&wish_id, &line, &mut events_file) {
                 let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": 0, "kind": "wish.terminal", "data": {"line": line.trim_end(), "error": e.to_string()} });
                 writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
@@ -1340,6 +1376,12 @@ fn translate_and_emit_codex_line(
     let mut data = serde_json::json!({});
     let t = v.get("type").and_then(|s| s.as_str()).unwrap_or("");
     match t {
+        "ThreadStarted" => {
+            kind = Some("codex.session");
+            if let Some(id) = v.get("thread_id").and_then(|s| s.as_str()) {
+                data = serde_json::json!({"session_id": id});
+            }
+        }
         "ItemStarted" | "ItemUpdated" | "ItemCompleted" => {
             if let Some(details) = v.get("item").and_then(|i| i.get("details")) {
                 let dty = details.get("type").and_then(|s| s.as_str()).unwrap_or("");
@@ -1358,6 +1400,35 @@ fn translate_and_emit_codex_line(
                             .map(|a| a.len())
                             .unwrap_or(0);
                         data = serde_json::json!({"steps": steps});
+                    }
+                    "CommandExecution" => {
+                        if t == "ItemStarted" {
+                            kind = Some("exec.started");
+                        } else {
+                            kind = Some("exec.completed");
+                        }
+                        let cmd = details
+                            .get("command")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("");
+                        let status = details.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                        let exit_code = details
+                            .get("exit_code")
+                            .and_then(|n| n.as_i64())
+                            .unwrap_or(0);
+                        data = serde_json::json!({"command": cmd, "status": status, "exit_code": exit_code});
+                    }
+                    "McpToolCall" => {
+                        if t == "ItemStarted" {
+                            kind = Some("tool.started");
+                        } else {
+                            kind = Some("tool.completed");
+                        }
+                        let server = details.get("server").and_then(|s| s.as_str()).unwrap_or("");
+                        let tool = details.get("tool").and_then(|s| s.as_str()).unwrap_or("");
+                        let status = details.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                        data =
+                            serde_json::json!({"server": server, "tool": tool, "status": status});
                     }
                     "FileChange" => {
                         let status = details.get("status").and_then(|s| s.as_str()).unwrap_or("");
@@ -1379,6 +1450,9 @@ fn translate_and_emit_codex_line(
         }
         "TurnCompleted" => {
             kind = Some("wish.success");
+            if let Some(u) = v.get("usage") {
+                data = u.clone();
+            }
         }
         "TurnFailed" => {
             kind = Some("wish.failed");
@@ -1435,6 +1509,8 @@ fn run_wish_orchestration_codex(
         None,
         Some(&repo_root),
         cfg.max_time_minutes,
+        false,
+        None,
     )?;
     Ok(())
 }

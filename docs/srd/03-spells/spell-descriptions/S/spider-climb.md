@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.164 -->
+
 # Spider Climb
 Level 2 Transmutation (Sorcerer, Warlock, Wizard)
 

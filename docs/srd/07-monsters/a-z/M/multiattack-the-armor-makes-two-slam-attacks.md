@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.259 -->
+
 # Multiattack. The armor makes two Slam attacks.
 
                                                                    Large Monstrosity, Unaligned

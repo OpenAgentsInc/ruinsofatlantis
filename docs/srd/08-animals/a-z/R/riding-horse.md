@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.360–361 -->
+
 # Riding Horse
 
                                                                     Int 1 −5 −5          Wis 8 −1 −1          Cha 2 −4 −4

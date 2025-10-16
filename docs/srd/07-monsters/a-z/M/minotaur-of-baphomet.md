@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.309–311 -->
+
 # Minotaur of Baphomet
 
                                                                     (3d6) every 24 hours that elapse. A creature dies and

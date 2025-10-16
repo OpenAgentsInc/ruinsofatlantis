@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.149 -->
+
 # Meteor Swarm
 Level 9 Evocation (Sorcerer, Wizard)
 

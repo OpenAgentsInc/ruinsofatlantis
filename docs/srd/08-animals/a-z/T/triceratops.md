@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.363 -->
+
 # Triceratops
 
                                                                    Int 1 −5 −5           Wis 10 +0 +0        Cha 3 −4 −4

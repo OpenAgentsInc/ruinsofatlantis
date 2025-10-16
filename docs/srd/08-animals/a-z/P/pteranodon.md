@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.359–360 -->
+
 # Pteranodon
 
                                                                    CR 0 (XP 10; PB +2)

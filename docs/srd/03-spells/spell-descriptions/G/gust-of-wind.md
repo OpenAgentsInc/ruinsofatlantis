@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.138 -->
+
 # Gust of Wind
 Level 2 Evocation (Druid, Sorcerer, Wizard)
 

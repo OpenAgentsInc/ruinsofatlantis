@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.117 -->
+
 # Confusion
 Level 4 Enchantment (Bard, Druid, Sorcerer, Wizard)
 

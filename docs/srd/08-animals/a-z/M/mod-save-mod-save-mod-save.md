@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.222–353 -->
+
 # MOD SAVE             MOD SAVE            MOD SAVE
 
 MOD SAVE             MOD SAVE            MOD SAVE

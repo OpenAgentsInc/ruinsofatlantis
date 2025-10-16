@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.350–351 -->
+
 # Giant Crab
 
       Medium Beast, Unaligned                                      Large Celestial, Neutral Good

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.300–301 -->
+
 # Reactive Heads. For each head the hydra has beyond
 
       one, it gets an extra Reaction that can be used only for

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.268–269 -->
+
 # Young Brass Dragon
 
       Large Dragon (Metallic), Chaotic Good                         (B) Spellcasting to cast Scorching Ray.

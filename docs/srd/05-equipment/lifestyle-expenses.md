@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.101 -->
+
 # Lifestyle Expenses
 
 Choose a lifestyle (Wretched, Squalid, Poor, Modest, Comfortable, Wealthy, Aristocratic) and pay the price per day/week.

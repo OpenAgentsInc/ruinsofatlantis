@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.145 -->
+
 # Longstrider
 Level 1 Transmutation (Bard, Druid, Ranger)
 

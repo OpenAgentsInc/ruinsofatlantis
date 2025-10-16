@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.147 -->
+
 # Major Image
 Level 3 Illusion (Bard, Sorcerer, Warlock, Wizard)
 

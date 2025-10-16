@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.292 -->
+
 # Ancient Gold Dragon
 
                                                                     take one of the following actions. The dragon regains all

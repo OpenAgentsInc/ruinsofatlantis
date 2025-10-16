@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.308–309 -->
+
 # Merfolk Skirmisher
 
       Medium Elemental, Neutral                                    pulls the target up to 15 feet straight toward itself.

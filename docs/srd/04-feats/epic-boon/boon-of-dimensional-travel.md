@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.88 -->
+
 # Boon of Dimensional Travel
 Epic Boon Feat (Prerequisite: Level 19+)
 

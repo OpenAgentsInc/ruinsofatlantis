@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.290 -->
+
 # Goblin Minion
 
                                                                   AC 17                             Initiative +2 (12)

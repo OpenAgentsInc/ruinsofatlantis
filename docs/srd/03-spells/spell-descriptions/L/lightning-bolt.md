@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.144–172 -->
+
 # Lightning Bolt
 Level 3 Evocation (Sorcerer, Wizard)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.273 -->
+
 # Conjure Infernal Chain. The devil conjures a fiery
 
       chain to bind a creature. Dexterity Saving Throw:

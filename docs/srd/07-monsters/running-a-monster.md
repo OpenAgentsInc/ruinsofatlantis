@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.255 -->
+
 # Running a Monster
 
 To ensure a monster acts in accordance with its Challenge Rating during combat:

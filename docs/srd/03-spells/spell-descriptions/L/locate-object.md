@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.145 -->
+
 # Locate Object
 Level 2 Divination (Bard, Cleric, Druid, Paladin, Ranger, Wizard)
 

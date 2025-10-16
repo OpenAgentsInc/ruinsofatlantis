@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.306–307 -->
+
 # Manticore
 
       Large Monstrosity, Lawful Evil                               Constrict. Strength Saving Throw: DC 17, one Medium

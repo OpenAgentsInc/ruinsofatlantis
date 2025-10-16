@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.303 -->
+
 # Kraken
 
                                                                    which falls in a space within 10 feet of the kraken with

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.313–314 -->
+
 # Phase Spider
 
       Tentacle. Melee Attack Roll: +6, reach 10 ft. Hit: 12

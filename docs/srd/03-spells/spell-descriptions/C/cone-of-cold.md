@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.117 -->
+
 # Cone of Cold
 Level 5 Evocation (Sorcerer, Wizard)
 

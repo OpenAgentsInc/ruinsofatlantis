@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.305–306 -->
+
 # Archmage
 
       Medium or Small Humanoid (Wizard), Neutral                      Senses Darkvision 60 ft.; Passive Perception 10

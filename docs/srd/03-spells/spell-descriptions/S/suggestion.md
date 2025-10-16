@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.166 -->
+
 # Suggestion
 Level 2 Enchantment (Bard, Sorcerer, Warlock, Wizard)
 

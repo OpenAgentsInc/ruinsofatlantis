@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.291–292 -->
+
 # Young Gold Dragon
 
                                                                     Legendary Resistance (3/Day, or 4/Day in Lair). If

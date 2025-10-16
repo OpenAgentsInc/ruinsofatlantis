@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.358–360 -->
+
 # Owl
 
 Owl

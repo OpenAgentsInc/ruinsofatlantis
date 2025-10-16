@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.344 -->
+
 # Allosaurus
 
       Large Beast (Dinosaur), Unaligned                            CR 1/2 (XP 100; PB +2)

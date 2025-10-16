@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.107 -->
+
 # Alarm
 Level 1 Abjuration (Ranger, Wizard)
 

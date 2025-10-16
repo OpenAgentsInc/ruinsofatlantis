@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.340–342 -->
+
 # Adult White Dragon
 
 Adult White Dragon

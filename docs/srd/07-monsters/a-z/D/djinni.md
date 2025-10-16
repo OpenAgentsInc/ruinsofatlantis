@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.280 -->
+
 # Djinni
 
       Large Elemental (Genie), Neutral                              spells, requiring no Material components and using

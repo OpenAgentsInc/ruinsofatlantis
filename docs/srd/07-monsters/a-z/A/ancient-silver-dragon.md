@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.325–326 -->
+
 # Ancient Silver Dragon
 
       Gargantuan Dragon (Metallic), Lawful Good                     ster. The dragon can’t take this action again until the

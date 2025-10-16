@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.289 -->
+
 # Glabrezu
 
       Large Fiend (Demon), Chaotic Evil                            Skills Athletics +10, Performance +5

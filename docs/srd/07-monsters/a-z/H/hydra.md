@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.300 -->
+
 # Hydra
 
       Huge Monstrosity, Unaligned                                    Nine Hells, its body disappears in sulfurous smoke, and

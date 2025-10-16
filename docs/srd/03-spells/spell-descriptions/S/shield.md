@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.161–162 -->
+
 # Shield
 Level 1 Abjuration (Sorcerer, Wizard)
 

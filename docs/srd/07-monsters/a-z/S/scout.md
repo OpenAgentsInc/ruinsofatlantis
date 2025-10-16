@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.322 -->
+
 # Scout
 
                                                                    Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 10 (2d6

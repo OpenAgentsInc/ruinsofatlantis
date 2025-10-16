@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.330–331 -->
+
 # Stone Giant
 
       Huge Giant, Neutral                                          Magic Resistance. The golem has Advantage on saving

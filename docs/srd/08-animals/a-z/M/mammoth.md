@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.357 -->
+
 # Mammoth
 
       Huge Beast, Unaligned                                        CR 1/8 (XP 25; PB +2)

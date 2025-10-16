@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.158 -->
+
 # Remove Curse
 Level 3 Abjuration (Bard, Cleric, Paladin, Warlock, Wizard)
 

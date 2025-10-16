@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.268 -->
+
 # Brass Dragon Wyrmling
 
       Medium Dragon (Metallic), Chaotic Good                        Sleep Breath. Constitution Saving Throw: DC 14, each

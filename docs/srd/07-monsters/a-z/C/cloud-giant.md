@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.275–276 -->
+
 # Cloud Giant
 
       Huge Giant, Neutral                                          it is subjected to the following effect. Constitution

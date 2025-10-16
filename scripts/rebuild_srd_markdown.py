@@ -28,7 +28,7 @@ def ensure_pdf_dump() -> str:
     TMP_DIR.mkdir(parents=True, exist_ok=True)
     if not RAW_TXT.exists():
         subprocess.run(
-            ["pdftotext", "-layout", str(PDF_PATH), str(RAW_TXT)],
+            ["pdftotext", str(PDF_PATH), str(RAW_TXT)],
             check=True,
         )
     return RAW_TXT.read_text(encoding="utf-8")

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.124 -->
+
 # Dispel Evil and Good
 Level 5 Abjuration (Cleric, Paladin)
 

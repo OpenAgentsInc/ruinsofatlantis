@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.337–338 -->
+
 # Water Elemental
 
                                                                      Senses Darkvision 60 ft.; Passive Perception 17

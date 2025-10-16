@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.322–323 -->
+
 # Sea Hag
 
                                                                    Immunities Necrotic, Poison; Exhaustion, Frightened,

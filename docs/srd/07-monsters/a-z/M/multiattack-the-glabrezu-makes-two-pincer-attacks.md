@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.289 -->
+
 # Multiattack. The glabrezu makes two Pincer attacks
 
       and uses Pummel or Spellcasting.

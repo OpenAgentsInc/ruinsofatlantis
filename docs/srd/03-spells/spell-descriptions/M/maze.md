@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.148 -->
+
 # Maze
 Level 8 Conjuration (Wizard)
 

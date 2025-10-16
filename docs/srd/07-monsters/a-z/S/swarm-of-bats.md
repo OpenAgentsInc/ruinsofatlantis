@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.361 -->
+
 # Swarm of Bats
 
       Large Swarm of Tiny Beasts, Unaligned

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.282 -->
+
 # Druid
 
       Medium or Small Humanoid (Druid), Neutral                    Charm Monster.

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.335–337 -->
+
 # Vampire
 
       Medium or Small Undead, Lawful Evil                             smaller creature, it has the Grappled condition (escape

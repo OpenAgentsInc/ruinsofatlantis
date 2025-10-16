@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.259 -->
+
 # Animated Rug of Smothering
 
       Large Construct, Unaligned                                   Acid Spray (Recharge 6). Dexterity Saving Throw: DC

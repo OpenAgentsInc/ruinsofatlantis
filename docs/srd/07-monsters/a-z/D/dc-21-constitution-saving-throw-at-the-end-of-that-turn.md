@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.298–329 -->
+
 # DC 21 Constitution saving throw at the end of that turn
 
 DC 21 Constitution saving throw at the end of that turn

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.363 -->
+
 # Tiger
 
       Large Beast, Unaligned                                       CR 8 (XP 3,900; PB +3)

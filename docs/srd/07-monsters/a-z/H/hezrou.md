@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.298 -->
+
 # Hezrou
 
       Large Fiend (Demon), Chaotic Evil                             Tree Club. Melee Attack Roll: +8, reach 10 ft. Hit: 18

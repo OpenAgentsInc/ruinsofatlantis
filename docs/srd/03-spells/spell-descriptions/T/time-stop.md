@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.169 -->
+
 # Time Stop
 Level 9 Transmutation (Sorcerer, Wizard)
 

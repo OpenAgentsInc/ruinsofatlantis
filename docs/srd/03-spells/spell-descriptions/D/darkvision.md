@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.122 -->
+
 # Darkvision
 Level 2 Transmutation (Druid, Ranger, Sorcerer, Wizard)
 

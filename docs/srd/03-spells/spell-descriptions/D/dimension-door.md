@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.123 -->
+
 # Dimension Door
 Level 4 Conjuration (Bard, Sorcerer, Warlock, Wizard)
 

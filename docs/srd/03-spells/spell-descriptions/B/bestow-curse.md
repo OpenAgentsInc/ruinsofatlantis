@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.112–113 -->
+
 # Bestow Curse
 Level 3 Necromancy (Bard, Cleric, Wizard)
 

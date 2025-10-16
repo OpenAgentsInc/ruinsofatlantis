@@ -34,7 +34,7 @@ def ensure_pdf_dump() -> None:
     if RAW_TXT.exists():
         return
     subprocess.run(
-        ["pdftotext", "-layout", str(PDF_PATH), str(RAW_TXT)],
+        ["pdftotext", str(PDF_PATH), str(RAW_TXT)],
         check=True,
     )
 

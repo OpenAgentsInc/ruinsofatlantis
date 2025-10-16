@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.115 -->
+
 # Chromatic Orb
 Level 1 Evocation (Sorcerer, Wizard)
 

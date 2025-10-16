@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.303–304 -->
+
 # Siege Monster. The kraken deals double damage to ob-
 
                                                                    Large Fiend, Chaotic Evil

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.344 -->
+
 # Ogre Zombie
 
       Large Undead, Neutral Evil                                   AC 15         Initiative +0 (10)

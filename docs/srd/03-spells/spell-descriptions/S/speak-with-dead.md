@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.164 -->
+
 # Speak with Dead
 Level 3 Necromancy (Bard, Cleric)
 

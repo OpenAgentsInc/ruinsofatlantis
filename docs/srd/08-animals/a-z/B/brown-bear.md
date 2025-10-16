@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.346–347 -->
+
 # Brown Bear
 
       Large Beast, Unaligned                                       Jumper. The cat’s jump distance is determined using its

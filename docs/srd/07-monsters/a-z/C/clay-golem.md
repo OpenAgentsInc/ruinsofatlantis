@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.274 -->
+
 # Clay Golem
 
       Large Construct, Unaligned                                     Int 13 +1 +1          Wis 14 +2 +2       Cha 7 −2 −2

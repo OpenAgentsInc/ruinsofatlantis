@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.281 -->
+
 # Dretch
 
       Small Fiend (Demon), Chaotic Evil                             Foreleg or Poison Burst in any combination.

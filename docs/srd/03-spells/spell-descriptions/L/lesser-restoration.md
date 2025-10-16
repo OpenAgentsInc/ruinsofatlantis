@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.144 -->
+
 # Lesser Restoration
 Level 2 Abjuration (Bard, Cleric, Druid, Paladin, Ranger)
 

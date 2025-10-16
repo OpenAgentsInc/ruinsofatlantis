@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.116 -->
+
 # Command
 Level 1 Enchantment (Bard, Cleric, Paladin)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.312 -->
+
 # Noble
 
       Medium or Small Humanoid, Neutral                             to Lightning or Slashing damage. Response: The jelly

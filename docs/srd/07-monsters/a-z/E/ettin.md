@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.284–285 -->
+
 # Ettin
 
       Large Giant, Chaotic Evil                                    turn, that creature takes 5 (1d10) Fire damage.

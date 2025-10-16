@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.271 -->
+
 # Ancient Bronze Dragon
 
                                                                     expended uses at the start of each of its turns.

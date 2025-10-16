@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.351 -->
+
 # Giant Fire Beetle
 
       Small Beast, Unaligned                                         takes 5 (2d4) Acid damage. If that damage doesn’t kill it,

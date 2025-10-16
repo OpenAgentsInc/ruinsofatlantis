@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.293–294 -->
+
 # Gray Ooze
 
       Medium Ooze, Unaligned                                          Passive Perception 14

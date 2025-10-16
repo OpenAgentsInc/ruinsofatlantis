@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.304 -->
+
 # Lich
 
       Medium Undead (Wizard), Neutral Evil                           Deathly Teleport. The lich teleports up to 60 feet to

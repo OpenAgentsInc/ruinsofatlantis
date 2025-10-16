@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.285–286 -->
+
 # Disadvantage on attack rolls and ability checks until the
 
 Disadvantage on attack rolls and ability checks until the

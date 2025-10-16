@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.349–352 -->
+
 # Giant Frog
 
       Medium Beast, Unaligned                                        immediately before the hit, the target takes an extra 5

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.343–344 -->
+
 # Xorn
 
       Medium Elemental, Neutral                                     from a Critical Hit. On a successful save, the zombie

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.270–271 -->
+
 # Guiding Bolt (level 2 version).
 
       Adult Bronze Dragon                                           Pounce. The dragon moves up to half its Speed, and it

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.125 -->
+
 # Divination
 Level 4 Divination (Cleric, Druid, Wizard)
 

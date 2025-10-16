@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.323 -->
+
 # Shambling Mound
 
       Large Plant, Unaligned                                         Passive Perception 10

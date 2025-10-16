@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.333 -->
+
 # Treant
 
       Huge Plant, Chaotic Good                                      turn, one of the troll’s limbs is severed, falls into the

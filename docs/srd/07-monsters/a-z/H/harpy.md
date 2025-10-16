@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.297 -->
+
 # Harpy
 
       Medium Monstrosity, Chaotic Evil                            have the Incapacitated condition.

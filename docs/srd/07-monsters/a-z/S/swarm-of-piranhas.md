@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.362 -->
+
 # Swarm of Piranhas
 
       Medium Swarm of Tiny Beasts, Unaligned                        Bites. Melee Attack Roll: +2, reach 5 ft. Hit: 5 (2d4)

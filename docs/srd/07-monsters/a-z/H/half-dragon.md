@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.297 -->
+
 # Half-Dragon
 
       Medium Dragon, Neutral                                      Luring Song. The harpy sings a magical melody, which

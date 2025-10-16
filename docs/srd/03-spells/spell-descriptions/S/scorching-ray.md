@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.159 -->
+
 # Scorching Ray
 Level 2 Evocation (Sorcerer, Wizard)
 

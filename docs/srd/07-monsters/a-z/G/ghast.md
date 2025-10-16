@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.287–288 -->
+
 # Ghast
 
       Medium Undead, Chaotic Evil                                  inside an object.

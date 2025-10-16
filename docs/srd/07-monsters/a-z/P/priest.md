@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.316–317 -->
+
 # Priest
 
       Medium or Small Humanoid (Cleric), Neutral                  Actions

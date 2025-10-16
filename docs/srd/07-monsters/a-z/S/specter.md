@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.327–328 -->
+
 # Specter
 
       Medium Undead, Chaotic Evil                                   throws against spells and other magical effects.

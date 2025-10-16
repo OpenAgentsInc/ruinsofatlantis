@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.151 -->
+
 # Nondetection
 Level 3 Abjuration (Bard, Ranger, Wizard)
 

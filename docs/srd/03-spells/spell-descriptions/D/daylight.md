@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.122 -->
+
 # Daylight
 Level 3 Evocation (Cleric, Druid, Paladin, Ranger, Sorcerer)
 

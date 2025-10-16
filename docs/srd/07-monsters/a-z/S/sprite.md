@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.329 -->
+
 # Sprite
 
       Tiny Fey, Neutral Good                                        Cunning Action. The spy takes the Dash, Disengage, or

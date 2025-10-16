@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.294–296 -->
+
 # Adult Green Dragon
 
 Adult Green Dragon

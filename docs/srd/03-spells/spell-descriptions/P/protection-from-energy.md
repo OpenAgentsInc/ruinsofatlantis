@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.157 -->
+
 # Protection from Energy
 Level 3 Abjuration (Cleric, Druid, Ranger, Sorcerer, Wizard)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.164 -->
+
 # Speak with Animals
 Level 1 Divination (Bard, Druid, Ranger)
 

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.113 -->
+
 # Blink
 Level 3 Transmutation (Sorcerer, Wizard)
 

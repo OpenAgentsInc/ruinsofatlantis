@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.277–278 -->
+
 # Ancient Copper Dragon
 
                                                                     expended uses at the start of each of its turns.

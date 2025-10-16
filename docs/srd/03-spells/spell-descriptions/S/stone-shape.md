@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.165 -->
+
 # Stone Shape
 Level 4 Transmutation (Cleric, Druid, Wizard)
 

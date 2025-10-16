@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.320 -->
+
 # Roc
 
       Gargantuan Monstrosity, Unaligned                            Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 17 (3d8 + 4)

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.290–291 -->
+
 # Goblin Warrior
 
       Small Fey (Goblinoid), Chaotic Neutral

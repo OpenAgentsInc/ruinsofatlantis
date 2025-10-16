@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.292–293 -->
+
 # Gorgon
 
       Legendary Resistance (4/Day, or 5/Day in Lair). If

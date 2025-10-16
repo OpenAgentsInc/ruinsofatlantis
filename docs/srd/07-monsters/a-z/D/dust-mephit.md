@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.307 -->
+
 # Dust Mephit
 
       Small Elemental, Neutral Evil                                   Emanation originating from the mephit. Failure: 5 (2d4)

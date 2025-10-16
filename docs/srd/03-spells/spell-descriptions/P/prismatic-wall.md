@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.155 -->
+
 # Prismatic Wall
 Level 9 Abjuration (Bard, Wizard)
 

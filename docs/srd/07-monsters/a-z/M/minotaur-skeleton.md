@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.326–327 -->
+
 # Minotaur Skeleton
 
       Large Undead, Lawful Evil                                   Actions

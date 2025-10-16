@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf pp.301–302 -->
+
 # Incubus
 
                                                                       Skills Perception +8, Stealth +10

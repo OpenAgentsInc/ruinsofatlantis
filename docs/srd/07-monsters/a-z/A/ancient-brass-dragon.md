@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.269 -->
+
 # Ancient Brass Dragon
 
       Gargantuan Dragon (Metallic), Chaotic Good                    Scorching Ray (level 3 version).

@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.302 -->
+
 # Knight
 
       Medium or Small Humanoid, Neutral                          Sunlight Sensitivity. While in sunlight, the kobold has

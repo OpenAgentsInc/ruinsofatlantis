@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.281 -->
+
 # Dragon Turtle
 
       Gargantuan Dragon, Neutral                                    Fetid Cloud (1/Day). Constitution Saving Throw: DC 11,

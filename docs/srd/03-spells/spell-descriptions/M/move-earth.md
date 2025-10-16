@@ -1,3 +1,5 @@
+<!-- Source: docs/srd/SRD_CC_v5.2.1.pdf p.151 -->
+
 # Move Earth
 Level 6 Transmutation (Druid, Sorcerer, Wizard)
 
