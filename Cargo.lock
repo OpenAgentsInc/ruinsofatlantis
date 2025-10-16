@@ -6976,6 +6976,7 @@ dependencies = [
  "clap",
  "data_runtime",
  "dirs",
+ "futures-util",
  "globset",
  "hex",
  "jsonschema",

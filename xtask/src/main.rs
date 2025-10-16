@@ -376,6 +376,7 @@ mod bridge {
         },
         routing::{get, post},
     };
+    use futures_util::StreamExt;
     use serde_json::json;
     use std::{fs, path::PathBuf, time::Duration};
     use tokio::{
@@ -383,7 +384,7 @@ mod bridge {
         io::{AsyncReadExt, AsyncSeekExt},
         time::sleep,
     };
-    use tokio_stream::{Stream, StreamExt};
+    use tokio_stream::Stream;
 
     #[derive(Clone)]
     pub struct AppState;
