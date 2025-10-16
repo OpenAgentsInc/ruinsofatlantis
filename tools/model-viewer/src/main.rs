@@ -146,6 +146,10 @@ fn try_convert_fbx_to_gltf(src: &std::path::Path) -> Option<std::path::PathBuf> 
     let _ = std::fs::create_dir_all(out_dir);
     let stem = src.file_stem()?.to_str()?;
     let out_path = out_dir.join(format!("{}.glb", stem));
+    // Fast path: if we already converted this FBX, reuse it.
+    if out_path.exists() {
+        return Some(out_path);
+    }
     if which::which("fbx2gltf").is_ok() {
         let status = std::process::Command::new("fbx2gltf")
             .arg("-b")
@@ -1140,7 +1144,6 @@ async fn run(cli: Cli) -> Result<()> {
     // Load from CLI if provided
     if let Some(p) = cli.path.as_ref() {
         if let Ok(mut gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
-            let mut need_replace_with_alt: Option<std::path::PathBuf> = None;
             match &gpu {
                 ModelGpu::Skinned {
                     center: c,
@@ -1173,27 +1176,6 @@ async fn run(cli: Cli) -> Result<()> {
                             _ => default_head_pitch_for(base, Some(p), cli.head_pitch_deg),
                         };
                     }
-                    // If no animations were found on this base, try a best-effort alternate
-                    if anims.is_empty() {
-                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                            for dir in ["assets/anims/converted", "assets/anims/dragons"] {
-                                let alt = std::path::Path::new(dir).join(format!("{stem}.glb"));
-                                if alt.exists() {
-                                    need_replace_with_alt = Some(alt);
-                                    break;
-                                }
-                                let alt2 = std::path::Path::new(dir).join(format!(
-                                    "{}{}",
-                                    stem.to_ascii_lowercase(),
-                                    ".glb"
-                                ));
-                                if alt2.exists() {
-                                    need_replace_with_alt = Some(alt2);
-                                    break;
-                                }
-                            }
-                        }
-                    }
                 }
                 ModelGpu::Basic {
                     center: c, diag: d, ..
@@ -1207,17 +1189,6 @@ async fn run(cli: Cli) -> Result<()> {
                     window.set_title(&title);
                 }
             }
-            // If we found a better base candidate, load it now (often true for FBX-converted rigs)
-            if let Some(alt) = need_replace_with_alt.take() {
-                if let Ok(repl) = load_model(&alt, &device, &queue, &mat_bgl, &skin_bgl) {
-                    log::info!(
-                        "viewer: replaced base with {} for rigged animations",
-                        alt.display()
-                    );
-                    model_gpu = Some(repl);
-                }
-            }
-
             // If an animation library is provided, and the model is skinned, merge now.
             if let Some(lib_path) = cli.anim_lib.as_ref() {
                 if let ModelGpu::Skinned {
