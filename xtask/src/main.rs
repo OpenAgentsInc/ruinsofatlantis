@@ -854,56 +854,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 Ok(())
             }
         },
-        WishCmd::Codex { cmd } => match cmd {
-            CodexCmd::Plan {
-                file,
-                region: _region,
-                out,
-                live,
-            } => {
-                let w = wish_read(&file)?;
-                // Build PlanInput from wish
-                let input = wishcraft_openai::conduit::PlanInput {
-                    repo: "ruinsofatlantis".to_string(),
-                    paths: vec!["**".to_string()],
-                    objective: w.objective.clone(),
-                    invariants: w.invariants.clone(),
-                    context_snippets: vec![],
-                };
-                let cfg = wishcraft_openai::config::OpenAIConfig::from_env_defaults()
-                    .unwrap_or_else(|_| wishcraft_openai::config::OpenAIConfig {
-                        chatgpt_base_url: std::env::var("CHATGPT_BASE_URL")
-                            .unwrap_or_else(|_| "https://chatgpt.com/backend-api/codex".into()),
-                        codex_home: std::env::var("CODEX_HOME")
-                            .map(std::path::PathBuf::from)
-                            .unwrap_or_else(|_| {
-                                dirs::home_dir().unwrap_or_default().join(".codex")
-                            }),
-                        model: std::env::var("OPENAI_MODEL")
-                            .unwrap_or_else(|_| "gpt-4o-mini".into()),
-                        temperature: Some(0.2),
-                        timeout_secs: 30,
-                    });
-                let client = wishcraft_openai::client::OpenAIClient::new(cfg);
-                let conduit = wishcraft_openai::OpenAIConduit::new(client);
-                let mode = if live {
-                    wishcraft::conduit::ExecMode::Commit
-                } else {
-                    wishcraft::conduit::ExecMode::ShadowRun
-                };
-                let rt = tokio::runtime::Runtime::new()?;
-                let out_val = rt.block_on(async move {
-                    conduit.exec("openai.codex.v2025.plan", input, mode).await
-                })?;
-                let s = serde_json::to_string_pretty(&out_val)?;
-                if let Some(path) = out {
-                    fs::write(path, s)?;
-                } else {
-                    println!("{}", s);
-                }
-                Ok(())
-            }
-        },
+
         WishCmd::Bridge { addr } => {
             let addr = addr.unwrap_or_else(|| "127.0.0.1:7069".to_string());
             let rt = tokio::runtime::Runtime::new()?;
@@ -1132,10 +1083,10 @@ fn codex_run(
         line.clear();
         // Non-blocking-ish read with small timeout
         let mut got = false;
-        if let Ok(n) = read_line_nonblocking(&mut reader) {
-            if n > 0 {
+        if let Ok(s) = read_line_nonblocking(&mut reader) {
+            if !s.is_empty() {
                 got = true;
-                line = n;
+                line = s;
             }
         }
         if !got {
@@ -1159,18 +1110,17 @@ fn codex_run(
                     }
                 }
                 // Acceptance
-                let (ok_build, _) = futures::executor::block_on(run_cmd(
+                let rt = tokio::runtime::Runtime::new()?;
+                let (ok_build, _) = rt.block_on(run_cmd(
                     &repo_root,
                     "cargo",
                     &["build", "--workspace", "--all-targets"],
                 ))?;
                 let (ok_test, _) = match &accept_cmd {
-                    Some(cmd) => futures::executor::block_on(run_shell(&repo_root, cmd))?,
-                    None => futures::executor::block_on(run_cmd(
-                        &repo_root,
-                        "cargo",
-                        &["test", "--workspace", "-q"],
-                    ))?,
+                    Some(cmd) => rt.block_on(run_shell(&repo_root, cmd))?,
+                    None => {
+                        rt.block_on(run_cmd(&repo_root, "cargo", &["test", "--workspace", "-q"]))?
+                    }
                 };
                 if ok && ok_build && ok_test {
                     mark_wish_completed(&wish_id, wish_text)?;
