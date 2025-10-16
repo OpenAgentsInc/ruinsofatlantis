@@ -1001,6 +1001,8 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                     model.as_deref(),
                     cwd.as_ref(),
                     timeout_mins,
+                    false,
+                    None,
                 )?;
                 Ok(())
             }
