@@ -46,31 +46,7 @@ Return a numbered plan with concrete steps and acceptance checks."#,
     )
 }
 
-fn parse_responses_plan(
-    resp: &serde_json::Value,
-) -> anyhow::Result<(Vec<String>, Vec<String>, Option<String>, Option<u64>)> {
-    let model = resp
-        .get("model")
-        .and_then(|m| m.as_str())
-        .map(|s| s.to_string());
-    let tokens = resp
-        .get("usage")
-        .and_then(|u| u.get("total_tokens"))
-        .and_then(|t| t.as_u64());
-    let text = resp
-        .pointer("/output_text")
-        .or_else(|| resp.pointer("/output/0/content/0/text"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    let steps = text
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>();
-    Ok((steps, vec![], model, tokens))
-}
+// (formerly parse_responses_plan) — removed after pivot to ChatGPT backend
 
 #[async_trait::async_trait]
 impl ConduitExec for OpenAIConduit {

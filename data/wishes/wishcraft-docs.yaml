@@ -1,0 +1,34 @@
+title: "Author Wishcraft Documentation Overview"
+objective: "Draft and deliver a complete, navigable documentation overview for the Wishcraft system at docs/wish.md, covering architecture (Conduits, Schema, Lint/Heat, Plan/Commit flow, Ledger), CLI usage, configuration, and extension points, with cross‑links into existing GDD technical docs and registry files."
+scope:
+  region: "repo/docs"
+  duration_days: 2
+invariants:
+  - "No secrets or tokens are surfaced"
+  - "Use repository context only; do not invent APIs beyond current code"
+  - "Follow docs style: short headers, cross‑links, and stable paths"
+  - "Place the new document at docs/wish.md; no other files modified"
+  - "Use only information present in the codebase (wishcraft, wishcraft_openai, xtask) and existing docs"
+budget:
+  chrono_sand: 1
+  genie_slots: 1
+  gold_cap: 0
+tools:
+  - "openai.codex.v2025.plan"
+plan:
+  - "Survey code: crates/wishcraft (schema, lint, score, heat, conduit, ledger traits)"
+  - "Survey code: crates/wishcraft_openai (config, client ChatGPT flow, conduit, provider seam)"
+  - "Document Conduits: registry, descriptors, ExecMode, headers, auth via CODEX_HOME/auth.json"
+  - "Document Wish Schema v0.1 with a minimal, runnable example (YAML)"
+  - "Document Lint and Heat: what is checked; tier effects; conduit multipliers"
+  - "Document CLI: xtask wish lint|conduits list|codex plan usage (ShadowRun vs Commit)"
+  - "Add pointers to GDD technical docs (schema/flow, conduits spec) and registry.yaml"
+  - "Write docs/wish.md with sections: Overview, Schema, Conduits, Auth, Flow, CLI, Extending"
+  - "Validate internal links and file paths"
+safety_tests:
+  - "Check docs/wish.md compiles to headings: Overview, Schema, Conduits, Flow, CLI"
+  - "Verify no external tokens or secrets are printed"
+  - "Lint wish file passes and conduit registry resolves"
+rollback:
+  - "If unsatisfactory, remove docs/wish.md and re‑run with revised outline"
+  - "Keep existing docs untouched; this wish is additive only"
