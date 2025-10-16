@@ -57,6 +57,12 @@ enum WishCmd {
         #[command(subcommand)]
         cmd: CodexCmd,
     },
+    /// Run a local SSE bridge exposing wish events and WISHES.md
+    Bridge {
+        /// Address to bind (default 127.0.0.1:7069)
+        #[arg(long)]
+        addr: Option<String>,
+    },
     /// Run a hands-off orchestration loop on a single wish string
     Run {
         /// The single wish text
@@ -356,6 +362,156 @@ fn warn_hooks() {
                 "xtask: note: couldn't read git hooksPath; you can enable pre-push checks via 'git config core.hooksPath .githooks'"
             );
         }
+    }
+}
+
+mod bridge {
+    use axum::{
+        Json, Router,
+        extract::{Path, State},
+        http::StatusCode,
+        response::{
+            IntoResponse,
+            sse::{Event, Sse},
+        },
+        routing::{get, post},
+    };
+    use serde_json::json;
+    use std::{fs, path::PathBuf, time::Duration};
+    use tokio::{
+        fs::File,
+        io::{AsyncReadExt, AsyncSeekExt},
+        time::sleep,
+    };
+    use tokio_stream::Stream;
+    use tokio_stream::StreamExt as _;
+
+    #[derive(Clone)]
+    pub struct AppState;
+
+    pub async fn run_bridge(addr: &str) -> anyhow::Result<()> {
+        let app = Router::new()
+            .route("/last", get(last))
+            .route("/wishes", get(wishes).post(wishes_post))
+            .route("/ledger/:id", get(ledger))
+            .route("/events/:id", get(events))
+            .with_state(AppState);
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        eprintln!("wish bridge listening on http://{}", addr);
+        axum::serve(listener, app).await?;
+        Ok(())
+    }
+
+    async fn last(State(_st): State<AppState>) -> impl IntoResponse {
+        let dir = dirs::home_dir().unwrap().join(".roa/wish_runner");
+        let mut latest: Option<(String, std::time::SystemTime)> = None;
+        if let Ok(rd) = fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                    if name.ends_with(".events.jsonl") {
+                        if let Ok(meta) = e.metadata() {
+                            if let Ok(mtime) = meta.modified() {
+                                let id = name.trim_end_matches(".events.jsonl").to_string();
+                                if latest.as_ref().map(|l| mtime > l.1).unwrap_or(true) {
+                                    latest = Some((id, mtime));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let id = latest.map(|l| l.0);
+        (StatusCode::OK, Json(json!({"wish_id": id })))
+    }
+
+    async fn wishes(State(_st): State<AppState>) -> impl IntoResponse {
+        match super::parse_wishes_md() {
+            Ok((_lines, items)) => {
+                let mut pending = Vec::new();
+                let mut completed = Vec::new();
+                for it in items {
+                    let obj = json!({"id": it.meta.id, "text": it.text});
+                    if it.checked {
+                        completed.push(obj);
+                    } else {
+                        pending.push(obj);
+                    }
+                }
+                (
+                    StatusCode::OK,
+                    Json(json!({"pending": pending, "completed": completed})),
+                )
+            }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            ),
+        }
+    }
+
+    async fn wishes_post(State(_st): State<AppState>, body: String) -> impl IntoResponse {
+        let text = body.trim();
+        if text.is_empty() {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error":"empty"})));
+        }
+        let generated = format!(
+            "W-{}-{}",
+            chrono::Utc::now().format("%Y%m%d-%H%M%S"),
+            "xxxx"
+        );
+        match super::ensure_wishes_md_and_get_meta(None, &generated, text) {
+            Ok((id, _scope, _acc)) => (StatusCode::OK, Json(json!({"id": id}))),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            ),
+        }
+    }
+
+    async fn ledger(State(_st): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+        let path = PathBuf::from(".wish-ledger").join(format!("{}.json", id));
+        match fs::read_to_string(&path) {
+            Ok(s) => (
+                StatusCode::OK,
+                Json(serde_json::from_str::<serde_json::Value>(&s).unwrap_or(json!({"raw": s}))),
+            ),
+            Err(e) => (StatusCode::NOT_FOUND, Json(json!({"error": e.to_string()}))),
+        }
+    }
+
+    async fn events(
+        State(_st): State<AppState>,
+        Path(id): Path<String>,
+    ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+        let path = dirs::home_dir()
+            .unwrap()
+            .join(".roa/wish_runner")
+            .join(format!("{}.events.jsonl", id));
+        let stream = tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(
+            Duration::from_millis(200),
+        ))
+        .scan(0u64, move |offset, _| {
+            let path = path.clone();
+            async move {
+                let mut buf = String::new();
+                if let Ok(mut f) = File::open(&path).await {
+                    let _ = f.seek(std::io::SeekFrom::Start(*offset)).await.ok();
+                    if f.read_to_string(&mut buf).await.is_ok() && !buf.is_empty() {
+                        *offset += buf.len() as u64;
+                        let mut evs = Vec::new();
+                        for line in buf.lines() {
+                            evs.push(Event::default().data(line.to_string()));
+                        }
+                        return Some(evs);
+                    }
+                }
+                Some(Vec::new())
+            }
+        })
+        .flat_map(|events| tokio_stream::iter(events.into_iter().map(Ok)));
+        Sse::new(stream)
     }
 }
 
@@ -715,6 +871,12 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 Ok(())
             }
         },
+        WishCmd::Bridge { addr } => {
+            let addr = addr.unwrap_or_else(|| "127.0.0.1:7069".to_string());
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(async move { bridge::run_bridge(&addr).await })?;
+            Ok(())
+        }
         WishCmd::Run {
             wish,
             timeout_mins,
