@@ -1,5 +1,6 @@
 use crate::config::OpenAIConfig;
 use base64::Engine as _;
+use base64::Engine as _;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::fs;
@@ -122,7 +123,8 @@ impl OpenAIClient {
                         continue;
                     }
                 }
-                return Err(OpenAIError::Auth(format!("{}", status)));
+                let detail = extract_error_detail(&text);
+                return Err(OpenAIError::Auth(format!("{}: {}", status, detail)));
             } else if status.as_u16() == 429 && attempts <= self.max_retries {
                 let mut delay_ms = self.backoff_millis;
                 if let Some(v) = hdrs.get("retry-after") {
@@ -198,6 +200,27 @@ fn decode_account_from_id_token(id_token_opt: Option<&str>) -> Option<String> {
         }
     }
     None
+}
+
+fn extract_error_detail(text: &str) -> String {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
+        if let Some(m) = v
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|s| s.as_str())
+        {
+            return m.to_string();
+        }
+        if let Some(m) = v.get("message").and_then(|s| s.as_str()) {
+            return m.to_string();
+        }
+    }
+    let s = text.trim();
+    if s.len() > 512 {
+        s[..512].to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
