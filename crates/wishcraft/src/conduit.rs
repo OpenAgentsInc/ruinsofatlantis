@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum Disposition {
+    #[default]
     Literalist,
     Maximizer,
     Egalitarian,
@@ -18,25 +19,28 @@ pub enum Domain {
     WorldAuthoring,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum RiskClass {
+    #[default]
     Low,
     Medium,
     High,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum Determinism {
+    #[default]
     Deterministic,
     Stochastic,
     Mockable,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum Latency {
+    #[default]
     Instant,
     Short,
     Long,
@@ -88,6 +92,25 @@ pub struct ConduitDescriptor {
     pub audit_fields: Vec<String>,
 }
 
+impl Default for ConduitDescriptor {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            label: String::new(),
+            disposition: Disposition::Literalist,
+            domains: vec![],
+            scopes: vec![],
+            cost_profile: CostProfile::default(),
+            risk_class: RiskClass::Low,
+            determinism: Determinism::Deterministic,
+            latency_class: Latency::Instant,
+            permissions: vec![],
+            limits: Limits::default(),
+            audit_fields: vec![],
+        }
+    }
+}
+
 pub trait ConduitRegistry {
     fn get(&self, id: &str) -> Option<ConduitDescriptor>;
     fn allow(&self, id: &str) -> bool {
@@ -102,10 +125,11 @@ pub enum ExecMode {
     Commit,
 }
 
+#[async_trait::async_trait]
 pub trait ConduitExec {
     type Input: Serialize + for<'de> Deserialize<'de>;
     type Output: Serialize + for<'de> Deserialize<'de>;
-    fn exec(
+    async fn exec(
         &self,
         conduit_id: &str,
         input: Self::Input,

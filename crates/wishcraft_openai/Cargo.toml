@@ -24,3 +24,10 @@ time = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 tracing = "0.1"
 wishcraft = { path = "../wishcraft" }
+
+[dev-dependencies]
+assert_matches = "1"
+httpmock = "0.7"
+serial_test = "3"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

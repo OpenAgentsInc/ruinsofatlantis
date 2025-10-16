@@ -21,6 +21,8 @@ pub enum OpenAIError {
 pub struct OpenAIClient {
     pub cfg: OpenAIConfig,
     http: reqwest::Client,
+    max_retries: u32,
+    backoff_millis: u64,
 }
 
 impl OpenAIClient {
@@ -31,7 +33,21 @@ impl OpenAIClient {
             .timeout(std::time::Duration::from_secs(cfg.timeout_secs))
             .build()
             .expect("client");
-        Self { cfg, http }
+        Self {
+            cfg,
+            http,
+            max_retries: 0,
+            backoff_millis: 100,
+        }
+    }
+
+    pub fn with_max_retries(mut self, n: u32) -> Self {
+        self.max_retries = n;
+        self
+    }
+    pub fn with_backoff_millis(mut self, ms: u64) -> Self {
+        self.backoff_millis = ms;
+        self
     }
 
     #[cfg(feature = "responses")]
@@ -59,32 +75,53 @@ impl OpenAIClient {
             }
         }
 
-        let res = self
-            .http
-            .post(url)
-            .headers(headers)
-            .body(body.to_string())
-            .send()
-            .await
-            .map_err(|e| OpenAIError::Network(e.to_string()))?;
-        let status = res.status();
-        let text = res
-            .text()
-            .await
-            .map_err(|e| OpenAIError::Network(e.to_string()))?;
-        if status.is_success() {
-            let v: Value =
-                serde_json::from_str(&text).map_err(|e| OpenAIError::Decode(e.to_string()))?;
-            Ok(v)
-        } else if status.as_u16() == 401 || status.as_u16() == 403 {
-            Err(OpenAIError::Auth(format!("{}", status)))
-        } else if status.as_u16() == 429 {
-            Err(OpenAIError::RateLimited(None))
-        } else {
-            Err(OpenAIError::Http {
-                status: status.as_u16(),
-                body: text,
-            })
+        let mut attempts = 0u32;
+        loop {
+            attempts += 1;
+            let res = self
+                .http
+                .post(&url)
+                .headers(headers.clone())
+                .body(body.to_string())
+                .send()
+                .await
+                .map_err(|e| OpenAIError::Network(e.to_string()))?;
+            let status = res.status();
+            let hdrs = res.headers().clone();
+            let text = res
+                .text()
+                .await
+                .map_err(|e| OpenAIError::Network(e.to_string()))?;
+            if status.is_success() {
+                let v: Value =
+                    serde_json::from_str(&text).map_err(|e| OpenAIError::Decode(e.to_string()))?;
+                return Ok(v);
+            } else if status.as_u16() == 401 || status.as_u16() == 403 {
+                return Err(OpenAIError::Auth(format!("{}", status)));
+            } else if status.as_u16() == 429 && attempts <= self.max_retries {
+                let mut delay_ms = self.backoff_millis;
+                if let Some(v) = hdrs.get("retry-after") {
+                    if let Ok(s) = v.to_str() {
+                        if let Ok(secs) = s.parse::<u64>() {
+                            delay_ms = secs * 1000;
+                        }
+                    }
+                }
+                if delay_ms > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+                continue;
+            } else if attempts <= self.max_retries && status.is_server_error() {
+                if self.backoff_millis > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(self.backoff_millis)).await;
+                }
+                continue;
+            } else {
+                return Err(OpenAIError::Http {
+                    status: status.as_u16(),
+                    body: text,
+                });
+            }
         }
     }
 }

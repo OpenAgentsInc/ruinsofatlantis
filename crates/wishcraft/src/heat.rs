@@ -52,13 +52,27 @@ pub fn estimate_heat(w: &Wish, novelty: f32) -> HeatBreakdown {
     let chain_len_factor = (w.plan.len() as f32).max(1.0).min(5.0) / 3.0; // ~0.33..1.67
     let speed = 1.0; // placeholder: instant vs scheduled
     let base = 10.0; // arbitrary base unit
+    // Heuristic conduit factor (used when no registry factoring is provided).
+    let mut conduit_factor = 1.0f32;
+    for id in &w.tools {
+        let s = id.to_ascii_lowercase();
+        if s.contains("apply") || s.contains("open_pr") {
+            conduit_factor *= 1.3; // High risk class heuristic
+        } else if s.contains("plan") || s.contains("codex") {
+            conduit_factor *= 1.15; // Medium risk class heuristic
+        } else if s.contains("low") {
+            conduit_factor *= 1.0; // Low risk
+        }
+    }
+
     let total = base
         * scope_factor
         * novelty
         * speed
         * reversibility_penalty
         * clarity_penalty
-        * chain_len_factor;
+        * chain_len_factor
+        * conduit_factor;
     HeatBreakdown {
         total,
         scope_factor,
