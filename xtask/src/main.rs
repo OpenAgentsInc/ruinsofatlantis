@@ -74,6 +74,9 @@ enum WishCmd {
         /// Max iterations
         #[arg(long)]
         max_iters: Option<u32>,
+        /// Allow running with a dirty working tree (skips clean check)
+        #[arg(long, default_value_t = false)]
+        allow_dirty: bool,
     },
 }
 
@@ -376,7 +379,7 @@ mod bridge {
         },
         routing::get,
     };
-    use futures_util::StreamExt;
+    // StreamExt not currently needed; keep imports minimal
     use serde_json::json;
     use std::{fs, path::PathBuf, time::Duration};
     use tokio::sync::mpsc;
@@ -393,8 +396,8 @@ mod bridge {
         let app = Router::new()
             .route("/last", get(last))
             .route("/wishes", get(wishes).post(wishes_post))
-            .route("/ledger/:id", get(ledger))
-            .route("/events/:id", get(events))
+            .route("/ledger/{id}", get(ledger))
+            .route("/events/{id}", get(events))
             .with_state(AppState);
         let listener = tokio::net::TcpListener::bind(addr).await?;
         eprintln!("wish bridge listening on http://{}", addr);
@@ -885,6 +888,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
             wish,
             timeout_mins,
             max_iters,
+            allow_dirty,
         } => {
             let cfg = RunnerConfig {
                 max_time_minutes: timeout_mins.unwrap_or(180),
@@ -894,7 +898,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 require_consecutive_greens: 2,
             };
             let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(async move { run_wish_orchestration(&wish, None, cfg).await })?;
+            rt.block_on(async move { run_wish_orchestration(&wish, allow_dirty, cfg).await })?;
             Ok(())
         }
     }
@@ -911,7 +915,7 @@ struct RunnerConfig {
 
 async fn run_wish_orchestration(
     wish_text: &str,
-    wish_id_arg: Option<&str>,
+    allow_dirty: bool,
     cfg: RunnerConfig,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
@@ -926,10 +930,19 @@ async fn run_wish_orchestration(
         hex::encode(h.finalize())[..4].to_string()
     );
     let (wish_id, allowed_paths, accept_cmd) =
-        ensure_wishes_md_and_get_meta(wish_id_arg, &generated_id, wish_text)?;
+        ensure_wishes_md_and_get_meta(None, &generated_id, wish_text)?;
 
     let repo_root = std::env::current_dir()?;
-    git_assert_clean(&repo_root).context("working tree not clean")?;
+    if !allow_dirty {
+        if let Err(e) = git_assert_clean(&repo_root) {
+            eprintln!(
+                "working tree not clean. Stash or commit changes, or pass --allow-dirty to proceed (will commit on a new branch). Error: {e}"
+            );
+            return Err(e);
+        }
+    } else {
+        eprintln!("xtask: proceeding with dirty working tree (--allow-dirty)");
+    }
     git_checkout_new_branch(&repo_root, &format!("wish/{wish_id}"))?;
 
     persist_wish_schema_file(&wish_id, wish_text)?;
@@ -942,7 +955,7 @@ async fn run_wish_orchestration(
     let mut iteration: u32 = 0;
     let mut last_plan_hash: Option<String> = None;
     let mut stall_counter: u32 = 0;
-    let mut breaker_counter: u32 = 0;
+    // breaker_counter removed; we bail immediately once retries exceed budget
     let mut consecutive_greens: u32 = 0;
     let allowed_paths: Vec<String> = if allowed_paths.is_empty() {
         vec!["**".to_string()]
@@ -1011,7 +1024,6 @@ async fn run_wish_orchestration(
                 if !ok_build {
                     tries += 1;
                     if tries > cfg.fix_tries_per_step {
-                        breaker_counter += 1;
                         anyhow::bail!("build failing after {} tries", cfg.fix_tries_per_step);
                     }
                     let fix_patch =
@@ -1031,7 +1043,6 @@ async fn run_wish_orchestration(
                 }
                 tries += 1;
                 if tries > cfg.fix_tries_per_step {
-                    breaker_counter += 1;
                     anyhow::bail!("tests failing after {} fixes", cfg.fix_tries_per_step);
                 }
                 let fix_patch =
@@ -1078,10 +1089,7 @@ async fn run_wish_orchestration(
         } else {
             stall_counter = 0;
         }
-        if breaker_counter >= 3 {
-            write_ledger(&wish_id, "BreakerTripped", &[])?;
-            anyhow::bail!("breaker tripped");
-        }
+        // no breaker counter; failures above already bail with a clear reason
     }
     Ok(())
 }
@@ -1194,26 +1202,7 @@ fn persist_wish_schema_file(wish_id: &str, wish_text: &str) -> anyhow::Result<()
     Ok(())
 }
 
-fn ensure_wishes_md(wish_id: &str, wish_text: &str) -> anyhow::Result<()> {
-    let path = std::path::Path::new("WISHES.md");
-    if !path.exists() {
-        let mut s = String::new();
-        s.push_str("# Wishes\n\n");
-        s.push_str("## Pending\n\n");
-        s.push_str("- [ ] Convert the SRD PDF fully to Markdown in appropriate files/folders. All text must be reproduced verbatim with specific page numbers cited.\n");
-        s.push_str("\n## Completed\n\n");
-        std::fs::write(path, s)?;
-    }
-    let mut cur = std::fs::read_to_string(path)?;
-    if !cur.contains(wish_text) {
-        if let Some(pidx) = cur.find("## Pending") {
-            let ins = format!("- [ ] {wish_text} (id: {wish_id})\n");
-            cur.insert_str(pidx + "## Pending\n\n".len(), &ins);
-            std::fs::write(path, cur)?;
-        }
-    }
-    Ok(())
-}
+// (deprecated) legacy helper retained for context; no longer used.
 
 fn mark_wish_completed(wish_id: &str, wish_text: &str) -> anyhow::Result<()> {
     let path = std::path::Path::new("WISHES.md");
@@ -1236,7 +1225,6 @@ struct WishMeta {
     id: Option<String>,
     scope: Vec<String>,
     accept: Option<String>,
-    raw: String,
 }
 
 #[derive(Debug, Clone)]
@@ -1287,7 +1275,6 @@ fn parse_wishes_md() -> anyhow::Result<(Vec<String>, Vec<WishLine>)> {
 
 fn parse_meta_comment(c: &str) -> WishMeta {
     let mut m = WishMeta {
-        raw: c.to_string(),
         ..Default::default()
     };
     let c = c.trim();
