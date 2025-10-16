@@ -232,14 +232,19 @@ def rebuild() -> None:
     full_text_lower = full_text.lower()
     page_starts, total_len = make_page_index(full_text)
 
-    spell_block_start = full_text_lower.find("\nspell descriptions")
+    spell_block_start = full_text_lower.find("\fspell descriptions")
+    if spell_block_start == -1:
+        spell_block_start = full_text_lower.find("\nspell descriptions")
     if spell_block_start == -1:
         raise RuntimeError("Unable to locate 'Spell Descriptions' section in PDF.")
-    spell_block_end = full_text_lower.find("\nspell lists", spell_block_start)
+    spell_block_end = full_text_lower.find("\fspell lists", spell_block_start)
     if spell_block_end == -1:
-        spell_block_end = len(full_text_lower)
+        spell_block_end = full_text_lower.find("\nspell lists", spell_block_start)
+        if spell_block_end == -1:
+            spell_block_end = len(full_text_lower)
 
     starts: list[int] = []
+    spell_cursor = spell_block_start
     cursor = 0
     for path in ordered_files:
         heading = heading_for_file(path)
@@ -254,8 +259,9 @@ def rebuild() -> None:
         search_end = len(full_text_lower)
         is_spell = "03-spells/spell-descriptions" in str(path)
         if is_spell:
-            if search_start < spell_block_start or search_start > spell_block_end:
-                search_start = spell_block_start
+            if spell_cursor < spell_block_start or spell_cursor > spell_block_end:
+                spell_cursor = spell_block_start
+            search_start = spell_cursor
             search_end = spell_block_end
 
         match = pattern.search(full_text_lower, search_start, search_end)
@@ -264,6 +270,8 @@ def rebuild() -> None:
         start = match.start()
         starts.append(start)
         cursor = start + 1
+        if is_spell:
+            spell_cursor = start + 1
 
     starts.append(total_len)
 
