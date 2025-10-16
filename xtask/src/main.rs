@@ -374,17 +374,17 @@ mod bridge {
             IntoResponse,
             sse::{Event, Sse},
         },
-        routing::{get, post},
+        routing::get,
     };
     use futures_util::StreamExt;
     use serde_json::json;
     use std::{fs, path::PathBuf, time::Duration};
+    use tokio::sync::mpsc;
     use tokio::{
         fs::File,
         io::{AsyncReadExt, AsyncSeekExt},
-        time::sleep,
     };
-    use tokio_stream::Stream;
+    use tokio_stream::{Stream, wrappers::ReceiverStream};
 
     #[derive(Clone)]
     pub struct AppState;
@@ -489,29 +489,33 @@ mod bridge {
             .unwrap()
             .join(".roa/wish_runner")
             .join(format!("{}.events.jsonl", id));
-        let stream = tokio_stream::wrappers::IntervalStream::new(tokio::time::interval(
-            Duration::from_millis(200),
-        ))
-        .scan(0u64, move |offset, _| {
-            let path = path.clone();
-            async move {
-                let mut buf = String::new();
+        let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(128);
+        tokio::spawn(async move {
+            let mut offset: u64 = 0;
+            if let Ok(md) = tokio::fs::metadata(&path).await {
+                offset = md.len();
+            }
+            loop {
                 if let Ok(mut f) = File::open(&path).await {
-                    let _ = f.seek(std::io::SeekFrom::Start(*offset)).await.ok();
+                    let _ = f.seek(std::io::SeekFrom::Start(offset)).await.ok();
+                    let mut buf = String::new();
                     if f.read_to_string(&mut buf).await.is_ok() && !buf.is_empty() {
-                        *offset += buf.len() as u64;
-                        let mut evs = Vec::new();
+                        offset += buf.len() as u64;
                         for line in buf.lines() {
-                            evs.push(Event::default().data(line.to_string()));
+                            if tx
+                                .send(Ok(Event::default().data(line.to_string())))
+                                .await
+                                .is_err()
+                            {
+                                return;
+                            }
                         }
-                        return Some(evs);
                     }
                 }
-                Some(Vec::new())
+                tokio::time::sleep(Duration::from_millis(200)).await;
             }
-        })
-        .flat_map(|events| tokio_stream::iter(events.into_iter().map(Ok)));
-        Sse::new(stream)
+        });
+        Sse::new(ReceiverStream::new(rx))
     }
 }
 
@@ -912,11 +916,7 @@ async fn run_wish_orchestration(
 ) -> anyhow::Result<()> {
     use anyhow::Context;
     use sha2::{Digest, Sha256};
-    use std::{
-        fs,
-        path::PathBuf,
-        time::{Duration, Instant},
-    };
+    use std::time::{Duration, Instant};
 
     let mut h = Sha256::new();
     h.update(wish_text.as_bytes());
@@ -1250,7 +1250,7 @@ struct WishLine {
 fn parse_wishes_md() -> anyhow::Result<(Vec<String>, Vec<WishLine>)> {
     let path = std::path::Path::new("WISHES.md");
     let s = std::fs::read_to_string(path)?;
-    let mut lines: Vec<String> = s.lines().map(|l| l.to_string()).collect();
+    let lines: Vec<String> = s.lines().map(|l| l.to_string()).collect();
     let mut items = Vec::new();
     for (i, l) in lines.iter().enumerate() {
         let t = l.trim();
@@ -1379,7 +1379,7 @@ fn ensure_wishes_md_and_get_meta(
         .unwrap_or_else(|| generated.to_string());
     let mut scope: Vec<String> = vec![];
     let mut accept: Option<String> = None;
-    if let Some(mut it) = target {
+    if let Some(it) = target {
         if it.meta.id.is_none() {
             // Inject id into the comment or append a new one
             let line = &lines[it.line_idx];
