@@ -57,6 +57,18 @@ enum WishCmd {
         #[command(subcommand)]
         cmd: CodexCmd,
     },
+    /// Run a hands-off orchestration loop on a single wish string
+    Run {
+        /// The single wish text
+        #[arg(long)]
+        wish: String,
+        /// Max time budget (minutes)
+        #[arg(long)]
+        timeout_mins: Option<u64>,
+        /// Max iterations
+        #[arg(long)]
+        max_iters: Option<u32>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -703,5 +715,464 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 Ok(())
             }
         },
+        WishCmd::Run {
+            wish,
+            timeout_mins,
+            max_iters,
+        } => {
+            let cfg = RunnerConfig {
+                max_time_minutes: timeout_mins.unwrap_or(180),
+                max_iters: max_iters.unwrap_or(50),
+                stall_window: 5,
+                fix_tries_per_step: 3,
+                require_consecutive_greens: 2,
+            };
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(async move { run_wish_orchestration(&wish, cfg).await })?;
+            Ok(())
+        }
     }
+}
+
+#[derive(Clone, Copy)]
+struct RunnerConfig {
+    max_time_minutes: u64,
+    max_iters: u32,
+    stall_window: u32,
+    fix_tries_per_step: u32,
+    require_consecutive_greens: u32,
+}
+
+async fn run_wish_orchestration(wish_text: &str, cfg: RunnerConfig) -> anyhow::Result<()> {
+    use anyhow::Context;
+    use sha2::{Digest, Sha256};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{Duration, Instant},
+    };
+
+    let mut h = Sha256::new();
+    h.update(wish_text.as_bytes());
+    let wish_id = format!(
+        "{}-{}",
+        chrono::Utc::now().format("%Y%m%d%H%M%S"),
+        hex::encode(h.finalize())[..8].to_string()
+    );
+
+    ensure_wishes_md(&wish_id, wish_text)?;
+
+    let repo_root = std::env::current_dir()?;
+    git_assert_clean(&repo_root).context("working tree not clean")?;
+    git_checkout_new_branch(&repo_root, &format!("wish/{wish_id}"))?;
+
+    persist_wish_schema_file(&wish_id, wish_text)?;
+
+    let oa_cfg = wishcraft_openai::config::OpenAIConfig::from_env_defaults()?;
+    let client = wishcraft_openai::client::OpenAIClient::new(oa_cfg);
+    let conduit = wishcraft_openai::OpenAIConduit::new(client.clone());
+
+    let start = Instant::now();
+    let mut iteration: u32 = 0;
+    let mut last_plan_hash: Option<String> = None;
+    let mut stall_counter: u32 = 0;
+    let mut breaker_counter: u32 = 0;
+    let mut consecutive_greens: u32 = 0;
+    let allowed_paths: Vec<String> = vec!["**".to_string()];
+
+    loop {
+        iteration += 1;
+        if start.elapsed() > Duration::from_secs(cfg.max_time_minutes * 60)
+            || iteration > cfg.max_iters
+        {
+            write_ledger(&wish_id, "BudgetExceeded", &[])?;
+            anyhow::bail!("budget exceeded");
+        }
+        emit_event(&wish_id, iteration, "iteration.start", None)?;
+
+        let plan_in = wishcraft_openai::conduit::PlanInput {
+            repo: repo_root
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            paths: allowed_paths.clone(),
+            objective: wish_text.to_string(),
+            invariants: vec![
+                "Keep cargo build/test green".into(),
+                "Do not exfiltrate secrets".into(),
+            ],
+            context_snippets: vec![],
+        };
+        let plan_out = conduit
+            .exec(
+                "openai.codex.v2025.plan",
+                plan_in,
+                wishcraft::conduit::ExecMode::ShadowRun,
+            )
+            .await?;
+        let plan_hash = blake3_lines(&plan_out.plan_steps);
+        let same_plan = last_plan_hash.as_deref() == Some(&plan_hash);
+        last_plan_hash = Some(plan_hash);
+        emit_event(
+            &wish_id,
+            iteration,
+            "plan.completed",
+            Some(
+                serde_json::json!({"steps": plan_out.plan_steps.len(),"model": plan_out.model,"tokens": plan_out.tokens_used}),
+            ),
+        )?;
+
+        let mut any_change = false;
+        for (idx, step) in plan_out.plan_steps.iter().enumerate() {
+            let patch = generate_patch_for_step(&client, wish_text, step).await?;
+            ensure_patch_in_scope(&patch, &allowed_paths)?;
+            apply_patch_and_commit(&repo_root, &patch, &wish_id, idx)?;
+            any_change = true;
+
+            let mut tries = 0u32;
+            loop {
+                let (ok_build, build_out) = run_cmd(
+                    &repo_root,
+                    "cargo",
+                    &["build", "--workspace", "--all-targets"],
+                )
+                .await?;
+                if !ok_build {
+                    tries += 1;
+                    if tries > cfg.fix_tries_per_step {
+                        breaker_counter += 1;
+                        anyhow::bail!("build failing after {} tries", cfg.fix_tries_per_step);
+                    }
+                    let fix_patch =
+                        generate_fix_patch(&client, wish_text, step, "build", &build_out).await?;
+                    ensure_patch_in_scope(&fix_patch, &allowed_paths)?;
+                    apply_patch_and_commit(&repo_root, &fix_patch, &wish_id, idx)?;
+                    continue;
+                }
+                let (ok_test, test_out) = run_cmd(
+                    &repo_root,
+                    "cargo",
+                    &["test", "--workspace", "--all-features", "-q"],
+                )
+                .await?;
+                if ok_test {
+                    break;
+                }
+                tries += 1;
+                if tries > cfg.fix_tries_per_step {
+                    breaker_counter += 1;
+                    anyhow::bail!("tests failing after {} fixes", cfg.fix_tries_per_step);
+                }
+                let fix_patch =
+                    generate_fix_patch(&client, wish_text, step, "tests", &test_out).await?;
+                ensure_patch_in_scope(&fix_patch, &allowed_paths)?;
+                apply_patch_and_commit(&repo_root, &fix_patch, &wish_id, idx)?;
+            }
+        }
+
+        let (ok_build, _) = run_cmd(
+            &repo_root,
+            "cargo",
+            &["build", "--workspace", "--all-targets"],
+        )
+        .await?;
+        let (ok_test, _) = run_cmd(
+            &repo_root,
+            "cargo",
+            &["test", "--workspace", "--all-features", "-q"],
+        )
+        .await?;
+        if ok_build && ok_test {
+            consecutive_greens += 1;
+            if consecutive_greens >= cfg.require_consecutive_greens {
+                write_ledger(&wish_id, "Success", &[])?;
+                mark_wish_completed(&wish_id, wish_text)?;
+                break;
+            }
+        } else {
+            consecutive_greens = 0;
+        }
+
+        if !any_change && same_plan {
+            stall_counter += 1;
+            if stall_counter >= cfg.stall_window {
+                write_ledger(&wish_id, "Stall", &[])?;
+                anyhow::bail!("stall detected");
+            }
+        } else {
+            stall_counter = 0;
+        }
+        if breaker_counter >= 3 {
+            write_ledger(&wish_id, "BreakerTripped", &[])?;
+            anyhow::bail!("breaker tripped");
+        }
+    }
+    Ok(())
+}
+
+async fn generate_patch_for_step(
+    client: &wishcraft_openai::client::OpenAIClient,
+    wish_text: &str,
+    step: &str,
+) -> anyhow::Result<String> {
+    let system = "You are a careful coding assistant. Return only a unified diff patch (git apply compatible) with proper file paths relative to repo root. No prose.";
+    let user = format!(
+        "Wish: {wish}\nImplement step:\n{step}\nRules:\n- Keep build and tests green.\n- Include context lines in hunks.\n- No extra commentary.",
+        wish = wish_text,
+        step = step
+    );
+    let body = serde_json::json!({
+        "model": client.cfg.model,
+        "instructions": system,
+        "input": [ {"type":"message","role":"user","content":[{"type":"input_text","text": user}]} ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "store": false,
+        "stream": true,
+        "include": []
+    });
+    let v = client.chatgpt_codex_post(body).await?;
+    Ok(v.get("output_text")
+        .and_then(|s| s.as_str())
+        .unwrap_or_default()
+        .to_string())
+}
+
+async fn generate_fix_patch(
+    client: &wishcraft_openai::client::OpenAIClient,
+    wish_text: &str,
+    step: &str,
+    kind: &str,
+    error_text: &str,
+) -> anyhow::Result<String> {
+    let system = "You fix code. Return only a unified diff patch (git apply compatible). No prose.";
+    let user = format!(
+        "Wish: {wish}\nFix kind: {kind}\nStep: {step}\nErrors (trimmed):\n{errs}\nRules:\n- Include only necessary changes.\n- Preserve formatting and license headers.\n- No comments in patch.",
+        wish = wish_text,
+        kind = kind,
+        step = step,
+        errs = trim_long(error_text, 6000)
+    );
+    let body = serde_json::json!({
+        "model": client.cfg.model,
+        "instructions": system,
+        "input": [ {"type":"message","role":"user","content":[{"type":"input_text","text": user}]} ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "store": false,
+        "stream": true,
+        "include": []
+    });
+    let v = client.chatgpt_codex_post(body).await?;
+    Ok(v.get("output_text")
+        .and_then(|s| s.as_str())
+        .unwrap_or_default()
+        .to_string())
+}
+
+fn trim_long(s: &str, max: usize) -> String {
+    let t = s.trim();
+    if t.len() > max {
+        t[..max].to_string()
+    } else {
+        t.to_string()
+    }
+}
+fn blake3_lines(lines: &[String]) -> String {
+    let mut h = blake3::Hasher::new();
+    for l in lines {
+        h.update(l.as_bytes());
+        h.update(b"\n");
+    }
+    h.finalize().to_hex().to_string()
+}
+
+fn persist_wish_schema_file(wish_id: &str, wish_text: &str) -> anyhow::Result<()> {
+    use wishcraft::schema::{Budget, Scope, Tier, Wish};
+    let w = Wish {
+        title: format!("Wish {wish_id}"),
+        objective: wish_text.to_string(),
+        scope: Scope {
+            region: "repo".into(),
+            duration_days: 7,
+        },
+        invariants: vec!["Keep build green".into()],
+        budget: Budget {
+            chrono_sand: 1,
+            genie_slots: 2,
+            gold_cap: 0,
+        },
+        tools: vec!["openai.codex.v2025.plan".into()],
+        plan: vec!["Plan".into(), "Apply".into(), "Test".into()],
+        safety_tests: vec!["Build & test".into()],
+        rollback: vec!["git revert".into()],
+        tier: Some(Tier::Meso),
+        meta: Default::default(),
+    };
+    let dir = PathBuf::from("data/wishes/inbox");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join(format!("{wish_id}.yaml")),
+        serde_yaml::to_string(&w)?,
+    )?;
+    Ok(())
+}
+
+fn ensure_wishes_md(wish_id: &str, wish_text: &str) -> anyhow::Result<()> {
+    let path = std::path::Path::new("WISHES.md");
+    if !path.exists() {
+        let mut s = String::new();
+        s.push_str("# Wishes\n\n");
+        s.push_str("## Pending\n\n");
+        s.push_str("- [ ] Convert the SRD PDF fully to Markdown in appropriate files/folders. All text must be reproduced verbatim with specific page numbers cited.\n");
+        s.push_str("\n## Completed\n\n");
+        std::fs::write(path, s)?;
+    }
+    let mut cur = std::fs::read_to_string(path)?;
+    if !cur.contains(wish_text) {
+        if let Some(pidx) = cur.find("## Pending") {
+            let ins = format!("- [ ] {wish_text} (id: {wish_id})\n");
+            cur.insert_str(pidx + "## Pending\n\n".len(), &ins);
+            std::fs::write(path, cur)?;
+        }
+    }
+    Ok(())
+}
+
+fn mark_wish_completed(wish_id: &str, wish_text: &str) -> anyhow::Result<()> {
+    let path = std::path::Path::new("WISHES.md");
+    if !path.exists() {
+        return Ok(());
+    }
+    let mut s = std::fs::read_to_string(path)?;
+    if let Some(pos) = s.find(&format!("- [ ] {wish_text}")) {
+        s.replace_range(pos..pos + 4, "- [x]");
+    }
+    if let Some(_cidx) = s.find("## Completed") {
+        s.push_str(&format!("- [x] {wish_text} (id: {wish_id})\n"));
+    }
+    std::fs::write(path, s)?;
+    Ok(())
+}
+
+fn write_ledger(wish_id: &str, reason: &str, commits: &[String]) -> anyhow::Result<()> {
+    let entry = serde_json::json!({ "wish_id": wish_id, "stop_reason": reason, "commits": commits, "ts": chrono::Utc::now().to_rfc3339() });
+    let path = PathBuf::from(".wish-ledger");
+    std::fs::create_dir_all(&path)?;
+    std::fs::write(
+        path.join(format!("{wish_id}.json")),
+        serde_json::to_vec_pretty(&entry)?,
+    )?;
+    Ok(())
+}
+
+fn emit_event(
+    wish_id: &str,
+    iteration: u32,
+    kind: &str,
+    data: Option<serde_json::Value>,
+) -> anyhow::Result<()> {
+    use std::io::Write;
+    let dir = dirs::home_dir().unwrap().join(".roa/wish_runner");
+    std::fs::create_dir_all(&dir)?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(format!("{wish_id}.events.jsonl")))?;
+    let evt = serde_json::json!({"ts": chrono::Utc::now().to_rfc3339(), "wish_id": wish_id, "iteration": iteration, "kind": kind, "data": data});
+    writeln!(f, "{}", serde_json::to_string(&evt)?)?;
+    Ok(())
+}
+
+async fn run_cmd(
+    cwd: &std::path::PathBuf,
+    bin: &str,
+    args: &[&str],
+) -> anyhow::Result<(bool, String)> {
+    use std::process::Stdio;
+    use tokio::{io::AsyncReadExt, process::Command};
+    let mut cmd = Command::new(bin);
+    cmd.args(args)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let status = child.wait().await?;
+    let mut out = String::new();
+    if let Some(mut s) = child.stdout.take() {
+        s.read_to_string(&mut out).await.ok();
+    }
+    if let Some(mut s) = child.stderr.take() {
+        let mut e = String::new();
+        s.read_to_string(&mut e).await.ok();
+        out.push_str(&e);
+    }
+    Ok((status.success(), out))
+}
+
+fn ensure_patch_in_scope(_patch: &str, _allowed: &[String]) -> anyhow::Result<()> {
+    Ok(())
+}
+
+fn apply_patch_and_commit(
+    repo_root: &std::path::PathBuf,
+    patch: &str,
+    wish_id: &str,
+    step_idx: usize,
+) -> anyhow::Result<String> {
+    use std::{fs, process::Command};
+    let tmp = tempfile::NamedTempFile::new()?;
+    fs::write(tmp.path(), patch)?;
+    let out = Command::new("git")
+        .current_dir(repo_root)
+        .args(["apply", "--index", tmp.path().to_str().unwrap()])
+        .output()?;
+    if !out.status.success() {
+        return Err(anyhow::anyhow!(format!(
+            "git apply failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )));
+    }
+    let msg = format!("wish:{wish_id} step:{step_idx}");
+    let out2 = Command::new("git")
+        .current_dir(repo_root)
+        .args(["commit", "-m", &msg])
+        .output()?;
+    if !out2.status.success() {
+        return Err(anyhow::anyhow!(format!(
+            "git commit failed: {}",
+            String::from_utf8_lossy(&out2.stderr)
+        )));
+    }
+    let sha = Command::new("git")
+        .current_dir(repo_root)
+        .args(["rev-parse", "HEAD"])
+        .output()?;
+    Ok(String::from_utf8_lossy(&sha.stdout).trim().to_string())
+}
+
+fn git_assert_clean(root: &std::path::PathBuf) -> anyhow::Result<()> {
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["status", "--porcelain"])
+        .output()?;
+    let dirty = !String::from_utf8_lossy(&out.stdout).trim().is_empty();
+    if dirty {
+        anyhow::bail!("working tree not clean");
+    }
+    Ok(())
+}
+fn git_checkout_new_branch(root: &std::path::PathBuf, name: &str) -> anyhow::Result<()> {
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["checkout", "-b", name])
+        .output()?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git checkout -b failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    Ok(())
 }
