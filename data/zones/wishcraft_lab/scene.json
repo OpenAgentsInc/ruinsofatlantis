@@ -1,0 +1,16 @@
+{
+  "entities": [
+    {
+      "name": "Floor",
+      "kind": "plane",
+      "position": [0.0, 0.0, 0.0],
+      "scale": [100.0, 1.0, 100.0]
+    },
+    {
+      "name": "Obelisk",
+      "kind": "placeholder",
+      "position": [0.0, 0.5, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    }
+  ]
+}

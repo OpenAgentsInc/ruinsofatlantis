@@ -1,0 +1,8 @@
+slug: "wishcraft_lab"
+title: "Wishcraft Lab"
+weather:
+  preset: "clear"
+terrain:
+  flat: true
+time_of_day: "noon"
+scene: "data/zones/wishcraft_lab/scene.json"
