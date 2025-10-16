@@ -96,3 +96,22 @@ See: `docs/gdd/12-environment/terrain-biomes.md` for the authoritative system do
 - Bake writes grouped matrices per kind to `snapshot.v1/trees.json` for instanced rendering.
 - Renderer must bind complete groups even when assets are missing; use DefaultMaterial/DefaultMesh fallbacks.
 - See `docs/gdd/11-technical/worldsmithing.md` for technical details and crate boundaries.
+
+---
+
+## Systems: Wishcrafting (Schema & Flow)
+
+Design Intent.
+- Unify the in‑world Wishcrafting fantasy with a safe, auditable planning/CI harness. Wishes are structured, simulated, reviewed, and committed with rollback.
+
+Scope (Phase 1).
+- Micro‑tier wishes only; one region; Anchor Invariants enforced; rollback mandatory.
+
+Data & Authoring.
+- Author a typed Wish Schema (YAML/JSON). Lints enforce measurable objectives, invariants, budgets, and tool allowlists. See: `docs/gdd/11-technical/wishcrafting-schema-flow.md`.
+
+Runtime Flow.
+- Petition → Schema Lint (blocking) → Shadow‑Run (staging snapshot) → Court Review (Clarity/Safety/Reversibility scores) → Commit (Ledger anchor) → Monitor/Amend.
+
+Telemetry.
+- Track Time‑to‑First‑Impact, Overheat Rate, Rollback Frequency, Template Reuse.
