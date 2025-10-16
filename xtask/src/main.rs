@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -24,6 +25,27 @@ enum Cmd {
     BuildSpells,
     /// Bake a zone snapshot to packs
     BakeZone { slug: String },
+    /// Wishcraft utilities
+    Wish {
+        #[command(subcommand)]
+        cmd: WishCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum WishCmd {
+    /// Lint a wish schema (YAML/JSON)
+    Lint { file: PathBuf },
+    /// Score a wish (clarity/safety/reversibility) and print thresholds
+    Court { file: PathBuf },
+    /// Shadow-run a wish against a region snapshot (stub)
+    ShadowRun {
+        file: PathBuf,
+        #[arg(long)]
+        region: String,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 fn run(cmd: &mut Command) -> Result<()> {
@@ -481,5 +503,78 @@ fn main() -> Result<()> {
         Cmd::BuildPacks => build_packs(),
         Cmd::BuildSpells => build_spells(),
         Cmd::BakeZone { slug } => bake_zone(&slug),
+        Cmd::Wish { cmd } => wish_cmd(cmd),
+    }
+}
+
+fn wish_read(file: &PathBuf) -> Result<wishcraft::Wish> {
+    let txt = fs::read_to_string(file)?;
+    // Try YAML first, then JSON
+    if let Ok(w) = serde_yaml::from_str::<wishcraft::Wish>(&txt) {
+        return Ok(w);
+    }
+    let w = serde_json::from_str::<wishcraft::Wish>(&txt)?;
+    Ok(w)
+}
+
+struct AllowAll;
+impl wishcraft::GenieRegistry for AllowAll {
+    fn get(&self, id: &str) -> Option<wishcraft::GenieCapability> {
+        Some(wishcraft::GenieCapability {
+            id: id.to_string(),
+            persona: wishcraft::Persona::Literalist,
+            allowed: true,
+        })
+    }
+}
+
+fn wish_cmd(cmd: WishCmd) -> Result<()> {
+    match cmd {
+        WishCmd::Lint { file } => {
+            let w = wish_read(&file)?;
+            let rep = wishcraft::lint_wish(&w, &AllowAll);
+            if !rep.errors.is_empty() {
+                eprintln!("errors:");
+                for e in &rep.errors {
+                    eprintln!("  - {}", e);
+                }
+            }
+            if !rep.warnings.is_empty() {
+                eprintln!("warnings:");
+                for w in &rep.warnings {
+                    eprintln!("  - {}", w);
+                }
+            }
+            if rep.ok() {
+                println!("lint: ok");
+                Ok(())
+            } else {
+                bail!("lint failed")
+            }
+        }
+        WishCmd::Court { file } => {
+            let w = wish_read(&file)?;
+            let s = wishcraft::score_wish(&w);
+            println!(
+                "clarity: {}\nsafety: {}\nreversibility: {}",
+                s.clarity, s.safety, s.reversibility
+            );
+            Ok(())
+        }
+        WishCmd::ShadowRun { file, region, out } => {
+            let _w = wish_read(&file)?;
+            // Skeleton: emit a placeholder Echo Report
+            let report = serde_json::json!({
+                "region": region,
+                "predicted": {"entities_changed": 0, "notes": "shadow-run stub"}
+            });
+            let s = serde_json::to_string_pretty(&report)?;
+            if let Some(path) = out {
+                fs::write(path, s)?;
+            } else {
+                println!("{}", s);
+            }
+            Ok(())
+        }
     }
 }

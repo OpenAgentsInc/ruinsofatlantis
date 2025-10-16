@@ -89,3 +89,12 @@ Conventions
 - Keep crates dependency‑light and focused. Renderer/platform/web APIs should not leak into gameplay/sim/data crates.
 - Prefer adding unit tests alongside new functionality (math/transforms, parsing, voxel ops, replication encode/decode, etc.).
 - If you add a new workspace crate, update this file with a brief scope and primary consumers.
+
+### wishcraft
+- Core Wish system: schema models (serde), linting, scoring (Clarity/Safety/Reversibility), Heat estimation, Genie Registry traits, Ledger entry models, and Shadow‑Run/Execute traits.
+- Feature flags:
+  - `sim`: adapters to run shadow simulations against `sim_core` snapshots (traits only in skeleton).
+  - `server`: helpers for transactional apply on the server (traits only in skeleton).
+  - `schemars`: emit JSON Schema for authoring tools.
+  - `fs-ledger`: file‑backed ledger helpers (reserved).
+- Consumers: `ux_hud` (UI flow), `server_core` (apply + ledger), `xtask` (lint/shadow‑run/court CLI).
