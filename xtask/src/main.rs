@@ -918,7 +918,6 @@ async fn run_wish_orchestration(
     allow_dirty: bool,
     cfg: RunnerConfig,
 ) -> anyhow::Result<()> {
-    use anyhow::Context;
     use sha2::{Digest, Sha256};
     use std::time::{Duration, Instant};
 
@@ -943,7 +942,7 @@ async fn run_wish_orchestration(
     } else {
         eprintln!("xtask: proceeding with dirty working tree (--allow-dirty)");
     }
-    git_checkout_new_branch(&repo_root, &format!("wish/{wish_id}"))?;
+    git_checkout_branch(&repo_root, &format!("wish/{wish_id}"))?;
 
     persist_wish_schema_file(&wish_id, wish_text)?;
 
@@ -1008,7 +1007,29 @@ async fn run_wish_orchestration(
 
         let mut any_change = false;
         for (idx, step) in plan_out.plan_steps.iter().enumerate() {
+            // Log patch request summary
+            let preview = step.chars().take(120).collect::<String>();
+            let _ = emit_event(
+                &wish_id,
+                iteration,
+                "patch.request",
+                Some(serde_json::json!({"step": idx, "preview": preview})),
+            );
+            eprintln!(
+                "[wish-run] step={} preview=\"{}\"",
+                idx,
+                preview.replace('\n', " ")
+            );
             let patch = generate_patch_for_step(&client, wish_text, step).await?;
+            if !looks_like_unified_diff(&patch) {
+                emit_event(
+                    &wish_id,
+                    iteration,
+                    "patch.skipped",
+                    Some(serde_json::json!({"step": idx, "reason": "empty-or-invalid-diff"})),
+                )?;
+                continue;
+            }
             ensure_patch_in_scope(&patch, &allowed_paths)?;
             apply_patch_and_commit(&repo_root, &patch, &wish_id, idx)?;
             any_change = true;
@@ -1099,15 +1120,15 @@ async fn generate_patch_for_step(
     wish_text: &str,
     step: &str,
 ) -> anyhow::Result<String> {
-    let system = "You are a careful coding assistant. Return only a unified diff patch (git apply compatible) with proper file paths relative to repo root. No prose.";
+    let base = codex_base_instructions_for_model(&client.cfg.model);
     let user = format!(
-        "Wish: {wish}\nImplement step:\n{step}\nRules:\n- Keep build and tests green.\n- Include context lines in hunks.\n- No extra commentary.",
+        "Return only a unified diff patch (git apply compatible) with proper file paths relative to repo root. No prose.\\n\\nWish: {wish}\\nImplement step:\\n{step}\\nRules:\\n- Keep build and tests green.\\n- Include sufficient context lines in hunks.\\n- Do not modify files outside scope.",
         wish = wish_text,
         step = step
     );
     let body = serde_json::json!({
         "model": client.cfg.model,
-        "instructions": system,
+        "instructions": base,
         "input": [ {"type":"message","role":"user","content":[{"type":"input_text","text": user}]} ],
         "tool_choice": "auto",
         "parallel_tool_calls": false,
@@ -1129,9 +1150,9 @@ async fn generate_fix_patch(
     kind: &str,
     error_text: &str,
 ) -> anyhow::Result<String> {
-    let system = "You fix code. Return only a unified diff patch (git apply compatible). No prose.";
+    let base = codex_base_instructions_for_model(&client.cfg.model);
     let user = format!(
-        "Wish: {wish}\nFix kind: {kind}\nStep: {step}\nErrors (trimmed):\n{errs}\nRules:\n- Include only necessary changes.\n- Preserve formatting and license headers.\n- No comments in patch.",
+        "You fix code. Return only a unified diff patch (git apply compatible). No prose.\\n\\nWish: {wish}\\nFix kind: {kind}\\nStep: {step}\\nErrors (trimmed):\\n{errs}\\nRules:\\n- Include only necessary changes.\\n- Preserve formatting and license headers.\\n- No comments in patch.",
         wish = wish_text,
         kind = kind,
         step = step,
@@ -1139,7 +1160,7 @@ async fn generate_fix_patch(
     );
     let body = serde_json::json!({
         "model": client.cfg.model,
-        "instructions": system,
+        "instructions": base,
         "input": [ {"type":"message","role":"user","content":[{"type":"input_text","text": user}]} ],
         "tool_choice": "auto",
         "parallel_tool_calls": false,
@@ -1152,6 +1173,18 @@ async fn generate_fix_patch(
         .and_then(|s| s.as_str())
         .unwrap_or_default()
         .to_string())
+}
+
+fn codex_base_instructions_for_model(model: &str) -> &'static str {
+    const PROMPT_BASE: &str =
+        include_str!("../../third_party/openai-codex/codex-rs/core/prompt.md");
+    const PROMPT_G5_CODEX: &str =
+        include_str!("../../third_party/openai-codex/codex-rs/core/gpt_5_codex_prompt.md");
+    if model.starts_with("gpt-5-codex") || model.starts_with("codex-") {
+        PROMPT_G5_CODEX
+    } else {
+        PROMPT_BASE
+    }
 }
 
 fn trim_long(s: &str, max: usize) -> String {
@@ -1498,6 +1531,23 @@ fn ensure_patch_in_scope(patch: &str, allowed: &[String]) -> anyhow::Result<()> 
     Ok(())
 }
 
+fn looks_like_unified_diff(patch: &str) -> bool {
+    let mut has_header = false;
+    let mut has_hunks = false;
+    for line in patch.lines() {
+        if line.starts_with("diff --git ") || line.starts_with("--- ") || line.starts_with("+++") {
+            has_header = true;
+        }
+        if line.starts_with("@@ ") {
+            has_hunks = true;
+        }
+        if has_header && has_hunks {
+            return true;
+        }
+    }
+    false
+}
+
 fn apply_patch_and_commit(
     repo_root: &std::path::PathBuf,
     patch: &str,
@@ -1512,10 +1562,12 @@ fn apply_patch_and_commit(
         .args(["apply", "--index", tmp.path().to_str().unwrap()])
         .output()?;
     if !out.status.success() {
-        return Err(anyhow::anyhow!(format!(
-            "git apply failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )));
+        let err = String::from_utf8_lossy(&out.stderr).to_string();
+        if err.contains("No valid patches") {
+            // Treat as skip; no commit is made
+            return Err(anyhow::anyhow!("skip-empty-diff"));
+        }
+        return Err(anyhow::anyhow!(format!("git apply failed: {}", err)));
     }
     let msg = format!("wish:{wish_id} step:{step_idx}");
     let out2 = Command::new("git")
@@ -1546,15 +1598,41 @@ fn git_assert_clean(root: &std::path::PathBuf) -> anyhow::Result<()> {
     }
     Ok(())
 }
-fn git_checkout_new_branch(root: &std::path::PathBuf, name: &str) -> anyhow::Result<()> {
+fn git_current_branch(root: &std::path::PathBuf) -> anyhow::Result<String> {
     let out = std::process::Command::new("git")
         .current_dir(root)
-        .args(["checkout", "-b", name])
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()?;
     if !out.status.success() {
         anyhow::bail!(
-            "git checkout -b failed: {}",
+            "git rev-parse failed: {}",
             String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn git_checkout_branch(root: &std::path::PathBuf, name: &str) -> anyhow::Result<()> {
+    if git_current_branch(root).unwrap_or_default() == name {
+        return Ok(());
+    }
+    // Try to checkout existing branch
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["checkout", name])
+        .output()?;
+    if out.status.success() {
+        return Ok(());
+    }
+    // Create new branch
+    let out_new = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["checkout", "-b", name])
+        .output()?;
+    if !out_new.status.success() {
+        anyhow::bail!(
+            "git checkout failed: {}",
+            String::from_utf8_lossy(&out_new.stderr)
         );
     }
     Ok(())
