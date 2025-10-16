@@ -1059,6 +1059,16 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
                 let (min_b, max_b) = compute_bounds(&skinned);
+                let tex_count = skinned
+                    .submeshes
+                    .iter()
+                    .filter(|s| s.base_color_texture.is_some())
+                    .count();
+                log::info!(
+                    "viewer: submeshes={} (with textures={})",
+                    skinned.submeshes.len(),
+                    tex_count
+                );
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
                 // Collect only clips that affect skinned joints (skip camera/object-only tracks)
