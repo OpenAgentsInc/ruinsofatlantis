@@ -4,16 +4,18 @@ use crate::{
 };
 use wishcraft::conduit::{ConduitExec, ExecMode};
 
+#[async_trait::async_trait]
 pub trait PlanProvider {
-    fn plan(&self, input: PlanInput, mode: ExecMode) -> anyhow::Result<PlanOutput>;
+    async fn plan(&self, input: PlanInput, mode: ExecMode) -> anyhow::Result<PlanOutput>;
 }
 
 /// Thin provider using our direct HTTP client via OpenAIConduit
 pub struct OpenAIThinClient(pub OpenAIConduit);
 
+#[async_trait::async_trait]
 impl PlanProvider for OpenAIThinClient {
-    fn plan(&self, input: PlanInput, mode: ExecMode) -> anyhow::Result<PlanOutput> {
-        self.0.exec("openai.codex.v2025.plan", input, mode)
+    async fn plan(&self, input: PlanInput, mode: ExecMode) -> anyhow::Result<PlanOutput> {
+        self.0.exec("openai.codex.v2025.plan", input, mode).await
     }
 }
 
@@ -22,8 +24,10 @@ impl PlanProvider for OpenAIThinClient {
 pub struct OpenAICodexAdapter;
 
 #[cfg(feature = "codex-adapter")]
+#[cfg(feature = "codex-adapter")]
+#[async_trait::async_trait]
 impl PlanProvider for OpenAICodexAdapter {
-    fn plan(&self, _input: PlanInput, _mode: ExecMode) -> anyhow::Result<PlanOutput> {
+    async fn plan(&self, _input: PlanInput, _mode: ExecMode) -> anyhow::Result<PlanOutput> {
         anyhow::bail!("codex adapter not wired yet; disable feature or use OpenAIThinClient")
     }
 }

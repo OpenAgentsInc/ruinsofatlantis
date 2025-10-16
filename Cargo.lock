@@ -6686,6 +6686,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-trait",
  "base64 0.22.1",
  "httpmock",
  "reqwest 0.12.24",
