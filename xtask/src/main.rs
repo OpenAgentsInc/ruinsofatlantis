@@ -672,7 +672,7 @@ fn wish_cmd(cmd: WishCmd) -> Result<()> {
                 let cfg = wishcraft_openai::config::OpenAIConfig::from_env_defaults()
                     .unwrap_or_else(|_| wishcraft_openai::config::OpenAIConfig {
                         chatgpt_base_url: std::env::var("CHATGPT_BASE_URL")
-                            .unwrap_or_else(|_| "https://chatgpt.com/backend-api".into()),
+                            .unwrap_or_else(|_| "https://chatgpt.com/backend-api/codex".into()),
                         codex_home: std::env::var("CODEX_HOME")
                             .map(std::path::PathBuf::from)
                             .unwrap_or_else(|_| {

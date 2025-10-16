@@ -1,6 +1,5 @@
 use crate::config::OpenAIConfig;
 use base64::Engine as _;
-use base64::Engine as _;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::fs;
@@ -70,16 +69,208 @@ impl OpenAIClient {
             AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
         );
+        // ChatGPT codex backend prefers streaming responses
         headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
         headers.insert(
             HeaderName::from_static("chatgpt-account-id"),
             HeaderValue::from_str(&account_id).unwrap(),
         );
-        // Mirror codex-rs provider: base points at /backend-api/codex, Chat wire adds /chat/completions
-        let url = format!(
-            "{}/chat/completions",
-            self.cfg.chatgpt_base_url.trim_end_matches('/')
+        // Extra headers observed in codex-rs provider
+        let convo_id = format!(
+            "codex-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
         );
+        headers.insert(
+            HeaderName::from_static("conversation_id"),
+            HeaderValue::from_str(&convo_id).unwrap(),
+        );
+        headers.insert(
+            HeaderName::from_static("session_id"),
+            HeaderValue::from_str(&convo_id).unwrap(),
+        );
+        headers.insert(
+            HeaderName::from_static("codex-task-type"),
+            HeaderValue::from_static("standard"),
+        );
+        headers.insert(
+            HeaderName::from_static("openai-beta"),
+            HeaderValue::from_static("responses=experimental"),
+        );
+        // Optional niceties that reduce CF interstitials in some environments
+        headers.insert(
+            HeaderName::from_static("referer"),
+            HeaderValue::from_static("https://chatgpt.com/"),
+        );
+        // Mirror codex-rs provider: base points at /backend-api/codex. Prefer Responses wire at `/responses`.
+        let base = self.cfg.chatgpt_base_url.trim_end_matches('/');
+        let url_primary = if base.ends_with("/backend-api") {
+            format!("{}/codex/responses", base)
+        } else if base.ends_with("/backend-api/codex") {
+            format!("{}/responses", base)
+        } else if base.ends_with("/responses") {
+            base.to_string()
+        } else {
+            format!("{}/responses", base)
+        };
+        let url_fallback = if base.ends_with("/backend-api") {
+            format!("{}/responses", base)
+        } else {
+            format!("https://chatgpt.com/backend-api/responses")
+        };
+        let mut attempts = 0u32;
+        let mut tried_refresh = false;
+        loop {
+            attempts += 1;
+            let res = self
+                .http
+                .post(if attempts == 1 {
+                    &url_primary
+                } else {
+                    &url_fallback
+                })
+                .headers(headers.clone())
+                .body(body.to_string())
+                .send()
+                .await
+                .map_err(|e| OpenAIError::Network(e.to_string()))?;
+            let status = res.status();
+            let hdrs = res.headers().clone();
+            let text = res
+                .text()
+                .await
+                .map_err(|e| OpenAIError::Network(e.to_string()))?;
+            if status.is_success() {
+                // Try to parse as plain JSON first.
+                if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                    return Ok(v);
+                }
+                // Fallback: parse as SSE transcript. Take the last data: line and parse JSON.
+                let last_json = text
+                    .lines()
+                    .filter_map(|line| {
+                        let l = line.trim_start();
+                        if let Some(rest) = l.strip_prefix("data: ") {
+                            Some(rest)
+                        } else {
+                            None
+                        }
+                    })
+                    .filter(|s| !s.eq(&"[DONE]"))
+                    .last()
+                    .ok_or_else(|| OpenAIError::Decode("empty SSE".into()))?;
+                let v: Value = serde_json::from_str(last_json)
+                    .map_err(|e| OpenAIError::Decode(format!("sse parse: {e}")))?;
+                // If wrapped as {"response": {...}}, unwrap to the response object to match Responses shape.
+                if let Some(r) = v.get("response").cloned() {
+                    return Ok(r);
+                }
+                return Ok(v);
+            } else if status.as_u16() == 401 || status.as_u16() == 403 {
+                if !tried_refresh {
+                    if let Some(rt) = refresh_token_opt.clone() {
+                        if let Err(e) =
+                            refresh_chatgpt_tokens(self.cfg.codex_home.clone(), &self.http, &rt)
+                                .await
+                        {
+                            return Err(OpenAIError::Auth(format!("refresh failed: {e}")));
+                        }
+                        if let Ok((new_access, new_acc, _)) =
+                            load_chatgpt_tokens(self.cfg.codex_home.clone())
+                        {
+                            access_token = new_access;
+                            account_id = new_acc;
+                            headers.insert(
+                                AUTHORIZATION,
+                                HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
+                            );
+                            headers.insert(
+                                HeaderName::from_static("chatgpt-account-id"),
+                                HeaderValue::from_str(&account_id).unwrap(),
+                            );
+                        }
+                        tried_refresh = true;
+                        continue;
+                    }
+                }
+                let detail = extract_error_detail(&text);
+                return Err(OpenAIError::Auth(format!("{}: {}", status, detail)));
+            } else if status.as_u16() == 429 && attempts <= self.max_retries {
+                let mut delay_ms = self.backoff_millis;
+                if let Some(v) = hdrs.get("retry-after") {
+                    if let Ok(s) = v.to_str() {
+                        if let Ok(secs) = s.parse::<u64>() {
+                            delay_ms = secs * 1000;
+                        }
+                    }
+                }
+                if delay_ms > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+                continue;
+            } else if attempts <= self.max_retries
+                && (status.is_server_error() || status.as_u16() == 404)
+            {
+                if self.backoff_millis > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(self.backoff_millis)).await;
+                }
+                continue;
+            } else {
+                return Err(OpenAIError::Http {
+                    status: status.as_u16(),
+                    body: text,
+                });
+            }
+        }
+    }
+
+    pub async fn chatgpt_codex_post_chat(&self, body: Value) -> Result<Value, OpenAIError> {
+        let (mut access_token, mut account_id, refresh_token_opt) =
+            load_chatgpt_tokens(self.cfg.codex_home.clone())
+                .map_err(|e| OpenAIError::Auth(format!("auth load: {e}")))?;
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
+        );
+        headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
+        headers.insert(
+            HeaderName::from_static("chatgpt-account-id"),
+            HeaderValue::from_str(&account_id).unwrap(),
+        );
+        let convo_id = format!(
+            "codex-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        headers.insert(
+            HeaderName::from_static("conversation_id"),
+            HeaderValue::from_str(&convo_id).unwrap(),
+        );
+        headers.insert(
+            HeaderName::from_static("session_id"),
+            HeaderValue::from_str(&convo_id).unwrap(),
+        );
+        headers.insert(
+            HeaderName::from_static("codex-task-type"),
+            HeaderValue::from_static("standard"),
+        );
+        headers.insert(
+            HeaderName::from_static("referer"),
+            HeaderValue::from_static("https://chatgpt.com/"),
+        );
+
+        // Chat Completions wire
+        let base = self.cfg.chatgpt_base_url.trim_end_matches('/');
+        let url = if base.ends_with("/backend-api") {
+            format!("{}/codex/chat/completions", base)
+        } else if base.ends_with("/backend-api/codex") {
+            format!("{}/chat/completions", base)
+        } else if base.ends_with("/chat/completions") {
+            base.to_string()
+        } else {
+            format!("{}/chat/completions", base)
+        };
+
         let mut attempts = 0u32;
         let mut tried_refresh = false;
         loop {
@@ -99,8 +290,24 @@ impl OpenAIClient {
                 .await
                 .map_err(|e| OpenAIError::Network(e.to_string()))?;
             if status.is_success() {
-                let v: Value =
-                    serde_json::from_str(&text).map_err(|e| OpenAIError::Decode(e.to_string()))?;
+                if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                    return Ok(v);
+                }
+                let last_json = text
+                    .lines()
+                    .filter_map(|line| {
+                        let l = line.trim_start();
+                        if let Some(rest) = l.strip_prefix("data: ") {
+                            Some(rest)
+                        } else {
+                            None
+                        }
+                    })
+                    .filter(|s| !s.eq(&"[DONE]"))
+                    .last()
+                    .ok_or_else(|| OpenAIError::Decode("empty SSE".into()))?;
+                let v: Value = serde_json::from_str(last_json)
+                    .map_err(|e| OpenAIError::Decode(format!("sse parse: {e}")))?;
                 return Ok(v);
             } else if status.as_u16() == 401 || status.as_u16() == 403 {
                 if !tried_refresh {

@@ -85,26 +85,39 @@ impl ConduitExec for OpenAIConduit {
             });
         }
 
-        // Commit mode: call ChatGPT backend /codex using Chat Completions-like payload
-        // Minimal tools array to mirror Codex tools presence (function tool)
-        let tools = serde_json::json!([
-          {"type":"function","function":{
-            "name":"plan",
-            "description":"Propose a step-by-step plan and acceptance checks for the requested objective.",
-            "parameters": {"type":"object","properties":{},"additionalProperties": true}
-          }}
-        ]);
+        // Commit mode: call ChatGPT backend /codex using Responses wire (`/responses`).
         let body = serde_json::json!({
             "model": self.client.cfg.model,
-            "messages": [
+            "input": [
                 {"role":"system","content":"You are a cautious code planner."},
                 {"role":"user","content": prompt}
             ],
-            "tools": tools,
+            "temperature": self.client.cfg.temperature.unwrap_or(0.2),
+            "store": false,
             "stream": true
         });
-        let resp = self.client.chatgpt_codex_post(body).await?;
-        let (steps, notes, model, tokens) = parse_chatgpt_plan(&resp)?;
+        let resp = match self.client.chatgpt_codex_post(body.clone()).await {
+            Ok(v) => v,
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("Instructions are required") || msg.contains("Not Found") {
+                    // Fallback to Chat Completions wire
+                    let chat_body = serde_json::json!({
+                        "model": self.client.cfg.model,
+                        "messages": [
+                            {"role":"system","content":"You are a cautious code planner."},
+                            {"role":"user","content": prompt}
+                        ],
+                        "stream": true
+                    });
+                    self.client.chatgpt_codex_post_chat(chat_body).await?
+                } else {
+                    return Err(anyhow::anyhow!(e));
+                }
+            }
+        };
+        let (steps, notes, model, tokens) =
+            parse_responses_plan(&resp).or_else(|_| parse_chat_plan(&resp))?;
         Ok(PlanOutput {
             plan_steps: steps,
             notes,
@@ -115,14 +128,43 @@ impl ConduitExec for OpenAIConduit {
     }
 }
 
-fn parse_chatgpt_plan(
+fn parse_responses_plan(
     resp: &serde_json::Value,
 ) -> anyhow::Result<(Vec<String>, Vec<String>, Option<String>, Option<u64>)> {
     let model = resp
         .get("model")
         .and_then(|m| m.as_str())
         .map(|s| s.to_string());
-    // Some backends include usage; optional
+    let tokens = resp
+        .get("usage")
+        .and_then(|u| u.get("total_tokens"))
+        .and_then(|t| t.as_u64());
+    let text = resp
+        .get("output_text")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            resp.pointer("/output/0/content/0/text")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default();
+    let steps = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+    Ok((steps, vec![], model, tokens))
+}
+
+fn parse_chat_plan(
+    resp: &serde_json::Value,
+) -> anyhow::Result<(Vec<String>, Vec<String>, Option<String>, Option<u64>)> {
+    let model = resp
+        .get("model")
+        .and_then(|m| m.as_str())
+        .map(|s| s.to_string());
     let tokens = resp
         .get("usage")
         .and_then(|u| u.get("total_tokens"))
@@ -130,8 +172,7 @@ fn parse_chatgpt_plan(
     let content = resp
         .pointer("/choices/0/message/content")
         .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
+        .unwrap_or_default();
     let steps = content
         .lines()
         .map(str::trim)
