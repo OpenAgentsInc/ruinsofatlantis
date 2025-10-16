@@ -16,6 +16,7 @@ codex-adapter = []
 anyhow = "1"
 async-trait = "0.1"
 base64 = "0.22"
+dirs = "5"
 reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

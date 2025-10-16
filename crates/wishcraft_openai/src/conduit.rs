@@ -109,14 +109,17 @@ impl ConduitExec for OpenAIConduit {
             });
         }
 
-        // Commit mode: call OpenAI Responses API
+        // Commit mode: call ChatGPT backend /codex using Chat Completions-like payload
         let body = serde_json::json!({
             "model": self.client.cfg.model,
-            "input": [{ "role":"user", "content": prompt }],
-            "temperature": self.client.cfg.temperature.unwrap_or(0.2),
+            "messages": [
+                {"role":"system","content":"You are a cautious code planner."},
+                {"role":"user","content": prompt}
+            ],
+            "stream": false
         });
-        let resp = self.client.responses_create(body, false).await?;
-        let (steps, notes, model, tokens) = parse_responses_plan(&resp)?;
+        let resp = self.client.chatgpt_codex_post(body).await?;
+        let (steps, notes, model, tokens) = parse_chatgpt_plan(&resp)?;
         Ok(PlanOutput {
             plan_steps: steps,
             notes,
@@ -125,4 +128,30 @@ impl ConduitExec for OpenAIConduit {
             prompt_hash,
         })
     }
+}
+
+fn parse_chatgpt_plan(
+    resp: &serde_json::Value,
+) -> anyhow::Result<(Vec<String>, Vec<String>, Option<String>, Option<u64>)> {
+    let model = resp
+        .get("model")
+        .and_then(|m| m.as_str())
+        .map(|s| s.to_string());
+    // Some backends include usage; optional
+    let tokens = resp
+        .get("usage")
+        .and_then(|u| u.get("total_tokens"))
+        .and_then(|t| t.as_u64());
+    let content = resp
+        .pointer("/choices/0/message/content")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let steps = content
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+    Ok((steps, vec![], model, tokens))
 }

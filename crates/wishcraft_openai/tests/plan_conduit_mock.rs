@@ -12,28 +12,29 @@ use wishcraft_openai::{
 async fn plan_conduit_returns_steps_and_audit_fields() {
     let server = MockServer::start();
     let _m = server.mock(|when, then| {
-        when.method(POST).path("/v1/responses");
-        then.status(200).body(
-            r#"{
+        when.method(POST).path("/backend-api/codex");
+        then.status(200).body(r#"{
           "model":"gpt-5-pro",
           "usage":{"total_tokens": 321},
-          "output_text":"1. Enable cache\n2. Prune symbols\n3. Parallelize shaders"
-        }"#,
-        );
+          "choices":[{"message":{"content":"1. Enable cache\n2. Prune symbols\n3. Parallelize shaders"}}]
+        }"#);
     });
 
-    std::env::set_var("OPENAI_API_KEY", "sk-test");
-    let cfg = OpenAIConfig {
-        base_url: format!("{}/v1", server.base_url()),
-        api_key: "sk-test".into(),
-        organization: None,
-        project: None,
-        model: "gpt-5-pro".into(),
-        temperature: Some(0.2),
-        timeout_secs: 10,
-        azure: false,
-        azure_api_version: None,
-    };
+    let dir = tempfile::tempdir().unwrap();
+    let auth = serde_json::json!({
+        "tokens": {"id_token":"a.b.c","access_token":"Access Token","refresh_token":"r","account_id":"acc-1"}
+    });
+    std::fs::write(
+        dir.path().join("auth.json"),
+        serde_json::to_string(&auth).unwrap(),
+    )
+    .unwrap();
+    std::env::set_var("CODEX_HOME", dir.path());
+    std::env::set_var(
+        "CHATGPT_BASE_URL",
+        format!("{}/backend-api", server.base_url()),
+    );
+    let cfg = OpenAIConfig::from_env_defaults().unwrap();
     let client = OpenAIClient::new(cfg);
     let conduit = OpenAIConduit::new(client);
 
@@ -46,11 +47,7 @@ async fn plan_conduit_returns_steps_and_audit_fields() {
     };
 
     let out = conduit
-        .exec(
-            "openai.codex.v2025.plan",
-            input.clone(),
-            ExecMode::ShadowRun,
-        )
+        .exec("openai.codex.v2025.plan", input.clone(), ExecMode::Commit)
         .await
         .expect("plan ok");
 
@@ -58,9 +55,7 @@ async fn plan_conduit_returns_steps_and_audit_fields() {
         out.plan_steps.len() >= 2,
         "should produce multiple plan steps"
     );
-    // in ShadowRun we set model to cfg.model; live mode would reflect API
     assert_eq!(out.model.as_deref(), Some("gpt-5-pro"));
-    // ShadowRun has None tokens, but Commit would set it; accept None or Some(_)
-    assert!(out.tokens_used.is_none() || out.tokens_used == Some(321));
+    assert_eq!(out.tokens_used, Some(321));
     assert_eq!(out.prompt_hash.len(), 64, "sha256 hex");
 }

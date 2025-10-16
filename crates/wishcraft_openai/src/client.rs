@@ -1,6 +1,8 @@
 use crate::config::OpenAIConfig;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::Value;
+use std::fs;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -50,31 +52,20 @@ impl OpenAIClient {
         self
     }
 
-    #[cfg(feature = "responses")]
-    pub async fn responses_create(&self, body: Value, _stream: bool) -> Result<Value, OpenAIError> {
+    pub async fn chatgpt_codex_post(&self, body: Value) -> Result<Value, OpenAIError> {
+        let (access_token, account_id) = load_chatgpt_tokens(self.cfg.codex_home.clone())
+            .map_err(|e| OpenAIError::Auth(format!("auth load: {e}")))?;
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", self.cfg.api_key)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {}", access_token)).unwrap(),
         );
-        if let Some(org) = &self.cfg.organization {
-            headers.insert("OpenAI-Organization", HeaderValue::from_str(org).unwrap());
-        }
-        if let Some(project) = &self.cfg.project {
-            headers.insert("OpenAI-Project", HeaderValue::from_str(project).unwrap());
-        }
-
-        // Endpoint
-        let mut url = format!("{}/responses", self.cfg.base_url.trim_end_matches('/'));
-        if self.cfg.azure {
-            // Azure uses deployment route and api-version; expect base_url to already include deployment
-            if let Some(v) = &self.cfg.azure_api_version {
-                let sep = if url.contains('?') { '&' } else { '?' };
-                url = format!("{}{}api-version={}", url, sep, v);
-            }
-        }
-
+        headers.insert(
+            HeaderName::from_static("chatgpt-account-id"),
+            HeaderValue::from_str(&account_id).unwrap(),
+        );
+        let url = format!("{}/codex", self.cfg.chatgpt_base_url.trim_end_matches('/'));
         let mut attempts = 0u32;
         loop {
             attempts += 1;
@@ -124,4 +115,49 @@ impl OpenAIClient {
             }
         }
     }
+}
+
+use reqwest::header::HeaderName;
+
+fn load_chatgpt_tokens(codex_home: PathBuf) -> std::io::Result<(String, String)> {
+    let auth_path = codex_home.join("auth.json");
+    let raw = fs::read_to_string(&auth_path)?;
+    let v: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| std::io::Error::other(format!("parse auth.json: {e}")))?;
+    let tokens = v
+        .get("tokens")
+        .ok_or(std::io::Error::other("missing tokens"))?;
+    let access_token = tokens
+        .get("access_token")
+        .and_then(|s| s.as_str())
+        .ok_or(std::io::Error::other("missing access_token"))?
+        .to_string();
+    let account_id = tokens
+        .get("account_id")
+        .and_then(|s| s.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| decode_account_from_id_token(tokens.get("id_token").and_then(|s| s.as_str())))
+        .ok_or(std::io::Error::other(
+            "missing account_id in tokens or id_token",
+        ))?;
+    Ok((access_token, account_id))
+}
+
+fn decode_account_from_id_token(id_token_opt: Option<&str>) -> Option<String> {
+    let idt = id_token_opt?;
+    let parts: Vec<&str> = idt.split('.').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let payload_b64 = parts[1];
+    let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload_b64)
+        .ok()?;
+    let payload: serde_json::Value = serde_json::from_slice(&payload_bytes).ok()?;
+    if let Some(auth) = payload.get("https://api.openai.com/auth") {
+        if let Some(acc) = auth.get("chatgpt_account_id").and_then(|s| s.as_str()) {
+            return Some(acc.to_string());
+        }
+    }
+    None
 }
