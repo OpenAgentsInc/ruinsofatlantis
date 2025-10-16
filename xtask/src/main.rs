@@ -1022,6 +1022,12 @@ async fn run_wish_orchestration(
             );
             let patch = generate_patch_for_step(&client, wish_text, step).await?;
             if !looks_like_unified_diff(&patch) {
+                eprintln!(
+                    "[wish-run] patch.invalid step={} len={} head=\"{}\"",
+                    idx,
+                    patch.len(),
+                    patch.lines().take(3).collect::<Vec<_>>().join(" | ")
+                );
                 emit_event(
                     &wish_id,
                     iteration,

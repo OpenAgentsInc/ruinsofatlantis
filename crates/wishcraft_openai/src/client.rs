@@ -74,6 +74,11 @@ impl OpenAIClient {
         let want_stream = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(true);
         if want_stream {
             headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
+            // Avoid compressed SSE bodies to reduce decode issues
+            headers.insert(
+                HeaderName::from_static("accept-encoding"),
+                HeaderValue::from_static("identity"),
+            );
         } else {
             headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         }
