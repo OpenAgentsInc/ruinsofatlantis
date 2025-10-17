@@ -540,7 +540,7 @@ struct ImpInst {
 struct ImpOut {
   @builtin(position) pos: vec4<f32>,
   @location(0) uv: vec2<f32>,
-  @location(1) layer: u32,
+  @interpolate(flat) @location(1) layer: u32,
   @location(2) sprite: vec2<f32>,
   @location(3) phase: f32,
 };
@@ -565,6 +565,17 @@ struct ImpParams {
 }
 @group(1) @binding(4) var<uniform> imp: ImpParams;
 
+// Canonical octahedral direction -> grid mapping, stable across folds
+fn oct_decode(n: vec3<f32>) -> vec2<f32> {
+  // canonical octahedral mapping to the XZ plane in [0,1]^2
+  let v = n / max(abs(n.x) + abs(n.y) + abs(n.z), 1e-5);
+  var o = v.xz;
+  if (v.y < 0.0) {
+    o = (1.0 - abs(o.yx)) * sign(o);
+  }
+  return o * 0.5 + vec2<f32>(0.5, 0.5);
+}
+
 @vertex
 fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   let right = globals.camRightTime.xyz;
@@ -576,19 +587,13 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   o.uv = v.corner * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
   o.layer = i.layer;
   o.phase = i.yaw;
-  // Octa map: per-impostor view direction using camera position
+  // View dir from impostor to camera
   let cam_dir = normalize(imp.cam_pos.xyz - i.pos);
-  // Full octahedron mapping (no hemi flip yet)
-  let denom = dot(abs(cam_dir), vec3<f32>(1.0, 1.0, 1.0));
-  var dir = cam_dir / max(denom, 1e-5);
-  if (dir.y < 0.0) {
-    let sign_not_zero = mix(vec2<f32>(1.0, 1.0), sign(dir.xz), step(vec2<f32>(0.0,0.0), dir.xz));
-    let oldx = dir.x;
-    dir.x = (1.0 - abs(dir.z)) * sign_not_zero.x;
-    dir.z = (1.0 - abs(oldx)) * sign_not_zero.y;
-  }
-  var grid = dir.xz * 0.5 + vec2<f32>(0.5, 0.5);
-  // Orientation flags: bit0=flipX, bit1=flipY, bit2=swapAxes, bit3=hemi (unused here)
+
+  // Canonical octahedral mapping
+  var grid = oct_decode(cam_dir);
+
+  // Orientation flags: bit0=flipX, bit1=flipY, bit2=swapAxes
   let fx = (imp.flags & 1u) != 0u;
   let fy = (imp.flags & 2u) != 0u;
   let sw = (imp.flags & 4u) != 0u;
@@ -598,8 +603,9 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   if (sw) { gridFinal = vec2<f32>(gridFinal.y, gridFinal.x); }
   let sps = max(imp.sprites_per_side, 1u);
   let sm1 = f32(sps - 1u);
+  // Stable “round to nearest cell” without oscillation at boundaries
   let sprite_grid = gridFinal * sm1;
-  o.sprite = clamp(round(sprite_grid), vec2<f32>(0.0, 0.0), vec2<f32>(sm1, sm1));
+  o.sprite = clamp(floor(sprite_grid + 0.5), vec2<f32>(0.0, 0.0), vec2<f32>(sm1, sm1));
   return o;
 }
 
@@ -608,8 +614,10 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
   // Tile addressing inside frame
   let sps = max(imp.sprites_per_side, 1u);
   let frame_size = 1.0 / f32(sps);
-  // Slight inset to avoid sampling outside the tile (edge sparkles)
-  let inset = 0.0005;
+  // A 1‑texel inset inside the cell prevents bleed without shaving too much
+  // Assume source frames baked at 64x64; adjust if different
+  let one_texel = frame_size / 64.0;
+  let inset = one_texel;
   let uv = clamp(vec2<f32>(i.uv.x, i.uv.y), vec2<f32>(inset, inset), vec2<f32>(1.0 - inset, 1.0 - inset));
   let sprite_uv = (i.sprite + uv) * frame_size;
   // Variant addressing: base + (time*fps % count)

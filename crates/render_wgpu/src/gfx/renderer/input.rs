@@ -1,7 +1,7 @@
 //! Input and window event handling extracted from gfx/mod.rs
 
 use winit::event::WindowEvent;
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
 
 use crate::gfx::Renderer;
 
@@ -12,6 +12,25 @@ impl Renderer {
             WindowEvent::KeyboardInput { event, .. } => {
                 let pressed = event.state.is_pressed();
                 let allow_casting = self.zone_policy.allow_casting;
+
+                // Helper: IME/layout-safe key matcher. Prefer physical codes, but fall back to
+                // logical characters when browsers fail to report a physical code (observed on
+                // some Web builds where letter keys arrive as Unidentified).
+                let key_is = |chars: &[&str], codes: &[KeyCode]| -> bool {
+                    if let PhysicalKey::Code(code) = event.physical_key {
+                        if codes.contains(&code) {
+                            return true;
+                        }
+                    }
+                    match &event.logical_key {
+                        Key::Character(s) => chars.iter().any(|c| s.eq_ignore_ascii_case(c)),
+                        Key::Named(NamedKey::Space) => chars.iter().any(|c| *c == "space"),
+                        Key::Named(NamedKey::Shift) => chars.iter().any(|c| *c == "shift"),
+                        _ => false,
+                    }
+                };
+
+                // Map keys. Keep original physical-key paths for performance and add fallbacks.
                 match event.physical_key {
                     // Cursor toggle/hold (ALT)
                     PhysicalKey::Code(KeyCode::AltLeft) | PhysicalKey::Code(KeyCode::AltRight) => {
@@ -38,7 +57,9 @@ impl Renderer {
                         }
                     }
                     // Ignore movement/casting inputs if the PC is dead
-                    PhysicalKey::Code(KeyCode::KeyW) if self.pc_alive => {
+                    PhysicalKey::Code(KeyCode::KeyW)
+                        if self.pc_alive || (self.pc_alive && key_is(&["w"], &[KeyCode::KeyW])) =>
+                    {
                         self.input.forward = pressed;
                         if pressed && !self.logged_first_w {
                             self.logged_first_w = true;
@@ -49,34 +70,52 @@ impl Renderer {
                             );
                         }
                     }
-                    PhysicalKey::Code(KeyCode::KeyS) if self.pc_alive => {
+                    PhysicalKey::Code(KeyCode::KeyS)
+                        if self.pc_alive || (self.pc_alive && key_is(&["s"], &[KeyCode::KeyS])) =>
+                    {
                         self.input.backward = pressed;
                         if pressed {
                             self.scene_inputs.cancel_autorun();
                         }
                     }
-                    PhysicalKey::Code(KeyCode::KeyA) if self.pc_alive => {
+                    PhysicalKey::Code(KeyCode::KeyA)
+                        if self.pc_alive || (self.pc_alive && key_is(&["a"], &[KeyCode::KeyA])) =>
+                    {
                         // Track raw A state; per-frame we resolve to strafe/turn using RMB
                         self.a_down = pressed;
                     }
-                    PhysicalKey::Code(KeyCode::KeyD) if self.pc_alive => {
+                    PhysicalKey::Code(KeyCode::KeyD)
+                        if self.pc_alive || (self.pc_alive && key_is(&["d"], &[KeyCode::KeyD])) =>
+                    {
                         // Track raw D state; per-frame we resolve to strafe/turn using RMB
                         self.d_down = pressed;
                     }
                     // Q/E tracked as raw strafes; resolved per-frame
-                    PhysicalKey::Code(KeyCode::KeyQ) if self.pc_alive => {
+                    PhysicalKey::Code(KeyCode::KeyQ)
+                        if self.pc_alive || (self.pc_alive && key_is(&["q"], &[KeyCode::KeyQ])) =>
+                    {
                         self.q_down = pressed;
                     }
-                    PhysicalKey::Code(KeyCode::KeyE) if self.pc_alive => {
+                    PhysicalKey::Code(KeyCode::KeyE)
+                        if self.pc_alive || (self.pc_alive && key_is(&["e"], &[KeyCode::KeyE])) =>
+                    {
                         self.e_down = pressed;
                     }
                     PhysicalKey::Code(KeyCode::ShiftLeft)
                     | PhysicalKey::Code(KeyCode::ShiftRight)
+                    | PhysicalKey::Unidentified(_)
                         if self.pc_alive =>
                     {
                         // Track raw Shift state; per-frame we derive effective run
                         // based on forward-only gating in render loop
-                        self.shift_down = pressed;
+                        if key_is(&["shift"], &[])
+                            || matches!(
+                                event.physical_key,
+                                PhysicalKey::Code(KeyCode::ShiftLeft | KeyCode::ShiftRight)
+                            )
+                        {
+                            self.shift_down = pressed;
+                        }
                     }
                     PhysicalKey::Code(KeyCode::Digit1) | PhysicalKey::Code(KeyCode::Numpad1)
                         if self.pc_alive && allow_casting =>
@@ -292,7 +331,7 @@ impl Renderer {
                             log::info!("impostor: toggle flipY");
                         }
                     }
-                    PhysicalKey::Code(KeyCode::KeyS) => {
+                    PhysicalKey::Code(KeyCode::KeyX) => {
                         if pressed {
                             self.impostor_toggle_swap_axes();
                             log::info!("impostor: toggle swapAxes");
@@ -340,6 +379,29 @@ impl Renderer {
                         }
                     }
                     _ => {}
+                }
+
+                // Fallback for browsers that report letter keys without a physical code
+                // (e.g., PhysicalKey::Unidentified on some Web builds). Use logical key chars.
+                if self.pc_alive && matches!(event.physical_key, PhysicalKey::Unidentified(_)) {
+                    if key_is(&["w"], &[KeyCode::KeyW]) {
+                        self.input.forward = pressed;
+                    } else if key_is(&["s"], &[KeyCode::KeyS]) {
+                        self.input.backward = pressed;
+                        if pressed {
+                            self.scene_inputs.cancel_autorun();
+                        }
+                    } else if key_is(&["a"], &[KeyCode::KeyA]) {
+                        self.a_down = pressed;
+                    } else if key_is(&["d"], &[KeyCode::KeyD]) {
+                        self.d_down = pressed;
+                    } else if key_is(&["q"], &[KeyCode::KeyQ]) {
+                        self.q_down = pressed;
+                    } else if key_is(&["e"], &[KeyCode::KeyE]) {
+                        self.e_down = pressed;
+                    } else if key_is(&["shift"], &[]) {
+                        self.shift_down = pressed;
+                    }
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {

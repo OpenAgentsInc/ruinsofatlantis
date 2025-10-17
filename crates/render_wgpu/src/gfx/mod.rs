@@ -1586,6 +1586,122 @@ impl Renderer {
             return;
         }
         let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Ok((cpu_verts, idx_opaque, idx_mask)) =
+                roa_assets::gltf::load_gltf_mesh_split(&mesh_path)
+            {
+                let verts: Vec<crate::gfx::types::VertexPosNrmUv> = cpu_verts
+                    .iter()
+                    .map(|v| crate::gfx::types::VertexPosNrmUv {
+                        pos: v.pos,
+                        nrm: v.nrm,
+                        uv: [0.0, 0.0],
+                    })
+                    .collect();
+                let vb = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("session-trees-vb"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+                let inst = crate::gfx::types::Instance {
+                    model,
+                    color: [1.0, 1.0, 1.0],
+                    selected: 0.25,
+                };
+                let cpu = vec![inst];
+                let instances = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("session-trees-instances"),
+                        contents: bytemuck::cast_slice(&cpu),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
+                if !idx_opaque.is_empty() {
+                    let ib = self
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("session-trees-ib(opaque)"),
+                            contents: bytemuck::cast_slice(&idx_opaque),
+                            usage: wgpu::BufferUsages::INDEX,
+                        });
+                    let bark = self.make_solid_material_bg([120, 78, 50, 255], "session-tree-bark");
+                    self.session_trees.push(SessionBatch {
+                        kind: format!("{}.opaque", kind_key),
+                        instances: instances.clone(),
+                        cpu: cpu.clone(),
+                        count: 1,
+                        vb: vb.clone(),
+                        ib,
+                        index_count: idx_opaque.len() as u32,
+                        material_bg: Some(bark),
+                    });
+                }
+                if !idx_mask.is_empty() {
+                    let ib = self
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("session-trees-ib(mask)"),
+                            contents: bytemuck::cast_slice(&idx_mask),
+                            usage: wgpu::BufferUsages::INDEX,
+                        });
+                    let leaves =
+                        self.make_solid_material_bg([170, 200, 120, 255], "session-tree-leaves");
+                    self.session_trees.push(SessionBatch {
+                        kind: format!("{}.mask", kind_key),
+                        instances: instances.clone(),
+                        cpu: cpu.clone(),
+                        count: 1,
+                        vb: vb.clone(),
+                        ib,
+                        index_count: idx_mask.len() as u32,
+                        material_bg: Some(leaves),
+                    });
+                }
+                // If we created any batches, stop here.
+                if !idx_opaque.is_empty() || !idx_mask.is_empty() {
+                    return;
+                }
+                // If split failed, fall back to a single-batch brown mesh.
+                let ib = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("session-trees-ib"),
+                        contents: &[],
+                        usage: wgpu::BufferUsages::INDEX,
+                    });
+                let mat_bg = Some(
+                    self.make_solid_material_bg([120, 78, 50, 255], "session-tree-solid-bark"),
+                );
+                let inst2 = crate::gfx::types::Instance {
+                    model,
+                    color: [0.8, 0.75, 0.7],
+                    selected: 0.25,
+                };
+                let cpu2 = vec![inst2];
+                let instances2 =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("session-trees-instances"),
+                            contents: bytemuck::cast_slice(&cpu2),
+                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        });
+                self.session_trees.push(SessionBatch {
+                    kind: kind_key.to_string(),
+                    instances: instances2,
+                    cpu: cpu2,
+                    count: 1,
+                    vb,
+                    ib,
+                    index_count: 0,
+                    material_bg: mat_bg,
+                });
+                return;
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         let (vb, ib, index_count, mut material_bg) = match gltf::import(&mesh_path) {
             Ok((doc, buffers, images)) => {
                 // Build VertexPosNrmUv + indices
@@ -1775,17 +1891,21 @@ impl Renderer {
                 (vb, ib, ic, None)
             }
         };
+        #[cfg(not(target_arch = "wasm32"))]
         if material_bg.is_none() {
             // Solid bark-brown fallback
             let bg = self.make_solid_material_bg([120, 78, 50, 255], "session-tree-solid-bark");
             material_bg = Some(bg);
         }
+        #[cfg(not(target_arch = "wasm32"))]
         let inst = crate::gfx::types::Instance {
             model,
             color: [0.8, 0.75, 0.7],
             selected: 0.25,
         };
+        #[cfg(not(target_arch = "wasm32"))]
         let cpu = vec![inst];
+        #[cfg(not(target_arch = "wasm32"))]
         let instances = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1793,6 +1913,7 @@ impl Renderer {
                 contents: bytemuck::cast_slice(&cpu),
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
+        #[cfg(not(target_arch = "wasm32"))]
         self.session_trees.push(SessionBatch {
             kind: kind_key.to_string(),
             instances,
@@ -2152,10 +2273,11 @@ impl Renderer {
         let mesh_path = crate::gfx::foliage::path_for_kind(kind_key);
         #[cfg(target_arch = "wasm32")]
         {
-            // On web, import via assets crate loader (embedded slices)
-            if let Ok(cpu) = roa_assets::gltf::load_gltf_mesh(&mesh_path) {
-                let vtx: Vec<crate::gfx::types::VertexPosNrmUv> = cpu
-                    .vertices
+            // On web, use embedded assets and prefer bark-only (opaque) indices for the preview.
+            if let Ok((cpu_verts, idx_opaque, _idx_mask)) =
+                roa_assets::gltf::load_gltf_mesh_split(&mesh_path)
+            {
+                let vtx: Vec<crate::gfx::types::VertexPosNrmUv> = cpu_verts
                     .iter()
                     .map(|v| crate::gfx::types::VertexPosNrmUv {
                         pos: v.pos,
@@ -2174,10 +2296,10 @@ impl Renderer {
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("ghost-tree-ib"),
-                        contents: bytemuck::cast_slice(&cpu.indices),
+                        contents: bytemuck::cast_slice(&idx_opaque),
                         usage: wgpu::BufferUsages::INDEX,
                     });
-                let ic = cpu.indices.len() as u32;
+                let ic = idx_opaque.len() as u32;
                 let mat_bg =
                     Some(self.make_solid_material_bg([170, 200, 120, 255], "ghost-tree-solid"));
                 self.ghost_mesh_cache.insert(

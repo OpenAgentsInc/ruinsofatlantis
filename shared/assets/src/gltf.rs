@@ -65,6 +65,225 @@ pub fn load_gltf_mesh(path: &Path) -> Result<CpuMesh> {
     }
 }
 
+/// Split mesh loader for wasm that separates OPAQUE vs MASK primitives so callers can
+/// tint bark/leaves differently without relying on external textures.
+///
+/// Returns vertices (pos+nrm) and two index lists: (opaque_indices, mask_indices).
+#[cfg(target_arch = "wasm32")]
+pub fn load_gltf_mesh_split(path: &Path) -> Result<(Vec<Vertex>, Vec<u16>, Vec<u16>)> {
+    let p = path.to_string_lossy();
+    // Helper to build verts/indices from a gltf::import_slice result, splitting by material alpha
+    let from_doc = |doc: &gltf::Document,
+                    buffers: &Vec<gltf::buffer::Data>,
+                    images_opt: Option<&Vec<gltf::image::Data>>|
+     -> Result<(Vec<Vertex>, Vec<u16>, Vec<u16>)> {
+        let mut verts: Vec<Vertex> = Vec::new();
+        let mut idx_opaque: Vec<u16> = Vec::new();
+        let mut idx_mask: Vec<u16> = Vec::new();
+        let images = images_opt;
+        for mesh in doc.meshes() {
+            for prim in mesh.primitives() {
+                let reader = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                let pos = reader
+                    .read_positions()
+                    .map(|it| it.collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let nrm = reader
+                    .read_normals()
+                    .map(|it| it.collect::<Vec<_>>())
+                    .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+                let base = verts.len() as u32;
+                for i in 0..pos.len() {
+                    verts.push(Vertex {
+                        pos: pos[i],
+                        nrm: nrm[i],
+                    });
+                }
+                let idx_u32: Vec<u32> = match reader.read_indices() {
+                    Some(gltf::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(),
+                    Some(gltf::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                    Some(gltf::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(),
+                    None => (0..pos.len() as u32).collect(),
+                };
+                let is_mask = matches!(
+                    prim.material().alpha_mode(),
+                    gltf::material::AlphaMode::Mask
+                );
+                let out = if is_mask {
+                    &mut idx_mask
+                } else {
+                    &mut idx_opaque
+                };
+                for v in idx_u32 {
+                    let rb = v + base;
+                    if rb <= u16::MAX as u32 {
+                        out.push(rb as u16);
+                    }
+                }
+                let _ = images; // reserved for future texture plumbing
+            }
+        }
+        Ok((verts, idx_opaque, idx_mask))
+    };
+
+    // 1) Self-contained GLB (Birch) via include_bytes
+    if p.contains("assets/trees/Birch_4GLB.glb") {
+        let bytes: &'static [u8] = include_bytes!("../../../assets/trees/Birch_4GLB.glb");
+        let (doc, buffers, images) =
+            gltf::import_slice(bytes).context("import glTF (birch glb)")?;
+        return from_doc(&doc, &buffers, Some(&images));
+    }
+    // 2) CommonTree_3.gltf is embedded and self-contained
+    if p.contains("assets/models/trees/CommonTree_3/CommonTree_3.gltf") {
+        let bytes: &'static [u8] =
+            include_bytes!("../../../assets/models/trees/CommonTree_3/CommonTree_3.gltf");
+        let (doc, buffers, images) =
+            gltf::import_slice(bytes).context("import glTF (CommonTree_3.gltf slice)")?;
+        return from_doc(&doc, &buffers, Some(&images));
+    }
+    // 3) Quaternius GiantPine_2.gltf + external .bin (embedded)
+    if p.contains("assets/trees/quaternius/glTF/GiantPine_2.gltf") {
+        let json_bytes: &'static [u8] =
+            include_bytes!("../../../assets/trees/quaternius/glTF/GiantPine_2.gltf");
+        let bin_bytes: &'static [u8] =
+            include_bytes!("../../../assets/trees/quaternius/glTF/GiantPine_2.bin");
+        let text = std::str::from_utf8(json_bytes).context("giantpine gltf not utf8")?;
+        let v: serde_json::Value = serde_json::from_str(text).context("parse giantpine gltf")?;
+        // Build lookup tables
+        let accessors = v
+            .get("accessors")
+            .and_then(|x| x.as_array())
+            .context("accessors missing")?;
+        let views = v
+            .get("bufferViews")
+            .and_then(|x| x.as_array())
+            .context("bufferViews missing")?;
+        let empty_vec: &'static Vec<serde_json::Value> = Box::leak(Box::new(Vec::new()));
+        let materials = v
+            .get("materials")
+            .and_then(|x| x.as_array())
+            .unwrap_or(empty_vec);
+        let meshes = v
+            .get("meshes")
+            .and_then(|x| x.as_array())
+            .context("meshes missing")?;
+        let mut verts: Vec<Vertex> = Vec::new();
+        let mut idx_opaque: Vec<u16> = Vec::new();
+        let mut idx_mask: Vec<u16> = Vec::new();
+        for mesh in meshes {
+            let prims = mesh
+                .get("primitives")
+                .and_then(|p| p.as_array())
+                .unwrap_or(empty_vec);
+            for prim in prims {
+                let attrs = prim
+                    .get("attributes")
+                    .and_then(|a| a.as_object())
+                    .context("primitive.attributes missing")?;
+                let pos_acc_idx = attrs
+                    .get("POSITION")
+                    .and_then(|i| i.as_u64())
+                    .context("POSITION accessor missing")?
+                    as usize;
+                let nrm_acc_idx = attrs
+                    .get("NORMAL")
+                    .and_then(|i| i.as_u64())
+                    .unwrap_or(pos_acc_idx as u64) as usize;
+                let pos_acc = &accessors[pos_acc_idx];
+                let nrm_acc = &accessors[nrm_acc_idx];
+                let vertex_count = pos_acc
+                    .get("count")
+                    .and_then(|c| c.as_u64())
+                    .context("POSITION.count missing")? as usize;
+                // Read positions
+                let pv_idx = pos_acc
+                    .get("bufferView")
+                    .and_then(|b| b.as_u64())
+                    .context("pos bufferView missing")? as usize;
+                let pn = &views[pv_idx];
+                let poff = pn.get("byteOffset").and_then(|b| b.as_u64()).unwrap_or(0) as usize;
+                let plen = pn
+                    .get("byteLength")
+                    .and_then(|b| b.as_u64())
+                    .context("pos byteLength missing")? as usize;
+                let pbytes = &bin_bytes[poff..poff + plen];
+                // Read normals
+                let nv_idx = nrm_acc
+                    .get("bufferView")
+                    .and_then(|b| b.as_u64())
+                    .context("nrm bufferView missing")? as usize;
+                let nn = &views[nv_idx];
+                let noff = nn.get("byteOffset").and_then(|b| b.as_u64()).unwrap_or(0) as usize;
+                let nlen = nn
+                    .get("byteLength")
+                    .and_then(|b| b.as_u64())
+                    .context("nrm byteLength missing")? as usize;
+                let nbytes = &bin_bytes[noff..noff + nlen];
+                let base = verts.len() as u32;
+                // positions: tightly packed float32 VEC3
+                for i in 0..vertex_count {
+                    let pi = i * 12; // 3*f32
+                    let x = f32::from_le_bytes(pbytes[pi..pi + 4].try_into().unwrap());
+                    let y = f32::from_le_bytes(pbytes[pi + 4..pi + 8].try_into().unwrap());
+                    let z = f32::from_le_bytes(pbytes[pi + 8..pi + 12].try_into().unwrap());
+                    let ni = i * 12;
+                    let nx = f32::from_le_bytes(nbytes[ni..ni + 4].try_into().unwrap());
+                    let ny = f32::from_le_bytes(nbytes[ni + 4..ni + 8].try_into().unwrap());
+                    let nz = f32::from_le_bytes(nbytes[ni + 8..ni + 12].try_into().unwrap());
+                    verts.push(Vertex {
+                        pos: [x, y, z],
+                        nrm: [nx, ny, nz],
+                    });
+                }
+                // Indices
+                let idx_acc_idx =
+                    prim.get("indices")
+                        .and_then(|i| i.as_u64())
+                        .context("indices accessor missing")? as usize;
+                let idx_acc = &accessors[idx_acc_idx];
+                let iv_idx = idx_acc
+                    .get("bufferView")
+                    .and_then(|b| b.as_u64())
+                    .context("idx bufferView missing")? as usize;
+                let in_ = &views[iv_idx];
+                let ioff = in_.get("byteOffset").and_then(|b| b.as_u64()).unwrap_or(0) as usize;
+                let ilen = in_
+                    .get("byteLength")
+                    .and_then(|b| b.as_u64())
+                    .context("idx byteLength missing")? as usize;
+                let ibytes = &bin_bytes[ioff..ioff + ilen];
+                let count = idx_acc
+                    .get("count")
+                    .and_then(|c| c.as_u64())
+                    .context("idx count missing")? as usize;
+                let mut out = &mut idx_opaque;
+                if let Some(mat_i) = prim.get("material").and_then(|m| m.as_u64()) {
+                    if let Some(mat) = materials.get(mat_i as usize) {
+                        let alpha = mat
+                            .get("alphaMode")
+                            .and_then(|a| a.as_str())
+                            .unwrap_or("OPAQUE");
+                        if alpha.eq_ignore_ascii_case("MASK") {
+                            out = &mut idx_mask;
+                        }
+                    }
+                }
+                // indices are u16 in this asset
+                for i in 0..count {
+                    let off = i * 2;
+                    let v = u16::from_le_bytes([ibytes[off], ibytes[off + 1]]) as u32;
+                    let rb = v + base;
+                    if rb <= u16::MAX as u32 {
+                        out.push(rb as u16);
+                    }
+                }
+            }
+        }
+        return Ok((verts, idx_opaque, idx_mask));
+    }
+    bail!("wasm split loader: unsupported path: {}", p)
+}
+
 #[allow(dead_code)]
 fn try_load_gltf_draco_json(path: &Path) -> Result<CpuMesh> {
     let text = std::fs::read_to_string(path)

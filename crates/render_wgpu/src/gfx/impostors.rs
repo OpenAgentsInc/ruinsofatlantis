@@ -205,7 +205,7 @@ impl ImpostorDemo {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: false,
+                depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::LessEqual,
                 stencil: Default::default(),
                 bias: Default::default(),
@@ -216,8 +216,11 @@ impl ImpostorDemo {
         });
 
         // Try to load texture array from assets; fallback to generated layers
-        let (view, samp, layers) = load_or_generate_array(device, &r.queue)?;
-        let (pal_view, pal_samp, pal_size, pal_rows, use_palette) = load_palette(device, &r.queue);
+        let (view, samp, layers, is_indexed) = load_or_generate_array(device, &r.queue)?;
+        let (pal_view, pal_samp, pal_size, pal_rows, palette_loaded) =
+            load_palette(device, &r.queue);
+        // Use palette only when BOTH the palette image exists AND the array is R8 indexed
+        let use_palette_flag = palette_loaded && is_indexed;
         #[repr(C)]
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
         struct Params {
@@ -235,7 +238,7 @@ impl ImpostorDemo {
         }
         let params = Params {
             sps: 16,
-            use_palette: if use_palette { 1 } else { 0 },
+            use_palette: if use_palette_flag { 1 } else { 0 },
             pal_size: pal_size,
             pal_rows: pal_rows,
             time: 0.0,
@@ -319,7 +322,7 @@ impl ImpostorDemo {
             sps: 16,
             pal_size,
             pal_rows,
-            use_palette,
+            use_palette: use_palette_flag,
             variant: 3,
             fps: 24.0,
             inst_cpu: insts,
@@ -413,7 +416,7 @@ impl ImpostorDemo {
 fn load_or_generate_array(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> Result<(wgpu::TextureView, wgpu::Sampler, u32)> {
+) -> Result<(wgpu::TextureView, wgpu::Sampler, u32, bool)> {
     // Prefer KTX2 2D array (R8 index) if available
     let ktx_candidates = [
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/horde/octa_demo/merged.ktx2"),
@@ -508,7 +511,7 @@ fn load_or_generate_array(
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
         });
-        return Ok((view, sampler, layers));
+        return Ok((view, sampler, layers, false));
     }
 
     // Load first to get dimensions
@@ -576,7 +579,7 @@ fn load_or_generate_array(
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         ..Default::default()
     });
-    Ok((view, sampler, layers))
+    Ok((view, sampler, layers, false))
 }
 
 fn palette(i: usize) -> (u8, u8, u8) {
@@ -597,7 +600,7 @@ fn load_ktx2_r8_array(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     path: &Path,
-) -> Result<(wgpu::TextureView, wgpu::Sampler, u32)> {
+) -> Result<(wgpu::TextureView, wgpu::Sampler, u32, bool)> {
     use std::fs::File;
     use std::io::Read;
     let mut f = File::open(path).with_context(|| format!("open ktx2: {:?}", path))?;
@@ -620,12 +623,29 @@ fn load_ktx2_r8_array(
     let lvl0 = levels
         .next()
         .ok_or_else(|| anyhow::anyhow!("ktx2: missing level 0"))?;
-    let bytes: Vec<u8> = match header.supercompression_scheme {
-        Some(s) if s == ktx2::SupercompressionScheme::Zstandard => {
-            zstd::stream::decode_all(&mut std::io::Cursor::new(lvl0.data))
-                .context("zstd decompress")?
+    let bytes: Vec<u8> = {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Avoid pulling in zstd on Web; refuse Zstandard-compressed payloads so we can fall back
+            // to the palette/CPU impostors path. This keeps the WASM dependency set pure-Rust.
+            if matches!(
+                header.supercompression_scheme,
+                Some(ktx2::SupercompressionScheme::Zstandard)
+            ) {
+                anyhow::bail!("ktx2: zstd supercompression not supported on wasm");
+            }
+            lvl0.data.to_vec()
         }
-        _ => lvl0.data.to_vec(),
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            match header.supercompression_scheme {
+                Some(s) if s == ktx2::SupercompressionScheme::Zstandard => {
+                    zstd::stream::decode_all(&mut std::io::Cursor::new(lvl0.data))
+                        .context("zstd decompress")?
+                }
+                _ => lvl0.data.to_vec(),
+            }
+        }
     };
     let bpp = 1usize;
     let expected = (w as usize) * (h as usize) * (layers as usize) * bpp;
@@ -694,7 +714,7 @@ fn load_ktx2_r8_array(
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         ..Default::default()
     });
-    Ok((view, sampler, layers))
+    Ok((view, sampler, layers, true))
 }
 
 fn load_palette(

@@ -37,6 +37,12 @@ Workspace crates (added for modularization)
 - H: hide/show HUD
 - O: 5s automated orbit for screenshots
 
+Impostor demo (when enabled)
+- F: toggle impostor flipX
+- G: toggle impostor flipY
+- X: toggle impostor swap-axes (rebinding from S to avoid WASD conflict)
+- V: cycle impostor animation variant
+
 Worldsmithing (Campaign Builder zone)
 - 1: select Place Tree
 - B: toggle builder overlay (help + counts)
