@@ -246,6 +246,13 @@ impl ZonePickerModel {
                 display: "Wizard Woods".into(),
             });
         }
+        // Ensure our impostor demo is always available from the picker
+        if next.iter().all(|e| e.slug != "octa_demo") {
+            next.push(ZoneEntry {
+                slug: "octa_demo".into(),
+                display: "Octahedral Crowds Demo".into(),
+            });
+        }
         if next.iter().all(|e| e.slug != "cc_demo") {
             next.push(ZoneEntry {
                 slug: "cc_demo".into(),
@@ -587,7 +594,15 @@ impl ApplicationHandler for App {
                     .unwrap_or(false);
                 let explicit = detect_zone_slug();
                 if !force_picker && let Some(slug) = explicit.as_ref() {
-                    if let Ok(zp) = client_core::zone_client::ZonePresentation::load(slug) {
+                    if slug == "octa_demo" {
+                        if let Err(e) = state.enable_impostor_demo() {
+                            log::error!("impostor demo: init failed: {e:?}");
+                        }
+                        let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                            slug: "octa_demo".to_string(),
+                        };
+                        state.set_zone_batches(Some(gb));
+                    } else if let Ok(zp) = client_core::zone_client::ZonePresentation::load(slug) {
                         let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(&state, &zp);
                         state.set_zone_batches(Some(gz));
                     } else {
@@ -724,7 +739,14 @@ impl ApplicationHandler for App {
                         if let Some(slug) = self.picker.current_slug() {
                             #[cfg(target_arch = "wasm32")]
                             {
-                                if let Ok(zp) =
+                                if slug == "octa_demo" {
+                                    if let Err(e) = state.enable_impostor_demo() {
+                                        log::error!("impostor demo: init failed: {e:?}");
+                                    }
+                                    state.ensure_pc_assets();
+                                    self.boot = BootMode::Running { slug: slug.clone() };
+                                    window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                } else if let Ok(zp) =
                                     client_core::zone_client::ZonePresentation::load(&slug)
                                 {
                                     let gz = render_wgpu::gfx::zone_batches::upload_zone_batches(
@@ -743,56 +765,70 @@ impl ApplicationHandler for App {
                             }
                             #[cfg(not(target_arch = "wasm32"))]
                             {
-                                // Spawn background worker using channel; keep UI responsive
-                                let (tx, rx) = mpsc::channel::<LoaderMsg>();
-                                let slug_clone = slug.clone();
-                                std::thread::spawn(move || {
-                                    let send = |m| {
-                                        let _ = tx.send(m);
-                                    };
-                                    send(LoaderMsg::Progress {
-                                        what: "Reading zone".into(),
-                                        step: 1,
-                                        of: 3,
-                                    });
-                                    let zp = client_core::zone_client::ZonePresentation::load(
-                                        &slug_clone,
-                                    );
-                                    let pc_cpu = if slug_clone == "campaign_builder"
-                                        || slug_clone == "cc_demo"
-                                    {
-                                        None
-                                    } else {
-                                        use roa_assets::skinning::load_gltf_skinned;
-                                        let ubc_path = std::path::Path::new(env!(
-                                            "CARGO_MANIFEST_DIR"
-                                        ))
-                                        .join("../../assets/models/ubc/godot/Superhero_Male.gltf");
-                                        load_gltf_skinned(&ubc_path).ok()
-                                    };
-                                    send(LoaderMsg::Progress {
-                                        what: "Finalizing".into(),
-                                        step: 3,
-                                        of: 3,
-                                    });
-                                    match zp {
-                                        Ok(zp_ok) => {
-                                            let _ = tx.send(LoaderMsg::Done(Box::new(Ok((
-                                                zp_ok, pc_cpu,
-                                            )))));
-                                        }
-                                        Err(e) => {
-                                            let _ = tx.send(LoaderMsg::Done(Box::new(Err(e))));
-                                        }
+                                if slug == "octa_demo" {
+                                    if let Err(e) = state.enable_impostor_demo() {
+                                        log::error!("impostor demo: init failed: {e:?}");
                                     }
-                                });
-                                self.boot = BootMode::Loading {
-                                    slug: slug.clone(),
-                                    rx,
-                                };
-                                // Latch HUD-only path throughout Loading
-                                state.set_picker_mode(true);
-                                window.set_title(&format!("Loading — {}", slug));
+                                    let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                                        slug: "octa_demo".to_string(),
+                                    };
+                                    state.set_zone_batches(Some(gb));
+                                    self.boot = BootMode::Running { slug: slug.clone() };
+                                    window.set_title(&format!("RuinsofAtlantis — {}", slug));
+                                } else {
+                                    // Spawn background worker using channel; keep UI responsive
+                                    let (tx, rx) = mpsc::channel::<LoaderMsg>();
+                                    let slug_clone = slug.clone();
+                                    std::thread::spawn(move || {
+                                        let send = |m| {
+                                            let _ = tx.send(m);
+                                        };
+                                        send(LoaderMsg::Progress {
+                                            what: "Reading zone".into(),
+                                            step: 1,
+                                            of: 3,
+                                        });
+                                        let zp = client_core::zone_client::ZonePresentation::load(
+                                            &slug_clone,
+                                        );
+                                        let pc_cpu = if slug_clone == "campaign_builder"
+                                            || slug_clone == "cc_demo"
+                                        {
+                                            None
+                                        } else {
+                                            use roa_assets::skinning::load_gltf_skinned;
+                                            let ubc_path = std::path::Path::new(env!(
+                                                "CARGO_MANIFEST_DIR"
+                                            ))
+                                            .join(
+                                                "../../assets/models/ubc/godot/Superhero_Male.gltf",
+                                            );
+                                            load_gltf_skinned(&ubc_path).ok()
+                                        };
+                                        send(LoaderMsg::Progress {
+                                            what: "Finalizing".into(),
+                                            step: 3,
+                                            of: 3,
+                                        });
+                                        match zp {
+                                            Ok(zp_ok) => {
+                                                let _ = tx.send(LoaderMsg::Done(Box::new(Ok((
+                                                    zp_ok, pc_cpu,
+                                                )))));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(LoaderMsg::Done(Box::new(Err(e))));
+                                            }
+                                        }
+                                    });
+                                    self.boot = BootMode::Loading {
+                                        slug: slug.clone(),
+                                        rx,
+                                    };
+                                    // Latch HUD-only path throughout Loading
+                                    state.set_picker_mode(true);
+                                    window.set_title(&format!("Loading — {}", slug));
+                                }
                             }
                         }
                         return;
@@ -954,6 +990,21 @@ impl ApplicationHandler for App {
                 {
                     // Clear any placement ghost when leaving builder overlay
                     state.set_ghost_instance(None);
+                    // Octahedral demo: initialize immediately and switch to running
+                    if slug == "octa_demo" {
+                        if let Err(e) = state.enable_impostor_demo() {
+                            log::error!("impostor demo: init failed: {e:?}");
+                        }
+                        let gb = render_wgpu::gfx::zone_batches::GpuZoneBatches {
+                            slug: "octa_demo".to_string(),
+                        };
+                        state.set_zone_batches(Some(gb));
+                        self.boot = BootMode::Running { slug };
+                        if let Some(w) = &self.window {
+                            w.set_title("RuinsofAtlantis — octa_demo");
+                        }
+                        return;
+                    }
                     // Spawn background loader so UI remains responsive
                     #[cfg(not(target_arch = "wasm32"))]
                     {

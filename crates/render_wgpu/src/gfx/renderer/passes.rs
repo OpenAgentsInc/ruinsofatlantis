@@ -135,6 +135,15 @@ impl Renderer {
                 return;
             }
         }
+        // Impostor demo (if enabled)
+        if let Some(ref demo) = self.impostor_demo {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            demo.draw(self, rp);
+            if pop_scope("impostor", &self.device) {
+                return;
+            }
+        }
         // Ruins (instanced static)
         if self.ruins_count > 0 && !self.is_picker_batches() {
             #[cfg(not(target_arch = "wasm32"))]

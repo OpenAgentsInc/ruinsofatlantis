@@ -202,7 +202,6 @@ def main():
         export_skins=True,
         export_morph=True,
         export_nla_strips=True,
-        export_all_actions=False,
         export_force_sampling=True,
         export_cameras=False,
         export_lights=False,
@@ -212,4 +211,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

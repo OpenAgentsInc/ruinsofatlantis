@@ -48,6 +48,7 @@ half = "2"
 env_logger = "0.11.5"
 net_core = { version = "0.1.0", path = "../net_core" }
 metrics = "0.24.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 # In-window Zone Picker UI overlay
 

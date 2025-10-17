@@ -528,3 +528,40 @@ fn fs_wizard_debug_flat(i: WizOut) -> @location(0) vec4<f32> {
   // Solid white to prove geometry/skinning without texture/materials
   return vec4<f32>(1.0, 1.0, 1.0, 1.0);
 }
+
+// ---- Impostor (billboard) pipeline — first pass ----
+struct ImpVert { @location(0) corner: vec2<f32> };
+struct ImpInst {
+  @location(1) pos: vec3<f32>,
+  @location(2) yaw: f32,
+  @location(3) layer: u32,
+  @location(4) scale: f32,
+};
+struct ImpOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+  @location(1) layer: u32,
+};
+
+@group(1) @binding(0) var imp_tex: texture_2d_array<f32>;
+@group(1) @binding(1) var imp_sam: sampler;
+
+@vertex
+fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
+  let right = globals.camRightTime.xyz;
+  let up = globals.camUpPad.xyz;
+  let world = i.pos + (right * v.corner.x + up * v.corner.y) * i.scale;
+  var o: ImpOut;
+  o.pos = globals.view_proj * vec4<f32>(world, 1.0);
+  // Simple full-quad UVs (no octa mapping yet)
+  o.uv = v.corner * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+  o.layer = i.layer;
+  return o;
+}
+
+@fragment
+fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
+  // Array textures sample with (coord, array_index) where index is i32
+  let c = textureSample(imp_tex, imp_sam, i.uv, i32(i.layer));
+  return c;
+}

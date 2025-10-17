@@ -2378,6 +2378,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         worldsmithing_kinds: Vec::new(),
         worldsmithing_selected: 0,
         present_recoveries: 0,
+        impostor_demo: None,
     };
 
     // Warm up a couple of frequently used pipelines to avoid first-use shader compilation hitch.

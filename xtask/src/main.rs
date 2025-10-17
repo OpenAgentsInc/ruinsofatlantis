@@ -1835,6 +1835,15 @@ fn create_isolated_worktree(
     if !status.success() {
         anyhow::bail!("git worktree add failed");
     }
+    // Narrow the worktree to docs/** to avoid heavy LFS assets for docs-only runs
+    let _ = std::process::Command::new("git")
+        .current_dir(&work_dir)
+        .args(["sparse-checkout", "init", "--cone"])
+        .status();
+    let _ = std::process::Command::new("git")
+        .current_dir(&work_dir)
+        .args(["sparse-checkout", "set", "docs"])
+        .status();
     Ok(work_dir)
 }
 

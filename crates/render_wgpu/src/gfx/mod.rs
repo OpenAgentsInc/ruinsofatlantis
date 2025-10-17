@@ -34,6 +34,7 @@ mod foliage;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod foliage_stream;
 pub mod fx;
+mod impostors;
 mod material;
 mod npcs;
 pub mod policy;
@@ -689,6 +690,9 @@ pub struct Renderer {
     // NPC wizard casting rotation state
     wizard_fire_cycle_count: Vec<u32>,
     wizard_fireball_next_at: Vec<u32>,
+
+    // Octahedral impostor demo (optional)
+    impostor_demo: Option<impostors::ImpostorDemo>,
 }
 
 pub struct VoxelChunkMesh {
@@ -744,6 +748,14 @@ struct Debris {
 
 #[allow(dead_code)]
 impl Renderer {
+    /// Enable the octahedral impostor demo scene. Safe to call multiple times.
+    pub fn enable_impostor_demo(&mut self) -> anyhow::Result<()> {
+        if self.impostor_demo.is_none() {
+            let demo = crate::gfx::impostors::ImpostorDemo::new(self)?;
+            self.impostor_demo = Some(demo);
+        }
+        Ok(())
+    }
     /// Approximate model-origin-to-feet offset (meters) using node names.
     /// Scans for foot/toe bones, computes global rest Y per node, and returns -min(Y).
     /// Falls back to 0.0 if no candidates found.

@@ -4390,6 +4390,7 @@ dependencies = [
  "gltf",
  "half",
  "hw-skymodel",
+ "image",
  "log",
  "metrics",
  "net_core",
