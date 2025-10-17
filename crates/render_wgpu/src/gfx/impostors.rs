@@ -35,6 +35,8 @@ pub struct ImpostorDemo {
     pal_size: u32,
     pal_rows: u32,
     use_palette: bool,
+    variant: u32,
+    fps: f32,
 }
 
 impl ImpostorDemo {
@@ -93,7 +95,7 @@ impl ImpostorDemo {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: std::num::NonZeroU64::new(48),
+                        min_binding_size: std::num::NonZeroU64::new(64),
                     },
                     count: None,
                 },
@@ -277,6 +279,8 @@ impl ImpostorDemo {
             pal_size,
             pal_rows,
             use_palette,
+            variant: 0,
+            fps: 24.0,
         })
     }
 
@@ -284,7 +288,7 @@ impl ImpostorDemo {
         rp.set_pipeline(&self.pipeline);
         // set globals at set=0
         rp.set_bind_group(0, &r.globals_bg, &[]);
-        // Update camera position in params each frame
+        // Update camera position and timing params each frame
         #[repr(C)]
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
         struct Params {
@@ -292,9 +296,11 @@ impl ImpostorDemo {
             use_palette: u32,
             pal_size: u32,
             pal_rows: u32,
+            fps: f32,
             alpha_clamp: f32,
             cam_pos: [f32; 3],
-            _pad: [f32; 4],
+            variant: u32,
+            _pad: [f32; 3],
         }
         let cam = r.cam_follow.current_pos;
         let params = Params {
@@ -302,9 +308,11 @@ impl ImpostorDemo {
             use_palette: if self.use_palette { 1 } else { 0 },
             pal_size: self.pal_size,
             pal_rows: self.pal_rows,
+            fps: self.fps,
             alpha_clamp: 0.05,
             cam_pos: [cam.x, cam.y, cam.z],
-            _pad: [0.0; 4],
+            variant: self.variant,
+            _pad: [0.0; 3],
         };
         r.queue
             .write_buffer(&self.params_buf, 0, bytemuck::bytes_of(&params));

@@ -553,8 +553,10 @@ struct ImpParams {
   use_palette: u32,
   palette_size: u32,
   palette_rows: u32,
+  fps: f32,
   alpha_clamp: f32,
   cam_pos: vec3<f32>,
+  variant: u32,
 }
 @group(1) @binding(4) var<uniform> imp: ImpParams;
 
@@ -594,7 +596,20 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
   let frame_size = 1.0 / f32(sps);
   let uv = vec2<f32>(i.uv.x, i.uv.y);
   let sprite_uv = (i.sprite + clamp(uv, vec2<f32>(0.0,0.0), vec2<f32>(1.0,1.0))) * frame_size;
-  var c = textureSample(imp_tex, imp_sam, sprite_uv, i32(i.layer));
+  // Variant addressing: base + (t*fps % count)
+  let t = globals.camRightTime.w;
+  let v = i32(imp.variant);
+  // counts and bases for 5 variants matching Horde merged.ktx2
+  let c0:i32 = 48; let c1:i32 = 38; let c2:i32 = 29; let c3:i32 = 31; let c4:i32 = 33;
+  let b0:i32 = 0;  let b1:i32 = 48; let b2:i32 = 86; let b3:i32 = 115; let b4:i32 = 146;
+  var count:i32 = c0; var base:i32 = b0;
+  if (v == 1) { count = c1; base = b1; }
+  if (v == 2) { count = c2; base = b2; }
+  if (v == 3) { count = c3; base = b3; }
+  if (v == 4) { count = c4; base = b4; }
+  let frame = i32(floor(t * imp.fps)) % max(count, 1);
+  let layer = base + frame;
+  var c = textureSample(imp_tex, imp_sam, sprite_uv, layer);
   // Optional palette recolor (R8 index to palette RGBA)
   if (imp.use_palette != 0u) {
     let idx255 = floor(c.r * 255.0 + 0.5);
