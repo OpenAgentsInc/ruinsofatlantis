@@ -136,10 +136,12 @@ impl Renderer {
             }
         }
         // Impostor demo (if enabled)
-        if let Some(ref demo) = self.impostor_demo {
+        if let Some(ref mut demo) = self.impostor_demo {
             #[cfg(not(target_arch = "wasm32"))]
             self.device.push_error_scope(wgpu::ErrorFilter::Validation);
-            demo.draw(self, rp);
+            let cam = self.cam_follow.current_pos;
+            let t = self.start.elapsed().as_secs_f32();
+            demo.draw(&self.queue, &self.globals_bg, &self.quad_vb, cam, t, rp);
             if pop_scope("impostor", &self.device) {
                 return;
             }

@@ -37,6 +37,10 @@ pub struct ImpostorDemo {
     use_palette: bool,
     variant: u32,
     fps: f32,
+    // CPU state for simple wander movement
+    inst_cpu: Vec<ImpostorInst>,
+    vel_cpu: Vec<[f32; 2]>, // xz planar velocities
+    prev_time: f32,
 }
 
 impl ImpostorDemo {
@@ -259,6 +263,7 @@ impl ImpostorDemo {
 
         // Populate a small grid of instances
         let mut insts: Vec<ImpostorInst> = Vec::new();
+        let mut vels: Vec<[f32; 2]> = Vec::new();
         let n = 32u32;
         let pitch = 2.2f32;
         for y in 0..n {
@@ -271,6 +276,12 @@ impl ImpostorDemo {
                     layer: (x % layers) as u32,
                     scale: 1.6,
                 });
+                // Random-ish velocity field per instance
+                let sx = ((x as i32 * 97 + y as i32 * 13) % 17) as f32 - 8.0;
+                let sz = ((x as i32 * 23 + y as i32 * 41) % 19) as f32 - 9.0;
+                let len = (sx * sx + sz * sz).sqrt().max(1.0);
+                let s = 0.8; // m/s
+                vels.push([s * sx / len, s * sz / len]);
             }
         }
         let inst_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -291,13 +302,24 @@ impl ImpostorDemo {
             use_palette,
             variant: 3,
             fps: 24.0,
+            inst_cpu: insts,
+            vel_cpu: vels,
+            prev_time: 0.0,
         })
     }
 
-    pub fn draw<'rp>(&self, r: &crate::gfx::Renderer, rp: &mut wgpu::RenderPass<'rp>) {
+    pub fn draw<'rp>(
+        &mut self,
+        queue: &wgpu::Queue,
+        globals_bg: &wgpu::BindGroup,
+        quad_vb: &wgpu::Buffer,
+        cam_pos: glam::Vec3,
+        time: f32,
+        rp: &mut wgpu::RenderPass<'rp>,
+    ) {
         rp.set_pipeline(&self.pipeline);
         // set globals at set=0
-        rp.set_bind_group(0, &r.globals_bg, &[]);
+        rp.set_bind_group(0, globals_bg, &[]);
         // Update camera position and timing params each frame
         #[repr(C)]
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -314,8 +336,32 @@ impl ImpostorDemo {
             variant: u32,
             _pad: [u32; 3],
         }
-        let cam = r.cam_follow.current_pos;
-        let time = r.start.elapsed().as_secs_f32();
+        let cam = cam_pos;
+        let time = time;
+        let dt = (time - self.prev_time).clamp(0.0, 0.1);
+        self.prev_time = time;
+        // Update simple wander motion on CPU
+        let half = 0.5 * (32.0 * 2.2); // grid half-size in meters
+        for (i, inst) in self.inst_cpu.iter_mut().enumerate() {
+            let v = self.vel_cpu[i];
+            inst.pos[0] += v[0] * dt;
+            inst.pos[2] += v[1] * dt;
+            // Wrap around bounds to keep the field dense
+            if inst.pos[0] > half {
+                inst.pos[0] = -half;
+            }
+            if inst.pos[0] < -half {
+                inst.pos[0] = half;
+            }
+            if inst.pos[2] > half {
+                inst.pos[2] = -half;
+            }
+            if inst.pos[2] < -half {
+                inst.pos[2] = half;
+            }
+        }
+        // Upload updated instance positions
+        queue.write_buffer(&self.inst, 0, bytemuck::cast_slice(&self.inst_cpu));
         let params = Params {
             sps: self.sps,
             use_palette: if self.use_palette { 1 } else { 0 },
@@ -329,11 +375,10 @@ impl ImpostorDemo {
             variant: self.variant,
             _pad: [0, 0, 0],
         };
-        r.queue
-            .write_buffer(&self.params_buf, 0, bytemuck::bytes_of(&params));
+        queue.write_buffer(&self.params_buf, 0, bytemuck::bytes_of(&params));
         rp.set_bind_group(1, &self.bg, &[]);
         // slot0: quad corners (from renderer), slot1: instances
-        rp.set_vertex_buffer(0, r.quad_vb.slice(..));
+        rp.set_vertex_buffer(0, quad_vb.slice(..));
         rp.set_vertex_buffer(1, self.inst.slice(..));
         // triangle strip quad: use index buffer from renderer? We can draw 4 verts/strip with built-in index
         // Here we draw strip with an implicit index via set_index_buffer isn't required if shader constructs; but we can use a small dynamic index.
