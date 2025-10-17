@@ -1,4 +1,4 @@
-struct Globals { view_proj: mat4x4<f32> };
+struct Globals { view_proj: mat4x4<f32>, model: mat4x4<f32> };
 @group(0) @binding(0) var<uniform> globals: Globals;
 
 @group(1) @binding(0) var base_sampler: sampler;
@@ -27,10 +27,10 @@ fn vs_main_skinned(in: VSIn) -> VSOut {
   let j = in.joints0;
   let w = in.weights0;
   let m = skin.joints[j.x] * w.x + skin.joints[j.y] * w.y + skin.joints[j.z] * w.z + skin.joints[j.w] * w.w;
-  let wp = m * vec4<f32>(in.pos, 1.0);
+  let wp = globals.model * (m * vec4<f32>(in.pos, 1.0));
   o.pos = globals.view_proj * wp;
   // Approximate normal transform (skinned): use linear part of skin matrix
-  let wn = (m * vec4<f32>(in.nrm, 0.0)).xyz;
+  let wn = (globals.model * (m * vec4<f32>(in.nrm, 0.0))).xyz;
   o.nrm = normalize(wn);
   o.uv0 = in.uv0;
   return o;

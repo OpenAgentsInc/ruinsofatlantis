@@ -482,6 +482,7 @@ struct Cli {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Globals {
     view_proj: [[f32; 4]; 4],
+    model: [[f32; 4]; 4],
 }
 
 #[repr(C)]
@@ -671,6 +672,7 @@ async fn run(cli: Cli) -> Result<()> {
     // Globals
     let globals = Globals {
         view_proj: Mat4::IDENTITY.to_cols_array_2d(),
+        model: Mat4::IDENTITY.to_cols_array_2d(),
     };
     let globals_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("globals"),
@@ -882,6 +884,8 @@ async fn run(cli: Cli) -> Result<()> {
     let mut yaw: f32 = 0.0; // radians
     let mut pitch: f32 = 0.35; // radians, clamped
     let mut radius: f32 = 3.0;
+    // Model orientation (GPU-space) rotation mode: 0=None, 1=-90x, 2=+90x, 3=+90z
+    let mut model_rot_mode: u32 = 0;
     let mut rmb_down = false;
     let mut last_cursor: Option<(f32, f32)> = None;
     let mut mouse_pos_px: (f32, f32) = (0.0, 0.0);
@@ -1187,6 +1191,13 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     );
                     window.set_title(&title);
+                    // Heuristic: rotate Red Wyvern into a horizontal alignment by default
+                    if let Some(sp) = p.to_str() {
+                        let sl = sp.to_ascii_lowercase();
+                        if sl.contains("red_wyvern") || sl.contains("reddragon") {
+                            model_rot_mode = 1;
+                        }
+                    }
                     // set current pitch for UI controls based on mode
                     if let ModelGpu::Skinned { base, .. } = &gpu {
                         head_pitch_deg_current = match orient_mode {
@@ -1436,8 +1447,12 @@ async fn run(cli: Cli) -> Result<()> {
             let eye = center + Vec3::new(r * cp.cos() * yaw.cos(), r * cp.sin(), r * cp.cos() * yaw.sin());
             let view = Mat4::look_at_rh(eye, center, Vec3::Y);
             let proj = Mat4::perspective_rh_gl(60f32.to_radians(), width as f32 / height as f32, 0.05, 100.0 * diag);
-            let vp = (proj * view).to_cols_array_2d();
-            queue.write_buffer(&globals_buf, 0, bytemuck::bytes_of(&Globals { view_proj: vp }));
+            let vp = (proj * view);
+            // Build model matrix: center pivot * orientation rotation
+            let rot = match model_rot_mode { 1 => Mat4::from_rotation_x(-90f32.to_radians()), 2 => Mat4::from_rotation_x(90f32.to_radians()), 3 => Mat4::from_rotation_z(90f32.to_radians()), _ => Mat4::IDENTITY };
+            let model_m = Mat4::from_translation(center) * rot * Mat4::from_translation(-center);
+            let g = Globals { view_proj: vp.to_cols_array_2d(), model: model_m.to_cols_array_2d() };
+            queue.write_buffer(&globals_buf, 0, bytemuck::bytes_of(&g));
 
             let frame = match surface.get_current_texture() { Ok(f) => f, Err(_) => { surface.configure(&device, &config); surface.get_current_texture().expect("frame") } };
             let view_tex = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
