@@ -287,7 +287,7 @@ impl ImpostorDemo {
             pal_size,
             pal_rows,
             use_palette,
-            variant: 0,
+            variant: 3,
             fps: 24.0,
         })
     }
@@ -317,7 +317,7 @@ impl ImpostorDemo {
             pal_size: self.pal_size,
             pal_rows: self.pal_rows,
             fps: self.fps,
-            alpha_clamp: 0.05,
+            alpha_clamp: 0.02,
             cam_pos: [cam.x, cam.y, cam.z],
             variant: self.variant,
             _pad: [0.0; 3],

@@ -583,9 +583,13 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
     dir.z = (1.0 - abs(oldx)) * sign_not_zero.y;
   }
   var grid = dir.xz * 0.5 + vec2<f32>(0.5, 0.5);
+  // Atlas orientation adjustments (Horde): flip Y, then swap X/Y
+  let gridX = grid.x;
+  let gridY = 1.0 - grid.y;
+  let gridFinal = vec2<f32>(gridY, gridX);
   let sps = max(imp.sprites_per_side, 1u);
   let sm1 = f32(sps - 1u);
-  let sprite_grid = grid * sm1;
+  let sprite_grid = gridFinal * sm1;
   o.sprite = clamp(round(sprite_grid), vec2<f32>(0.0, 0.0), vec2<f32>(sm1, sm1));
   return o;
 }
