@@ -204,16 +204,24 @@ impl ImpostorDemo {
             use_palette: u32,
             pal_size: u32,
             pal_rows: u32,
+            fps: f32,
             alpha_clamp: f32,
-            _pad: [f32; 7],
+            pad0: [f32; 2],
+            cam_pos: [f32; 4],
+            variant: u32,
+            pad1: [u32; 3],
         }
         let params = Params {
             sps: 16,
             use_palette: if use_palette { 1 } else { 0 },
             pal_size: pal_size,
             pal_rows: pal_rows,
+            fps: 24.0,
             alpha_clamp: 0.05,
-            _pad: [0.0; 7],
+            pad0: [0.0; 2],
+            cam_pos: [0.0, 0.0, 0.0, 0.0],
+            variant: 0,
+            pad1: [0, 0, 0],
         };
         let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("impostor-params"),

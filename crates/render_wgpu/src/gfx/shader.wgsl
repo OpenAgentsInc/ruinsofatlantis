@@ -555,7 +555,8 @@ struct ImpParams {
   palette_rows: u32,
   fps: f32,
   alpha_clamp: f32,
-  cam_pos: vec3<f32>,
+  _pad0: vec2<f32>,
+  cam_pos: vec4<f32>,
   variant: u32,
 }
 @group(1) @binding(4) var<uniform> imp: ImpParams;
