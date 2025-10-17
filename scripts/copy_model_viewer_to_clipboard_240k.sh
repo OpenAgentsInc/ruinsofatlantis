@@ -52,15 +52,18 @@ CTX
 add_file "$ROOT_DIR/tools/model-viewer/src/main.rs"
 add_file "$ROOT_DIR/tools/model-viewer/src/shader_skinned.wgsl"
 add_file "$ROOT_DIR/tools/model-viewer/src/shader_basic.wgsl"
+add_file "$ROOT_DIR/tools/model-viewer/Cargo.toml"
 
 # Shared assets (loaders + types)
 add_file "$ROOT_DIR/shared/assets/src/skinning.rs"
 add_file "$ROOT_DIR/shared/assets/src/fbx.rs"
 add_file "$ROOT_DIR/shared/assets/src/types.rs"
 add_file "$ROOT_DIR/shared/assets/src/lib.rs"
+add_file "$ROOT_DIR/shared/assets/Cargo.toml"
 
 # Docs
 add_file "$ROOT_DIR/docs/graphics/model-viewer.md"
+add_file "$ROOT_DIR/README.md"
 
 # Grep-based discovery for helpers that the viewer relies on
 if command -v rg >/dev/null 2>&1; then
@@ -76,6 +79,10 @@ else
     "$ROOT_DIR/crates" "$ROOT_DIR/shared" "$ROOT_DIR/tools" 2>/dev/null | cut -d: -f1 | \
     LC_ALL=C sort -u | while IFS= read -r f; do add_file "$f"; done
 fi
+
+# Viewer-related helper scripts (conversion/bake)
+add_file "$ROOT_DIR/scripts/bake_redwyvern_textured_glb.sh"
+add_file "$ROOT_DIR/scripts/blender/bake_redwyvern_textures.py"
 
 # Asset index (paths only; do NOT include binary contents)
 {
@@ -107,4 +114,3 @@ esac
 
 kb=$(awk -v b="$size_bytes" 'BEGIN{printf "%.1f", b/1024}')
 echo "Copied ${kb} KiB to clipboard (truncated=${truncated})"
-

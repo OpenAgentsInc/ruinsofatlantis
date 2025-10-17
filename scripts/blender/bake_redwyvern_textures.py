@@ -46,6 +46,13 @@ def bake_material_albedo(obj, mat, size):
     img_node.select = True
     nodes.active = img_node
     # Bake diffuse color only
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception:
+        pass
     bpy.ops.object.bake(type='DIFFUSE', pass_filter={'COLOR'}, use_clear=True, margin=8)
     # Keep node for export (Image node plugged into baseColor by exporters)
     return img
@@ -53,13 +60,13 @@ def bake_material_albedo(obj, mat, size):
 def main():
     args = parse_args()
     ensure_cycles()
-    # Select all mesh objects
+    # Select all mesh objects and bake per material slot
     for obj in bpy.data.objects:
         if obj.type != 'MESH':
             continue
+        bpy.ops.object.select_all(action='DESELECT')
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
-        # Bake per material slot
         for slot in obj.material_slots:
             bake_material_albedo(obj, slot.material, args.size)
         obj.select_set(False)
@@ -71,4 +78,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

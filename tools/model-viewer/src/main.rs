@@ -1109,6 +1109,19 @@ async fn run(cli: Cli) -> Result<()> {
                     log::info!("viewer: head pitch correction {} deg", pitch);
                 }
                 let anim = Box::new(AnimData::from_skinned_with_options(&base, &names, pitch));
+                let default_idx = {
+                    let mut best_i = 0usize;
+                    let mut best = 0.0f32;
+                    for (i, n) in names.iter().enumerate() {
+                        if let Some(c) = base.animations.get(n) {
+                            if c.duration > best {
+                                best = c.duration;
+                                best_i = i;
+                            }
+                        }
+                    }
+                    best_i
+                };
                 Ok(ModelGpu::Skinned {
                     vb,
                     ib,
@@ -1119,7 +1132,7 @@ async fn run(cli: Cli) -> Result<()> {
                     diag,
                     anims: names,
                     anim,
-                    active_index: 0,
+                    active_index: default_idx,
                     time: 0.0,
                     base,
                 })
@@ -1166,6 +1179,8 @@ async fn run(cli: Cli) -> Result<()> {
         }
     };
 
+    // Pre-UI defaults accumulated while loading
+    let mut lists_visible_pre: bool = false;
     // Load from CLI if provided
     if let Some(p) = cli.path.as_ref() {
         if let Ok(mut gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
@@ -1191,6 +1206,9 @@ async fn run(cli: Cli) -> Result<()> {
                         }
                     );
                     window.set_title(&title);
+                    if !anims.is_empty() {
+                        lists_visible_pre = true;
+                    }
                     // Heuristic: rotate Red Wyvern into a horizontal alignment by default
                     if let Some(sp) = p.to_str() {
                         let sl = sp.to_ascii_lowercase();
@@ -1379,7 +1397,10 @@ async fn run(cli: Cli) -> Result<()> {
     let mut snapshot_done = false;
     // UI visibility toggles
     let mut ui_visible = true; // full UI (top-left controls)
-    let mut lists_visible = false; // heavy side lists (models/anims/library)
+    let mut lists_visible = lists_visible_pre; // side lists (animations/catalog)
+    let mut catalog_visible = false; // Models/Library lists
+    // Animations panel scroll (pixels, 0 = top)
+    let mut anim_scroll_px: f32 = 0.0;
 
     Ok(event_loop.run(move |event, elwt| match event {
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => elwt.exit(),
@@ -1409,8 +1430,7 @@ async fn run(cli: Cli) -> Result<()> {
             if is_tab { ui_visible = !ui_visible; }
             if is_l { lists_visible = !lists_visible; }
             // 'G' toggles the asset catalog (Models + Library) while keeping the Animations list
-            static mut CATALOG: bool = false;
-            if is_g { unsafe { CATALOG = !CATALOG; } }
+            if is_g { catalog_visible = !catalog_visible; }
             if is_o { autorotate = !autorotate; }
             if is_h {
                 head_pitch_deg_current = 0.0;
@@ -1636,6 +1656,17 @@ async fn run(cli: Cli) -> Result<()> {
                     rpass.set_vertex_buffer(0, tvb.slice(..));
                     rpass.draw(0..(head_text.len() as u32), 0..1);
                 }
+                // Tiny hint below the head controls
+                let mut hint_text: Vec<UiVertex> = Vec::new();
+                let hint = if lists_visible { "Scroll to see more • Click a name to play • [ / ] to cycle" } else { "[L] Show ANIMATIONS • [ / ] to cycle" };
+                let hint_y = head_y + (7.0*label_cell) + (label_cell*2.0) + 8.0;
+                build_text_quads(&vec![hint.to_string()], (m + s + 8.0, hint_y), (width as f32, height as f32), &mut hint_text, [0.8,0.85,0.95,1.0], label_cell);
+                if !hint_text.is_empty() {
+                    let tvb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("ui-hint"), contents: bytemuck::cast_slice(&hint_text), usage: wgpu::BufferUsages::VERTEX });
+                    rpass.set_pipeline(&ui_pipe);
+                    rpass.set_vertex_buffer(0, tvb.slice(..));
+                    rpass.draw(0..(hint_text.len() as u32), 0..1);
+                }
                 // Anim list text (multi-column) — hidden unless lists are visible
                 if lists_visible {
                     let mut text_verts: Vec<UiVertex> = Vec::new();
@@ -1669,8 +1700,7 @@ async fn run(cli: Cli) -> Result<()> {
                 }
 
                 // Model library list (optional) - toggle with 'G'
-                static mut CATALOG: bool = false; // declared also in key handler
-                if lists_visible && !lib_models.is_empty() && unsafe { CATALOG } {
+                if lists_visible && !lib_models.is_empty() && catalog_visible {
                     let mut model_lines: Vec<String> = vec!["MODELS:".to_string()];
                     for (i, mentry) in lib_models.iter().enumerate() {
                         model_lines.push(format!("{}: {}", i + 1, mentry.name.to_uppercase()));
@@ -1690,7 +1720,7 @@ async fn run(cli: Cli) -> Result<()> {
                 }
 
                 // Library animations (optional) - toggle with 'G'
-                if lists_visible && !lib_anims.is_empty() && unsafe { CATALOG } {
+                if lists_visible && !lib_anims.is_empty() && catalog_visible {
                     let mut lib_lines: Vec<String> = vec!["LIBRARY:".to_string()];
                     for (i, a) in lib_anims.iter().enumerate() { lib_lines.push(format!("{}: {}", i + 1, a.name.to_uppercase())); }
                     let anim_cell: f32 = 4.8 * cli.ui_scale.max(0.25);
@@ -1785,6 +1815,7 @@ async fn run(cli: Cli) -> Result<()> {
                         center = *c; diag = *d; radius = *d * 1.0; yaw = 0.0; pitch = 0.35;
                         let title = format!("Model Viewer — {} | anims: {}", path.display(), if anims.is_empty() { "(none)".to_string() } else { anims.join(", ") });
                         window.set_title(&title);
+                        if !anims.is_empty() { lists_visible = true; anim_scroll_px = 0.0; }
                         if let ModelGpu::Skinned { base, .. } = &gpu {
                             head_pitch_deg_current = match orient_mode { 0=>0.0, 2=>45.0, 3=>60.0, 4=>70.0, _=> default_head_pitch_for(base, Some(&path), cli.head_pitch_deg) };
                         }
@@ -1819,8 +1850,35 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
         Event::WindowEvent { event: WindowEvent::MouseWheel { delta, .. }, .. } => {
-            let scroll = match delta { MouseScrollDelta::LineDelta(_, y) => y * 50.0, MouseScrollDelta::PixelDelta(p) => p.y as f32 };
-            radius *= (1.0 - scroll * 0.001).max(0.1);
+            // Scroll animations list if cursor is over it; else dolly camera
+            let label_cell = 3.0 * cli.ui_scale.max(0.25);
+            let anim_cell  = 4.8 * cli.ui_scale.max(0.25);
+            let glyph_h    = 7.0 * anim_cell;
+            let line_gap   = anim_cell * 2.0;
+            let s: f32 = 20.0; let m: f32 = 16.0;
+            let oy0      = m + s + 8.0 + (7.0*label_cell) + (label_cell*2.0) + 8.0;
+            let head_y   = oy0 + (7.0*label_cell) + (label_cell*2.0) + 6.0;
+            let label_row_h = 7.0*label_cell + label_cell*2.0;
+            let anim_header_y = head_y + (2.0 * label_row_h) + 18.0;
+            let available_h = (height as f32) - anim_header_y - 16.0;
+            let list_x0 = m; let list_x1 = (width as f32) - m;
+            let list_y0 = anim_header_y; let list_y1 = anim_header_y + available_h;
+            let (mx, my) = mouse_pos_px;
+            let over_anim_list = lists_visible && mx >= list_x0 && mx <= list_x1 && my >= list_y0 && my <= list_y1;
+            if over_anim_list {
+                let dy = match delta { MouseScrollDelta::LineDelta(_, y) => -y as f32 * (glyph_h + line_gap), MouseScrollDelta::PixelDelta(p) => -p.y as f32 };
+                if let Some(ref gpu) = model_gpu
+                    && let ModelGpu::Skinned { anims, .. } = gpu
+                    && !anims.is_empty()
+                {
+                    let content_h = (anims.len() as f32) * (glyph_h + line_gap);
+                    let max_scroll = (content_h - available_h).max(0.0);
+                    anim_scroll_px = (anim_scroll_px + dy).clamp(-max_scroll, 0.0);
+                }
+            } else {
+                let scroll = match delta { MouseScrollDelta::LineDelta(_, y) => y * 50.0, MouseScrollDelta::PixelDelta(p) => p.y as f32 };
+                radius *= (1.0 - scroll * 0.001).max(0.1);
+            }
         }
         Event::WindowEvent { event: WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. }, .. } => {
             // Toggle autorotate and orientation button
@@ -1878,27 +1936,40 @@ async fn run(cli: Cli) -> Result<()> {
                 }
                 x_cursor += bw + 18.0;
             }
-            // Animation buttons (skinned): click lines under header (multi-column)
-            if lists_visible && let Some(gpu) = model_gpu.as_mut()
+            // Animation list click (single column with scroll)
+            if lists_visible
+                && let Some(gpu) = model_gpu.as_mut()
                 && let ModelGpu::Skinned { anims, active_index, time, .. } = gpu
                 && !anims.is_empty()
             {
-                let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
-                let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
-                let label_row_h = 7.0 * (3.0 * cli.ui_scale.max(0.25)) + (3.0 * cli.ui_scale.max(0.25)) * 2.0;
-                let anim_header_y = (m + (7.0*anim_cell) + (anim_cell*2.0) + 8.0) + label_row_h + 14.0;
+                let label_cell = 3.0 * cli.ui_scale.max(0.25);
+                let anim_cell: f32 = 4.8 * cli.ui_scale.max(0.25);
+                let glyph_h = 7.0 * anim_cell;
+                let glyph_w = 5.0 * anim_cell;
+                let line_gap = anim_cell * 2.0;
+                let s: f32 = 20.0; let m: f32 = 16.0;
+                let oy0 = m + s + 8.0 + (7.0*label_cell) + (label_cell*2.0) + 8.0;
+                let head_y = oy0 + (7.0*label_cell) + (label_cell*2.0) + 6.0;
+                let label_row_h = 7.0*label_cell + label_cell*2.0;
+                let anim_header_y = head_y + (2.0 * label_row_h) + 18.0;
                 let available_h = (height as f32) - anim_header_y - 16.0;
-                let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
-                let col_w = 260.0 * cli.ui_scale.max(0.5);
-                for (i, name) in anims.iter().enumerate() {
-                    let col = i / rows_per_col;
-                    let row = i % rows_per_col;
-                    let tx0 = m + (col as f32) * col_w;
-                    let ty0 = anim_header_y + (row as f32) * (glyph_h + line_gap);
-                    let tw = (name.len() as f32 + 4.0) * (5.0*anim_cell + anim_cell);
-                    let th = glyph_h;
-                    if mx >= tx0 && mx <= tx0 + tw && my >= ty0 && my <= ty0 + th {
-                        *active_index = i; *time = 0.0;
+                let row_step = glyph_h + line_gap;
+                // List rect
+                let list_x0 = m;
+                let list_x1 = (width as f32) - m;
+                let list_y0 = anim_header_y;
+                let list_y1 = anim_header_y + available_h;
+                if mx >= list_x0 && mx <= list_x1 && my >= list_y0 && my <= list_y1 {
+                    let y_rel = my - anim_header_y - anim_scroll_px;
+                    let row = (y_rel / row_step).floor() as isize;
+                    if row >= 0 && (row as usize) < anims.len() {
+                        let i = row as usize;
+                        let label = format!("{}: {}", i + 1, anims[i].to_uppercase());
+                        let text_w_px = (label.len() as f32) * (glyph_w + anim_cell);
+                        if mx <= list_x0 + text_w_px {
+                            *active_index = i;
+                            *time = 0.0;
+                        }
                     }
                 }
             }
