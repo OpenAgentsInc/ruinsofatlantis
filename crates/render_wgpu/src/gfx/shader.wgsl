@@ -594,7 +594,7 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
     let idx255 = floor(c.r * 255.0 + 0.5);
     let maxIdx = f32(max(imp.palette_size, 1u) - 1u);
     let clamped = clamp(idx255, 0.0, maxIdx);
-    let row = f32(min(imp.palette_rows - 1u, imp.palette_rows));
+    let row = 0.0; // single-row palette for now; can be varied per-instance later
     let u = (clamped + 0.5) / f32(max(imp.palette_size,1u));
     let v = (row + 0.5) / f32(max(imp.palette_rows,1u));
     let pal = textureSample(pal_tex, pal_sam, vec2<f32>(u, v));

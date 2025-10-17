@@ -88,7 +88,7 @@ impl ImpostorDemo {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: std::num::NonZeroU64::new(32),
+                        min_binding_size: std::num::NonZeroU64::new(48),
                     },
                     count: None,
                 },
@@ -198,7 +198,7 @@ impl ImpostorDemo {
             pal_size: u32,
             pal_rows: u32,
             alpha_clamp: f32,
-            _pad: [f32; 3],
+            _pad: [f32; 7],
         }
         let params = Params {
             sps: 16,
@@ -206,7 +206,7 @@ impl ImpostorDemo {
             pal_size: pal_size,
             pal_rows: pal_rows,
             alpha_clamp: 0.05,
-            _pad: [0.0; 3],
+            _pad: [0.0; 7],
         };
         let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("impostor-params"),
