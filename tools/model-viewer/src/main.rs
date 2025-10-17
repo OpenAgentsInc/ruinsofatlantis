@@ -874,7 +874,7 @@ async fn run(cli: Cli) -> Result<()> {
     let mut center = Vec3::ZERO;
     let mut diag = 1.0f32;
     // Orbit state
-    let mut autorotate = true;
+    let mut autorotate = false;
     // Orientation correction mode: 0=None, 1=Auto, 2=45deg, 3=60deg, 4=70deg
     let mut orient_mode: u32 = 1;
     // Current head pitch correction applied when sampling (degrees)
