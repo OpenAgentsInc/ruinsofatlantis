@@ -603,7 +603,7 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
   let sps = max(imp.sprites_per_side, 1u);
   let frame_size = 1.0 / f32(sps);
   // Slight inset to avoid sampling outside the tile (edge sparkles)
-  let inset = 0.01;
+  let inset = 0.0005;
   let uv = clamp(vec2<f32>(i.uv.x, i.uv.y), vec2<f32>(inset, inset), vec2<f32>(1.0 - inset, 1.0 - inset));
   let sprite_uv = (i.sprite + uv) * frame_size;
   // Variant addressing: base + (time*fps % count)
@@ -630,7 +630,8 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
     let u = (clamped + 0.5) / f32(max(imp.palette_size,1u));
     let v = (row + 0.5) / f32(max(imp.palette_rows,1u));
     let pal = textureSample(pal_tex, pal_sam, vec2<f32>(u, v));
-    let alpha = select(0.0, 1.0, clamped >= 0.5);
+    // Treat index 0 as transparent, any non-zero index as opaque
+    let alpha = select(0.0, 1.0, clamped >= 1.0);
     c = vec4<f32>(pal.rgb, alpha);
   }
   if (c.a <= imp.alpha_clamp) { discard; }
