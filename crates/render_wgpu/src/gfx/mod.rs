@@ -756,6 +756,27 @@ impl Renderer {
         }
         Ok(())
     }
+
+    pub fn impostor_toggle_flip_x(&mut self) {
+        if let Some(ref mut d) = self.impostor_demo {
+            d.toggle_flip_x();
+        }
+    }
+    pub fn impostor_toggle_flip_y(&mut self) {
+        if let Some(ref mut d) = self.impostor_demo {
+            d.toggle_flip_y();
+        }
+    }
+    pub fn impostor_toggle_swap_axes(&mut self) {
+        if let Some(ref mut d) = self.impostor_demo {
+            d.toggle_swap_axes();
+        }
+    }
+    pub fn impostor_cycle_variant(&mut self) {
+        if let Some(ref mut d) = self.impostor_demo {
+            d.cycle_variant();
+        }
+    }
     /// Approximate model-origin-to-feet offset (meters) using node names.
     /// Scans for foot/toe bones, computes global rest Y per node, and returns -min(Y).
     /// Falls back to 0.0 if no candidates found.

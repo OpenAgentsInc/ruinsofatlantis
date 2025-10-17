@@ -279,6 +279,31 @@ impl Renderer {
                             );
                         }
                     }
+                    // Impostor debug toggles
+                    PhysicalKey::Code(KeyCode::KeyF) => {
+                        if pressed {
+                            self.impostor_toggle_flip_x();
+                            log::info!("impostor: toggle flipX");
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyG) => {
+                        if pressed {
+                            self.impostor_toggle_flip_y();
+                            log::info!("impostor: toggle flipY");
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyS) => {
+                        if pressed {
+                            self.impostor_toggle_swap_axes();
+                            log::info!("impostor: toggle swapAxes");
+                        }
+                    }
+                    PhysicalKey::Code(KeyCode::KeyV) => {
+                        if pressed {
+                            self.impostor_cycle_variant();
+                            log::info!("impostor: cycle variant");
+                        }
+                    }
                     // 5s automated orbit capture (screenshots)
                     PhysicalKey::Code(KeyCode::KeyO) => {
                         if pressed {

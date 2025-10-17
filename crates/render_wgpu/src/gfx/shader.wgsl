@@ -560,6 +560,8 @@ struct ImpParams {
   _pad0: f32,
   cam_pos: vec4<f32>,
   variant: u32,
+  flags: u32,
+  _pad1: vec2<u32>,
 }
 @group(1) @binding(4) var<uniform> imp: ImpParams;
 
@@ -586,10 +588,14 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
     dir.z = (1.0 - abs(oldx)) * sign_not_zero.y;
   }
   var grid = dir.xz * 0.5 + vec2<f32>(0.5, 0.5);
-  // Atlas orientation adjustments (Horde): flip Y, then swap X/Y
-  let gridX = grid.x;
-  let gridY = 1.0 - grid.y;
-  let gridFinal = vec2<f32>(gridY, gridX);
+  // Orientation flags: bit0=flipX, bit1=flipY, bit2=swapAxes, bit3=hemi (unused here)
+  let fx = (imp.flags & 1u) != 0u;
+  let fy = (imp.flags & 2u) != 0u;
+  let sw = (imp.flags & 4u) != 0u;
+  var gx = select(grid.x, 1.0 - grid.x, fx);
+  var gy = select(grid.y, 1.0 - grid.y, fy);
+  var gridFinal = vec2<f32>(gx, gy);
+  if (sw) { gridFinal = vec2<f32>(gridFinal.y, gridFinal.x); }
   let sps = max(imp.sprites_per_side, 1u);
   let sm1 = f32(sps - 1u);
   let sprite_grid = gridFinal * sm1;

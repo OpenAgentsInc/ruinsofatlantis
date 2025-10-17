@@ -41,11 +41,25 @@ pub struct ImpostorDemo {
     inst_cpu: Vec<ImpostorInst>,
     vel_cpu: Vec<[f32; 2]>, // xz planar velocities
     prev_time: f32,
+    flags: u32,
 }
 
 impl ImpostorDemo {
     pub fn info(&self) -> (u32, u32, f32, u32) {
         (self.count, self.sps, self.fps, self.variant)
+    }
+
+    pub fn toggle_flip_x(&mut self) {
+        self.flags ^= 1;
+    }
+    pub fn toggle_flip_y(&mut self) {
+        self.flags ^= 2;
+    }
+    pub fn toggle_swap_axes(&mut self) {
+        self.flags ^= 4;
+    }
+    pub fn cycle_variant(&mut self) {
+        self.variant = (self.variant + 1) % 5;
     }
     pub fn new(r: &crate::gfx::Renderer) -> Result<Self> {
         let device = &r.device;
@@ -311,6 +325,7 @@ impl ImpostorDemo {
             inst_cpu: insts,
             vel_cpu: vels,
             prev_time: 0.0,
+            flags: 0,
         })
     }
 
@@ -340,7 +355,8 @@ impl ImpostorDemo {
             pad0: f32,
             cam_pos: [f32; 4],
             variant: u32,
-            _pad: [u32; 3],
+            flags: u32,
+            _pad: [u32; 2],
         }
         let cam = cam_pos;
         let time = time;
@@ -379,7 +395,8 @@ impl ImpostorDemo {
             pad0: 0.0,
             cam_pos: [cam.x, cam.y, cam.z, 0.0],
             variant: self.variant,
-            _pad: [0, 0, 0],
+            flags: self.flags,
+            _pad: [0, 0],
         };
         queue.write_buffer(&self.params_buf, 0, bytemuck::bytes_of(&params));
         rp.set_bind_group(1, &self.bg, &[]);
