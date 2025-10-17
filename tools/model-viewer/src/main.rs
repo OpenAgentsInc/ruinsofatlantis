@@ -464,7 +464,7 @@ struct Cli {
     snapshot: Option<PathBuf>,
 
     /// UI scale for text (1.0 = default). Lower to see more lines.
-    #[arg(long, default_value_t = 0.7)]
+    #[arg(long, default_value_t = 0.6)]
     ui_scale: f32,
 
     /// Optional path to an animation library (GLTF/GLB/FBX) to merge into the loaded model.
@@ -1385,10 +1385,14 @@ async fn run(cli: Cli) -> Result<()> {
             let is_l = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("l"));
             let is_o = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("o"));
             let is_h = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("h"));
+            let is_g = matches!(log_key, Key::Character(c) if c.eq_ignore_ascii_case("g"));
             let left = matches!(phys_key, PhysicalKey::Code(KeyCode::ArrowLeft)) || matches!(log_key, Key::Character(c) if c.as_ref() == "[");
             let right = matches!(phys_key, PhysicalKey::Code(KeyCode::ArrowRight)) || matches!(log_key, Key::Character(c) if c.as_ref() == "]");
             if is_tab { ui_visible = !ui_visible; }
             if is_l { lists_visible = !lists_visible; }
+            // 'G' toggles the asset catalog (Models + Library) while keeping the Animations list
+            static mut CATALOG: bool = false;
+            if is_g { unsafe { CATALOG = !CATALOG; } }
             if is_o { autorotate = !autorotate; }
             if is_h {
                 head_pitch_deg_current = 0.0;
@@ -1617,7 +1621,7 @@ async fn run(cli: Cli) -> Result<()> {
                         && let ModelGpu::Skinned { anims, .. } = gpu
                         && !anims.is_empty()
                     {
-                        let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                        let anim_cell: f32 = 4.8 * cli.ui_scale.max(0.25);
                         let _glyph_w = 5.0 * anim_cell; let glyph_h = 7.0 * anim_cell; let line_gap = anim_cell * 2.0;
                         // Space list clearly below head controls using label metrics
                         let label_row_h = 7.0 * label_cell + label_cell * 2.0;
@@ -1626,7 +1630,7 @@ async fn run(cli: Cli) -> Result<()> {
                         let anim_header_y = head_y + (2.0 * label_row_h) + 18.0;
                         let available_h = (height as f32) - anim_header_y - 16.0;
                         let rows_per_col = ((available_h / (glyph_h + line_gap)).floor() as usize).max(10);
-                        let col_w = 260.0 * cli.ui_scale.max(0.5);
+                        let col_w = 220.0 * cli.ui_scale.max(0.5);
                         build_text_quads(&vec!["ANIMATIONS:".to_string()], (m, anim_header_y - header_h), (width as f32, height as f32), &mut text_verts, [0.9,0.9,0.95,1.0], anim_cell);
                         for (i, name) in anims.iter().enumerate() {
                             let col = i / rows_per_col;
@@ -1642,15 +1646,16 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
 
-                // Model library list (optional)
-                if lists_visible && !lib_models.is_empty() {
+                // Model library list (optional) - toggle with 'G'
+                static mut CATALOG: bool = false; // declared also in key handler
+                if lists_visible && !lib_models.is_empty() && unsafe { CATALOG } {
                     let mut model_lines: Vec<String> = vec!["MODELS:".to_string()];
                     for (i, mentry) in lib_models.iter().enumerate() {
                         model_lines.push(format!("{}: {}", i + 1, mentry.name.to_uppercase()));
                     }
-                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                    let anim_cell: f32 = 4.8 * cli.ui_scale.max(0.25);
                     let base_y = head_y + 7.0*label_cell + label_cell*2.0 + 14.0;
-                    let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { (anims.len() as f32 / 2.0).ceil() + 1.0 } else { 0.0 };
+                    let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { (anims.len() as f32 / 3.0).ceil() + 1.0 } else { 0.0 };
                     let y_offset = base_y + anim_lines * ((7.0*anim_cell) + (anim_cell*2.0)) + 10.0;
                     let mut model_text: Vec<UiVertex> = Vec::new();
                     build_text_quads(&model_lines, (m, y_offset), (width as f32, height as f32), &mut model_text, [0.8,0.9,0.95,1.0], anim_cell);
@@ -1662,11 +1667,11 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
 
-                // Library animations (optional)
-                if lists_visible && !lib_anims.is_empty() {
+                // Library animations (optional) - toggle with 'G'
+                if lists_visible && !lib_anims.is_empty() && unsafe { CATALOG } {
                     let mut lib_lines: Vec<String> = vec!["LIBRARY:".to_string()];
                     for (i, a) in lib_anims.iter().enumerate() { lib_lines.push(format!("{}: {}", i + 1, a.name.to_uppercase())); }
-                    let anim_cell: f32 = 6.0 * cli.ui_scale.max(0.25);
+                    let anim_cell: f32 = 4.8 * cli.ui_scale.max(0.25);
                     let base_y = m + s + 8.0;
                     let anim_lines = if let Some(ModelGpu::Skinned{anims, ..}) = &model_gpu { anims.len() as f32 + 1.0 } else { 0.0 };
                     let model_lines = if lib_models.is_empty() { 0.0 } else { lib_models.len() as f32 + 1.0 };
