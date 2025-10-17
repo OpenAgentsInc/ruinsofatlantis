@@ -1140,9 +1140,10 @@ fn codex_run(
         .arg("include_apply_patch_tool=true")
         .arg("-C")
         .arg(cwd.cloned().unwrap_or(run_root.clone()))
-        .arg(wish_text)
+        .arg("-")
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .stdin(Stdio::piped());
     if let Some(m) = model {
         cmd.arg("-m").arg(m);
     }
@@ -1153,6 +1154,11 @@ fn codex_run(
         cmd.get_program().to_string_lossy()
     );
     let mut child = cmd.spawn().context("spawn codex")?;
+    if let Some(mut sin) = child.stdin.take() {
+        use std::io::Write as _;
+        let _ = sin.write_all(wish_text.as_bytes());
+        let _ = sin.write_all(b"\n");
+    }
 
     let dir = dirs::home_dir().unwrap().join(".roa/wish_runner");
     std::fs::create_dir_all(&dir)?;
