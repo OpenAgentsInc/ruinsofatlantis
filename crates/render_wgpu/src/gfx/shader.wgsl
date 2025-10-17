@@ -548,7 +548,14 @@ struct ImpOut {
 @group(1) @binding(1) var imp_sam: sampler;
 @group(1) @binding(2) var pal_tex: texture_2d<f32>;
 @group(1) @binding(3) var pal_sam: sampler;
-struct ImpParams { sprites_per_side: u32, use_palette: u32, palette_size: u32, palette_rows: u32, alpha_clamp: f32, _pad: vec3<f32> };
+struct ImpParams {
+  sprites_per_side: u32,
+  use_palette: u32,
+  palette_size: u32,
+  palette_rows: u32,
+  alpha_clamp: f32,
+  cam_pos: vec3<f32>,
+}
 @group(1) @binding(4) var<uniform> imp: ImpParams;
 
 @vertex
@@ -561,9 +568,8 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   // Full-quad UVs
   o.uv = v.corner * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
   o.layer = i.layer;
-  // Octa map: approximate view dir from camera basis (no camera position in Globals)
-  let fwd = normalize(cross(up, right));
-  let cam_dir = -fwd; // direction from impostor toward camera
+  // Octa map: per-impostor view direction using camera position
+  let cam_dir = normalize(imp.cam_pos - i.pos);
   // Full octahedron mapping (no hemi flip yet)
   let denom = dot(abs(cam_dir), vec3<f32>(1.0, 1.0, 1.0));
   var dir = cam_dir / max(denom, 1e-5);

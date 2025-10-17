@@ -28,8 +28,13 @@ struct ImpostorInst {
 pub struct ImpostorDemo {
     pipeline: wgpu::RenderPipeline,
     bg: wgpu::BindGroup,
+    params_buf: wgpu::Buffer,
     inst: wgpu::Buffer,
     count: u32,
+    sps: u32,
+    pal_size: u32,
+    pal_rows: u32,
+    use_palette: bool,
 }
 
 impl ImpostorDemo {
@@ -265,8 +270,13 @@ impl ImpostorDemo {
         Ok(Self {
             pipeline: pipe,
             bg,
+            params_buf,
             inst: inst_buf,
             count: insts.len() as u32,
+            sps: 16,
+            pal_size,
+            pal_rows,
+            use_palette,
         })
     }
 
@@ -274,6 +284,30 @@ impl ImpostorDemo {
         rp.set_pipeline(&self.pipeline);
         // set globals at set=0
         rp.set_bind_group(0, &r.globals_bg, &[]);
+        // Update camera position in params each frame
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct Params {
+            sps: u32,
+            use_palette: u32,
+            pal_size: u32,
+            pal_rows: u32,
+            alpha_clamp: f32,
+            cam_pos: [f32; 3],
+            _pad: [f32; 4],
+        }
+        let cam = r.cam_follow.current_pos;
+        let params = Params {
+            sps: self.sps,
+            use_palette: if self.use_palette { 1 } else { 0 },
+            pal_size: self.pal_size,
+            pal_rows: self.pal_rows,
+            alpha_clamp: 0.05,
+            cam_pos: [cam.x, cam.y, cam.z],
+            _pad: [0.0; 4],
+        };
+        r.queue
+            .write_buffer(&self.params_buf, 0, bytemuck::bytes_of(&params));
         rp.set_bind_group(1, &self.bg, &[]);
         // slot0: quad corners (from renderer), slot1: instances
         rp.set_vertex_buffer(0, r.quad_vb.slice(..));
