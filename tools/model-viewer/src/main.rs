@@ -1001,8 +1001,14 @@ async fn run(cli: Cli) -> Result<()> {
                     });
                     mats.push((bg, 0, skinned.indices.len() as u32));
                 } else {
-                    for sm in &skinned.submeshes {
+                    for (i, sm) in skinned.submeshes.iter().enumerate() {
                         let (view, samp) = if let Some(tex) = &sm.base_color_texture {
+                            log::info!(
+                                "viewer: material #{} baseColor {}x{}",
+                                i,
+                                tex.width,
+                                tex.height
+                            );
                             let size = wgpu::Extent3d {
                                 width: tex.width,
                                 height: tex.height,
@@ -1039,6 +1045,7 @@ async fn run(cli: Cli) -> Result<()> {
                                 linear_samp.clone(),
                             )
                         } else {
+                            log::info!("viewer: material #{} baseColor <none>", i);
                             (white_view.clone(), linear_samp.clone())
                         };
                         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
