@@ -81,8 +81,6 @@ else
 fi
 
 # Viewer-related helper scripts (conversion/bake)
-add_file "$ROOT_DIR/scripts/bake_redwyvern_textured_glb.sh"
-add_file "$ROOT_DIR/scripts/blender/bake_redwyvern_textures.py"
 
 # Asset index (paths only; do NOT include binary contents)
 {
