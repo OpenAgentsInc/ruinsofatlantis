@@ -572,7 +572,7 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   o.uv = v.corner * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
   o.layer = i.layer;
   // Octa map: per-impostor view direction using camera position
-  let cam_dir = normalize(imp.cam_pos - i.pos);
+  let cam_dir = normalize(imp.cam_pos.xyz - i.pos);
   // Full octahedron mapping (no hemi flip yet)
   let denom = dot(abs(cam_dir), vec3<f32>(1.0, 1.0, 1.0));
   var dir = cam_dir / max(denom, 1e-5);

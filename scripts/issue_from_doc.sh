@@ -38,7 +38,11 @@ sed -n "$((END_LINE+1)),999999p" "$FILE" > "$BODY_FILE"
 
 get_val() {
   local key=$1
-  printf '%s\n' "$FRONT" | sed -n -E "s/^(${key}|${key^}|${key^^}|${key,,}):[[:space:]]*(.*)$/\\2/p" | head -n1 | sed 's/^\s\+//; s/\s\+$//'
+  printf '%s\n' "$FRONT" | awk -v k="$key" 'BEGIN{IGNORECASE=1} {
+    if ($0 ~ "^" k ":[[:space:]]*") {
+      line=$0; sub(/^[^:]*:[[:space:]]*/, "", line); print line; exit;
+    }
+  }'
 }
 
 TITLE=$(get_val title)
@@ -61,14 +65,6 @@ fi
 
 args=(issue create --title "$TITLE" --body-file "$BODY_FILE")
 
-if [[ -n "${LABELS:-}" ]]; then
-  IFS=',' read -r -a labels_arr <<< "$LABELS"
-  for lbl in "${labels_arr[@]}"; do
-    lbl_trimmed=$(echo "$lbl" | xargs)
-    [[ -n "$lbl_trimmed" ]] && args+=(--label "$lbl_trimmed")
-  done
-fi
-
 if [[ -n "${ASSIGNEES:-}" ]]; then
   IFS=',' read -r -a ass_arr <<< "$ASSIGNEES"
   for a in "${ass_arr[@]}"; do
@@ -84,8 +80,33 @@ fi
 # Create the issue; capture URL
 ISSUE_URL=$(gh "${args[@]}" | tail -n1)
 echo "$ISSUE_URL"
+ISSUE_NUMBER=$(basename "$ISSUE_URL")
+
+# Apply labels after creation; create labels if missing
+if [[ -n "${LABELS:-}" ]]; then
+  IFS=',' read -r -a labels_arr <<< "$LABELS"
+  for lbl in "${labels_arr[@]}"; do
+    lbl_trimmed=$(echo "$lbl" | xargs)
+    [[ -z "$lbl_trimmed" ]] && continue
+    if ! gh issue edit "$ISSUE_NUMBER" --add-label "$lbl_trimmed" >/dev/null 2>&1; then
+      # Create label then try again
+      gh label create "$lbl_trimmed" --color BFDADC --description "auto-created from docs/issues" >/dev/null 2>&1 || true
+      gh issue edit "$ISSUE_NUMBER" --add-label "$lbl_trimmed" >/dev/null 2>&1 || true
+    fi
+  done
+fi
 
 # Optionally add to a GitHub Project (new Projects)
 if [[ -n "${PROJECT_OWNER:-}" && -n "${PROJECT_NUMBER:-}" ]]; then
-  gh project item-add --owner "$PROJECT_OWNER" --number "$PROJECT_NUMBER" --url "$ISSUE_URL"
+  ITEM_JSON=$(gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$ISSUE_URL" --format json)
+  ITEM_ID=$(echo "$ITEM_JSON" | jq -r '.id' 2>/dev/null || true)
+  # Try to set Status=Backlog if available
+  PROJECT_JSON=$(gh project view "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json)
+  PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.id' 2>/dev/null || true)
+  FIELDS_JSON=$(gh project field-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json)
+  STATUS_FIELD_ID=$(echo "$FIELDS_JSON" | jq -r '.fields[] | select(.name=="Status").id' 2>/dev/null || true)
+  BACKLOG_OPTION_ID=$(echo "$FIELDS_JSON" | jq -r '.fields[] | select(.name=="Status").options[] | select(.name=="Backlog").id' 2>/dev/null || true)
+  if [[ -n "$ITEM_ID" && -n "$PROJECT_ID" && -n "$STATUS_FIELD_ID" && -n "$BACKLOG_OPTION_ID" ]]; then
+    gh project item-edit --project-id "$PROJECT_ID" --id "$ITEM_ID" --field-id "$STATUS_FIELD_ID" --single-select-option-id "$BACKLOG_OPTION_ID" >/dev/null 2>&1 || true
+  fi
 fi

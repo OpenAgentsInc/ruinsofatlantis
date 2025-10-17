@@ -545,7 +545,7 @@ fn load_ktx2_r8_array(
     let lvl0 = levels
         .next()
         .ok_or_else(|| anyhow::anyhow!("ktx2: missing level 0"))?;
-    let mut bytes: Vec<u8> = match header.supercompression_scheme {
+    let bytes: Vec<u8> = match header.supercompression_scheme {
         Some(s) if s == ktx2::SupercompressionScheme::Zstandard => {
             zstd::stream::decode_all(&mut std::io::Cursor::new(lvl0.data))
                 .context("zstd decompress")?
