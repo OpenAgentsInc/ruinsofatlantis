@@ -63,6 +63,35 @@ impl ImpostorDemo {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    // palette texture (optional)
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    // palette sampler
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    // params uniform
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: std::num::NonZeroU64::new(32),
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -160,6 +189,30 @@ impl ImpostorDemo {
 
         // Try to load texture array from assets; fallback to generated layers
         let (view, samp, layers) = load_or_generate_array(device, &r.queue)?;
+        let (pal_view, pal_samp, pal_size, pal_rows, use_palette) = load_palette(device, &r.queue);
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct Params {
+            sps: u32,
+            use_palette: u32,
+            pal_size: u32,
+            pal_rows: u32,
+            alpha_clamp: f32,
+            _pad: [f32; 3],
+        }
+        let params = Params {
+            sps: 16,
+            use_palette: if use_palette { 1 } else { 0 },
+            pal_size: pal_size,
+            pal_rows: pal_rows,
+            alpha_clamp: 0.05,
+            _pad: [0.0; 3],
+        };
+        let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("impostor-params"),
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("impostor-bg"),
             layout: &mat_bgl,
@@ -171,6 +224,18 @@ impl ImpostorDemo {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&samp),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&pal_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&pal_samp),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: params_buf.as_entire_binding(),
                 },
             ],
         });
@@ -224,6 +289,19 @@ fn load_or_generate_array(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> Result<(wgpu::TextureView, wgpu::Sampler, u32)> {
+    // Prefer KTX2 2D array (R8 index) if available
+    let ktx_candidates = [
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/horde/octa_demo/merged.ktx2"),
+        PathBuf::from("/Users/christopherdavid/code/Horde/textures/merged.ktx2"),
+    ];
+    for p in &ktx_candidates {
+        if p.exists() {
+            if let Ok(ok) = load_ktx2_r8_array(device, queue, p) {
+                return Ok(ok);
+            }
+        }
+    }
+    // Fallback: stacked PNG layers
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/horde/octa_demo/albedo");
     let mut files: Vec<PathBuf> = Vec::new();
     if base.exists() {
@@ -388,4 +466,120 @@ fn palette(i: usize) -> (u8, u8, u8) {
         (200, 200, 120),
     ];
     P[i % P.len()]
+}
+
+fn load_ktx2_r8_array(
+    _device: &wgpu::Device,
+    _queue: &wgpu::Queue,
+    _path: &Path,
+) -> Result<(wgpu::TextureView, wgpu::Sampler, u32)> {
+    anyhow::bail!(
+        "ktx2 loader not available; convert to PNG layers under assets/horde/octa_demo/albedo/"
+    )
+}
+
+fn load_palette(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> (wgpu::TextureView, wgpu::Sampler, u32, u32, bool) {
+    let candidates = [
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/horde/octa_demo/palette.png"),
+        PathBuf::from("/Users/christopherdavid/code/Horde/textures/palette.png"),
+    ];
+    for p in &candidates {
+        if p.exists() {
+            if let Ok(img) = image::open(p) {
+                let rgba = img.to_rgba8();
+                let (w, h) = (rgba.width(), rgba.height());
+                let tex = device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("palette-tex"),
+                    size: wgpu::Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &rgba,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(w * 4),
+                        rows_per_image: Some(h),
+                    },
+                    wgpu::Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                let samp = device.create_sampler(&wgpu::SamplerDescriptor {
+                    label: Some("palette-sampler"),
+                    mag_filter: wgpu::FilterMode::Nearest,
+                    min_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                    ..Default::default()
+                });
+                return (view, samp, w, h, true);
+            }
+        }
+    }
+    let tex = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("palette-dummy"),
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &tex,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &[255, 255, 255, 255],
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4),
+            rows_per_image: Some(1),
+        },
+        wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+    );
+    let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+    let samp = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("palette-sampler"),
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        ..Default::default()
+    });
+    (view, samp, 1, 1, false)
 }

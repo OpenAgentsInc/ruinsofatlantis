@@ -541,10 +541,15 @@ struct ImpOut {
   @builtin(position) pos: vec4<f32>,
   @location(0) uv: vec2<f32>,
   @location(1) layer: u32,
+  @location(2) sprite: vec2<f32>,
 };
 
 @group(1) @binding(0) var imp_tex: texture_2d_array<f32>;
 @group(1) @binding(1) var imp_sam: sampler;
+@group(1) @binding(2) var pal_tex: texture_2d<f32>;
+@group(1) @binding(3) var pal_sam: sampler;
+struct ImpParams { sprites_per_side: u32, use_palette: u32, palette_size: u32, palette_rows: u32, alpha_clamp: f32, _pad: vec3<f32> };
+@group(1) @binding(4) var<uniform> imp: ImpParams;
 
 @vertex
 fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
@@ -553,15 +558,49 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   let world = i.pos + (right * v.corner.x + up * v.corner.y) * i.scale;
   var o: ImpOut;
   o.pos = globals.view_proj * vec4<f32>(world, 1.0);
-  // Simple full-quad UVs (no octa mapping yet)
+  // Full-quad UVs
   o.uv = v.corner * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
   o.layer = i.layer;
+  // Octa map: approximate view dir from camera basis (no camera position in Globals)
+  let fwd = normalize(cross(up, right));
+  let cam_dir = -fwd; // direction from impostor toward camera
+  // Full octahedron mapping (no hemi flip yet)
+  let denom = dot(abs(cam_dir), vec3<f32>(1.0, 1.0, 1.0));
+  var dir = cam_dir / max(denom, 1e-5);
+  if (dir.y < 0.0) {
+    let sign_not_zero = mix(vec2<f32>(1.0, 1.0), sign(dir.xz), step(vec2<f32>(0.0,0.0), dir.xz));
+    let oldx = dir.x;
+    dir.x = (1.0 - abs(dir.z)) * sign_not_zero.x;
+    dir.z = (1.0 - abs(oldx)) * sign_not_zero.y;
+  }
+  var grid = dir.xz * 0.5 + vec2<f32>(0.5, 0.5);
+  let sps = max(imp.sprites_per_side, 1u);
+  let sm1 = f32(sps - 1u);
+  let sprite_grid = grid * sm1;
+  o.sprite = clamp(round(sprite_grid), vec2<f32>(0.0, 0.0), vec2<f32>(sm1, sm1));
   return o;
 }
 
 @fragment
 fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
-  // Array textures sample with (coord, array_index) where index is i32
-  let c = textureSample(imp_tex, imp_sam, i.uv, i32(i.layer));
+  // Tile addressing inside frame
+  let sps = max(imp.sprites_per_side, 1u);
+  let frame_size = 1.0 / f32(sps);
+  let uv = vec2<f32>(i.uv.x, i.uv.y);
+  let sprite_uv = (i.sprite + clamp(uv, vec2<f32>(0.0,0.0), vec2<f32>(1.0,1.0))) * frame_size;
+  var c = textureSample(imp_tex, imp_sam, sprite_uv, i32(i.layer));
+  // Optional palette recolor (R8 index to palette RGBA)
+  if (imp.use_palette != 0u) {
+    let idx255 = floor(c.r * 255.0 + 0.5);
+    let maxIdx = f32(max(imp.palette_size, 1u) - 1u);
+    let clamped = clamp(idx255, 0.0, maxIdx);
+    let row = f32(min(imp.palette_rows - 1u, imp.palette_rows));
+    let u = (clamped + 0.5) / f32(max(imp.palette_size,1u));
+    let v = (row + 0.5) / f32(max(imp.palette_rows,1u));
+    let pal = textureSample(pal_tex, pal_sam, vec2<f32>(u, v));
+    let alpha = select(0.0, 1.0, clamped >= 0.5);
+    c = vec4<f32>(pal.rgb, alpha);
+  }
+  if (c.a <= imp.alpha_clamp) { discard; }
   return c;
 }
