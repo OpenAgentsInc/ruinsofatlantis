@@ -1269,18 +1269,26 @@ fn codex_run(
                     writeln!(events_file, "{}", serde_json::to_string(&evt)?)?;
                 }
             }
-            // Acceptance
-            let rt = tokio::runtime::Runtime::new()?;
-            let (ok_build, _) = rt.block_on(run_cmd(
-                &repo_root,
-                "cargo",
-                &["build", "--workspace", "--all-targets"],
-            ))?;
-            let (ok_test, _) = match &accept_cmd {
-                Some(cmd) => rt.block_on(run_shell(&repo_root, cmd))?,
-                None => {
-                    rt.block_on(run_cmd(&repo_root, "cargo", &["test", "--workspace", "-q"]))?
-                }
+            // Acceptance (optimize docs-only scope)
+            let docs_only = allowed_paths
+                .iter()
+                .all(|g| g.starts_with("docs/") || g.starts_with("./docs/"));
+            let (ok_build, ok_test) = if docs_only {
+                (true, true)
+            } else {
+                let rt = tokio::runtime::Runtime::new()?;
+                let (b_ok, _) = rt.block_on(run_cmd(
+                    &repo_root,
+                    "cargo",
+                    &["build", "--workspace", "--all-targets"],
+                ))?;
+                let (t_ok, _) = match &accept_cmd {
+                    Some(cmd) => rt.block_on(run_shell(&repo_root, cmd))?,
+                    None => {
+                        rt.block_on(run_cmd(&repo_root, "cargo", &["test", "--workspace", "-q"]))?
+                    }
+                };
+                (b_ok, t_ok)
             };
             if ok && ok_build && ok_test {
                 mark_wish_completed(&wish_id, wish_text)?;

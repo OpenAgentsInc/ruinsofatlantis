@@ -1387,7 +1387,13 @@ async fn run(cli: Cli) -> Result<()> {
                 model_gpu = Some(gpu);
             }
         } else {
-            log::error!("failed to load {}", p.display());
+            // Re-run with error capture to print chain
+            match load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
+                Ok(_) => { /* unreachable, handled above */ }
+                Err(e) => {
+                    log::error!("failed to load {}: {:#}", p.display(), e);
+                }
+            }
         }
     } else {
         info!("Drag-and-drop a .gltf or .glb into this window");
@@ -1828,7 +1834,10 @@ async fn run(cli: Cli) -> Result<()> {
                 }
                 model_gpu = Some(gpu);
             } else {
-                log::error!("failed to load {}", path.display());
+                match load_model(&path, &device, &queue, &mat_bgl, &skin_bgl) {
+                    Ok(_) => {}
+                    Err(e) => log::error!("failed to load {}: {:#}", path.display(), e),
+                }
             }
         }
         Event::WindowEvent { event: WindowEvent::MouseInput{ state, button: MouseButton::Right, .. }, .. } => {
