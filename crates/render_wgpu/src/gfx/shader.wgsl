@@ -553,9 +553,10 @@ struct ImpParams {
   use_palette: u32,
   palette_size: u32,
   palette_rows: u32,
+  time: f32,
   fps: f32,
   alpha_clamp: f32,
-  _pad0: vec2<f32>,
+  _pad0: f32,
   cam_pos: vec4<f32>,
   variant: u32,
 }
@@ -599,11 +600,14 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
   // Tile addressing inside frame
   let sps = max(imp.sprites_per_side, 1u);
   let frame_size = 1.0 / f32(sps);
-  let uv = vec2<f32>(i.uv.x, i.uv.y);
-  let sprite_uv = (i.sprite + clamp(uv, vec2<f32>(0.0,0.0), vec2<f32>(1.0,1.0))) * frame_size;
-  // Variant addressing: base + (t*fps % count)
-  let t = globals.camRightTime.w;
-  let v = i32(imp.variant);
+  // Slight inset to avoid sampling outside the tile (edge sparkles)
+  let inset = 0.01;
+  let uv = clamp(vec2<f32>(i.uv.x, i.uv.y), vec2<f32>(inset, inset), vec2<f32>(1.0 - inset, 1.0 - inset));
+  let sprite_uv = (i.sprite + uv) * frame_size;
+  // Variant addressing: base + (time*fps % count)
+  let t = imp.time;
+  // Derive variant per-instance so we see diversity across rows
+  let v = i32(i.layer % 5u);
   // counts and bases for 5 variants matching Horde merged.ktx2
   let c0:i32 = 48; let c1:i32 = 38; let c2:i32 = 29; let c3:i32 = 31; let c4:i32 = 33;
   let b0:i32 = 0;  let b1:i32 = 48; let b2:i32 = 86; let b3:i32 = 115; let b4:i32 = 146;

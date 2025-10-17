@@ -204,9 +204,10 @@ impl ImpostorDemo {
             use_palette: u32,
             pal_size: u32,
             pal_rows: u32,
+            time: f32,
             fps: f32,
             alpha_clamp: f32,
-            pad0: [f32; 2],
+            pad0: f32,
             cam_pos: [f32; 4],
             variant: u32,
             pad1: [u32; 3],
@@ -216,11 +217,12 @@ impl ImpostorDemo {
             use_palette: if use_palette { 1 } else { 0 },
             pal_size: pal_size,
             pal_rows: pal_rows,
+            time: 0.0,
             fps: 24.0,
-            alpha_clamp: 0.05,
-            pad0: [0.0; 2],
+            alpha_clamp: 0.02,
+            pad0: 0.0,
             cam_pos: [0.0, 0.0, 0.0, 0.0],
-            variant: 0,
+            variant: 3,
             pad1: [0, 0, 0],
         };
         let params_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -304,23 +306,28 @@ impl ImpostorDemo {
             use_palette: u32,
             pal_size: u32,
             pal_rows: u32,
+            time: f32,
             fps: f32,
             alpha_clamp: f32,
-            cam_pos: [f32; 3],
+            pad0: f32,
+            cam_pos: [f32; 4],
             variant: u32,
-            _pad: [f32; 3],
+            _pad: [u32; 3],
         }
         let cam = r.cam_follow.current_pos;
+        let time = r.start.elapsed().as_secs_f32();
         let params = Params {
             sps: self.sps,
             use_palette: if self.use_palette { 1 } else { 0 },
             pal_size: self.pal_size,
             pal_rows: self.pal_rows,
+            time,
             fps: self.fps,
             alpha_clamp: 0.02,
-            cam_pos: [cam.x, cam.y, cam.z],
+            pad0: 0.0,
+            cam_pos: [cam.x, cam.y, cam.z, 0.0],
             variant: self.variant,
-            _pad: [0.0; 3],
+            _pad: [0, 0, 0],
         };
         r.queue
             .write_buffer(&self.params_buf, 0, bytemuck::bytes_of(&params));

@@ -14,6 +14,60 @@ This document outlines our options for a Kanban board on GitHub and a concrete, 
 
 Recommendation: Use GitHub Projects (new) at the repo level to keep everything close to code, labels, and PRs, with the option to lift to an org‑level Project later if cross‑repo planning is needed.
 
+## Portfolio & Scope Strategy
+
+Short version: keep the active delivery board laser‑focused on the current wave (e.g., VOOX ~2 months). Put longer‑horizon ideas (e.g., voxel destruction ECS follow‑ups) into a Future/Incubator space so they don’t add noise or implied commitment.
+
+Two workable patterns:
+
+- Single Project with a `Wave` field — Recommended if you prefer one board
+  - Add single‑select `Wave`: VOOX, Future, Deferred, Unassigned
+  - Saved views: `VOOX Board` (filter `Wave=VOOX`), `Future` (filter `Wave=Future`)
+  - New issues default to `Wave=Unassigned`; triage moves them to `VOOX` or `Future`
+
+- Two Projects (split by time horizon)
+  - Project 10: “VOOX — Current Wave” (2‑month scope only)
+  - Project X: “Incubator — Future/Exploratory” (ideas/tech spikes, no dates)
+  - Items can live in both, but avoid dual‑tracking unless there’s a reason (e.g., spike in Incubator + delivery slice in VOOX)
+
+Recommendation for this repo: Start with the single‑project pattern and add `Wave`. If the volume grows or you need different permissions/cadence, lift `Future` into its own org‑level Project later.
+
+### What belongs where
+
+- VOOX (current wave)
+  - Deliverables targeted to the next 1–2 releases
+  - Issues with clear acceptance criteria and owners; linked to milestones
+  - High‑confidence tech debt that blocks wave goals
+
+- Future/Incubator
+  - Longer‑horizon features (e.g., advanced voxel destruction ECS work)
+  - Exploratory spikes, research, and larger refactors without dates
+  - Ideas awaiting design/feasibility or dependency unblocking
+
+- Out of any Project (for now)
+  - Draft notes, untriaged ideas not ready for discussion
+  - Parking‑lot items without a problem statement — keep them in `docs/issues/` until ready
+
+### Move Criteria (VOOX ↔ Future)
+
+- Move to VOOX when
+  - It has a crisp scope + acceptance criteria, an owner, and fits the 2‑month window
+  - Dependencies are known and within team control
+
+- Move to Future when
+  - It exceeds the 2‑month window or is still research/uncertain
+  - It is not tied to a near‑term milestone or budget
+
+### Triage & Cadence
+
+- Weekly triage
+  - Inbox: new issues (Wave=Unassigned) → assign Wave, Priority, Type, Area; add to Project
+  - Pull at most what fits WIP and the 2‑month window into VOOX
+  - Move remainder to Future; add minimal notes/next proof step
+
+- Monthly wave review
+  - Reconfirm scope for VOOX; promote ready Future items; demote out‑of‑scope items
+
 ## Recommended Workflow
 
 - Status flow (columns): Backlog → Ready → In Progress → Review → Done
@@ -36,6 +90,7 @@ Recommendation: Use GitHub Projects (new) at the repo level to keep everything c
    - `Size` (number)
    - `Blocked` (checkbox) with `Blocked reason` (text)
    - `Iteration` (Projects iterations) for sprints/timeboxes (optional)
+   - `Wave` (single‑select): VOOX, Future, Deferred, Unassigned
 
 3) Saved views
    - Board: `Status` columns, group by `Area`, filter `is:open`
@@ -43,6 +98,8 @@ Recommendation: Use GitHub Projects (new) at the repo level to keep everything c
    - Bugs: filter `Type=Bug`
    - Release: filter by `Milestone=next`
    - My Work: filter `assignee:@me is:open`
+   - VOOX: filter `Wave=VOOX`
+   - Future: filter `Wave=Future`
 
 4) Backlog import
    - Add existing repo issues to the Project (bulk select in Issues list → `Projects` → add).
@@ -84,6 +141,7 @@ jobs:
 
 Suggested transitions:
 - Issue opened → add to Project with `Status=Backlog`; map `prio:P0..P3` → `Priority`.
+- If `Wave` unset → set `Wave=Unassigned`; triage promotes to `VOOX` or moves to `Future`.
 - PR opened and linked to issue (via `Fixes #123`) → `Status=In Progress`.
 - PR ready for review → `Status=Review`.
 - PR merged or issue closed → `Status=Done`.
@@ -96,6 +154,7 @@ Note: We can use `gh` CLI in Actions or a maintained action such as `leonsteinha
 
 - Definition of Ready
   - Clear problem statement, acceptance criteria, labels (`area:*`, `type:*`, `prio:P*`), estimate (`Size`).
+  - Assigned `Wave` (VOOX for current wave); otherwise keep in `Future` or `Unassigned` views.
 
 - Definition of Done
   - Code merged, CI green, tests/docs updated, perf note if GPU cost ≥ 0.5 ms, labels accurate.
@@ -131,6 +190,8 @@ Note: We can use `gh` CLI in Actions or a maintained action such as `leonsteinha
 - [ ] Land automation workflow (status sync, label→field mapping)
 - [ ] Announce conventions (this doc) and start date
 - [ ] Review after 2 weeks; adjust fields, views, WIP limits
+ - [ ] Add `Wave` field and saved views (`VOOX`, `Future`); assign Waves during weekly triage
+ - [ ] Move non‑VOOX items (e.g., voxel destruction ECS expansions) to `Wave=Future` or to a separate “Incubator” Project if preferred
 
 ---
 
@@ -147,5 +208,12 @@ gh project item-list "Engineering Kanban" --format json > project.json
 # Add an issue to the project
 gh issue list -s all
 gh project item-add "Engineering Kanban" --url https://github.com/$REPO/issues/123
-```
 
+# Create `Wave` field and seed options (single project pattern)
+gh project field-create $NUM --owner $OWNER --name Wave --data-type SINGLE_SELECT --single-select-options VOOX,Future,Deferred,Unassigned
+
+# Set Wave for an item
+gh project item-edit --project-id $(gh project view $NUM --owner $OWNER --format json -q .id) \
+  --id $ITEM_ID --field-id $(gh project field-list $NUM --owner $OWNER --format json | jq -r '.fields[] | select(.name=="Wave").id') \
+  --single-select-option-id $(gh project field-list $NUM --owner $OWNER --format json | jq -r '.fields[] | select(.name=="Wave").options[] | select(.name=="VOOX").id')
+```
