@@ -469,13 +469,107 @@ fn palette(i: usize) -> (u8, u8, u8) {
 }
 
 fn load_ktx2_r8_array(
-    _device: &wgpu::Device,
-    _queue: &wgpu::Queue,
-    _path: &Path,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    path: &Path,
 ) -> Result<(wgpu::TextureView, wgpu::Sampler, u32)> {
-    anyhow::bail!(
-        "ktx2 loader not available; convert to PNG layers under assets/horde/octa_demo/albedo/"
-    )
+    use std::fs::File;
+    use std::io::Read;
+    let mut f = File::open(path).with_context(|| format!("open ktx2: {:?}", path))?;
+    let mut data = Vec::new();
+    f.read_to_end(&mut data)?;
+    let reader = ktx2::Reader::new(&data).context("parse ktx2")?;
+    let header = reader.header();
+    let w = header.pixel_width;
+    let h = header.pixel_height.max(1);
+    let layers = header.layer_count.max(1);
+    if let Some(fmt) = header.format {
+        if fmt != ktx2::Format::R8_UNORM {
+            log::warn!(
+                "ktx2: expected R8_UNORM, got {:?}; proceeding as raw R8",
+                fmt
+            );
+        }
+    }
+    let mut levels = reader.levels();
+    let lvl0 = levels
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("ktx2: missing level 0"))?;
+    let mut bytes: Vec<u8> = match header.supercompression_scheme {
+        Some(s) if s == ktx2::SupercompressionScheme::Zstandard => {
+            zstd::stream::decode_all(&mut std::io::Cursor::new(lvl0.data))
+                .context("zstd decompress")?
+        }
+        _ => lvl0.data.to_vec(),
+    };
+    let bpp = 1usize;
+    let expected = (w as usize) * (h as usize) * (layers as usize) * bpp;
+    if bytes.len() < expected {
+        anyhow::bail!(
+            "ktx2: level 0 too small: got {} expected {}",
+            bytes.len(),
+            expected
+        );
+    }
+    let tex = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("impostor-ktx2"),
+        size: wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: layers,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let layer_stride = (w as usize) * (h as usize) * bpp;
+    for z in 0..(layers as usize) {
+        let start = z * layer_stride;
+        let end = start + layer_stride;
+        let slice = &bytes[start..end];
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: 0,
+                    y: 0,
+                    z: z as u32,
+                },
+                aspect: wgpu::TextureAspect::All,
+            },
+            slice,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(w),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+    let view = tex.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("impostor-ktx2-view"),
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    });
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("impostor-index-sampler"),
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        ..Default::default()
+    });
+    Ok((view, sampler, layers))
 }
 
 fn load_palette(
