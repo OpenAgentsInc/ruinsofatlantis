@@ -616,7 +616,7 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
   if (v == 2) { count = c2; base = b2; }
   if (v == 3) { count = c3; base = b3; }
   if (v == 4) { count = c4; base = b4; }
-  let frame = i32(floor(t * imp.fps)) % max(count, 1);
+  let frame = i32(floor((t + i.yaw) * imp.fps)) % max(count, 1);
   let layer = base + frame;
   var c = textureSample(imp_tex, imp_sam, sprite_uv, layer);
   // Optional palette recolor (R8 index to palette RGBA)

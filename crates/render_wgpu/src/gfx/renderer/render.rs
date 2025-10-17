@@ -2351,6 +2351,16 @@ pub fn render_impl(
             r.hud.append_reticle(r.size.width, r.size.height);
         }
         */
+        // Always show an impostor info line when the demo is active
+        if let Some(ref demo) = r.impostor_demo {
+            let (cnt, sps, fps, var) = demo.info();
+            let line = format!(
+                "Impostors: {}  sps={} fps={} variant={} (press P for perf)",
+                cnt, sps, fps as i32, var
+            );
+            r.hud
+                .append_perf_text_line(r.size.width, r.size.height, &line, 0);
+        }
         if r.hud_model.perf_enabled() {
             let ms = dt * 1000.0;
             let fps = if dt > 1e-5 { 1.0 / dt } else { 0.0 };

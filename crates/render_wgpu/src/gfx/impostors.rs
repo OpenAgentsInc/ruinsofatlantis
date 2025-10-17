@@ -44,6 +44,9 @@ pub struct ImpostorDemo {
 }
 
 impl ImpostorDemo {
+    pub fn info(&self) -> (u32, u32, f32, u32) {
+        (self.count, self.sps, self.fps, self.variant)
+    }
     pub fn new(r: &crate::gfx::Renderer) -> Result<Self> {
         let device = &r.device;
         let format = if r.direct_present {
@@ -188,8 +191,8 @@ impl ImpostorDemo {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::LessEqual,
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
@@ -270,18 +273,21 @@ impl ImpostorDemo {
             for x in 0..n {
                 let px = (x as f32 - n as f32 * 0.5) * pitch;
                 let py = (y as f32 - n as f32 * 0.5) * pitch;
+                // Use yaw as a random per-instance phase offset in [0,1)
+                let phase = ((x as i32 * 73 + y as i32 * 37) % 100) as f32 / 100.0;
                 insts.push(ImpostorInst {
                     pos: [px, 0.5, py],
-                    yaw: 0.0,
+                    yaw: phase,
                     layer: (x % layers) as u32,
                     scale: 1.6,
                 });
-                // Random-ish velocity field per instance
-                let sx = ((x as i32 * 97 + y as i32 * 13) % 17) as f32 - 8.0;
-                let sz = ((x as i32 * 23 + y as i32 * 41) % 19) as f32 - 9.0;
-                let len = (sx * sx + sz * sz).sqrt().max(1.0);
-                let s = 0.8; // m/s
-                vels.push([s * sx / len, s * sz / len]);
+                // Consistent world direction with slight row-based jitter
+                let jitter = (((y as i32 % 9) - 4) as f32) * 0.06;
+                let ang = jitter; // small radians
+                let dirx = ang.cos();
+                let dirz = ang.sin();
+                let s = 0.9; // m/s
+                vels.push([dirx * s, dirz * s]);
             }
         }
         let inst_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
