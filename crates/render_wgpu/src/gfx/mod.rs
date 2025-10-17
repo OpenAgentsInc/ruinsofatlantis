@@ -1088,6 +1088,15 @@ impl Renderer {
         if let Some(slug) = self.zone_batches.as_ref().map(|b| b.slug.clone())
             && slug != "<picker>"
         {
+            // Special-case: octa_demo is a renderer demo scene. Skip terrain/foliage rebuild.
+            if slug == "octa_demo" {
+                self.trees_groups.clear();
+                self.trees_count = 0;
+                self.terrain_index_count = 0;
+                log::info!("impostor demo: skipping terrain/foliage rebuild for slug='octa_demo'");
+                // Nothing else to do for the demo scene
+                return;
+            }
             // Avoid blocking the main thread on large GLTF imports for builder/demo zones.
             // For the Campaign Builder (and RA_DEFER_FOLIAGE=1), skip heavy foliage rebuild here;
             // session-placed trees still render. Do NOT return; continue with zone attach.
