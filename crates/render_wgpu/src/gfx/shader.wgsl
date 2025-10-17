@@ -542,6 +542,7 @@ struct ImpOut {
   @location(0) uv: vec2<f32>,
   @location(1) layer: u32,
   @location(2) sprite: vec2<f32>,
+  @location(3) phase: f32,
 };
 
 @group(1) @binding(0) var imp_tex: texture_2d_array<f32>;
@@ -572,6 +573,7 @@ fn vs_impostor(v: ImpVert, i: ImpInst) -> ImpOut {
   // Full-quad UVs
   o.uv = v.corner * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
   o.layer = i.layer;
+  o.phase = i.yaw;
   // Octa map: per-impostor view direction using camera position
   let cam_dir = normalize(imp.cam_pos.xyz - i.pos);
   // Full octahedron mapping (no hemi flip yet)
@@ -616,7 +618,7 @@ fn fs_impostor(i: ImpOut) -> @location(0) vec4<f32> {
   if (v == 2) { count = c2; base = b2; }
   if (v == 3) { count = c3; base = b3; }
   if (v == 4) { count = c4; base = b4; }
-  let frame = i32(floor((t + i.yaw) * imp.fps)) % max(count, 1);
+  let frame = i32(floor((t + i.phase) * imp.fps)) % max(count, 1);
   let layer = base + frame;
   var c = textureSample(imp_tex, imp_sam, sprite_uv, layer);
   // Optional palette recolor (R8 index to palette RGBA)
