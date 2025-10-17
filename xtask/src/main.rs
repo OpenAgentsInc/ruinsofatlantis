@@ -1111,15 +1111,24 @@ fn codex_run(
     use std::io::Write;
     use std::sync::mpsc;
     let repo_root = std::env::current_dir()?;
-    let (wish_id, allowed_paths, accept_cmd) =
-        ensure_wishes_md_and_get_meta(wish_id_opt, &generate_wish_id(wish_text), wish_text)?;
+    // Generate or reuse a wish id; avoid touching WISHES.md when running isolated
+    let wish_id = wish_id_opt
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| generate_wish_id(wish_text));
+    // Create an isolated git worktree for this run
+    let run_root = create_isolated_worktree(&repo_root, &wish_id)?;
+    eprintln!(
+        "[codex-run] using isolated worktree at {}",
+        run_root.display()
+    );
     let allowed_paths: Vec<String> = if !scope_globs.is_empty() {
         scope_globs.to_vec()
     } else {
-        allowed_paths
+        vec!["**".into()]
     };
-    let start_sha = git_head_sha(&repo_root)?;
-    persist_wish_schema_file(&wish_id, wish_text)?;
+    let accept_cmd: Option<String> = None;
+    let start_sha = git_head_sha(&run_root)?;
+    persist_wish_schema_file_at(&run_root, &wish_id, wish_text)?;
 
     let codex = resolve_codex_bin()?;
     let mut cmd = Command::new(codex);
@@ -1130,7 +1139,7 @@ fn codex_run(
         .arg("-c")
         .arg("include_apply_patch_tool=true")
         .arg("-C")
-        .arg(cwd.cloned().unwrap_or(repo_root.clone()))
+        .arg(cwd.cloned().unwrap_or(run_root.clone()))
         .arg(wish_text)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1783,6 +1792,70 @@ fn write_final_summary_event(
     if let Some(id) = evt["data"]["session_id"].as_str() {
         eprintln!("[resume] codex resume {}", id);
     }
+    Ok(())
+}
+
+fn create_isolated_worktree(
+    repo_root: &std::path::PathBuf,
+    wish_id: &str,
+) -> anyhow::Result<std::path::PathBuf> {
+    let base_sha = git_head_sha(repo_root)?;
+    let work_dir = dirs::home_dir()
+        .unwrap()
+        .join(".roa/wish_runner")
+        .join(format!("{}.worktree", wish_id));
+    if work_dir.exists() {
+        return Ok(work_dir);
+    }
+    std::fs::create_dir_all(&work_dir)?;
+    let status = std::process::Command::new("git")
+        .current_dir(repo_root)
+        .args([
+            "worktree",
+            "add",
+            "--detach",
+            work_dir.to_str().unwrap(),
+            &base_sha,
+        ])
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("git worktree add failed");
+    }
+    Ok(work_dir)
+}
+
+fn persist_wish_schema_file_at(
+    root: &std::path::Path,
+    wish_id: &str,
+    wish_text: &str,
+) -> anyhow::Result<()> {
+    use wishcraft::schema::{Budget, Scope, Tier, Wish};
+    let w = Wish {
+        title: format!("Wish {wish_id}"),
+        objective: wish_text.to_string(),
+        scope: Scope {
+            region: "repo".into(),
+            duration_days: 7,
+        },
+        invariants: vec!["Keep build green".into()],
+        budget: Budget {
+            chrono_sand: 1,
+            genie_slots: 2,
+            gold_cap: 0,
+        },
+        tools: vec!["openai.codex.v2025.plan".into()],
+        plan: vec!["Plan".into(), "Apply".into(), "Test".into()],
+        safety_tests: vec!["Build & test".into()],
+        rollback: vec!["git revert".into()],
+        tier: Some(Tier::Meso),
+        meta: Default::default(),
+    };
+    let dir = root.join("data/wishes/inbox");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join(format!("{wish_id}.yaml")),
+        serde_yaml::to_string(&w)?,
+    )?;
     Ok(())
 }
 

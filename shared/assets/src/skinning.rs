@@ -550,17 +550,38 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
                 s_tracks.insert(di, sr.clone());
             }
         }
-        base.animations.insert(
-            name.clone(),
-            AnimClip {
-                name: name.clone(),
-                duration: clip.duration,
-                t_tracks,
-                r_tracks,
-                s_tracks,
-            },
-        );
-        merged += 1;
+        // Only merge clips that actually mapped at least one track; log mapping counts
+        let mapped_t = t_tracks.len();
+        let mapped_r = r_tracks.len();
+        let mapped_s = s_tracks.len();
+        let mapped_count = mapped_t + mapped_r + mapped_s;
+        if mapped_count > 0 {
+            log::info!(
+                "merge: '{}' mapped tracks → T:{} R:{} S:{} (dur {:.3}s)",
+                name,
+                mapped_t,
+                mapped_r,
+                mapped_s,
+                clip.duration
+            );
+            base.animations.insert(
+                name.clone(),
+                AnimClip {
+                    name: name.clone(),
+                    duration: clip.duration,
+                    t_tracks,
+                    r_tracks,
+                    s_tracks,
+                },
+            );
+            merged += 1;
+        } else {
+            log::warn!(
+                "skinning: skipped animation '{}' from {} (no retargeted tracks)",
+                name,
+                anim_path.display()
+            );
+        }
     }
     Ok(merged)
 }
