@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 
 use crate::gfx::types::Vertex as Vtx;
 use crate::gfx::types::{InstanceSkin, VertexSkinned};
+use gltf as gltf_rs;
 use roa_assets::gltf::load_gltf_mesh;
 use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
 
@@ -151,6 +152,66 @@ pub fn load_unskinned_static(device: &wgpu::Device) -> Option<(wgpu::Buffer, wgp
         }
     }
     None
+}
+
+/// Minimal reader: load only the first mesh primitive (positions/normals/indices),
+/// clamped to u16 index range so we can draw something even for very large meshes.
+pub fn load_unskinned_first_primitive(
+    device: &wgpu::Device,
+) -> Option<(wgpu::Buffer, wgpu::Buffer, u32)> {
+    let base = super::wyvern::find_wyvern_model_path()?;
+    let prepared = roa_assets::util::prepare_gltf_path(&base)
+        .ok()
+        .unwrap_or(base);
+    let (doc, bufs, _imgs) = gltf_rs::import(&prepared).ok()?;
+    let mesh = doc.meshes().next()?;
+    let prim = mesh.primitives().next()?;
+    let reader = prim.reader(|b| bufs.get(b.index()).map(|bb| bb.0.as_slice()));
+    let pos: Vec<[f32; 3]> = reader.read_positions()?.collect();
+    let nrm: Vec<[f32; 3]> = reader
+        .read_normals()
+        .map(|it| it.collect())
+        .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+    let mut idx_u32: Vec<u32> = match reader.read_indices() {
+        Some(gltf_rs::mesh::util::ReadIndices::U32(it)) => it.collect(),
+        Some(gltf_rs::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(),
+        Some(gltf_rs::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(),
+        None => (0..pos.len() as u32).collect(),
+    };
+    // Clamp to u16 capacity
+    let max_index = *idx_u32.iter().max().unwrap_or(&0);
+    if max_index > u16::MAX as u32 {
+        // Best effort: remap by slicing to first 65535 vertices
+        let cap = (u16::MAX as usize).min(pos.len());
+        idx_u32.retain(|&v| (v as usize) < cap);
+    }
+    if idx_u32.is_empty() || pos.is_empty() {
+        return None;
+    }
+    let verts: Vec<Vtx> = pos
+        .iter()
+        .zip(nrm.iter())
+        .map(|(p, n)| Vtx { pos: *p, nrm: *n })
+        .collect();
+    let ib_u16: Vec<u16> = idx_u32.into_iter().map(|v| (v as u16)).collect();
+    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wyvern-first-prim-vb"),
+        contents: bytemuck::cast_slice(&verts),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wyvern-first-prim-ib"),
+        contents: bytemuck::cast_slice(&ib_u16),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+    log::info!(
+        target: "wyvern",
+        "wyvern: first-primitive fallback ok: {} (verts={}, idx={})",
+        prepared.display(),
+        verts.len(),
+        ib_u16.len()
+    );
+    Some((vb, ib, ib_u16.len() as u32))
 }
 
 fn find_wyvern_model_path() -> Option<std::path::PathBuf> {

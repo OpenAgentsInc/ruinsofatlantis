@@ -1755,12 +1755,24 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     {
         if let Some((vb, ib, idx)) = super::super::wyvern::load_unskinned_static(&device) {
             (Some(vb), Some(ib), idx)
+        } else if let Some((vb, ib, idx)) =
+            super::super::wyvern::load_unskinned_first_primitive(&device)
+        {
+            (Some(vb), Some(ib), idx)
         } else {
             (None, None, 0u32)
         }
     } else {
         (None, None, 0u32)
     };
+    log::info!(
+        "wyvern: assets summary — skinned idx={} joints={} inst_count={} | static idx={} used={}",
+        wyvern_index_count,
+        wyvern_joints,
+        wyvern_count,
+        wyvern_static_index_count,
+        wyvern_static_index_count > 0
+    );
 
     // Determine asset forward offset from the zombie root node (if present).
     let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
