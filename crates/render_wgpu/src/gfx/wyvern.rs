@@ -17,24 +17,16 @@ pub struct WyvernAssets {
 }
 
 pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
-    // Prefer packed textured GLB; fall back to original if present
-    let candidates = [
-        "assets/models/red_wyvern/RedDragon2021.textured.glb",
-        "assets/models/red_wyvern/RedDragon2021.glb",
-    ];
-    let mut model_path = None;
-    for c in candidates {
-        let p = asset_path(c);
-        if p.exists() {
-            model_path = Some(p);
-            break;
-        }
-    }
-    let model_path = model_path
-        .ok_or_else(|| anyhow::anyhow!("wyvern model not found in assets/models/red_wyvern"))?;
-
-    let mut cpu = load_gltf_skinned(&model_path)
-        .with_context(|| format!("load skinned {}", model_path.display()))?;
+    // Prefer packed GLB; otherwise find any *.glb|*.gltf under red_wyvern
+    let base_path = find_wyvern_model_path()
+        .ok_or_else(|| anyhow::anyhow!("wyvern model not found under assets/models/red_wyvern"))?;
+    // Mirror viewer: prepare path (pick decompressed alternates when applicable)
+    let prepared = match roa_assets::util::prepare_gltf_path(&base_path) {
+        Ok(p) => p,
+        Err(_) => base_path.clone(),
+    };
+    let mut cpu = load_gltf_skinned(&prepared)
+        .with_context(|| format!("load skinned wyvern: {}", prepared.display()))?;
     // Optional: merge animation library if present
     let anim_libs = [
         asset_path("assets/anims/converted/RedDragon2021.glb"),
@@ -145,6 +137,42 @@ pub fn load_unskinned_static(device: &wgpu::Device) -> Option<(wgpu::Buffer, wgp
         }
     }
     None
+}
+
+fn find_wyvern_model_path() -> Option<std::path::PathBuf> {
+    // Preferred exact names
+    let preferred = [
+        asset_path("assets/models/red_wyvern/RedDragon2021.textured.glb"),
+        asset_path("assets/models/red_wyvern/RedDragon2021.glb"),
+        asset_path("assets/models/red_wyvern/RedDragon2021.decompressed.gltf"),
+    ];
+    for p in preferred.iter() {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+    // Directory scan fallback
+    let root = asset_path("assets/models/red_wyvern");
+    if !root.exists() {
+        return None;
+    }
+    let mut picks: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(&root) {
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if !p.is_file() {
+                continue;
+            }
+            if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                let e = ext.to_ascii_lowercase();
+                if e == "glb" || e == "gltf" {
+                    picks.push(p);
+                }
+            }
+        }
+    }
+    picks.sort();
+    picks.into_iter().next()
 }
 
 pub fn build_instance_at(
