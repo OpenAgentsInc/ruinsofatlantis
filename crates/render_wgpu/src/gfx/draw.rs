@@ -175,15 +175,16 @@ impl Renderer {
             return;
         }
         if let (Some(vb), Some(ib)) = (&self.wyvern_static_vb, &self.wyvern_static_ib) {
-            // Update model uniform and a single Instance for instanced-textured pipeline
-            let m = Model {
-                model: model_m.to_cols_array_2d(),
+            // For instanced pipeline parity with trees/rocks, keep Model uniform as identity and
+            // carry the transform in the single instance buffer.
+            let ident = Model {
+                model: glam::Mat4::IDENTITY.to_cols_array_2d(),
                 color: [1.0, 1.0, 1.0],
                 emissive: 0.0,
                 _pad: [0.0; 4],
             };
             self.queue
-                .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&m));
+                .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&ident));
             // Build a one-off instance into the shared ghost_inst buffer
             let inst = crate::gfx::types::Instance {
                 model: model_m.to_cols_array_2d(),
