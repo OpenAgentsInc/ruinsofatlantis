@@ -546,6 +546,12 @@ impl Renderer {
             self.batch_add_key_ids(pid, mid, mesh);
         }
         if self.wyvern_count > 0 && !self.is_vox_onepath() && !self.is_picker_batches() {
+            log::info!(
+                target: "render_wgpu::gfx::renderer::passes",
+                "draw: wyvern (count={} index_count={})",
+                self.wyvern_count,
+                self.wyvern_index_count
+            );
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.wyvern_mat_bg);
             let mesh = ptr_id(&self.wyvern_ib);

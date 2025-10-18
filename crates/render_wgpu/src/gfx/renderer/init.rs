@@ -1700,14 +1700,22 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             mat.sampler,
         )
     };
-    // Place wyvern near the PC (always visible at start): a few meters ahead of the player
+    // Place wyvern near the PC (always visible at start): a few meters ahead of the player's facing
     let wyvern_pos = {
-        let base = pc_initial_pos;
-        let mut p = base + glam::vec3(0.0, 0.0, 8.0);
+        let mpc = wizard_models[scene_build.pc_index];
+        let (_s, r, t) = mpc.to_scale_rotation_translation();
+        let fwd = r * glam::Vec3::Z;
+        let mut p = t + fwd.normalize_or_zero() * 8.0;
         let (h, _n) = terrain::height_at(&terrain_cpu, p.x, p.z);
         p.y = h + 2.0; // slight lift
         p
     };
+    log::info!(
+        "wyvern: spawn at {:?} (index_count={}, joints={})",
+        wyvern_pos,
+        wyvern_index_count,
+        wyvern_joints
+    );
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)
