@@ -693,9 +693,8 @@ pub fn build_instance_at(
     // - Rotate -90° about X to fix exporter axis
     // - Rotate 180° about Y so it faces the camera by default
     // - Scale down to fit near the PC
-    let rot = glam::Quat::from_rotation_y(std::f32::consts::PI)
-        * glam::Quat::from_rotation_x(-90f32.to_radians());
-    let scale = glam::Vec3::splat(0.03);
+    let rot = glam::Quat::from_rotation_x(-90f32.to_radians());
+    let scale = glam::Vec3::splat(0.02);
     let m = glam::Mat4::from_scale_rotation_translation(scale, rot, pos);
     let models = vec![m];
     let inst = InstanceSkin {

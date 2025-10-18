@@ -54,6 +54,35 @@ pub fn sample_palette(mesh: &SkinnedMeshCPU, clip: &AnimClip, t: f32) -> Vec<gla
     out
 }
 
+/// Compute the bind-pose palette (no animation): global(base) * inverse_bind.
+pub fn bind_pose_palette(mesh: &SkinnedMeshCPU) -> Vec<glam::Mat4> {
+    use std::collections::HashMap;
+    let mut global: HashMap<usize, glam::Mat4> = HashMap::new();
+    for &jn in &mesh.joints_nodes {
+        if jn < mesh.base_t.len() {
+            compute_global(
+                jn,
+                &mesh.parent,
+                &mesh.base_t,
+                &mesh.base_r,
+                &mesh.base_s,
+                &mut global,
+            );
+        }
+    }
+    let mut out = Vec::with_capacity(mesh.joints_nodes.len());
+    for (i, &node_idx) in mesh.joints_nodes.iter().enumerate() {
+        let g = *global.get(&node_idx).unwrap_or(&glam::Mat4::IDENTITY);
+        let ibm = mesh
+            .inverse_bind
+            .get(i)
+            .copied()
+            .unwrap_or(glam::Mat4::IDENTITY);
+        out.push(g * ibm);
+    }
+    out
+}
+
 pub fn global_of_node(
     mesh: &SkinnedMeshCPU,
     clip: &AnimClip,

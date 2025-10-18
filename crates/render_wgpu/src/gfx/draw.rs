@@ -275,10 +275,26 @@ impl Renderer {
         rpass.set_bind_group(0, &self.globals_bg, &[]);
         rpass.set_bind_group(1, &self.shard_model_bg, &[]);
         rpass.set_bind_group(2, &self.wyvern_palettes_bg, &[]);
-        rpass.set_bind_group(3, &self.wyvern_mat_bg, &[]);
         rpass.set_vertex_buffer(0, self.wyvern_vb.slice(..));
         rpass.set_vertex_buffer(1, self.wyvern_instances.slice(..));
         rpass.set_index_buffer(self.wyvern_ib.slice(..), IndexFormat::Uint16);
-        rpass.draw_indexed(0..self.wyvern_index_count, 0, 0..self.wyvern_count);
+        // If submesh textures exist, draw each with its own material to fix UV/material mismatches.
+        if !self.wyvern_cpu.submeshes.is_empty() {
+            for sm in &self.wyvern_cpu.submeshes {
+                let (bg, _b, _v, _s) = crate::gfx::material::create_material_from_texture(
+                    &self.device,
+                    &self.queue,
+                    &self.material_bgl,
+                    sm.base_color_texture.as_ref(),
+                );
+                rpass.set_bind_group(3, &bg, &[]);
+                let start = sm.start as u32;
+                let end = start + sm.count as u32;
+                rpass.draw_indexed(start..end, 0, 0..self.wyvern_count);
+            }
+        } else {
+            rpass.set_bind_group(3, &self.wyvern_mat_bg, &[]);
+            rpass.draw_indexed(0..self.wyvern_index_count, 0, 0..self.wyvern_count);
+        }
     }
 }

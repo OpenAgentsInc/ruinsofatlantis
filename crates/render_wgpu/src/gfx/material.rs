@@ -3,7 +3,7 @@
 //! Creates a bind group for the wizard’s base color texture and a small
 //! material transform uniform (supports KHR_texture_transform if present).
 
-use roa_assets::types::SkinnedMeshCPU;
+use roa_assets::types::{SkinnedMeshCPU, TextureCPU};
 use wgpu::util::DeviceExt;
 
 pub struct WizardMaterial {
@@ -176,6 +176,140 @@ pub fn create_wizard_material(
         texture_view: view,
         sampler,
     }
+}
+
+/// Create a material bind group from an optional CPU texture. If `tex_opt` is `None`,
+/// a 1x1 white SRGB texture is used. Matches the layout used by `create_wizard_material`.
+pub fn create_material_from_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    material_bgl: &wgpu::BindGroupLayout,
+    tex_opt: Option<&TextureCPU>,
+) -> (
+    wgpu::BindGroup,
+    wgpu::Buffer,
+    wgpu::TextureView,
+    wgpu::Sampler,
+) {
+    #[repr(C)]
+    #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+    struct MaterialXform {
+        offset: [f32; 2],
+        _pad0: [f32; 2],
+        scale: [f32; 2],
+        _pad1: [f32; 2],
+        rot: f32,
+        _pad2: [f32; 3],
+    }
+    let mat_xf = MaterialXform {
+        offset: [0.0, 0.0],
+        _pad0: [0.0; 2],
+        scale: [1.0, 1.0],
+        _pad1: [0.0; 2],
+        rot: 0.0,
+        _pad2: [0.0; 3],
+    };
+    let mat_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("material-xform"),
+        contents: bytemuck::bytes_of(&mat_xf),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+    let (view, sampler) = if let Some(tex) = tex_opt {
+        let size3 = wgpu::Extent3d {
+            width: tex.width,
+            height: tex.height,
+            depth_or_array_layers: 1,
+        };
+        let img = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("material-albedo"),
+            size: size3,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &img,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &tex.pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * tex.width),
+                rows_per_image: Some(tex.height),
+            },
+            size3,
+        );
+        let view = img.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("material-sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            ..Default::default()
+        });
+        (view, sampler)
+    } else {
+        let size3 = wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        };
+        let img = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("white-1x1"),
+            size: size3,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &img,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &[255, 255, 255, 255],
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            size3,
+        );
+        let view = img.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+        (view, sampler)
+    };
+    let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("material-bg"),
+        layout: material_bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: mat_buf.as_entire_binding(),
+            },
+        ],
+    });
+    (bg, mat_buf, view, sampler)
 }
 
 fn read_texture_transform() -> Option<MaterialXform> {

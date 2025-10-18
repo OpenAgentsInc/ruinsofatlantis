@@ -5679,17 +5679,23 @@ impl Renderer {
             }
             lookup = best.map(|b| b.0);
         }
+        // Optional: force bind pose for stability if env set
+        let force_bind = std::env::var("ROA_WYVERN_BIND")
+            .map(|v| v == "1")
+            .unwrap_or(false);
         let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wyvern_count as usize * joints);
         for i in 0..(self.wyvern_count as usize) {
+            if force_bind {
+                mats.extend(anim::bind_pose_palette(&self.wyvern_cpu));
+                continue;
+            }
             let t = time_global + self.wyvern_time_offset.get(i).copied().unwrap_or(0.0);
             if let Some(ref name) = lookup
                 && let Some(clip) = self.wyvern_cpu.animations.get(name)
             {
                 mats.extend(anim::sample_palette(&self.wyvern_cpu, clip, t));
             } else {
-                for _ in 0..joints {
-                    mats.push(glam::Mat4::IDENTITY);
-                }
+                mats.extend(anim::bind_pose_palette(&self.wyvern_cpu));
             }
         }
         let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
