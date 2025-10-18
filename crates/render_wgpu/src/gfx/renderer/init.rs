@@ -1719,10 +1719,16 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing.
     // Use a conservative, known-good orientation: exporter axis fix only (face forward enough to be visible).
     // Lay flat and rotate 90° horizontally away from the player (yaw about world Y)
-    let yaw_m90 = glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2);
+    // Rotate 90° away from the player along a horizontal axis: use the player's right vector
+    // as the rotation axis (it's horizontal by construction), then lay flat and apply exporter fix.
+    let pc_m = wizard_models[scene_build.pc_index];
+    let (_s_pc, r_pc, _t_pc) = pc_m.to_scale_rotation_translation();
+    let pc_forward = (r_pc * glam::Vec3::Z).normalize_or_zero();
+    let pc_right = pc_forward.cross(glam::Vec3::Y).normalize_or_zero();
+    let around_right = glam::Quat::from_axis_angle(pc_right, std::f32::consts::FRAC_PI_2);
     let roll_flat = glam::Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
     let pitch_fix = glam::Quat::from_rotation_x(-90f32.to_radians());
-    let r = yaw_m90 * roll_flat * pitch_fix;
+    let r = around_right * roll_flat * pitch_fix;
     let wyvern_model_m =
         glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), r, wyvern_pos);
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
