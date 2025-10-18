@@ -19,25 +19,63 @@ pub struct WyvernAssets {
 }
 
 pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
-    // Prefer packed GLB; otherwise find any *.glb|*.gltf under red_wyvern
-    let base_path = find_wyvern_model_path()
-        .ok_or_else(|| anyhow::anyhow!("wyvern model not found under assets/models/red_wyvern"))?;
-    // Mirror viewer: prepare path (pick decompressed alternates when applicable)
-    let prepared = match roa_assets::util::prepare_gltf_path(&base_path) {
-        Ok(p) => p,
-        Err(_) => base_path.clone(),
-    };
+    // Prefer a model that actually contains a skin. Probe common candidates and pick the first
+    // that yields joints_nodes > 0, mirroring the viewer's success criteria.
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    candidates.push(asset_path(
+        "assets/models/red_wyvern/RedDragon2021.textured.glb",
+    ));
+    candidates.push(asset_path("assets/models/red_wyvern/RedDragon2021.glb"));
+    candidates.push(asset_path(
+        "assets/models/red_wyvern/RedDragon2021.decompressed.glb",
+    ));
+    candidates.push(asset_path(
+        "assets/models/red_wyvern/RedDragon2021.decompressed.gltf",
+    ));
+    // Fallback: directory scan for any *.glb|*.gltf
+    let root = asset_path("assets/models/red_wyvern");
+    if root.exists() {
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.is_file() {
+                    if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                        let e = ext.to_ascii_lowercase();
+                        if e == "glb" || e == "gltf" {
+                            candidates.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut chosen: Option<std::path::PathBuf> = None;
+    let mut cpu_probe: Option<roa_assets::types::SkinnedMeshCPU> = None;
+    for cand in candidates.iter() {
+        if !cand.exists() {
+            continue;
+        }
+        let prepared = roa_assets::util::prepare_gltf_path(cand).unwrap_or_else(|_| cand.clone());
+        if !prepared.exists() {
+            continue;
+        }
+        if let Ok(test) = load_gltf_skinned(&prepared) {
+            if !test.joints_nodes.is_empty() && !test.indices.is_empty() {
+                chosen = Some(prepared);
+                cpu_probe = Some(test);
+                break;
+            }
+        }
+    }
+    let prepared = chosen.ok_or_else(|| anyhow::anyhow!(
+        "wyvern: no skinned model with joints found under assets/models/red_wyvern (tried textured/original/decompressed)"
+    ))?;
+    let mut cpu = cpu_probe.expect("probe must have loaded cpu");
     log::info!(
         target: "wyvern",
-        "wyvern: try skinned load from {} (exists={})",
+        "wyvern: skinned ok: {} (verts={}, idx={}, joints={}, anims={})",
         prepared.display(),
-        prepared.exists()
-    );
-    let mut cpu = load_gltf_skinned(&prepared)
-        .with_context(|| format!("load skinned wyvern: {}", prepared.display()))?;
-    log::info!(
-        target: "wyvern",
-        "wyvern: skinned ok (verts={}, idx={}, joints={}, anims={})",
         cpu.vertices.len(),
         cpu.indices.len(),
         cpu.joints_nodes.len(),
@@ -46,11 +84,18 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
     // Optional: merge animation libraries exactly like the model viewer.
     // Strategy: find <stem>.{glb,gltf,fbx} under converted/, dragons/, and anims/.
     let mut merged = 0usize;
-    let stem = prepared
+    let mut stem = prepared
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("")
         .to_string();
+    // Heuristic: strip common suffixes like ".textured" or ".decompressed"
+    for suf in [".textured", ".decompressed"] {
+        if let Some(pos) = stem.find(suf) {
+            stem = stem[..pos].to_string();
+            break;
+        }
+    }
     let search_dirs = [
         asset_path("assets/anims/converted"),
         asset_path("assets/anims/dragons"),
