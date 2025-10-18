@@ -83,15 +83,39 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
 /// Attempt to load an unskinned static mesh of the wyvern for fallback drawing.
 /// Returns (vb, ib, index_count) with Vertex (pos,nrm) layout.
 pub fn load_unskinned_static(device: &wgpu::Device) -> Option<(wgpu::Buffer, wgpu::Buffer, u32)> {
-    let candidates = [
-        asset_path("assets/models/red_wyvern/RedDragon2021.textured.glb"),
-        asset_path("assets/models/red_wyvern/RedDragon2021.glb"),
-    ];
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    // Preferred names
+    candidates.push(asset_path(
+        "assets/models/red_wyvern/RedDragon2021.textured.glb",
+    ));
+    candidates.push(asset_path("assets/models/red_wyvern/RedDragon2021.glb"));
+    // Decompressed alt
+    candidates.push(asset_path(
+        "assets/models/red_wyvern/RedDragon2021.decompressed.gltf",
+    ));
+    // Scan directory for any other *.glb|*.gltf under red_wyvern
+    let root = asset_path("assets/models/red_wyvern");
+    if root.exists() {
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for ent in rd.flatten() {
+                let p = ent.path();
+                if p.is_file() {
+                    if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                        let e = ext.to_ascii_lowercase();
+                        if e == "glb" || e == "gltf" {
+                            candidates.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
     for p in candidates.iter() {
         if !p.exists() {
             continue;
         }
-        if let Ok(cpu) = load_gltf_mesh(p) {
+        let prepared = roa_assets::util::prepare_gltf_path(p).unwrap_or_else(|_| p.clone());
+        if let Ok(cpu) = load_gltf_mesh(&prepared) {
             let verts: Vec<Vtx> = cpu
                 .vertices
                 .into_iter()
@@ -111,6 +135,12 @@ pub fn load_unskinned_static(device: &wgpu::Device) -> Option<(wgpu::Buffer, wgp
                 contents: bytemuck::cast_slice(&ib_data),
                 usage: wgpu::BufferUsages::INDEX,
             });
+            log::info!(
+                "wyvern: static fallback ok: {} (verts={}, idx={})",
+                prepared.display(),
+                verts.len(),
+                ib_data.len()
+            );
             return Some((vb, ib, ib_data.len() as u32));
         }
     }
