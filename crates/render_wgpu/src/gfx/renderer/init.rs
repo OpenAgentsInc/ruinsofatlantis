@@ -1725,7 +1725,8 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (_s_pc, r_pc, _t_pc) = pc_m.to_scale_rotation_translation();
     let pc_forward = (r_pc * glam::Vec3::Z).normalize_or_zero();
     let pc_right = pc_forward.cross(glam::Vec3::Y).normalize_or_zero();
-    let around_right = glam::Quat::from_axis_angle(pc_right, std::f32::consts::FRAC_PI_2);
+    // Reverse the previous right-axis turn: rotate -90° about the player's right vector
+    let around_right = glam::Quat::from_axis_angle(pc_right, -std::f32::consts::FRAC_PI_2);
     let roll_flat = glam::Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
     let pitch_fix = glam::Quat::from_rotation_x(-90f32.to_radians());
     let r = around_right * roll_flat * pitch_fix;
