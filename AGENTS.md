@@ -234,6 +234,20 @@ NOTE FOR AGENTS
   - Do not run interactive apps. Favor read‑only analysis unless asked to create files.
   - If saving the dossier, update `docs/gdd/11-technical/overview.md` with a cross‑link when appropriate.
 
+#### Option: "Comprehensive Dossier — with code" (CD+code)
+- Purpose: Same as CD, plus a single, shareable Markdown bundle that embeds the most relevant source code and docs (up to a hard size cap) so one file contains everything needed.
+- Invocation: The user may ask for “Comprehensive Dossier with code” or “CD with code”.
+- Behavior:
+  - Collect the regular dossier narrative (overview, behavior, data flow, history, TODOs).
+  - Append stitched file contents for the most relevant sources (code, docs, scripts, schemas) with clear headers and absolute paths for traceability.
+  - Enforce a size budget (default 240 KiB) so the bundle can be pasted/shared.
+  - Persist the bundle to `docs/dossiers/generated/<topic-slug>.with-code.md` and copy the bundle to the clipboard.
+- Script support:
+  - Use `scripts/dossier_with_code_240k.sh <topic-slug>` to generate a 240 KiB bundle, save it under `docs/dossiers/generated/`, and copy it to the clipboard.
+  - The script is non‑interactive and repository‑local; it never reads network resources.
+- Git hygiene:
+  - The `docs/dossiers/generated/` directory is ignored by Git. Generated bundles are local artifacts for handoff and should not be committed.
+
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.

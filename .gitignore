@@ -8,3 +8,6 @@ docs/srd/.tmp/
 .codex_run*.out
 .codex_report_watcher.sh
 .wish-ledger/
+
+# Ignore generated Comprehensive Dossiers with embedded code
+docs/dossiers/generated/
