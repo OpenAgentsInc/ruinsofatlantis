@@ -546,7 +546,7 @@ impl Renderer {
             self.batch_add_key_ids(pid, mid, mesh);
         }
         if self.wyvern_count > 0 && !self.is_vox_onepath() && !self.is_picker_batches() {
-            log::info!(
+            log::debug!(
                 target: "render_wgpu::gfx::renderer::passes",
                 "draw: wyvern (count={} index_count={})",
                 self.wyvern_count,
@@ -566,11 +566,11 @@ impl Renderer {
             && !self.is_picker_batches()
         {
             if self.wyvern_static_index_count > 0 {
-                log::info!(target: "render_wgpu::gfx::renderer::passes", "draw: wyvern STATIC fallback (index_count={})", self.wyvern_static_index_count);
+                log::debug!(target: "render_wgpu::gfx::renderer::passes", "draw: wyvern STATIC fallback (index_count={})", self.wyvern_static_index_count);
                 self.draw_wyvern_static(rp, self.wyvern_models[0]);
                 self.draw_calls += 1;
             } else {
-                log::info!(target: "render_wgpu::gfx::renderer::passes", "draw: wyvern DEBUG placeholder cube");
+                log::debug!(target: "render_wgpu::gfx::renderer::passes", "draw: wyvern DEBUG placeholder cube");
                 self.draw_debug_cube(rp, self.wyvern_models[0]);
                 self.draw_calls += 1;
             }

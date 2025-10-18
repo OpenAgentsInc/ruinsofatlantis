@@ -556,7 +556,7 @@ pub fn merge_gltf_animations(base: &mut SkinnedMeshCPU, anim_path: &Path) -> Res
         let mapped_s = s_tracks.len();
         let mapped_count = mapped_t + mapped_r + mapped_s;
         if mapped_count > 0 {
-            log::info!(
+            log::debug!(
                 "merge: '{}' mapped tracks → T:{} R:{} S:{} (dur {:.3}s)",
                 name,
                 mapped_t,
