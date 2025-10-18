@@ -40,6 +40,7 @@ def parse_args():
     p.add_argument("--triangulate", action="store_true")
     p.add_argument("--pack", action="store_true")
     p.add_argument("--push-actions", action="store_true")
+    p.add_argument("--images-dir", dest="images_dir", default="")
     return p.parse_args(argv)
 
 
@@ -124,6 +125,36 @@ def normal_images_to_noncolor():
             except Exception:
                 pass
 
+def reconnect_images_by_name(images_dir: str):
+    if not images_dir:
+        return
+    import os
+    if not os.path.isdir(images_dir):
+        return
+    # Build a map of lowercase filename -> absolute path from images_dir
+    candidates = {}
+    try:
+        for fn in os.listdir(images_dir):
+            p = os.path.join(images_dir, fn)
+            if os.path.isfile(p):
+                candidates[fn.lower()] = p
+    except Exception:
+        return
+    for img in bpy.data.images:
+        try:
+            if img.packed_file:
+                continue
+        except Exception:
+            pass
+        name = os.path.basename(img.filepath_raw or img.name).lower()
+        if not name:
+            name = (img.name or "").lower()
+        if name in candidates:
+            try:
+                img.filepath = candidates[name]
+            except Exception:
+                pass
+
 
 def push_actions_to_nla(arm: bpy.types.Object):
     arm.animation_data_create()
@@ -176,6 +207,8 @@ def main():
 
     # Minor material hygiene
     normal_images_to_noncolor()
+    # Optionally reconnect missing images by name from a directory (UDIM bakes, etc.)
+    reconnect_images_by_name(args.images_dir)
     if args.pack:
         try:
             bpy.ops.file.pack_all()

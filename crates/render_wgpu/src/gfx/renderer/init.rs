@@ -1626,6 +1626,116 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
+    // Wyvern assets (skinned, single instance)
+    let (
+        wyvern_cpu,
+        wyvern_vb,
+        wyvern_ib,
+        wyvern_index_count,
+        wyvern_joints,
+        wyvern_mat_bg,
+        _wyvern_mat_buf,
+        _wyvern_tex_view,
+        _wyvern_sampler,
+    ) = if load_npc_assets {
+        match super::super::wyvern::load_assets(&device) {
+            Ok(a) => {
+                let cpu = a.cpu;
+                let joints = cpu.joints_nodes.len() as u32;
+                let mat = material::create_wizard_material(&device, &queue, &material_bgl, &cpu);
+                (
+                    cpu,
+                    a.vb,
+                    a.ib,
+                    a.index_count,
+                    joints,
+                    mat.bind_group,
+                    mat.uniform_buf,
+                    mat.texture_view,
+                    mat.sampler,
+                )
+            }
+            Err(e) => {
+                log::warn!("wyvern: failed to load assets: {:#}", e);
+                let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("wyvern-empty"),
+                    size: 4,
+                    usage: wgpu::BufferUsages::VERTEX,
+                    mapped_at_creation: false,
+                });
+                let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+                let mat =
+                    material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
+                (
+                    empty_cpu,
+                    dummy.clone(),
+                    dummy,
+                    0u32,
+                    0u32,
+                    mat.bind_group,
+                    mat.uniform_buf,
+                    mat.texture_view,
+                    mat.sampler,
+                )
+            }
+        }
+    } else {
+        let dummy = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("wyvern-empty"),
+            size: 4,
+            usage: wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        let empty_cpu = crate::gfx::Renderer::empty_skinned_cpu();
+        let mat = material::create_wizard_material(&device, &queue, &material_bgl, &empty_cpu);
+        (
+            empty_cpu,
+            dummy.clone(),
+            dummy,
+            0u32,
+            0u32,
+            mat.bind_group,
+            mat.uniform_buf,
+            mat.texture_view,
+            mat.sampler,
+        )
+    };
+    // Place wyvern near the DK + offset, or near origin if DK absent
+    let wyvern_pos = {
+        let base = dk_model_pos;
+        let mut p = base + glam::vec3(25.0, 0.0, -10.0);
+        let (h, _n) = terrain::height_at(&terrain_cpu, p.x, p.z);
+        p.y = h + 3.0; // slight lift
+        p
+    };
+    let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
+        if wyvern_index_count > 0 {
+            super::super::wyvern::build_instance_at(&device, wyvern_pos)
+        } else {
+            let b = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("wyvern-instances-empty"),
+                size: 4,
+                usage: wgpu::BufferUsages::VERTEX,
+                mapped_at_creation: false,
+            });
+            (b, Vec::new(), Vec::new(), 0u32)
+        };
+    let total_wyvern_mats = wyvern_count as usize * wyvern_joints as usize;
+    let wyvern_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wyvern-palettes"),
+        size: ((total_wyvern_mats.max(1)) * 64) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let wyvern_palettes_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("wyvern-palettes-bg"),
+        layout: &palettes_bgl,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wyvern_palettes_buf.as_entire_binding(),
+        }],
+    });
+
     // Determine asset forward offset from the zombie root node (if present).
     let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
@@ -2123,6 +2233,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         sorc_vb,
         sorc_ib,
         sorc_index_count,
+        wyvern_vb,
+        wyvern_ib,
+        wyvern_index_count,
         zombie_vb,
         zombie_ib,
         zombie_index_count,
@@ -2157,6 +2270,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         sorc_instances,
         sorc_count,
         sorc_instances_cpu,
+        wyvern_instances,
+        wyvern_count,
+        wyvern_instances_cpu,
         zombie_instances,
         zombie_count: zombie_instances_cpu.len() as u32,
         zombie_instances_cpu,
@@ -2192,6 +2308,14 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _zombie_mat_buf,
         _zombie_tex_view,
         _zombie_sampler,
+        wyvern_palettes_buf,
+        wyvern_palettes_bg,
+        wyvern_joints,
+        wyvern_models: wyvern_models.clone(),
+        wyvern_cpu,
+        wyvern_time_offset: (0..wyvern_count as usize).map(|_| 0.0f32).collect(),
+        wyvern_prev_pos: wyvern_pos,
+        wyvern_mat_bg,
         wire_enabled: false,
         pc_debug_warned_not_ready: false,
         sky: sky_state,

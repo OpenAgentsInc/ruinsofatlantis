@@ -46,6 +46,7 @@ mod sorceress;
 pub mod terrain;
 mod ui;
 mod util;
+mod wyvern;
 #[cfg(feature = "vox_onepath_demo")]
 pub mod demo {
     pub mod vox_onepath;
@@ -336,6 +337,10 @@ pub struct Renderer {
     sorc_vb: wgpu::Buffer,
     sorc_ib: wgpu::Buffer,
     sorc_index_count: u32,
+    // Wyvern skinned geometry
+    wyvern_vb: wgpu::Buffer,
+    wyvern_ib: wgpu::Buffer,
+    wyvern_index_count: u32,
     ruins_vb: wgpu::Buffer,
     ruins_ib: wgpu::Buffer,
     ruins_index_count: u32,
@@ -390,6 +395,11 @@ pub struct Renderer {
     sorc_count: u32,
     #[allow(dead_code)]
     sorc_instances_cpu: Vec<InstanceSkin>,
+    // Wyvern instance
+    wyvern_instances: wgpu::Buffer,
+    wyvern_count: u32,
+    #[allow(dead_code)]
+    wyvern_instances_cpu: Vec<InstanceSkin>,
     ruins_instances: wgpu::Buffer,
     ruins_count: u32,
     ruins_instances_cpu: Vec<types::Instance>,
@@ -462,6 +472,16 @@ pub struct Renderer {
     // Sorceress
     sorc_palettes_buf: wgpu::Buffer,
     sorc_palettes_bg: wgpu::BindGroup,
+    // Wyvern palettes + material
+    wyvern_palettes_buf: wgpu::Buffer,
+    wyvern_palettes_bg: wgpu::BindGroup,
+    wyvern_joints: u32,
+    #[allow(dead_code)]
+    wyvern_models: Vec<glam::Mat4>,
+    wyvern_cpu: SkinnedMeshCPU,
+    wyvern_time_offset: Vec<f32>,
+    wyvern_prev_pos: glam::Vec3,
+    wyvern_mat_bg: wgpu::BindGroup,
 
     // Ghost preview (worldsmithing): single-instance cube drawn with instanced pipeline
     ghost_vb: wgpu::Buffer,
@@ -5610,6 +5630,69 @@ impl Renderer {
         }
         self.queue
             .write_buffer(&self.sorc_palettes_buf, 0, bytemuck::cast_slice(&raw));
+    }
+
+    fn update_wyvern_palettes(&mut self, time_global: f32) {
+        if self.wyvern_count == 0 {
+            return;
+        }
+        let joints = self.wyvern_joints as usize;
+        // Movement heuristic
+        let current_pos = if let Some(m) = self.wyvern_models.first().copied() {
+            let c = m.to_cols_array();
+            glam::vec3(c[12], c[13], c[14])
+        } else {
+            glam::Vec3::ZERO
+        };
+        let moving = (current_pos - self.wyvern_prev_pos).length_squared() > 1e-6;
+        // Prefer Fly_Loop/Idle names if available; else pick the longest clip
+        let pick_named = |want: &str| -> Option<String> {
+            if self.wyvern_cpu.animations.contains_key(want) {
+                return Some(want.to_string());
+            }
+            let low = want.to_lowercase();
+            for name in self.wyvern_cpu.animations.keys() {
+                if name.to_lowercase().contains(&low) {
+                    return Some(name.clone());
+                }
+            }
+            None
+        };
+        let mut lookup = if moving {
+            pick_named("Fly_Loop").or_else(|| pick_named("Fly"))
+        } else {
+            pick_named("Idle").or_else(|| pick_named("Idle_Loop"))
+        };
+        if lookup.is_none() {
+            // fallback to longest-duration clip
+            let mut best: Option<(String, f32)> = None;
+            for (n, c) in &self.wyvern_cpu.animations {
+                if best.as_ref().map(|b| c.duration > b.1).unwrap_or(true) {
+                    best = Some((n.clone(), c.duration));
+                }
+            }
+            lookup = best.map(|b| b.0);
+        }
+        let mut mats: Vec<glam::Mat4> = Vec::with_capacity(self.wyvern_count as usize * joints);
+        for i in 0..(self.wyvern_count as usize) {
+            let t = time_global + self.wyvern_time_offset.get(i).copied().unwrap_or(0.0);
+            if let Some(ref name) = lookup
+                && let Some(clip) = self.wyvern_cpu.animations.get(name)
+            {
+                mats.extend(anim::sample_palette(&self.wyvern_cpu, clip, t));
+            } else {
+                for _ in 0..joints {
+                    mats.push(glam::Mat4::IDENTITY);
+                }
+            }
+        }
+        let mut raw: Vec<[f32; 16]> = Vec::with_capacity(mats.len());
+        for m in mats {
+            raw.push(m.to_cols_array());
+        }
+        self.queue
+            .write_buffer(&self.wyvern_palettes_buf, 0, bytemuck::cast_slice(&raw));
+        self.wyvern_prev_pos = current_pos;
     }
     /* Client-side sorceress motion removed; keep legacy under cfg.
         #[allow(dead_code)]

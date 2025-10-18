@@ -1094,6 +1094,8 @@ pub fn render_impl(
     r.update_deathknight_palettes(t);
     // Sorceress palettes (walk/idle based on motion)
     r.update_sorceress_palettes(t);
+    // Wyvern palettes (fly/idle if present; fallback longest)
+    r.update_wyvern_palettes(t);
     // FX update (projectiles/particles)
     r.update_fx(t, dt);
     // Debris cubes update and upload instances

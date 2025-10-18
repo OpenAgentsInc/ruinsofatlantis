@@ -519,7 +519,7 @@ impl Renderer {
                 return;
             }
         }
-        // DK, Sorceress, Zombies
+        // DK, Sorceress, Wyvern, Zombies
         if self.dk_count > 0
             && !self.is_vox_onepath()
             && !self.has_zone_batches()
@@ -542,6 +542,18 @@ impl Renderer {
             let mid = ptr_id(&self.sorc_mat_bg);
             let mesh = ptr_id(&self.sorc_ib);
             self.draw_sorceress(rp);
+            self.draw_calls += 1;
+            self.batch_add_key_ids(pid, mid, mesh);
+        }
+        if self.wyvern_count > 0
+            && !self.is_vox_onepath()
+            && !self.has_zone_batches()
+            && !self.is_picker_batches()
+        {
+            let pid = ptr_id(&self.wizard_pipeline);
+            let mid = ptr_id(&self.wyvern_mat_bg);
+            let mesh = ptr_id(&self.wyvern_ib);
+            self.draw_wyvern(rp);
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
