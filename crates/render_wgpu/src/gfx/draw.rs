@@ -175,18 +175,37 @@ impl Renderer {
             return;
         }
         if let (Some(vb), Some(ib)) = (&self.wyvern_static_vb, &self.wyvern_static_ib) {
+            // Update model uniform and a single Instance for instanced-textured pipeline
             let m = Model {
                 model: model_m.to_cols_array_2d(),
-                color: [0.9, 0.3, 0.3],
+                color: [1.0, 1.0, 1.0],
                 emissive: 0.0,
                 _pad: [0.0; 4],
             };
             self.queue
                 .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&m));
-            rpass.set_pipeline(&self.pipeline);
+            // Build a one-off instance into the shared ghost_inst buffer
+            let inst = crate::gfx::types::Instance {
+                model: model_m.to_cols_array_2d(),
+                color: [1.0, 1.0, 1.0],
+                selected: 0.0,
+            };
+            self.queue
+                .write_buffer(&self.ghost_inst, 0, bytemuck::bytes_of(&inst));
+
+            // Use textured instanced pipeline; bind material if available, else default
+            rpass.set_pipeline(&self.inst_tex_pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+            rpass.set_bind_group(2, &self.wyvern_palettes_bg, &[]); // unused by this pipeline but required by layout
+            let mat_bg = self
+                .wyvern_static_mat_bg
+                .as_ref()
+                .unwrap_or(&self.default_material_bg);
+            rpass.set_bind_group(3, mat_bg, &[]);
+
             rpass.set_vertex_buffer(0, vb.slice(..));
+            rpass.set_vertex_buffer(1, self.ghost_inst.slice(..));
             rpass.set_index_buffer(ib.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..self.wyvern_static_index_count, 0, 0..1);
         }

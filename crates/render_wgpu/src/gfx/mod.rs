@@ -486,6 +486,8 @@ pub struct Renderer {
     wyvern_static_vb: Option<wgpu::Buffer>,
     wyvern_static_ib: Option<wgpu::Buffer>,
     wyvern_static_index_count: u32,
+    // Optional override material for static wyvern (if a baseColor was found)
+    wyvern_static_mat_bg: Option<wgpu::BindGroup>,
 
     // Ghost preview (worldsmithing): single-instance cube drawn with instanced pipeline
     ghost_vb: wgpu::Buffer,

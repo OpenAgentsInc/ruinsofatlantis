@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use wgpu::util::DeviceExt;
 
 use crate::gfx::types::Vertex as Vtx;
-use crate::gfx::types::{InstanceSkin, VertexSkinned};
+use crate::gfx::types::{InstanceSkin, VertexPosNrmUv, VertexSkinned};
 use gltf as gltf_rs;
 use roa_assets::gltf::load_gltf_mesh;
 use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
@@ -152,6 +152,123 @@ pub fn load_unskinned_static(device: &wgpu::Device) -> Option<(wgpu::Buffer, wgp
         }
     }
     None
+}
+
+/// Unskinned textured loader: builds a VertexPosNrmUv VB from all primitives and returns an
+/// optional baseColor texture (RGBA8, SRGB) extracted from the largest contributing primitive.
+#[allow(dead_code)]
+pub fn load_unskinned_textured(
+    device: &wgpu::Device,
+) -> Option<(wgpu::Buffer, wgpu::Buffer, u32, Option<(Vec<u8>, u32, u32)>)> {
+    let base = super::wyvern::find_wyvern_model_path()?;
+    let prepared = roa_assets::util::prepare_gltf_path(&base)
+        .ok()
+        .unwrap_or(base);
+    let (doc, bufs, images) = gltf_rs::import(&prepared).ok()?;
+
+    let mut verts: Vec<VertexPosNrmUv> = Vec::new();
+    let mut indices: Vec<u16> = Vec::new();
+    let mut best_tex: Option<(Vec<u8>, u32, u32)> = None;
+    let mut best_vert_count = 0usize;
+
+    for mesh in doc.meshes() {
+        for prim in mesh.primitives() {
+            let reader = prim.reader(|b| bufs.get(b.index()).map(|bb| bb.0.as_slice()));
+            let Some(pos_it) = reader.read_positions() else {
+                continue;
+            };
+            let nrm_it = reader.read_normals();
+            let uv_it = reader.read_tex_coords(0).map(|t| t.into_f32());
+
+            let pos: Vec<[f32; 3]> = pos_it.collect();
+            let nrm: Vec<[f32; 3]> = nrm_it
+                .map(|it| it.collect())
+                .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; pos.len()]);
+            let uv: Vec<[f32; 2]> = uv_it
+                .map(|it| it.collect())
+                .unwrap_or_else(|| vec![[0.5, 0.5]; pos.len()]);
+
+            let base = verts.len() as u32;
+            for i in 0..pos.len() {
+                verts.push(VertexPosNrmUv {
+                    pos: pos[i],
+                    nrm: nrm[i],
+                    uv: uv[i],
+                });
+            }
+            let idx_u32: Vec<u32> = match reader.read_indices() {
+                Some(gltf_rs::mesh::util::ReadIndices::U16(it)) => it.map(|v| v as u32).collect(),
+                Some(gltf_rs::mesh::util::ReadIndices::U32(it)) => it.collect(),
+                Some(gltf_rs::mesh::util::ReadIndices::U8(it)) => it.map(|v| v as u32).collect(),
+                None => (0..pos.len() as u32).collect(),
+            };
+            for i in idx_u32 {
+                let v = i + base;
+                if let Ok(u) = u16::try_from(v) {
+                    indices.push(u);
+                }
+            }
+
+            // Track a plausible baseColor texture from the largest contributing primitive
+            if pos.len() > best_vert_count {
+                best_vert_count = pos.len();
+                if let Some(texinfo) = prim
+                    .material()
+                    .pbr_metallic_roughness()
+                    .base_color_texture()
+                {
+                    let tex = texinfo.texture();
+                    let img_idx = tex.source().index();
+                    if let Some(img) = images.get(img_idx) {
+                        let (w, h) = (img.width, img.height);
+                        let pixels = match img.format {
+                            gltf::image::Format::R8G8B8A8 => img.pixels.clone(),
+                            gltf::image::Format::R8G8B8 => {
+                                let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                for c in img.pixels.chunks_exact(3) {
+                                    out.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                                }
+                                out
+                            }
+                            gltf::image::Format::R8 => {
+                                let mut out = Vec::with_capacity((w * h * 4) as usize);
+                                for &r in &img.pixels {
+                                    out.extend_from_slice(&[r, r, r, 255]);
+                                }
+                                out
+                            }
+                            _ => img.pixels.clone(),
+                        };
+                        best_tex = Some((pixels, w, h));
+                    }
+                }
+            }
+        }
+    }
+
+    if indices.is_empty() || verts.is_empty() {
+        return None;
+    }
+
+    let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wyvern-static-uv-vb"),
+        contents: bytemuck::cast_slice(&verts),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wyvern-static-uv-ib"),
+        contents: bytemuck::cast_slice(&indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+    log::info!(
+        target: "wyvern",
+        "wyvern: static textured ok: {} (verts={}, idx={}, tex={})",
+        prepared.display(),
+        verts.len(),
+        indices.len(),
+        best_tex.as_ref().map(|(_,w,h)| format!("{}x{}", w, h)).unwrap_or_else(|| "none".into())
+    );
+    Some((vb, ib, indices.len() as u32, best_tex))
 }
 
 /// Minimal reader: load only the first mesh primitive (positions/normals/indices),

@@ -1750,21 +1750,93 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
-    // Wyvern static mesh fallback (unskinned)
-    let (wyvern_static_vb, wyvern_static_ib, wyvern_static_index_count) = if wyvern_index_count == 0
-    {
-        if let Some((vb, ib, idx)) = super::super::wyvern::load_unskinned_static(&device) {
-            (Some(vb), Some(ib), idx)
-        } else if let Some((vb, ib, idx)) =
-            super::super::wyvern::load_unskinned_first_primitive(&device)
-        {
-            (Some(vb), Some(ib), idx)
+    // Wyvern static mesh fallback (unskinned). Prefer a UV-capable, textured path.
+    let (wyvern_static_vb, wyvern_static_ib, wyvern_static_index_count, wyvern_static_mat_bg_opt) =
+        if wyvern_index_count == 0 {
+            if let Some((vb, ib, idx, base_tex)) =
+                super::super::wyvern::load_unskinned_textured(&device)
+            {
+                // If a baseColor texture was found, create a simple material BG from it.
+                let mat_bg = base_tex.map(|(pixels, w, h)| {
+                    let size3 = wgpu::Extent3d {
+                        width: w,
+                        height: h,
+                        depth_or_array_layers: 1,
+                    };
+                    let tex_obj = device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some("wyvern-static-albedo"),
+                        size: size3,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+                    queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &tex_obj,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &pixels,
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * w),
+                            rows_per_image: Some(h),
+                        },
+                        size3,
+                    );
+                    let view = tex_obj.create_view(&wgpu::TextureViewDescriptor::default());
+                    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                        label: Some("wyvern-static-sampler"),
+                        mag_filter: wgpu::FilterMode::Linear,
+                        min_filter: wgpu::FilterMode::Linear,
+                        mipmap_filter: wgpu::FilterMode::Nearest,
+                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                        ..Default::default()
+                    });
+                    // Minimal xform buffer (no KHR_texture_transform)
+                    let xf_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("wyvern-static-mat-xf"),
+                        contents: bytemuck::bytes_of(&[0.0f32; 8]),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                    device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("wyvern-static-material-bg"),
+                        layout: &material_bgl,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(&view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::Sampler(&sampler),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: xf_buf.as_entire_binding(),
+                            },
+                        ],
+                    })
+                });
+                (Some(vb), Some(ib), idx, mat_bg)
+            } else if let Some((vb, ib, idx)) = super::super::wyvern::load_unskinned_static(&device)
+            {
+                (Some(vb), Some(ib), idx, None)
+            } else if let Some((vb, ib, idx)) =
+                super::super::wyvern::load_unskinned_first_primitive(&device)
+            {
+                (Some(vb), Some(ib), idx, None)
+            } else {
+                (None, None, 0u32, None)
+            }
         } else {
-            (None, None, 0u32)
-        }
-    } else {
-        (None, None, 0u32)
-    };
+            (None, None, 0u32, None)
+        };
     log::info!(
         "wyvern: assets summary — skinned idx={} joints={} inst_count={} | static idx={} used={}",
         wyvern_index_count,
@@ -2354,6 +2426,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wyvern_time_offset: (0..wyvern_count as usize).map(|_| 0.0f32).collect(),
         wyvern_prev_pos: wyvern_pos,
         wyvern_mat_bg,
+        wyvern_static_mat_bg: wyvern_static_mat_bg_opt,
         wyvern_static_vb,
         wyvern_static_ib,
         wyvern_static_index_count,
