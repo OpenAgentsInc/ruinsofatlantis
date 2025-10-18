@@ -1716,29 +1716,13 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wyvern_index_count,
         wyvern_joints
     );
-    // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing
-    // Orient wyvern side-on to the player for better readability: first fix rig axis (-90° X),
-    // then yaw +90° so the profile is visible instead of a full wingspan facing the camera.
-    // Align wyvern forward (+Z after the -90° X fix) to the player's right vector so it presents
-    // a side profile relative to the PC's facing. Use world-space composition to avoid mixing
-    // local axes.
-    let mpc = wizard_models[scene_build.pc_index];
-    let (_s, r_pc, _t) = mpc.to_scale_rotation_translation();
-    let pc_fwd = (r_pc * glam::Vec3::Z).normalize_or_zero();
-    let world_up = glam::Vec3::Y;
-    let forward = pc_fwd.normalize();
-    let mut right = forward.cross(world_up);
-    if right.length_squared() < 1e-6 {
-        right = glam::Vec3::X;
-    }
-    right = right.normalize();
-    // Re-orthonormalize up so the basis is right-handed and rigid (det +1)
-    let up2 = right.cross(forward).normalize();
-    // Columns: [right, up2, forward]
-    let align = glam::Mat3::from_cols(right, up2, forward);
-    let r_align = glam::Mat4::from_quat(glam::Quat::from_mat3(&align));
-    let r_fix = glam::Mat4::from_rotation_x(-90f32.to_radians());
-    let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_align * r_fix;
+    // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing.
+    // Use a conservative, known-good orientation: exporter axis fix only (face forward enough to be visible).
+    let wyvern_model_m = glam::Mat4::from_scale_rotation_translation(
+        glam::Vec3::splat(1.0),
+        glam::Quat::from_rotation_x(-90f32.to_radians()),
+        wyvern_pos,
+    );
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)
