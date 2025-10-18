@@ -1848,9 +1848,10 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             (None, None, 0u32, None)
         };
     log::info!(
-        "wyvern: assets summary — skinned idx={} joints={} inst_count={} | static idx={} used={}",
+        "wyvern: assets summary — skinned idx={} joints={} anims={} inst_count={} | static idx={} used={}",
         wyvern_index_count,
         wyvern_joints,
+        wyvern_cpu.animations.len(),
         wyvern_count,
         wyvern_static_index_count,
         wyvern_static_index_count > 0

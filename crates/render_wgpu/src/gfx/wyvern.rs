@@ -9,6 +9,7 @@ use crate::gfx::types::{InstanceSkin, VertexPosNrmUv, VertexSkinned};
 use gltf as gltf_rs;
 use roa_assets::gltf::load_gltf_mesh;
 use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+use std::path::{Path, PathBuf};
 
 pub struct WyvernAssets {
     pub cpu: roa_assets::types::SkinnedMeshCPU,
@@ -42,15 +43,42 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
         cpu.joints_nodes.len(),
         cpu.animations.len()
     );
-    // Optional: merge animation library if present
-    let anim_libs = [
-        asset_path("assets/anims/converted/RedDragon2021.glb"),
-        asset_path("assets/anims/dragons/RedDragon2021.fbx"),
+    // Optional: merge animation libraries exactly like the model viewer.
+    // Strategy: find <stem>.{glb,gltf,fbx} under converted/, dragons/, and anims/.
+    let mut merged = 0usize;
+    let stem = prepared
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let search_dirs = [
+        asset_path("assets/anims/converted"),
+        asset_path("assets/anims/dragons"),
+        asset_path("assets/anims"),
     ];
-    for lib in anim_libs.iter() {
-        if lib.exists() {
-            let _ = merge_gltf_animations(&mut cpu, lib);
+    let exts = ["glb", "gltf", "fbx"];
+    for dir in search_dirs.iter() {
+        for ext in exts.iter() {
+            let cand = dir.join(format!("{}.{}", stem, ext));
+            if !cand.exists() {
+                continue;
+            }
+            let ok = if *ext == "fbx" {
+                if let Some(conv) = try_convert_fbx_to_gltf(&cand) {
+                    merge_gltf_animations(&mut cpu, &conv).ok()
+                } else {
+                    None
+                }
+            } else {
+                merge_gltf_animations(&mut cpu, &cand).ok()
+            };
+            if let Some(k) = ok {
+                merged += k;
+            }
         }
+    }
+    if merged > 0 {
+        log::info!(target: "wyvern", "merged {} animation clips", merged);
     }
     let verts: Vec<VertexSkinned> = cpu
         .vertices
@@ -85,6 +113,51 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
         ib,
         index_count,
     })
+}
+
+/// Try to convert an FBX file to GLB in assets/anims/converted, mirroring the viewer.
+fn try_convert_fbx_to_gltf(src: &Path) -> Option<PathBuf> {
+    let out_dir = asset_path("assets/anims/converted");
+    let _ = std::fs::create_dir_all(&out_dir);
+    let stem = src.file_stem()?.to_str()?;
+    let out_path = out_dir.join(format!("{}.glb", stem));
+    if out_path.exists() {
+        return Some(out_path);
+    }
+    // Prefer fbx2gltf if available
+    let try_cmd = |prog: &str, args: &[&str]| -> bool {
+        std::process::Command::new(prog)
+            .args(args)
+            .status()
+            .ok()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+    if try_cmd(
+        "fbx2gltf",
+        &[
+            "-b",
+            "-o",
+            out_dir.to_str().unwrap_or("."),
+            src.to_str().unwrap_or(""),
+        ],
+    ) && out_path.exists()
+    {
+        return Some(out_path);
+    }
+    // Fallback: assimp export
+    if try_cmd(
+        "assimp",
+        &[
+            "export",
+            src.to_str().unwrap_or(""),
+            out_path.to_str().unwrap_or(""),
+        ],
+    ) && out_path.exists()
+    {
+        return Some(out_path);
+    }
+    None
 }
 
 /// Attempt to load an unskinned static mesh of the wyvern for fallback drawing.
