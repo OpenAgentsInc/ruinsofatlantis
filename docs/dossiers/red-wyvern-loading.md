@@ -1,139 +1,164 @@
 # Red Wyvern Loading — Comprehensive Dossier
 
-Summary
-- Goal: Document how the Red Wyvern (assets/models/red_wyvern/RedDragon2021.glb) is loaded, animated, and textured in the model viewer, current limitations (animations, UDIM textures), and the path to integrate it into the main scene.
-- Audience: New contributors and agents who need full context to debug or extend dragon loading and bring it into the game scene.
+This is the canonical, all‑in‑one reference for the Red Wyvern asset: where files live, how the loaders work, how the viewer renders it, how the game renderer wires it today, and what remains to enable full animations in‑game.
 
-Scope
-- Covers loaders in `shared/assets`, viewer specifics in `tools/model-viewer`, relevant assets and scripts under `assets/**` and `scripts/**`, and history/issues.
-- Out of scope: Final engine integration draw code (renderer) implementation; this dossier provides concrete integration steps and references.
+## Quick Facts
+- Base model: `assets/models/red_wyvern/RedDragon2021.glb`
+- Packed model (no Meshopt/Draco, embedded images): `assets/models/red_wyvern/RedDragon2021.textured.glb`
+- Anim lib: `assets/anims/converted/RedDragon2021.glb` (source FBX also present)
+- Export script: `scripts/blender/export_glb_clean.py`
+- Shared loaders: `shared/assets/src/*`
+- Viewer: `tools/model-viewer/**`
+- Renderer glue: `crates/render_wgpu/src/gfx/**`
 
-Assets Inventory
-- Base model
-  - `assets/models/red_wyvern/RedDragon2021.glb`
-  - UDIM textures present (external files): `assets/models/red_wyvern/udims/Dragon Skin.100{1..4}.png`, `assets/models/red_wyvern/udims/Dragon Subsurf.100{1..4}.png`
-- Animation libraries
-  - Raw FBX: `assets/anims/dragons/RedDragon2021.fbx`
-  - Converted GLB: `assets/anims/converted/RedDragon2021.glb`
-- Blender export script (headless)
-  - `scripts/blender/export_glb_clean.py`
+## Current State
+1) Viewer (tools/model-viewer)
+- Loads the Wyvern via `roa_assets::skinning::load_gltf_skinned`, can merge compatible animation libraries, and displays textured submeshes. Orientation toggle commonly set to -90° around X for this rig. Shader: simple lambert with SRGB baseColor.
 
-Key Code Paths
-- Viewer entry and skinned pipeline
-  - `tools/model-viewer/src/main.rs:718` — material bind group layout (`mat_bgl`).
-  - `tools/model-viewer/src/main.rs:980` — build per-submesh material bind groups, upload SRGB textures.
-  - `tools/model-viewer/src/main.rs:1120` — build `AnimData`, choose default clip (longest), handle head-pitch correction.
-  - `tools/model-viewer/src/main.rs:1430` — auto-merge animations by filename stem from `assets/anims/**` (dragons/converted).
-  - `tools/model-viewer/src/shader_skinned.wgsl:1` — skinned pipeline; baseColor sampling + simple lambert for shape readability.
-- CPU asset loading and animations
-  - `shared/assets/src/skinning.rs:14` — `load_gltf_skinned(path)`: dominant-skin selection, multi-node aggregation, Draco decode for skinned prims, per-primitive baseColor extraction into `SubmeshCPU`.
-  - `shared/assets/src/skinning.rs:513` — `merge_gltf_animations(base, lib_path)`: clip retarget by node-name mapping; skips clips with zero mapped tracks; logs mapped T/R/S counts per clip.
-  - `shared/assets/src/retarget.rs` — rotation retarget math and helpers for mapping name-equivalent bones.
-  - `shared/assets/src/draco.rs:18` — `decode_draco_skinned_primitive` reads `KHR_draco_mesh_compression` and expands POSITION/NORMAL/UV/JOINTS/WEIGHTS.
-  - Types: `shared/assets/src/types.rs:53` (`TextureCPU`), `:61` (`SubmeshCPU`), `:77` (`SkinnedMeshCPU`).
-  - Path resolver: `shared/assets/src/util.rs:6` (`prepare_gltf_path`) — prefers decompressed/packed alternates.
-- Graphics overview and viewer docs
-  - `docs/graphics/model-viewer.md:1` — model viewer architecture and troubleshooting.
-  - `docs/gdd/11-technical/graphics/model-loading.md:1` — GLTF loading behavior (dominant skin, submeshes, Draco, textures).
+2) Game renderer (crates/render_wgpu)
+- A textured static fallback is implemented and visible in cc_demo. It aggregates all primitives, uploads a VB/IB, installs a material BG from the per‑primitive baseColor, and draws via the textured instanced pipeline.
+- The skinned path attempts to load the rig but currently reports `skinned idx=0 joints=0`, so the draw falls back to the static path.
 
-Current Behavior — Red Wyvern in the Viewer
-- Loading flow
-  - The viewer scans `assets/models/**` and lists `RedDragon2021.glb` (and any `*.textured.glb` variants). Drag-and-drop also works.
-  - On load, `roa_assets::skinning::load_gltf_skinned` selects the dominant skin by vertex count and aggregates all skinned primitives across nodes referencing that skin.
-  - For each primitive (material), if `pbr_metallic_roughness.base_color_texture` exists, the image is uploaded into a GPU SRGB texture; a per-submesh bind group is created.
-  - The viewer builds a CPU palette sampler (`AnimData`) and plays the longest clip by default; head-pitch upright correction can be applied via `--head-pitch-deg`.
-- Animation merging
-  - If no explicit `--anim-lib` is passed, the viewer auto-searches for `<stem>.(glb|gltf|fbx)` under `assets/anims/converted`, `assets/anims/dragons`, then `assets/anims` and merges any found clips into the loaded rig.
-  - `merge_gltf_animations` maps node names via `normalize_bone_name` and retargets rotations using rest-pose deltas. Clips with zero mapped tracks are skipped with a warning.
-  - FBX is converted to GLB via `assimp` (if available) or via `fbx2gltf` when present; results are cached under `assets/anims/converted/`.
-- Model orientation
-  - The viewer includes a model-rotation toggle; for Red Wyvern we commonly use “-90° X” to orient into the viewer’s +Y-up.
+Bottom line: the dragon renders (static), but animations are not active in‑game yet because the engine isn’t receiving a skinned, jointed Wyvern GLB with usable clips.
 
-Textures & UDIMs
-- What works today
-  - For each submesh, if the GLB references a single baseColor texture, the viewer uploads it and shades with a simple lambert. This yields correct color for packed/embedded textures.
-- UDIM limitation
-  - GLTF exporters often express UDIMs as multiple images per material or via non-standard conventions; our loader selects a single `base_color_texture` per primitive.
-  - If the Red Wyvern GLB references UDIM tiles externally, you can get white or flat color on some surfaces.
-- Recommended fixes
-  - Prefer a “packed” GLB with embedded textures for viewer/engine: use `scripts/blender/export_glb_clean.py` with `--pack` to embed.
-  - If UDIMs are required, bake them to a single 0–1 albedo per material in Blender and export; or implement a future path to detect/resolve UDIM tiles into a single texture atlas per submesh.
-  - Validate by checking logs for `viewer: material #i baseColor WxH` (non-1×1) and `viewer: submeshes=N (with textures=M)` with `M>0`.
+## File & Module Map (clickable)
+- Shared loaders and types
+  - shared/assets/src/skinning.rs
+  - shared/assets/src/retarget.rs
+  - shared/assets/src/draco.rs
+  - shared/assets/src/util.rs
+  - shared/assets/src/types.rs
+- Viewer
+  - tools/model-viewer/src/main.rs
+  - tools/model-viewer/src/shader_skinned.wgsl
+- Renderer (engine)
+  - crates/render_wgpu/src/gfx/wyvern.rs
+  - crates/render_wgpu/src/gfx/draw.rs
+  - crates/render_wgpu/src/gfx/renderer/init.rs
+  - crates/render_wgpu/src/gfx/renderer/passes.rs
+  - crates/render_wgpu/src/gfx/material.rs
+  - crates/render_wgpu/src/gfx/pipeline.rs
+  - crates/render_wgpu/src/gfx/shader.wgsl
 
-Common Symptoms and Root Causes
-- “White model” or flat grey
-  - Cause: no `baseColor` image for that submesh, or GLB references UDIMs not embedded; we fall back to 1×1 white.
-  - Source: `tools/model-viewer/src/main.rs:1009` (white fallback), `shared/assets/src/skinning.rs:290+` (per-primitive texture load).
-- “No animations listed/playing”
-  - Cause: base GLB has camera/object tracks only, or merged library clips don’t map to the base rig.
-  - Fix: merge `assets/anims/converted/RedDragon2021.glb` (or the FBX via converter). The viewer filters to joint-affecting clips; if empty, it falls back to all clip names for manual testing.
-- “Wrong orientation”
-  - Use the viewer’s model-rotation toggle; Red Wyvern typically needs -90° X.
+## Asset Prep (what we did and why)
+The original GLB contained Meshopt compression and external images in some variants; the engine’s plain reader returned empty attributes, causing a DEBUG cube. We generated a “raw” GLB with embedded textures and no Meshopt/Draco:
 
-How-To: Reproduce and Verify Locally
-- Load with logs
-  - `RUST_LOG=info,roa_assets=info cargo run -p model-viewer -- assets/models/red_wyvern/RedDragon2021.glb`
-  - Expect: messages selecting a skin, appending primitives, and printing per-submesh baseColor dimensions.
-- Merge animations (automatic)
-  - Name stems match; the viewer finds `assets/anims/converted/RedDragon2021.glb` and merges mapped clips. The animation list shows joint-affecting clips; longest is active.
-- Troubleshoot textures
-  - If some submeshes are white: ensure GLB has embedded baseColor images (see export script); otherwise bake UDIMs to 0–1.
+```bash
+npx -y gltfpack -i assets/models/red_wyvern/RedDragon2021.glb \
+  -o assets/models/red_wyvern/RedDragon2021.textured.glb -noq
+```
 
-Integration Plan — Add Red Wyvern to Main Scene
-1) CPU asset load
-   - Use `roa_assets::skinning::load_gltf_skinned("assets/models/red_wyvern/RedDragon2021.glb")` to get `SkinnedMeshCPU`.
-   - Validate `submeshes` and `base_color_texture` presence; prefer “packed” GLB.
-2) GPU resources (mirror wizard pipeline)
-   - Vertex/index buffers: same `VertexSkinned` layout as wizards (`crates/render_wgpu/src/gfx/types.rs:53`).
-   - Skin palette storage buffer; bind group matches wizard pipeline.
-   - Material bind group per submesh (sampler + SRGB 2D texture). See viewer path for a minimal template.
-3) Draw integration
-   - Either: reuse the wizard skinned pipeline (`crates/render_wgpu/src/gfx/shader.wgsl:378`) with per-instance model matrices.
-   - Or: add a simple unlit-lambert variant if you want exact viewer parity quickly.
-   - Render order: opaque first; if any parts need alpha, treat them as masked/transparent later.
-4) Animation playback
-   - Sample palettes on CPU (like viewer’s `AnimData`) or integrate with existing animator that drives wizards/zombies; seed a single instance with an idle/fly clip.
-   - For merged dragon library clips, keep the name-based mapping; ensure joint names are consistent after export.
-5) Placement
-   - Start with one instance near the ruins; add a simple orbit/fly loop to validate culling and animation.
+The engine now reads vertex/index data for the static fallback reliably and uploads a proper SRGB baseColor.
 
-History (Commits)
-- dcb866f… — tools: load Red Wyvern model, auto-merge dragon anims, and compact UI (toggle lists) (.git/logs/HEAD:1653)
-- fc85cc6… — viewer: add GPU model rotation (default -90x for Red Wyvern), lambert shading; add Blender bake script (.git/logs/HEAD:1673)
-- b884d74… — assets: skip empty retargets when merging; viewer: auto-swap removed later, keep base textures (.git/logs/HEAD:1655/1659)
-- fca3900… — viewer: filter clips to joint-affecting; neutral grey fallback; docs/model-viewer (.git/logs/HEAD:1656)
+## Loader Behavior (shared/assets)
+- Skinned load (shared/assets/src/skinning.rs)
+  - Picks the dominant skin by vertex count, aggregates all skinned primitives referencing that skin, extracts per‑primitive baseColor images, and returns `SkinnedMeshCPU` plus a clip list.
+  - `merge_gltf_animations` can merge a Wyvern anim library; it retargets by name, skipping unmapped clips.
 
-Related Issue
-- #119 — Blender headless export script: clean GLB with textures + clips (start with Red Wyvern)
+- Static GLB load (shared/assets/src/gltf.rs)
+  - Merges meshes/primitives into a CPU mesh of `Vertex` and `u16` indices; decodes Draco JSON when needed for wasm.
 
-Open Risks and Follow-Ups
-- UDIM handling: bake to 0–1 or implement multi-tile resolve.
-- PBR materials: expand to normal/ORM textures (viewer and engine) to match expected look.
-- Engine animator: consolidate CPU palette sampling utilities so viewer and renderer share code.
+## What the Renderer Does Today
+- Init: crates/render_wgpu/src/gfx/renderer/init.rs
+  - Loads skinned Wyvern CPU data; if `index_count==0 || joints==0`, builds a static fallback VB/IB and an optional material BG.
+  - Logs: `wyvern: assets summary — skinned idx=… joints=… | static idx=… used=…`.
 
-Validation Checklist
-- Viewer lists joint-affecting clips for Red Wyvern and plays the longest by default.
-- Submeshes report non-1×1 baseColor dimensions; M>0 textured submeshes.
-- Engine integration draws at least one animated instance with expected orientation and color.
+- Static renderer path (textured)
+  - Build VB (VertexPosNrmUv) + IB and an SRGB 2D texture for the baseColor if present.
+  - Draw via instanced textured pipeline; material BG bound at set=3.
+  - Code: crates/render_wgpu/src/gfx/wyvern.rs (load), crates/render_wgpu/src/gfx/draw.rs (draw_wyvern_static), crates/render_wgpu/src/gfx/pipeline.rs (create_textured_inst_pipeline).
 
-Sources
-- Code
-  - tools/model-viewer/src/main.rs:980
-  - tools/model-viewer/src/shader_skinned.wgsl:1
-  - shared/assets/src/skinning.rs:14
-  - shared/assets/src/draco.rs:18
-  - shared/assets/src/types.rs:53
-  - shared/assets/src/util.rs:6
+- Orientation
+  - We apply conservative Rx(-90°) first; optional roll/yaw tweaks are composed in `wyvern_model_m`. See init.rs for the current composition and log history when adjusting.
+
+## EXACT TODOs to Enable Animations In‑Game
+1) Export a skinned Wyvern GLB with embedded textures + NLA clips
+- Use the pipeline below to produce `assets/models/red_wyvern/RedDragon2021.textured.glb` with JOINTS/WEIGHTS and pushed actions:
+
+```bash
+BLENDER="/Applications/Blender.app/Contents/MacOS/Blender"
+IN="$HOME/Desktop/RedWyvern/uploads_files_2877852_FireBreathingWyvernDragon(update).blend"
+OUT="assets/models/red_wyvern/RedDragon2021.textured.glb"
+IMAGES_DIR="assets/models/red_wyvern/udims"
+
+"$BLENDER" -b "$IN" --python scripts/blender/export_glb_clean.py -- \
+  --in "$IN" --out "$OUT" \
+  --strip-cams --strip-lights --strip-empties \
+  --pack --push-actions --images-dir "$IMAGES_DIR"
+```
+
+Acceptance: `SkinnedMeshCPU` from `load_gltf_skinned(OUT)` has `joints_nodes.len()>0` and `indices.len()>0` and the viewer lists ≥1 clips.
+
+2) Optional: Meshopt decoding for skinned attributes
+- If future exports contain `EXT_meshopt_compression`, add decoding in the skinned reader (similar to the planned static Meshopt‑aware routine) so positions/indices/joints/weights are readable without re‑exporting.
+
+3) Upload and render via the existing wizard skinned pipeline
+- Build `VertexSkinned` VB + IB, create a storage buffer for joint palettes, and per‑submesh material BGs (SRGB).
+- Wire binds identical to the wizard/zombie rigs and call the skinned pass.
+
+4) Animate each frame
+- Port the viewer’s palette sampler (`AnimData`) or integrate an animator that writes palette matrices per frame for the active clip:
+
+```rust
+let palette = anim.sample_palette(active_clip, time);
+queue.write_buffer(&wyvern_palettes_buf, 0, bytemuck::cast_slice(&palette));
+```
+
+5) Keep logs + CI guardrail
+- When `skinned idx>0` and `joints>0`, log once and run a minimal CI check (load → sample → draw) to guard regressions.
+
+## Troubleshooting Matrix (engine)
+- Cube renders / model invisible → asset uses Meshopt/Draco and static path lacked decode. Use `*.textured.glb` (gltfpack -noq) or add Meshopt decode.
+- Textures white → no `baseColorTexture` for that primitive or UDIM tiles not embedded. Re‑export with `--pack` or bake UDIMs to 0–1.
+- Skinned path idx=0/joints=0 → export lacks skin or the wrong GLB is referenced; generate a proper skinned GLB as above.
+
+## Commands
+- Generate raw packed GLB:
+
+```bash
+npx -y gltfpack -i assets/models/red_wyvern/RedDragon2021.glb \
+  -o assets/models/red_wyvern/RedDragon2021.textured.glb -noq
+```
+
+- Viewer with logs:
+
+```bash
+RUST_LOG=info,roa_assets=info cargo run -p model-viewer -- \
+  assets/models/red_wyvern/RedDragon2021.textured.glb
+```
+
+- Game with wyvern logs (cc_demo):
+
+```bash
+ROA_ZONE=cc_demo \
+RUST_LOG=info,wyvern=info,render_wgpu::gfx::renderer::init=info,render_wgpu::gfx::renderer::passes=info \
+cargo run
+```
+
+## Sources & Pointers
 - Assets
   - assets/models/red_wyvern/RedDragon2021.glb
+  - assets/models/red_wyvern/RedDragon2021.textured.glb
   - assets/models/red_wyvern/udims/Dragon Skin.1001.png
   - assets/anims/dragons/RedDragon2021.fbx
   - assets/anims/converted/RedDragon2021.glb
+- Shared loaders
+  - shared/assets/src/skinning.rs
+  - shared/assets/src/retarget.rs
+  - shared/assets/src/draco.rs
+  - shared/assets/src/util.rs
+  - shared/assets/src/types.rs
+- Viewer
+  - tools/model-viewer/src/main.rs
+  - tools/model-viewer/src/shader_skinned.wgsl
+- Renderer
+  - crates/render_wgpu/src/gfx/wyvern.rs
+  - crates/render_wgpu/src/gfx/draw.rs
+  - crates/render_wgpu/src/gfx/renderer/init.rs
+  - crates/render_wgpu/src/gfx/renderer/passes.rs
+  - crates/render_wgpu/src/gfx/material.rs
+  - crates/render_wgpu/src/gfx/pipeline.rs
 - Docs
-  - docs/graphics/model-viewer.md:1
-  - docs/gdd/11-technical/graphics/model-loading.md:1
-- Issues/Commits
-  - #119 (Blender export)
-  - dcb866f… (tools: load Red Wyvern)
-  - fc85cc6… (viewer: rotate/model shading)
+  - docs/graphics/model-viewer.md
+  - docs/gdd/11-technical/graphics/model-loading.md
 
