@@ -1727,12 +1727,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let pc_fwd = (r_pc * glam::Vec3::Z).normalize_or_zero();
     let world_up = glam::Vec3::Y;
     let forward = pc_fwd.normalize();
-    let right = forward.cross(world_up).normalize_or_zero();
-    let up = world_up;
-    // Build alignment for post-fix axes: columns = [right, up, forward]
-    // Because Rx(-90°) maps local Z→+Y and Y→-Z, composing Align * Rx(-90°) yields
-    // world forward and upright body.
-    let align = glam::Mat3::from_cols(right, up, forward);
+    let mut right = forward.cross(world_up);
+    if right.length_squared() < 1e-6 {
+        right = glam::Vec3::X;
+    }
+    right = right.normalize();
+    // Re-orthonormalize up so the basis is right-handed and rigid (det +1)
+    let up2 = right.cross(forward).normalize();
+    // Columns: [right, up2, forward]
+    let align = glam::Mat3::from_cols(right, up2, forward);
     let r_align = glam::Mat4::from_quat(glam::Quat::from_mat3(&align));
     let r_fix = glam::Mat4::from_rotation_x(-90f32.to_radians());
     let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_align * r_fix;
