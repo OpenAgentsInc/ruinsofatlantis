@@ -1726,23 +1726,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let (_s, r_pc, _t) = mpc.to_scale_rotation_translation();
     let pc_fwd = (r_pc * glam::Vec3::Z).normalize_or_zero();
     let world_up = glam::Vec3::Y;
-    let mut target_right = pc_fwd.cross(world_up);
-    if target_right.length_squared() < 1e-6 {
-        target_right = glam::Vec3::X;
-    }
-    // Align local +Z (model forward) to player's forward so the dragon faces forward
-    let z_axis = pc_fwd.normalize();
-    let y_axis = world_up; // keep world up
-    let mut x_axis = y_axis.cross(z_axis);
-    if x_axis.length_squared() < 1e-6 {
-        x_axis = glam::Vec3::Z;
-    }
-    let align = glam::Mat3::from_cols(x_axis.normalize(), y_axis, z_axis);
+    let forward = pc_fwd.normalize();
+    let right = forward.cross(world_up).normalize_or_zero();
+    let up = world_up;
+    // Build alignment for the pre-rotated rig: columns = [right, forward, up].
+    // With model = T * A * FixX(-90°), local e_z maps to world forward as desired.
+    let align = glam::Mat3::from_cols(right, forward, up);
     let r_align = glam::Mat4::from_quat(glam::Quat::from_mat3(&align));
     let r_fix = glam::Mat4::from_rotation_x(-90f32.to_radians());
-    // Extra roll to lay the body level (face forward, not up)
-    let r_roll = glam::Mat4::from_rotation_z(-std::f32::consts::FRAC_PI_2);
-    let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_align * r_roll * r_fix;
+    let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_align * r_fix;
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)
