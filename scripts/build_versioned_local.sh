@@ -78,7 +78,25 @@ BASE_STATIC="$DIST_DIR/builds-static/$VER"
 mkdir -p "$BASE_STATIC/assets" "$BASE_STATIC/packs"
 cp -f "$DIST_DIR/$MOD_JS" "$BASE_STATIC/$MOD_JS"
 cp -f "$DIST_DIR/$WASM_BIN" "$BASE_STATIC/$WASM_BIN"
-rsync -a --delete "$DIST_DIR/assets/" "$BASE_STATIC/assets/"
+if [[ "${SLIM:-0}" == "1" ]]; then
+  echo "  SLIM=1: not copying full assets directory"
+  if [[ -n "${ASSETS_WHITELIST:-}" ]]; then
+    echo "  copying whitelisted assets: $ASSETS_WHITELIST"
+    IFS=':' read -r -a items <<< "$ASSETS_WHITELIST"
+    for it in "${items[@]}"; do
+      src="$DIST_DIR/assets/$it"
+      dst_dir="$BASE_STATIC/assets/$(dirname "$it")"
+      mkdir -p "$dst_dir"
+      if [[ -d "$src" ]]; then
+        rsync -a "$src/" "$BASE_STATIC/assets/$it/"
+      elif [[ -f "$src" ]]; then
+        cp -f "$src" "$BASE_STATIC/assets/$it"
+      fi
+    done
+  fi
+else
+  rsync -a --delete "$DIST_DIR/assets/" "$BASE_STATIC/assets/"
+fi
 rsync -a --delete "$DIST_DIR/packs/"  "$BASE_STATIC/packs/"
 cat > "$BASE_STATIC/manifest.json" << JSON
 { "mod": "$MOD_JS", "wasm": "$WASM_BIN", "assetsBase": "assets/", "packsBase": "packs/" }
