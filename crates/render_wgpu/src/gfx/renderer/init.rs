@@ -1750,6 +1750,18 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         }],
     });
 
+    // Wyvern static mesh fallback (unskinned)
+    let (wyvern_static_vb, wyvern_static_ib, wyvern_static_index_count) = if wyvern_index_count == 0
+    {
+        if let Some((vb, ib, idx)) = super::super::wyvern::load_unskinned_static(&device) {
+            (Some(vb), Some(ib), idx)
+        } else {
+            (None, None, 0u32)
+        }
+    } else {
+        (None, None, 0u32)
+    };
+
     // Determine asset forward offset from the zombie root node (if present).
     let zombie_forward_offset = zombies::forward_offset(&zombie_cpu);
 
@@ -2330,6 +2342,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wyvern_time_offset: (0..wyvern_count as usize).map(|_| 0.0f32).collect(),
         wyvern_prev_pos: wyvern_pos,
         wyvern_mat_bg,
+        wyvern_static_vb,
+        wyvern_static_ib,
+        wyvern_static_index_count,
         wire_enabled: false,
         pc_debug_warned_not_ready: false,
         sky: sky_state,

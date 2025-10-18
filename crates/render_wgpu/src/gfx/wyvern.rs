@@ -4,7 +4,9 @@
 use anyhow::{Context, Result};
 use wgpu::util::DeviceExt;
 
+use crate::gfx::types::Vertex as Vtx;
 use crate::gfx::types::{InstanceSkin, VertexSkinned};
+use roa_assets::gltf::load_gltf_mesh;
 use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
 
 pub struct WyvernAssets {
@@ -76,6 +78,43 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
         ib,
         index_count,
     })
+}
+
+/// Attempt to load an unskinned static mesh of the wyvern for fallback drawing.
+/// Returns (vb, ib, index_count) with Vertex (pos,nrm) layout.
+pub fn load_unskinned_static(device: &wgpu::Device) -> Option<(wgpu::Buffer, wgpu::Buffer, u32)> {
+    let candidates = [
+        asset_path("assets/models/red_wyvern/RedDragon2021.textured.glb"),
+        asset_path("assets/models/red_wyvern/RedDragon2021.glb"),
+    ];
+    for p in candidates.iter() {
+        if !p.exists() {
+            continue;
+        }
+        if let Ok(cpu) = load_gltf_mesh(p) {
+            let verts: Vec<Vtx> = cpu
+                .vertices
+                .into_iter()
+                .map(|v| Vtx {
+                    pos: v.pos,
+                    nrm: v.nrm,
+                })
+                .collect();
+            let ib_data: Vec<u16> = cpu.indices;
+            let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("wyvern-static-vb"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+            let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("wyvern-static-ib"),
+                contents: bytemuck::cast_slice(&ib_data),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+            return Some((vb, ib, ib_data.len() as u32));
+        }
+    }
+    None
 }
 
 pub fn build_instance_at(

@@ -482,6 +482,10 @@ pub struct Renderer {
     wyvern_time_offset: Vec<f32>,
     wyvern_prev_pos: glam::Vec3,
     wyvern_mat_bg: wgpu::BindGroup,
+    // Wyvern static (unskinned) fallback geometry
+    wyvern_static_vb: Option<wgpu::Buffer>,
+    wyvern_static_ib: Option<wgpu::Buffer>,
+    wyvern_static_index_count: u32,
 
     // Ghost preview (worldsmithing): single-instance cube drawn with instanced pipeline
     ghost_vb: wgpu::Buffer,

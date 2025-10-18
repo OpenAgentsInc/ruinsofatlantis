@@ -170,6 +170,27 @@ impl Renderer {
         }
     }
 
+    pub(crate) fn draw_wyvern_static(&self, rpass: &mut wgpu::RenderPass<'_>, model_m: glam::Mat4) {
+        if self.wyvern_static_index_count == 0 {
+            return;
+        }
+        if let (Some(vb), Some(ib)) = (&self.wyvern_static_vb, &self.wyvern_static_ib) {
+            let m = Model {
+                model: model_m.to_cols_array_2d(),
+                color: [0.9, 0.3, 0.3],
+                emissive: 0.0,
+                _pad: [0.0; 4],
+            };
+            self.queue
+                .write_buffer(&self.shard_model_buf, 0, bytemuck::bytes_of(&m));
+            rpass.set_pipeline(&self.pipeline);
+            rpass.set_bind_group(0, &self.globals_bg, &[]);
+            rpass.set_bind_group(1, &self.shard_model_bg, &[]);
+            rpass.set_vertex_buffer(0, vb.slice(..));
+            rpass.set_index_buffer(ib.slice(..), IndexFormat::Uint16);
+            rpass.draw_indexed(0..self.wyvern_static_index_count, 0, 0..1);
+        }
+    }
     pub(crate) fn draw_particles(&self, rpass: &mut wgpu::RenderPass<'_>) {
         if self.fx_count == 0 {
             return;
