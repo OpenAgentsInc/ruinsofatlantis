@@ -1,7 +1,7 @@
 //! Red Wyvern NPC: load configured model (GLTF/GLB), single instance.
 //! Mirrors the Sorceress/DK pattern and reuses the wizard skinned pipeline.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use wgpu::util::DeviceExt;
 
 use crate::gfx::types::Vertex as Vtx;
@@ -68,6 +68,39 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
             }
         }
     }
+    // If nothing found in models/, probe animation library directory for a skinned GLB with mesh
+    if chosen.is_none() {
+        let conv_dir = asset_path("assets/anims/converted");
+        if conv_dir.exists() {
+            if let Ok(rd) = std::fs::read_dir(&conv_dir) {
+                for ent in rd.flatten() {
+                    let p = ent.path();
+                    if p.extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e.eq_ignore_ascii_case("glb"))
+                        .unwrap_or(false)
+                        && p.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|s| s.to_ascii_lowercase().contains("reddragon"))
+                            .unwrap_or(false)
+                    {
+                        let prepared = p.clone();
+                        if let Ok(test) = load_gltf_skinned(&prepared) {
+                            if !test.joints_nodes.is_empty()
+                                && !test.indices.is_empty()
+                                && !test.vertices.is_empty()
+                            {
+                                chosen = Some(prepared);
+                                cpu_probe = Some(test);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let prepared = chosen.ok_or_else(|| anyhow::anyhow!(
         "wyvern: no skinned model with joints found under assets/models/red_wyvern (tried textured/original/decompressed)"
     ))?;
