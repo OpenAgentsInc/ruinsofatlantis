@@ -1719,10 +1719,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing
     // Orient wyvern side-on to the player for better readability: first fix rig axis (-90° X),
     // then yaw +90° so the profile is visible instead of a full wingspan facing the camera.
-    let wyvern_rot = glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
-        * glam::Quat::from_rotation_x(-90f32.to_radians());
-    let wyvern_model_m =
-        glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), wyvern_rot, wyvern_pos);
+    // Build explicit world-space orientation matrix to avoid local-axis surprises:
+    // model = T * R_y(90°) * R_x(-90°)
+    let r_fix = glam::Mat4::from_rotation_x(-90f32.to_radians());
+    let r_yaw = glam::Mat4::from_rotation_y(std::f32::consts::FRAC_PI_2);
+    let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_yaw * r_fix;
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)

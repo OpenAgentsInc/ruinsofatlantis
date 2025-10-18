@@ -310,7 +310,7 @@ pub fn load_unskinned_first_primitive(
         .zip(nrm.iter())
         .map(|(p, n)| Vtx { pos: *p, nrm: *n })
         .collect();
-    let ib_u16: Vec<u16> = idx_u32.into_iter().map(|v| (v as u16)).collect();
+    let ib_u16: Vec<u16> = idx_u32.into_iter().map(|v| v as u16).collect();
     let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("wyvern-first-prim-vb"),
         contents: bytemuck::cast_slice(&verts),
