@@ -174,6 +174,66 @@ NOTE FOR AGENTS
 - Do NOT run the interactive application during automation (e.g., avoid invoking `cargo run`) unless the user specifically directs you to. The user will run the app locally. Limit yourself to building, testing, linting, and file operations unless explicitly asked otherwise.
 - To understand the workspace at a glance, read `crates/README.md` for a summary of what each crate does before making cross‑crate changes.
 
+## Skills
+- Definition: A "skill" is a repeatable capability with explicit steps the agent follows to deliver a specific outcome. Skills supplement this AGENTS.md and inherit all policies herein (sandbox, approvals, coding style, docs updates).
+- Invocation: The user may request a skill by name (e.g., "Comprehensive Dossier" or its short code). Unless the user requests otherwise, default to the documented deliverable and depth.
+- Environment: Prefer `rg` for local discovery, `git` for history, and `gh` for remote issues/PRs. Respect non‑interactive constraints; if network access is unavailable, state the limitation and proceed with offline sources.
+- Outputs: Follow repository writing/formatting rules. Include relative file paths and clear references so results are actionable by other agents.
+
+### Skill: Comprehensive Dossier (CD)
+- Purpose: Produce a holistic, end‑to‑end dossier for a given topic (usually codebase‑related) that a new contributor can use to ramp quickly.
+- Deliverable: A comprehensive document in Markdown (or a different format if explicitly requested). By default, return in chat; if asked to persist, save to `docs/dossiers/<topic-slug>.md` and reference it.
+- Scope levels:
+  - "overview" (short), "standard" (default), "deep" (include historical evolution, alternatives, and tradeoffs).
+  - Optional filters: crate(s), subsystem(s), time window, labels, authors.
+
+- Inputs to confirm with the user:
+  - Topic keywords and synonyms; desired scope/depth; desired output location/format; any constraints (e.g., offline only).
+
+- Discovery steps (local repo):
+  - Use `rg -n -S "<keywords|patterns>"` across the workspace to identify relevant code, docs, schemas, configs, and scripts.
+  - Expand search to filenames, module paths, and headings: `rg -n "^#|^##|mod |pub (struct|enum|fn)"` where useful.
+  - Identify owners via paths (see Ownership Map) and CODEOWNERS.
+  - Read relevant files in manageable chunks; prefer targeted sections (public APIs, docblocks, tests, entry points, and pipelines).
+
+- Discovery steps (git history):
+  - `git log --all --grep "<keywords>" --oneline --decorate --no-merges` to find relevant commits.
+  - For key commits: `git show <sha> --name-only` and spot diffs; use `git blame` on focal files to trace provenance.
+  - Note evolution: when introduced, major refactors, deprecations, removals.
+
+- Discovery steps (GitHub issues/PRs via gh):
+  - Issues: `gh issue list --search "<keywords> in:title,body" --limit 100`; view details with `gh issue view <num>`.
+  - PRs: `gh pr list --search "<keywords> in:title,body" --limit 100`; view with `gh pr view <num>`.
+  - Consider labels from this repo (e.g., `area:*`, `perf`, `docs-needed`, `schema-change`).
+  - If `gh` is unavailable or unauthenticated, state this and proceed with local sources; optionally suggest queries for manual follow‑up.
+
+- Synthesis and structure (suggested):
+  - Title, Summary, and Scope (what this dossier covers and excludes)
+  - Architecture context and module mapping (with crate/module paths)
+  - Behavior and data flow (entry points → systems → outputs)
+  - Key types/APIs and extension points (public interfaces and patterns)
+  - Historical evolution (commits/PRs/issues with brief rationale)
+  - Known gaps, tradeoffs, perf notes, and tech debt
+  - Testing and validation (existing tests, how to add more)
+  - Operational notes (build/run/test commands relevant to this topic)
+  - Sources and references (files, commits, issues, PRs)
+
+- Referencing sources:
+  - Use relative file paths like ``path:line`` or ``path#Lline`` for key definitions.
+  - Commits as short hashes (and subject), e.g., ``abcd1234: area: change summary``.
+  - Issues/PRs by number and title, e.g., ``#123: renderer: fix shadow acne``.
+
+- Output quality checklist:
+  - Comprehensive coverage across code, docs, history, and tickets.
+  - Clear, concise explanations with correct terminology and crate boundaries.
+  - Accurate commands and paths; include pitfalls and platform notes where relevant.
+  - Self‑contained: a new agent can act on it without additional context.
+
+- Process notes for agents:
+  - Use a brief preamble and an `update_plan` to outline: confirm topic → search repo → scan history → scan issues/PRs → synthesize → deliver.
+  - Do not run interactive apps. Favor read‑only analysis unless asked to create files.
+  - If saving the dossier, update `docs/gdd/11-technical/overview.md` with a cross‑link when appropriate.
+
 ## Assets & GLTF
 - Place models under `assets/models/` (e.g., `assets/models/wizard.gltf`).
 - GLTF loader uses `gltf` crate with the `import` feature, so external buffers/images resolve via relative paths. Keep referenced files next to the `.gltf` or adjust URIs accordingly.
