@@ -1700,12 +1700,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             mat.sampler,
         )
     };
-    // Place wyvern near the DK + offset, or near origin if DK absent
+    // Place wyvern near the PC (always visible at start): a few meters ahead of the player
     let wyvern_pos = {
-        let base = dk_model_pos;
-        let mut p = base + glam::vec3(25.0, 0.0, -10.0);
+        let base = pc_initial_pos;
+        let mut p = base + glam::vec3(0.0, 0.0, 8.0);
         let (h, _n) = terrain::height_at(&terrain_cpu, p.x, p.z);
-        p.y = h + 3.0; // slight lift
+        p.y = h + 2.0; // slight lift
         p
     };
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
