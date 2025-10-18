@@ -2,6 +2,9 @@
 
 This document explains how the standalone wgpu model viewer works end‑to‑end: file formats, loaders, animation merging/retargeting, UI, keyboard/mouse controls, and common debugging playbooks. It’s written for agents and contributors so issues can be diagnosed quickly.
 
+Related
+- Dossier: `docs/dossiers/red-wyvern-loading.md` — Red Wyvern loading, animations, textures, and integration steps.
+
 ## Purpose
 - Inspect GLTF/GLB/FBX assets offline with the same CPU loaders used by the engine (`shared/assets`).
 - Preview skinning, submesh materials, and animation clips.
@@ -114,4 +117,3 @@ Run:
 - Tools: `tools/model-viewer` (Tools team)
 - Asset loaders: `shared/assets` (Assets)
 - Graphics: `crates/render_wgpu` (Graphics)
-
