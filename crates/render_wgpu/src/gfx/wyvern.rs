@@ -52,7 +52,7 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
 
     let mut chosen: Option<std::path::PathBuf> = None;
     let mut cpu_probe: Option<roa_assets::types::SkinnedMeshCPU> = None;
-    for cand in candidates.iter() {
+    'probe: for cand in candidates.iter() {
         if !cand.exists() {
             continue;
         }
@@ -64,7 +64,24 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
             if !test.joints_nodes.is_empty() && !test.indices.is_empty() {
                 chosen = Some(prepared);
                 cpu_probe = Some(test);
-                break;
+                break 'probe;
+            }
+        }
+        // If this candidate is an FBX under models/, convert it and try again (viewer parity)
+        if cand
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("fbx"))
+            .unwrap_or(false)
+        {
+            if let Some(conv) = try_convert_fbx_to_gltf(cand) {
+                if let Ok(test) = load_gltf_skinned(&conv) {
+                    if !test.joints_nodes.is_empty() && !test.indices.is_empty() {
+                        chosen = Some(conv);
+                        cpu_probe = Some(test);
+                        break 'probe;
+                    }
+                }
             }
         }
     }
