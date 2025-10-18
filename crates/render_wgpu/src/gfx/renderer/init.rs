@@ -1718,11 +1718,11 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     );
     // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing.
     // Use a conservative, known-good orientation: exporter axis fix only (face forward enough to be visible).
-    let wyvern_model_m = glam::Mat4::from_scale_rotation_translation(
-        glam::Vec3::splat(1.0),
-        glam::Quat::from_rotation_x(-90f32.to_radians()),
-        wyvern_pos,
-    );
+    // Lay the model flat: apply a 90° world-Z roll after the exporter X fix
+    let r_flat = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)
+        * glam::Quat::from_rotation_x(-90f32.to_radians());
+    let wyvern_model_m =
+        glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), r_flat, wyvern_pos);
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)
