@@ -1729,9 +1729,9 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     let forward = pc_fwd.normalize();
     let right = forward.cross(world_up).normalize_or_zero();
     let up = world_up;
-    // Build alignment for the pre-rotated rig: columns = [right, forward, up].
-    // With model = T * A * FixX(-90°), local e_z maps to world forward as desired.
-    let align = glam::Mat3::from_cols(right, forward, up);
+    // Build alignment for the pre-rotated rig: columns = [right, forward, -up]
+    // Flip up to counter the exporter X-rotation so the body is upright.
+    let align = glam::Mat3::from_cols(right, forward, -up);
     let r_align = glam::Mat4::from_quat(glam::Quat::from_mat3(&align));
     let r_fix = glam::Mat4::from_rotation_x(-90f32.to_radians());
     let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_align * r_fix;
