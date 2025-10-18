@@ -59,6 +59,8 @@ add_file "$ROOT_DIR/shared/assets/src/draco.rs"
 add_file "$ROOT_DIR/shared/assets/src/util.rs"
 add_file "$ROOT_DIR/shared/assets/src/types.rs"
 add_file "$ROOT_DIR/shared/assets/src/retarget.rs"
+add_file "$ROOT_DIR/shared/assets/src/gltf.rs"
+add_file "$ROOT_DIR/shared/assets/src/lib.rs"
 
 # Docs
 add_file "$ROOT_DIR/docs/graphics/model-viewer.md"
@@ -66,6 +68,18 @@ add_file "$ROOT_DIR/docs/gdd/11-technical/graphics/model-loading.md"
 
 # Blender export helper
 add_file "$ROOT_DIR/scripts/blender/export_glb_clean.py"
+
+# Engine integration (renderer)
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/wyvern.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/init.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/renderer/passes.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/draw.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/mod.rs"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/shader.wgsl"
+add_file "$ROOT_DIR/crates/render_wgpu/src/gfx/pipeline.rs"
+
+# Zone manifest used to enable wyvern in cc_demo
+add_file "$ROOT_DIR/data/zones/cc_demo/manifest.json"
 
 # Asset index (paths only; do NOT include binary contents)
 {
@@ -101,4 +115,3 @@ esac
 
 kb=$(awk -v b="$size_bytes" 'BEGIN{printf "%.1f", b/1024}')
 echo "Copied ${kb} KiB to clipboard (truncated=${truncated})"
-

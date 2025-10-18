@@ -4,16 +4,30 @@ use std::path::{Path, PathBuf};
 /// Prepare a glTF path for loading per policy: prefer `<name>.decompressed.gltf`
 /// if present. Do not attempt runtime Draco decompression.
 pub fn prepare_gltf_path(path: &Path) -> Result<PathBuf> {
-    // Prefer original if it imports successfully. Fall back to a sibling
-    // `<name>.decompressed.gltf` if present and importable. Do not attempt
-    // runtime decompression.
-    if gltf::import(path).is_ok() {
-        return Ok(path.to_path_buf());
-    }
+    // Prefer a sibling `<name>.decompressed.gltf` when present and importable.
+    // This avoids Draco at runtime for both skinned and unskinned loads.
     let decompressed = path.with_extension("decompressed.gltf");
     if decompressed.exists() && gltf::import(&decompressed).is_ok() {
+        log::info!(
+            target: "roa_assets::util",
+            "prepare_gltf_path: using decompressed {}",
+            decompressed.display()
+        );
         return Ok(decompressed);
     }
+    if gltf::import(path).is_ok() {
+        log::info!(
+            target: "roa_assets::util",
+            "prepare_gltf_path: using original {}",
+            path.display()
+        );
+        return Ok(path.to_path_buf());
+    }
+    log::warn!(
+        target: "roa_assets::util",
+        "prepare_gltf_path: import failed for {}, returning original",
+        path.display()
+    );
     Ok(path.to_path_buf())
 }
 
