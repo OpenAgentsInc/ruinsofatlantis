@@ -545,11 +545,7 @@ impl Renderer {
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
-        if self.wyvern_count > 0
-            && !self.is_vox_onepath()
-            && !self.has_zone_batches()
-            && !self.is_picker_batches()
-        {
+        if self.wyvern_count > 0 && !self.is_vox_onepath() && !self.is_picker_batches() {
             let pid = ptr_id(&self.wizard_pipeline);
             let mid = ptr_id(&self.wyvern_mat_bg);
             let mesh = ptr_id(&self.wyvern_ib);
