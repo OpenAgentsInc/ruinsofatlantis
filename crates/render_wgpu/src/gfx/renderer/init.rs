@@ -1719,11 +1719,27 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
     // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing
     // Orient wyvern side-on to the player for better readability: first fix rig axis (-90° X),
     // then yaw +90° so the profile is visible instead of a full wingspan facing the camera.
-    // Build explicit world-space orientation matrix to avoid local-axis surprises:
-    // model = T * R_y(90°) * R_x(-90°)
+    // Align wyvern forward (+Z after the -90° X fix) to the player's right vector so it presents
+    // a side profile relative to the PC's facing. Use world-space composition to avoid mixing
+    // local axes.
+    let mpc = wizard_models[scene_build.pc_index];
+    let (_s, r_pc, _t) = mpc.to_scale_rotation_translation();
+    let pc_fwd = (r_pc * glam::Vec3::Z).normalize_or_zero();
+    let world_up = glam::Vec3::Y;
+    let mut target_right = pc_fwd.cross(world_up);
+    if target_right.length_squared() < 1e-6 {
+        target_right = glam::Vec3::X;
+    }
+    let z_axis = target_right.normalize(); // local +Z → world right
+    let y_axis = world_up; // keep world up
+    let mut x_axis = y_axis.cross(z_axis);
+    if x_axis.length_squared() < 1e-6 {
+        x_axis = glam::Vec3::Z;
+    }
+    let align = glam::Mat3::from_cols(x_axis.normalize(), y_axis, z_axis);
+    let r_align = glam::Mat4::from_quat(glam::Quat::from_mat3(&align));
     let r_fix = glam::Mat4::from_rotation_x(-90f32.to_radians());
-    let r_yaw = glam::Mat4::from_rotation_y(std::f32::consts::FRAC_PI_2);
-    let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_yaw * r_fix;
+    let wyvern_model_m = glam::Mat4::from_translation(wyvern_pos) * r_align * r_fix;
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)
