@@ -1716,6 +1716,12 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wyvern_index_count,
         wyvern_joints
     );
+    // Always keep a model matrix for the wyvern to enable a visible placeholder if mesh is missing
+    let wyvern_model_m = glam::Mat4::from_scale_rotation_translation(
+        glam::Vec3::splat(1.0),
+        glam::Quat::from_rotation_x(-90f32.to_radians()),
+        wyvern_pos,
+    );
     let (wyvern_instances, wyvern_instances_cpu, wyvern_models, wyvern_count) =
         if wyvern_index_count > 0 {
             super::super::wyvern::build_instance_at(&device, wyvern_pos)
@@ -1726,7 +1732,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
                 usage: wgpu::BufferUsages::VERTEX,
                 mapped_at_creation: false,
             });
-            (b, Vec::new(), Vec::new(), 0u32)
+            (b, Vec::new(), vec![wyvern_model_m], 0u32)
         };
     let total_wyvern_mats = wyvern_count as usize * wyvern_joints as usize;
     let wyvern_palettes_buf = device.create_buffer(&wgpu::BufferDescriptor {

@@ -559,6 +559,16 @@ impl Renderer {
             self.draw_calls += 1;
             self.batch_add_key_ids(pid, mid, mesh);
         }
+        // Fallback placeholder: draw a debug cube at wyvern position if mesh didn't load
+        if self.wyvern_count == 0
+            && !self.wyvern_models.is_empty()
+            && !self.is_vox_onepath()
+            && !self.is_picker_batches()
+        {
+            log::info!(target: "render_wgpu::gfx::renderer::passes", "draw: wyvern DEBUG placeholder cube");
+            self.draw_debug_cube(rp, self.wyvern_models[0]);
+            self.draw_calls += 1;
+        }
         if !self.is_vox_onepath()
             && !self.has_zone_batches()
             && !self.is_picker_batches()
