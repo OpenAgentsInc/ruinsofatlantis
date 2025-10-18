@@ -4,6 +4,17 @@ use std::path::{Path, PathBuf};
 /// Prepare a glTF path for loading per policy: prefer `<name>.decompressed.gltf`
 /// if present. Do not attempt runtime Draco decompression.
 pub fn prepare_gltf_path(path: &Path) -> Result<PathBuf> {
+    // Idempotency: if the path already points to a decompressed file, keep it.
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+        if name.ends_with(".decompressed.glb") || name.ends_with(".decompressed.gltf") {
+            log::info!(
+                target: "roa_assets::util",
+                "prepare_gltf_path: already decompressed {}",
+                path.display()
+            );
+            return Ok(path.to_path_buf());
+        }
+    }
     // Prefer a sibling `<name>.decompressed.glb` or `.decompressed.gltf` when present and importable.
     // This avoids Draco at runtime for both skinned and unskinned loads.
     let dec_glb = path.with_extension("decompressed.glb");

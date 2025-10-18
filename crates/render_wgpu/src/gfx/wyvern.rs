@@ -25,8 +25,22 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
         Ok(p) => p,
         Err(_) => base_path.clone(),
     };
+    log::info!(
+        target: "wyvern",
+        "wyvern: try skinned load from {} (exists={})",
+        prepared.display(),
+        prepared.exists()
+    );
     let mut cpu = load_gltf_skinned(&prepared)
         .with_context(|| format!("load skinned wyvern: {}", prepared.display()))?;
+    log::info!(
+        target: "wyvern",
+        "wyvern: skinned ok (verts={}, idx={}, joints={}, anims={})",
+        cpu.vertices.len(),
+        cpu.indices.len(),
+        cpu.joints_nodes.len(),
+        cpu.animations.len()
+    );
     // Optional: merge animation library if present
     let anim_libs = [
         asset_path("assets/anims/converted/RedDragon2021.glb"),
