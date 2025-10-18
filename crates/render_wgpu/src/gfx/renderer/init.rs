@@ -1637,7 +1637,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         _wyvern_mat_buf,
         _wyvern_tex_view,
         _wyvern_sampler,
-    ) = if load_npc_assets {
+    ) = if load_npc_assets || std::env::var("ROA_WYVERN_BASE").is_ok() {
         match super::super::wyvern::load_assets(&device) {
             Ok(a) => {
                 let cpu = a.cpu;

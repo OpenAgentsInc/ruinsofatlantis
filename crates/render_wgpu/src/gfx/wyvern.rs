@@ -9,7 +9,14 @@ use crate::gfx::types::{InstanceSkin, VertexPosNrmUv, VertexSkinned};
 use gltf as gltf_rs;
 use roa_assets::gltf::load_gltf_mesh;
 use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
+use roa_assets::types::TextureCPU;
 use std::path::{Path, PathBuf};
+
+/// Resolve a repo-relative asset path (like assets/...) or accept an absolute path unchanged.
+fn resolve_asset_or_abs(p: &str) -> PathBuf {
+    let q = PathBuf::from(p);
+    if q.is_absolute() { q } else { asset_path(p) }
+}
 
 pub struct WyvernAssets {
     pub cpu: roa_assets::types::SkinnedMeshCPU,
@@ -19,6 +26,120 @@ pub struct WyvernAssets {
 }
 
 pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
+    // 0) Manual override for fast unblocking via environment.
+    if let Ok(ovr) = std::env::var("ROA_WYVERN_BASE") {
+        let p = resolve_asset_or_abs(&ovr);
+        log::info!(target: "wyvern", "override ROA_WYVERN_BASE -> {}", p.display());
+        let prepared = roa_assets::util::prepare_gltf_path(&p)
+            .ok()
+            .unwrap_or(p.clone());
+        match load_gltf_skinned(&prepared) {
+            Ok(cpu) if !cpu.joints_nodes.is_empty() && !cpu.indices.is_empty() => {
+                log::info!(target: "wyvern",
+                    "wyvern: skinned ok (override): {} (verts={}, idx={}, joints={}, anims={})",
+                    prepared.display(), cpu.vertices.len(), cpu.indices.len(), cpu.joints_nodes.len(), cpu.animations.len());
+                // Continue with merge search using the prepared override and loaded cpu.
+                let mut cpu = cpu;
+                let mut stem = prepared
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                for suf in [".textured", ".decompressed"] {
+                    if let Some(pos) = stem.find(suf) {
+                        stem = stem[..pos].to_string();
+                        break;
+                    }
+                }
+                let search_dirs = [
+                    asset_path("assets/anims/converted"),
+                    asset_path("assets/anims/dragons"),
+                    asset_path("assets/anims"),
+                ];
+                let exts = ["glb", "gltf", "fbx"];
+                let mut merged = 0usize;
+                for dir in search_dirs.iter() {
+                    for ext in exts.iter() {
+                        let cand = dir.join(format!("{}.{}", stem, ext));
+                        if !cand.exists() {
+                            continue;
+                        }
+                        let ok = if *ext == "fbx" {
+                            if let Some(conv) = try_convert_fbx_to_gltf(&cand) {
+                                merge_gltf_animations(&mut cpu, &conv).ok()
+                            } else {
+                                None
+                            }
+                        } else {
+                            merge_gltf_animations(&mut cpu, &cand).ok()
+                        };
+                        if let Some(k) = ok {
+                            merged += k;
+                        }
+                    }
+                }
+                if merged > 0 {
+                    log::info!(target: "wyvern", "merged {} animation clips", merged);
+                }
+                // If the skinned source lacks a baseColor texture, try to borrow it from
+                // the textured static model variant under assets/models/red_wyvern/*.
+                if cpu.base_color_texture.is_none() {
+                    if let Some((_vb, _ib, _idx, Some((pixels, w, h)))) =
+                        load_unskinned_textured(device)
+                    {
+                        cpu.base_color_texture = Some(TextureCPU {
+                            pixels,
+                            width: w,
+                            height: h,
+                            srgb: true,
+                        });
+                        log::info!(target: "wyvern", "applied borrowed baseColor texture ({}x{})", w, h);
+                    } else {
+                        log::info!(target: "wyvern", "no baseColor texture available (leaving white)");
+                    }
+                }
+                let verts: Vec<VertexSkinned> = cpu
+                    .vertices
+                    .iter()
+                    .map(|v| VertexSkinned {
+                        pos: v.pos,
+                        nrm: v.nrm,
+                        joints: [
+                            v.joints[0] as u32,
+                            v.joints[1] as u32,
+                            v.joints[2] as u32,
+                            v.joints[3] as u32,
+                        ],
+                        weights: v.weights,
+                        uv: v.uv,
+                    })
+                    .collect();
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("wyvern-vb"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let ib = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("wyvern-ib"),
+                    contents: bytemuck::cast_slice(&cpu.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+                let index_count = cpu.indices.len() as u32;
+                return Ok(WyvernAssets {
+                    cpu,
+                    vb,
+                    ib,
+                    index_count,
+                });
+            }
+            Ok(_) => {
+                log::warn!(target: "wyvern", "override does not have a skin: {}", prepared.display())
+            }
+            Err(e) => {
+                log::error!(target: "wyvern", "override load failed: {} -> {}", prepared.display(), e)
+            }
+        }
+    }
     // Prefer a model that actually contains a skin. Probe common candidates and pick the first
     // that yields joints_nodes > 0, mirroring the viewer's success criteria.
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
@@ -53,14 +174,18 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
     let mut chosen: Option<std::path::PathBuf> = None;
     let mut cpu_probe: Option<roa_assets::types::SkinnedMeshCPU> = None;
     'probe: for cand in candidates.iter() {
+        log::info!(target:"wyvern", "probe: {}", cand.display());
         if !cand.exists() {
+            log::info!(target:"wyvern", " -> skip (missing)");
             continue;
         }
         let prepared = roa_assets::util::prepare_gltf_path(cand).unwrap_or_else(|_| cand.clone());
         if !prepared.exists() {
+            log::info!(target:"wyvern", " -> skip (prepared missing: {})", prepared.display());
             continue;
         }
         if let Ok(test) = load_gltf_skinned(&prepared) {
+            log::info!(target:"wyvern", " -> loaded joints={} idx={}", test.joints_nodes.len(), test.indices.len());
             if !test.joints_nodes.is_empty() && !test.indices.is_empty() {
                 chosen = Some(prepared);
                 cpu_probe = Some(test);
@@ -85,24 +210,32 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
             }
         }
     }
-    // If nothing found in models/, probe animation library directory for a skinned GLB with mesh
+    // If nothing found in models/, probe animation library directories for a skinned base
     if chosen.is_none() {
-        let conv_dir = asset_path("assets/anims/converted");
-        if conv_dir.exists() {
-            if let Ok(rd) = std::fs::read_dir(&conv_dir) {
+        for dir in &[
+            asset_path("assets/anims/converted"),
+            asset_path("assets/anims/dragons"),
+            asset_path("assets/anims"),
+        ] {
+            if !dir.exists() {
+                continue;
+            }
+            log::info!(target:"wyvern", "probe dir: {}", dir.display());
+            if let Ok(rd) = std::fs::read_dir(dir) {
                 for ent in rd.flatten() {
                     let p = ent.path();
                     if p.extension()
                         .and_then(|e| e.to_str())
                         .map(|e| e.eq_ignore_ascii_case("glb"))
                         .unwrap_or(false)
-                        && p.file_name()
+                        && p.file_stem()
                             .and_then(|n| n.to_str())
                             .map(|s| s.to_ascii_lowercase().contains("reddragon"))
                             .unwrap_or(false)
                     {
                         let prepared = p.clone();
                         if let Ok(test) = load_gltf_skinned(&prepared) {
+                            log::info!(target:"wyvern", " -> loaded {}, joints={}, idx={}", prepared.display(), test.joints_nodes.len(), test.indices.len());
                             if !test.joints_nodes.is_empty()
                                 && !test.indices.is_empty()
                                 && !test.vertices.is_empty()
@@ -114,6 +247,9 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
                         }
                     }
                 }
+            }
+            if chosen.is_some() {
+                break;
             }
         }
     }
@@ -174,6 +310,20 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
     }
     if merged > 0 {
         log::info!(target: "wyvern", "merged {} animation clips", merged);
+    }
+    // Borrow a baseColor texture from the textured static variant if missing.
+    if cpu.base_color_texture.is_none() {
+        if let Some((_vb, _ib, _idx, Some((pixels, w, h)))) = load_unskinned_textured(device) {
+            cpu.base_color_texture = Some(TextureCPU {
+                pixels,
+                width: w,
+                height: h,
+                srgb: true,
+            });
+            log::info!(target: "wyvern", "applied borrowed baseColor texture ({}x{})", w, h);
+        } else {
+            log::info!(target: "wyvern", "no baseColor texture available (leaving white)");
+        }
     }
     let verts: Vec<VertexSkinned> = cpu
         .vertices
@@ -539,9 +689,14 @@ pub fn build_instance_at(
     device: &wgpu::Device,
     pos: glam::Vec3,
 ) -> (wgpu::Buffer, Vec<InstanceSkin>, Vec<glam::Mat4>, u32) {
-    // Apply -90° X rotation into the instance model matrix for viewer parity
-    let rot_x = glam::Quat::from_rotation_x(-90f32.to_radians());
-    let m = glam::Mat4::from_scale_rotation_translation(glam::Vec3::splat(1.0), rot_x, pos);
+    // Default orientation and scale for the Red Wyvern to match viewer parity and scene scale.
+    // - Rotate -90° about X to fix exporter axis
+    // - Rotate 180° about Y so it faces the camera by default
+    // - Scale down to fit near the PC
+    let rot = glam::Quat::from_rotation_y(std::f32::consts::PI)
+        * glam::Quat::from_rotation_x(-90f32.to_radians());
+    let scale = glam::Vec3::splat(0.03);
+    let m = glam::Mat4::from_scale_rotation_translation(scale, rot, pos);
     let models = vec![m];
     let inst = InstanceSkin {
         model: m.to_cols_array_2d(),
