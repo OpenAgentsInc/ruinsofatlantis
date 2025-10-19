@@ -481,6 +481,8 @@ pub struct Renderer {
     wyvern_cpu: SkinnedMeshCPU,
     wyvern_time_offset: Vec<f32>,
     wyvern_prev_pos: glam::Vec3,
+    // Prebaked per-submesh material bind groups (bg, start, count)
+    wyvern_submeshes: Vec<(wgpu::BindGroup, u32, u32)>,
     wyvern_mat_bg: wgpu::BindGroup,
     // Wyvern static (unskinned) fallback geometry
     wyvern_static_vb: Option<wgpu::Buffer>,
@@ -510,6 +512,8 @@ pub struct Renderer {
     // Wizard pipelines
     wizard_pipeline: wgpu::RenderPipeline,
     wizard_pipeline_debug: Option<wgpu::RenderPipeline>,
+    // Wyvern-only skinned pipeline (viewer-parity bind order)
+    wyvern_pipeline: wgpu::RenderPipeline,
 
     wizard_mat_bg: wgpu::BindGroup,
     _wizard_mat_buf: wgpu::Buffer,
@@ -3713,6 +3717,7 @@ impl Renderer {
             wizard_instances_cpu,
             wizard_pipeline,
             wizard_pipeline_debug,
+            wyvern_pipeline,
             // debug pipelines removed
             wizard_mat_bg,
             _wizard_mat_buf,

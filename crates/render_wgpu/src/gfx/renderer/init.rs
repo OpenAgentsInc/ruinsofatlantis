@@ -494,6 +494,15 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         draw_fmt,
         attachments.sample_count,
     ));
+    // Wyvern-only pipeline (viewer-parity group order: 0=globals,1=skin,2=material)
+    let wyvern_pipeline = pipeline::create_wyvern_skinned_pipeline(
+        &device,
+        &globals_bgl,
+        &palettes_bgl,
+        &material_bgl,
+        draw_fmt,
+        attachments.sample_count,
+    );
     let particle_pipeline = pipeline::create_particle_pipeline(
         &device,
         &shader,
@@ -1700,6 +1709,22 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
             mat.sampler,
         )
     };
+    // Pre-bake wyvern per-submesh materials (if any), falling back to the borrowed/combined mat
+    let mut wyvern_submeshes: Vec<(wgpu::BindGroup, u32, u32)> = Vec::new();
+    if wyvern_index_count > 0 {
+        for sm in &wyvern_cpu.submeshes {
+            let bg = {
+                let tex_opt = sm
+                    .base_color_texture
+                    .as_ref()
+                    .or(wyvern_cpu.base_color_texture.as_ref());
+                let (bg, _ub, _tv, _samp) =
+                    material::create_material_from_texture(&device, &queue, &material_bgl, tex_opt);
+                bg
+            };
+            wyvern_submeshes.push((bg, sm.start, sm.count));
+        }
+    }
     // Place wyvern near the PC (always visible at start): a few meters ahead of the player's facing
     let wyvern_pos = {
         let mpc = wizard_models[scene_build.pc_index];
@@ -2417,6 +2442,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wizard_instances_cpu,
         wizard_pipeline,
         wizard_pipeline_debug,
+        wyvern_pipeline,
         wizard_mat_bg,
         _wizard_mat_buf,
         _wizard_tex_view,
@@ -2436,6 +2462,7 @@ pub async fn new_renderer(window: &Window) -> anyhow::Result<crate::gfx::Rendere
         wyvern_cpu,
         wyvern_time_offset: (0..wyvern_count as usize).map(|_| 0.0f32).collect(),
         wyvern_prev_pos: wyvern_pos,
+        wyvern_submeshes,
         wyvern_mat_bg,
         wyvern_static_mat_bg: wyvern_static_mat_bg_opt,
         wyvern_static_vb,

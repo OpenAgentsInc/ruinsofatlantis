@@ -548,6 +548,66 @@ pub fn create_wizard_pipelines(
     (pipeline, wire_pipeline)
 }
 
+pub fn create_wyvern_skinned_pipeline(
+    device: &wgpu::Device,
+    globals_bgl: &wgpu::BindGroupLayout,
+    palettes_bgl: &wgpu::BindGroupLayout,
+    material_bgl: &wgpu::BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+    sample_count: u32,
+) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wyvern-shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+            "wyvern_shader.wgsl"
+        ))),
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("wyvern-pipeline-layout"),
+        // Wyvern-only: 0=globals, 1=skin palettes, 2=material
+        bind_group_layouts: &[globals_bgl, palettes_bgl, material_bgl],
+        push_constant_ranges: &[],
+    });
+    let depth_format = wgpu::TextureFormat::Depth32Float;
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("wyvern-skinned-pipeline"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_wyvern"),
+            buffers: &[
+                crate::gfx::types::VertexSkinned::LAYOUT,
+                crate::gfx::types::InstanceSkin::LAYOUT,
+            ],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_wyvern"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: depth_format,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
+        multiview: None,
+        cache: None,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn create_wizard_pipeline_debug(
     device: &wgpu::Device,
