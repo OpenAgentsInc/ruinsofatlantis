@@ -1,164 +1,248 @@
-# Red Wyvern Loading — Comprehensive Dossier
+# Red Wyvern Loading — Engine vs. Viewer (Current State and Issues)
 
-This is the canonical, all‑in‑one reference for the Red Wyvern asset: where files live, how the loaders work, how the viewer renders it, how the game renderer wires it today, and what remains to enable full animations in‑game.
+This dossier is the comprehensive, traceable record for how the Red Wyvern is loaded and rendered in the engine today, how that differs from the standalone model viewer, what we changed during investigation, what is still failing, and the shortest path to make it match the viewer exactly.
 
-## Quick Facts
-- Base model: `assets/models/red_wyvern/RedDragon2021.glb`
-- Packed model (no Meshopt/Draco, embedded images): `assets/models/red_wyvern/RedDragon2021.textured.glb`
-- Anim lib: `assets/anims/converted/RedDragon2021.glb` (source FBX also present)
-- Export script: `scripts/blender/export_glb_clean.py`
-- Shared loaders: `shared/assets/src/*`
-- Viewer: `tools/model-viewer/**`
-- Renderer glue: `crates/render_wgpu/src/gfx/**`
+It is intentionally exhaustive and includes code references, logs, hypotheses, and a clear remediation plan.
 
-## Current State
-1) Viewer (tools/model-viewer)
-- Loads the Wyvern via `roa_assets::skinning::load_gltf_skinned`, can merge compatible animation libraries, and displays textured submeshes. Orientation toggle commonly set to -90° around X for this rig. Shader: simple lambert with SRGB baseColor.
+## TL;DR
 
-2) Game renderer (crates/render_wgpu)
-- A textured static fallback is implemented and visible in cc_demo. It aggregates all primitives, uploads a VB/IB, installs a material BG from the per‑primitive baseColor, and draws via the textured instanced pipeline.
-- The skinned path attempts to load the rig but currently reports `skinned idx=0 joints=0`, so the draw falls back to the static path.
+- The viewer renders `assets/anims/converted/RedDragon2021.glb` skinned and correct.
+- The engine now loads the same GLB (skinned), merges 42 clips, and draws via a dedicated wyvern-only skinned pipeline that mirrors the viewer’s binding order.
+- We fixed multiple concrete issues (attribute order, bind-group order mismatches, static pipeline binding, weight/joint hardening, env override, removal of static-texture borrowing).
+- The wyvern still appears “mangled” in-engine under some conditions. Geometry is skinned (joints/indices OK), but the final result does not match the viewer.
+- The remaining root cause is most likely one of: (1) a subtle palette upload/offset misuse, (2) a matrix space mismatch (model vs. instance), or (3) a submesh/material indexing side-effect. The remediation plan below makes validation unambiguous.
 
-Bottom line: the dragon renders (static), but animations are not active in‑game yet because the engine isn’t receiving a skinned, jointed Wyvern GLB with usable clips.
+## Asset Resolution and Overrides
 
-## File & Module Map (clickable)
-- Shared loaders and types
-  - shared/assets/src/skinning.rs
-  - shared/assets/src/retarget.rs
-  - shared/assets/src/draco.rs
-  - shared/assets/src/util.rs
-  - shared/assets/src/types.rs
-- Viewer
-  - tools/model-viewer/src/main.rs
-  - tools/model-viewer/src/shader_skinned.wgsl
-- Renderer (engine)
-  - crates/render_wgpu/src/gfx/wyvern.rs
-  - crates/render_wgpu/src/gfx/draw.rs
-  - crates/render_wgpu/src/gfx/renderer/init.rs
-  - crates/render_wgpu/src/gfx/renderer/passes.rs
-  - crates/render_wgpu/src/gfx/material.rs
-  - crates/render_wgpu/src/gfx/pipeline.rs
-  - crates/render_wgpu/src/gfx/shader.wgsl
+- Preferred skinned base is force-selected via env:
+  - `ROA_WYVERN_BASE` or alias `OA_WYVERN_BASE`: engine honors either.
+  - Code: crates/render_wgpu/src/gfx/wyvern.rs:31, crates/render_wgpu/src/gfx/renderer/init.rs:1640
+- Minimal candidate list (no deep scans) when no override:
+  - `assets/anims/converted/RedDragon2021.glb`
+  - `assets/models/red_wyvern/RedDragon2021.glb`
+  - Code: crates/render_wgpu/src/gfx/wyvern.rs:133
 
-## Asset Prep (what we did and why)
-The original GLB contained Meshopt compression and external images in some variants; the engine’s plain reader returned empty attributes, causing a DEBUG cube. We generated a “raw” GLB with embedded textures and no Meshopt/Draco:
+Relevant log (good path):
 
-```bash
-npx -y gltfpack -i assets/models/red_wyvern/RedDragon2021.glb \
-  -o assets/models/red_wyvern/RedDragon2021.textured.glb -noq
+```
+wyvern] override WYVERN_BASE -> .../assets/anims/converted/RedDragon2021.glb
+skinning: selected skin index 0 (67150 verts)
+wyvern: skinned ok (override): ... (verts=67150, idx=353478, joints=701, anims=21)
+wyvern] merged 42 animation clips
 ```
 
-The engine now reads vertex/index data for the static fallback reliably and uploads a proper SRGB baseColor.
+## CPU Load Path (Skinned)
 
-## Loader Behavior (shared/assets)
-- Skinned load (shared/assets/src/skinning.rs)
-  - Picks the dominant skin by vertex count, aggregates all skinned primitives referencing that skin, extracts per‑primitive baseColor images, and returns `SkinnedMeshCPU` plus a clip list.
-  - `merge_gltf_animations` can merge a Wyvern anim library; it retargets by name, skipping unmapped clips.
+1) GLB import and skin selection
+- Shared loader picks dominant skin and gathers all skin‑bound primitives.
+- Code: shared/assets/src/skinning.rs:14, 58, 382, 494
 
-- Static GLB load (shared/assets/src/gltf.rs)
-  - Merges meshes/primitives into a CPU mesh of `Vertex` and `u16` indices; decodes Draco JSON when needed for wasm.
+2) Vertex stream extraction
+- Reads positions, normals, UVs, joints (u8/u16), weights (u8/u16/f32).
+- Code: shared/assets/src/skinning.rs:312–540
 
-## What the Renderer Does Today
-- Init: crates/render_wgpu/src/gfx/renderer/init.rs
-  - Loads skinned Wyvern CPU data; if `index_count==0 || joints==0`, builds a static fallback VB/IB and an optional material BG.
-  - Logs: `wyvern: assets summary — skinned idx=… joints=… | static idx=… used=…`.
+3) Submeshes and baseColor textures
+- Each primitive contributes a submesh with optional baseColor.
+- Code: shared/assets/src/skinning.rs:463–540
 
-- Static renderer path (textured)
-  - Build VB (VertexPosNrmUv) + IB and an SRGB 2D texture for the baseColor if present.
-  - Draw via instanced textured pipeline; material BG bound at set=3.
-  - Code: crates/render_wgpu/src/gfx/wyvern.rs (load), crates/render_wgpu/src/gfx/draw.rs (draw_wyvern_static), crates/render_wgpu/src/gfx/pipeline.rs (create_textured_inst_pipeline).
+4) Animation clips
+- All glTF clips are loaded; later we merge additional clips from companion GLBs.
+- Code: shared/assets/src/skinning.rs:540–708
 
-- Orientation
-  - We apply conservative Rx(-90°) first; optional roll/yaw tweaks are composed in `wyvern_model_m`. See init.rs for the current composition and log history when adjusting.
+5) CPU → engine vertex mapping (hardening)
+- We clamp joint indices to range and renormalize weights to protect against edge cases.
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:62–93, 284–306
 
-## EXACT TODOs to Enable Animations In‑Game
-1) Export a skinned Wyvern GLB with embedded textures + NLA clips
-- Use the pipeline below to produce `assets/models/red_wyvern/RedDragon2021.textured.glb` with JOINTS/WEIGHTS and pushed actions:
+6) Materials
+- New policy: we do NOT borrow textures from the static textured GLB for the skinned model. If the skinned base lacks textures, we render untextured (white) to avoid UV mismatches.
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:94–104, 221–226
 
-```bash
-BLENDER="/Applications/Blender.app/Contents/MacOS/Blender"
-IN="$HOME/Desktop/RedWyvern/uploads_files_2877852_FireBreathingWyvernDragon(update).blend"
-OUT="assets/models/red_wyvern/RedDragon2021.textured.glb"
-IMAGES_DIR="assets/models/red_wyvern/udims"
+## GPU Pipelines and Bindings
 
-"$BLENDER" -b "$IN" --python scripts/blender/export_glb_clean.py -- \
-  --in "$IN" --out "$OUT" \
-  --strip-cams --strip-lights --strip-empties \
-  --pack --push-actions --images-dir "$IMAGES_DIR"
-```
+Two different pipelines are relevant:
 
-Acceptance: `SkinnedMeshCPU` from `load_gltf_skinned(OUT)` has `joints_nodes.len()>0` and `indices.len()>0` and the viewer lists ≥1 clips.
+1) Wizard/skinned (legacy shared) — group order set(0)=globals, set(1)=model, set(2)=palettes, set(3)=material.
+- Shader: crates/render_wgpu/src/gfx/shader.wgsl:407–468
+- Pipeline: crates/render_wgpu/src/gfx/pipeline.rs:459–520
 
-2) Optional: Meshopt decoding for skinned attributes
-- If future exports contain `EXT_meshopt_compression`, add decoding in the skinned reader (similar to the planned static Meshopt‑aware routine) so positions/indices/joints/weights are readable without re‑exporting.
+2) Wyvern-only skinned (viewer-parity) — group order set(0)=globals, set(1)=palettes (skin), set(2)=material.
+- Shader: crates/render_wgpu/src/gfx/wyvern_shader.wgsl
+- Pipeline creation: crates/render_wgpu/src/gfx/pipeline.rs:555–618
+- Used by draw_wyvern (see below).
 
-3) Upload and render via the existing wizard skinned pipeline
-- Build `VertexSkinned` VB + IB, create a storage buffer for joint palettes, and per‑submesh material BGs (SRGB).
-- Wire binds identical to the wizard/zombie rigs and call the skinned pass.
+Static textured fallback has its own instanced-textured pipeline and a distinct layout: set(0)=globals, set(1)=model, set(2)=palettes (unused), set(3)=material.
+- Shader: crates/render_wgpu/src/gfx/shader.wgsl:237–307
+- Pipeline: crates/render_wgpu/src/gfx/pipeline.rs:180–233
 
-4) Animate each frame
-- Port the viewer’s palette sampler (`AnimData`) or integrate an animator that writes palette matrices per frame for the active clip:
+## Vertex Formats and Layouts
 
-```rust
-let palette = anim.sample_palette(active_clip, time);
-queue.write_buffer(&wyvern_palettes_buf, 0, bytemuck::cast_slice(&palette));
-```
+Skinned Vertex (`VertexSkinned`)
+- Order and locations are now ascending and match shaders: pos@0, nrm@1, joints@8, weights@9, uv@11.
+- Code: crates/render_wgpu/src/gfx/types.rs:53–86
 
-5) Keep logs + CI guardrail
-- When `skinned idx>0` and `joints>0`, log once and run a minimal CI check (load → sample → draw) to guard regressions.
+Instance (`InstanceSkin`)
+- Instance matrix mat4 @ locations 2..5; color@6; selected@7; palette_base@10.
+- Code: crates/render_wgpu/src/gfx/types.rs:169–217
 
-## Troubleshooting Matrix (engine)
-- Cube renders / model invisible → asset uses Meshopt/Draco and static path lacked decode. Use `*.textured.glb` (gltfpack -noq) or add Meshopt decode.
-- Textures white → no `baseColorTexture` for that primitive or UDIM tiles not embedded. Re‑export with `--pack` or bake UDIMs to 0–1.
-- Skinned path idx=0/joints=0 → export lacks skin or the wrong GLB is referenced; generate a proper skinned GLB as above.
+Key fix applied: attribute order was previously non‑ascending (UV before joints), which could cause cross‑backend vertex fetch corruption. Now fixed.
+- Commit: 68c8dff9
 
-## Commands
-- Generate raw packed GLB:
+## Draw Paths (Binding Orders)
 
-```bash
-npx -y gltfpack -i assets/models/red_wyvern/RedDragon2021.glb \
-  -o assets/models/red_wyvern/RedDragon2021.textured.glb -noq
-```
+Skinned wyvern
+- Uses wyvern-only pipeline (viewer parity).
+- Binding order per draw:
+  - set(0) globals BG
+  - set(1) wyvern_palettes_bg (storage buffer)
+  - set(2) material BG (per-submesh or single)
+- Code: crates/render_wgpu/src/gfx/draw.rs:272–310
 
-- Viewer with logs:
+Static wyvern fallback (unskinned)
+- Uses instanced textured pipeline, binding order:
+  - set(0) globals, set(1) model, set(2) palettes (placeholder), set(3) material
+- Code: crates/render_wgpu/src/gfx/draw.rs:180–205
 
-```bash
-RUST_LOG=info,roa_assets=info cargo run -p model-viewer -- \
-  assets/models/red_wyvern/RedDragon2021.textured.glb
-```
+## Animation Palette Update
 
-- Game with wyvern logs (cc_demo):
+Wyvern palette is updated every frame based on a selected clip (Idle/Fly_Loop or longest clip fallback) and uploaded to `wyvern_palettes_buf`.
+- Code: crates/render_wgpu/src/gfx/mod.rs:5648–5689
 
-```bash
-ROA_ZONE=cc_demo \
-RUST_LOG=info,wyvern=info,render_wgpu::gfx::renderer::init=info,render_wgpu::gfx::renderer::passes=info \
-cargo run
-```
+Bind-pose freeze (for troubleshooting) is available via `ROA_WYVERN_BIND=1`.
+- Code: crates/render_wgpu/src/gfx/mod.rs:5648–5689 (bind-pose branch)
 
-## Sources & Pointers
-- Assets
-  - assets/models/red_wyvern/RedDragon2021.glb
-  - assets/models/red_wyvern/RedDragon2021.textured.glb
-  - assets/models/red_wyvern/udims/Dragon Skin.1001.png
-  - assets/anims/dragons/RedDragon2021.fbx
-  - assets/anims/converted/RedDragon2021.glb
-- Shared loaders
-  - shared/assets/src/skinning.rs
-  - shared/assets/src/retarget.rs
-  - shared/assets/src/draco.rs
-  - shared/assets/src/util.rs
-  - shared/assets/src/types.rs
-- Viewer
-  - tools/model-viewer/src/main.rs
-  - tools/model-viewer/src/shader_skinned.wgsl
-- Renderer
-  - crates/render_wgpu/src/gfx/wyvern.rs
-  - crates/render_wgpu/src/gfx/draw.rs
-  - crates/render_wgpu/src/gfx/renderer/init.rs
-  - crates/render_wgpu/src/gfx/renderer/passes.rs
-  - crates/render_wgpu/src/gfx/material.rs
-  - crates/render_wgpu/src/gfx/pipeline.rs
-- Docs
-  - docs/graphics/model-viewer.md
-  - docs/gdd/11-technical/graphics/model-loading.md
+## Materials & Submeshes (Skinned)
+
+- Submesh list is taken from the skinned GLB; each submesh may carry its own baseColor.
+- During init, we pre-bake per-submesh material BGs for wyvern to avoid pass-time creation.
+- Code: crates/render_wgpu/src/gfx/renderer/init.rs:1708–1730
+
+If the skinned GLB has no textures, wyvern renders untextured (white). We intentionally do not “borrow” textures from the static GLB anymore.
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:221–226
+
+## Differences vs. Model Viewer
+
+Viewer (tools/model-viewer):
+- Group order: set(0)=Globals, set(2)=Skin (varies by viewer impl), set(1)=Material; but the viewer wiring is self-consistent and simple.
+- Computes a bind-pose palette first and uses its own shader/path.
+- Vertex layout and attribute order are simple/ascending.
+- Viewer treats skinned model textures separately from static assets; it does not “borrow” from unrelated GLBs.
+
+Engine (current):
+- Now has a dedicated wyvern-only pipeline to mirror viewer’s binding structure and semantics.
+- Global model UBO is not used by wyvern-only pipeline; the instance matrix (mat4 at 2..5) is the model transform (viewer parity).
+- Materials are pre-baked at load.
+
+## What We Changed During Investigation
+
+1) Ensure wyvern loads skinned even in Picker mode (override honored)
+- Code: crates/render_wgpu/src/gfx/renderer/init.rs:1640
+
+2) Add env override + verbose probing
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:31
+
+3) Fix attribute layout and offsets for skinned vertices (critical)
+- Code: crates/render_wgpu/src/gfx/types.rs:61
+
+4) Harden vertex mapping (clamp joints, renormalize weights)
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:62–93, 284–306
+
+5) Correct bind-group orders in both skinned and static paths
+- Wyvern-only skinned: set(0)=globals, set(1)=skin, set(2)=material
+  - Shader: crates/render_wgpu/src/gfx/wyvern_shader.wgsl
+  - Pipeline: crates/render_wgpu/src/gfx/pipeline.rs:555–618
+  - Draw: crates/render_wgpu/src/gfx/draw.rs:272–310
+- Static textured: set(0)=globals, set(1)=model, set(2)=palettes(unused), set(3)=material
+  - Draw: crates/render_wgpu/src/gfx/draw.rs:180–205
+
+6) Prebake wyvern submesh materials once in init
+- Code: crates/render_wgpu/src/gfx/renderer/init.rs:1708–1730
+
+7) Remove static borrowing of baseColor for skinned wyvern
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:94–104, 221–226
+
+8) Minimal candidate list (no deep scans)
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:133
+
+9) Accept env alias `OA_WYVERN_BASE` and adjust gating
+- Code: crates/render_wgpu/src/gfx/wyvern.rs:31, crates/render_wgpu/src/gfx/renderer/init.rs:1640
+
+## Current Symptoms (After Fixes)
+
+- Logs confirm skinned load (joints=701), clip merge (42), and valid index/vertex counts.
+- Still observe “mangled” look in-engine (wings/head not matching viewer), even when textures are suppressed (white), implying a transform issue (not a texture issue) remains.
+
+## What’s Likely Still Wrong
+
+Given the fixes above, these are the top hypotheses:
+
+1) Palette base/offset misuse
+- Instance `palette_base` is set to 0 for wyvern (single instance). That is correct, but if the palette buffer upload or range math ever desynchronizes from draw, you can see severe deformation. We should assert length and ranges per frame and/or draw.
+
+2) Matrix space mismatch in wyvern-only pipeline
+- Wizard pipeline multiplies `(model_u.model * inst * skinned_pos)`; wyvern-only pipeline uses `(inst * skinned_pos)` to mirror the viewer. If any downstream pass or global expects the model UBO to be active (e.g., for lights in world space), normals/world may be off. We should spot-check world-space construction against expectations.
+
+3) Submesh/material indexing side-effects
+- Although materials no longer affect transforms, incorrect per-submesh index ranges could masquerade as geometry corruption. We should validate each submesh’s draw range against CPU ranges and ensure no overflow/overrun.
+
+4) Skinning matrices content
+- If the joint palette contains wrong matrices (e.g., wrong node global or bad inverse bind ordering), the whole rig deforms. The viewer computes a bind-pose palette; we do too (for bind-pose test) and animate similarly, but we should dump/select a known clip and capture several joint matrices at draw to compare against the viewer’s output.
+
+## Validation Plan (Concrete)
+
+1) Add a wyvern debug mode `ROA_WYVERN_DEBUG=1` that:
+- Captures and logs: first 8 palette matrices (flattened 4x4) each frame for two frames.
+- Checks palette buffer length equals `wyvern_count * wyvern_joints` and asserts no overflow.
+- Dumps first submesh draw range (start,count) and validates they’re within index buffer length (u16).
+
+2) Force a known clip
+- Add `ROA_WYVERN_CLIP=Idle` (or name substring) and log the selected clip, duration, and time.
+- Ensures deterministic pose for comparison.
+
+3) Head-pitch correction parity (viewer feature)
+- Port the viewer’s head pitch correction and allow `ROA_WYVERN_HEAD_PITCH_DEG` to confirm posture alignment quickly.
+
+4) Optional: single-submesh draw
+- Temporarily draw only the first submesh with a solid color to verify index ranges and vertex fetch.
+
+## Proposed Remediation (Step-by-step)
+
+Short path to parity:
+
+1) Implement `ROA_WYVERN_CLIP` and log pick + duration.
+2) Add `ROA_WYVERN_DEBUG=1` and dump: joint count, palette length, first submesh range, first 2–4 joint matrices, and first 8 vertex joints/weights from VB to correlate CPU/GPU.
+3) If matrices mismatch expected values from viewer, compare inverse bind order and joint-node mapping (names) across both loaders.
+4) If matrices are correct but deform still happens, inspect the instance matrix path and remove any extra transforms from the pass (ensure world-space constructed consistently across pipelines).
+5) Keep static fallback intact; do not reuse static albedo for skinned.
+
+## Code References (Key Sites)
+
+- Override + candidates: crates/render_wgpu/src/gfx/wyvern.rs:31, 133
+- CPU→GPU vertex mapping + hardening: crates/render_wgpu/src/gfx/wyvern.rs:62–93, 284–306
+- Remove borrowing of textures for skinned: crates/render_wgpu/src/gfx/wyvern.rs:94–104, 221–226
+- Per-submesh material pre-bake: crates/render_wgpu/src/gfx/renderer/init.rs:1708–1730
+- Wyvern-only shader: crates/render_wgpu/src/gfx/wyvern_shader.wgsl
+- Wyvern-only pipeline creation: crates/render_wgpu/src/gfx/pipeline.rs:555–618
+- Wyvern draw (bind order and per-submesh draw): crates/render_wgpu/src/gfx/draw.rs:272–310
+- Static textured pipeline draw (corrected binds): crates/render_wgpu/src/gfx/draw.rs:180–205
+- Wizard shared shader (for comparison): crates/render_wgpu/src/gfx/shader.wgsl:407–468
+- Attribute layouts: crates/render_wgpu/src/gfx/types.rs:53, 169
+- Animation sampling (palette build): crates/render_wgpu/src/gfx/anim.rs:8–68
+
+## Known Good vs Known Bad (Ground Truth)
+
+- Viewer loads `assets/anims/converted/RedDragon2021.glb` and shows correct geometry with 21 clips available (loggable there). Bind-pose and Idle clip are stable.
+- Engine now loads the same GLB and reports indices/verts/joints consistent with the viewer. Despite this, deformation persists in-engine.
+- This strongly suggests a remaining transform chain mismatch (palette or instance/world), not texture or candidate selection.
+
+## Next Work Items (Owner: Graphics)
+
+1) Add `ROA_WYVERN_DEBUG` to dump palette and VB slices at draw (one frame).
+2) Add `ROA_WYVERN_CLIP` and a hard-coded list of clip aliases (e.g., Idle, Fly_Loop).
+3) Implement viewer head-pitch correction parity and compare posture.
+4) If mismatch persists, temporarily switch wyvern-only pipeline to multiply a unit model UBO (add small model_bgl) and compare vs. instance-only transform to isolate a space mismatch.
+5) If still failing, instrument shared/assets palette generation and verify inverse bind order vs. glTF skin joints.
+
+---
+
+This dossier will be kept current as we iterate. Once the debug fences above are in place, we can capture a single frame’s matrices and resolve the remaining mismatch quickly.
 
