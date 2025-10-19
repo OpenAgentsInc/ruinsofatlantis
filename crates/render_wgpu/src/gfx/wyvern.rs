@@ -98,20 +98,28 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
                         log::info!(target: "wyvern", "no baseColor texture available (leaving white)");
                     }
                 }
+                let jcount_u16 = cpu.joints_nodes.len() as u16;
                 let verts: Vec<VertexSkinned> = cpu
                     .vertices
                     .iter()
-                    .map(|v| VertexSkinned {
-                        pos: v.pos,
-                        nrm: v.nrm,
-                        joints: [
-                            v.joints[0] as u32,
-                            v.joints[1] as u32,
-                            v.joints[2] as u32,
-                            v.joints[3] as u32,
-                        ],
-                        weights: v.weights,
-                        uv: v.uv,
+                    .map(|v| {
+                        let mut j = v.joints;
+                        let mut w = v.weights;
+                        for k in 0..4 {
+                            if j[k] >= jcount_u16 {
+                                j[k] = 0;
+                                w[k] = 0.0;
+                            }
+                        }
+                        let s = (w[0] + w[1] + w[2] + w[3]).max(1.0e-8);
+                        let w = [w[0] / s, w[1] / s, w[2] / s, w[3] / s];
+                        VertexSkinned {
+                            pos: v.pos,
+                            nrm: v.nrm,
+                            uv: v.uv,
+                            joints: [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32],
+                            weights: w,
+                        }
                     })
                     .collect();
                 let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -140,36 +148,11 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
             }
         }
     }
-    // Prefer a model that actually contains a skin. Probe common candidates and pick the first
-    // that yields joints_nodes > 0, mirroring the viewer's success criteria.
-    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-    candidates.push(asset_path(
-        "assets/models/red_wyvern/RedDragon2021.textured.glb",
-    ));
-    candidates.push(asset_path("assets/models/red_wyvern/RedDragon2021.glb"));
-    candidates.push(asset_path(
-        "assets/models/red_wyvern/RedDragon2021.decompressed.glb",
-    ));
-    candidates.push(asset_path(
-        "assets/models/red_wyvern/RedDragon2021.decompressed.gltf",
-    ));
-    // Fallback: directory scan for any *.glb|*.gltf
-    let root = asset_path("assets/models/red_wyvern");
-    if root.exists() {
-        if let Ok(rd) = std::fs::read_dir(&root) {
-            for ent in rd.flatten() {
-                let p = ent.path();
-                if p.is_file() {
-                    if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
-                        let e = ext.to_ascii_lowercase();
-                        if e == "glb" || e == "gltf" {
-                            candidates.push(p);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Explicit candidates only; avoid deep scans to reduce ambiguity.
+    let candidates: Vec<std::path::PathBuf> = vec![
+        asset_path("assets/anims/converted/RedDragon2021.glb"),
+        asset_path("assets/models/red_wyvern/RedDragon2021.glb"),
+    ];
 
     let mut chosen: Option<std::path::PathBuf> = None;
     let mut cpu_probe: Option<roa_assets::types::SkinnedMeshCPU> = None;
@@ -325,20 +308,28 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
             log::info!(target: "wyvern", "no baseColor texture available (leaving white)");
         }
     }
+    let jcount_u16 = cpu.joints_nodes.len() as u16;
     let verts: Vec<VertexSkinned> = cpu
         .vertices
         .iter()
-        .map(|v| VertexSkinned {
-            pos: v.pos,
-            nrm: v.nrm,
-            joints: [
-                v.joints[0] as u32,
-                v.joints[1] as u32,
-                v.joints[2] as u32,
-                v.joints[3] as u32,
-            ],
-            weights: v.weights,
-            uv: v.uv,
+        .map(|v| {
+            let mut j = v.joints;
+            let mut w = v.weights;
+            for k in 0..4 {
+                if j[k] >= jcount_u16 {
+                    j[k] = 0;
+                    w[k] = 0.0;
+                }
+            }
+            let s = (w[0] + w[1] + w[2] + w[3]).max(1.0e-8);
+            let w = [w[0] / s, w[1] / s, w[2] / s, w[3] / s];
+            VertexSkinned {
+                pos: v.pos,
+                nrm: v.nrm,
+                uv: v.uv,
+                joints: [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32],
+                weights: w,
+            }
         })
         .collect();
     let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

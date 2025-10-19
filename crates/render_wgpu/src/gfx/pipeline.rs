@@ -456,6 +456,8 @@ pub fn create_wizard_pipelines(
 ) -> (RenderPipeline, Option<RenderPipeline>) {
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("wizard-pipeline-layout"),
+        // ORDER MATTERS (matches shader.wgsl):
+        // set(0)=globals, set(1)=model, set(2)=palettes(skin SSBO), set(3)=material(sampler+texture)
         bind_group_layouts: &[globals_bgl, model_bgl, palettes_bgl, material_bgl],
         push_constant_ranges: &[],
     });
