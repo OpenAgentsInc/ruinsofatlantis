@@ -84,22 +84,10 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
                 if merged > 0 {
                     log::info!(target: "wyvern", "merged {} animation clips", merged);
                 }
-                // If the skinned source lacks a baseColor texture, try to borrow it from
-                // the textured static model variant under assets/models/red_wyvern/*.
+                // Do not borrow texture from static variant: if skinned base lacks textures,
+                // render untextured (white) to avoid UV mismatch artifacts.
                 if cpu.base_color_texture.is_none() {
-                    if let Some((_vb, _ib, _idx, Some((pixels, w, h)))) =
-                        load_unskinned_textured(device)
-                    {
-                        cpu.base_color_texture = Some(TextureCPU {
-                            pixels,
-                            width: w,
-                            height: h,
-                            srgb: true,
-                        });
-                        log::info!(target: "wyvern", "applied borrowed baseColor texture ({}x{})", w, h);
-                    } else {
-                        log::info!(target: "wyvern", "no baseColor texture available (leaving white)");
-                    }
+                    log::info!(target: "wyvern", "no baseColor on skinned base; rendering untextured (white)");
                 }
                 let jcount_u16 = cpu.joints_nodes.len() as u16;
                 let verts: Vec<VertexSkinned> = cpu
@@ -297,19 +285,8 @@ pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
     if merged > 0 {
         log::info!(target: "wyvern", "merged {} animation clips", merged);
     }
-    // Borrow a baseColor texture from the textured static variant if missing.
     if cpu.base_color_texture.is_none() {
-        if let Some((_vb, _ib, _idx, Some((pixels, w, h)))) = load_unskinned_textured(device) {
-            cpu.base_color_texture = Some(TextureCPU {
-                pixels,
-                width: w,
-                height: h,
-                srgb: true,
-            });
-            log::info!(target: "wyvern", "applied borrowed baseColor texture ({}x{})", w, h);
-        } else {
-            log::info!(target: "wyvern", "no baseColor texture available (leaving white)");
-        }
+        log::info!(target: "wyvern", "no baseColor on skinned base; rendering untextured (white)");
     }
     let jcount_u16 = cpu.joints_nodes.len() as u16;
     let verts: Vec<VertexSkinned> = cpu
