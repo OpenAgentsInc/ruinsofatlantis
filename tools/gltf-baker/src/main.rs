@@ -42,17 +42,47 @@ fn scan_has_draco(doc: &gltf::Document) -> bool {
 }
 
 fn bake_summary(path: &std::path::Path) -> Result<Summary> {
-    let (doc, _buffers, _images) =
-        gltf::import(path).with_context(|| format!("import {}", path.display()))?;
-    let sum = Summary {
-        file: path.display().to_string(),
-        scenes: doc.scenes().len(),
-        nodes: doc.nodes().len(),
-        meshes: doc.meshes().len(),
-        skins: doc.skins().len(),
-        animations: doc.animations().len(),
-        materials: doc.materials().len(),
-        has_draco: scan_has_draco(&doc),
+    // Prefer full import to catch gross errors; if buffers are missing, fall back to JSON-only parse.
+    let sum = match gltf::import(path) {
+        Ok((doc, _, _)) => Summary {
+            file: path.display().to_string(),
+            scenes: doc.scenes().len(),
+            nodes: doc.nodes().len(),
+            meshes: doc.meshes().len(),
+            skins: doc.skins().len(),
+            animations: doc.animations().len(),
+            materials: doc.materials().len(),
+            has_draco: scan_has_draco(&doc),
+        },
+        Err(_) => {
+            // JSON-only fallback for counts
+            let bytes = std::fs::read(path)?;
+            let root: serde_json::Value = serde_json::from_slice(&bytes)?;
+            let len = |k: &str| {
+                root.get(k)
+                    .and_then(|a| a.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0)
+            };
+            let has_draco = root
+                .get("extensionsUsed")
+                .and_then(|a| a.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .any(|v| v.as_str() == Some("KHR_draco_mesh_compression"))
+                })
+                .unwrap_or(false);
+            Summary {
+                file: path.display().to_string(),
+                scenes: len("scenes"),
+                nodes: len("nodes"),
+                meshes: len("meshes"),
+                skins: len("skins"),
+                animations: len("animations"),
+                materials: len("materials"),
+                has_draco,
+            }
+        }
     };
     if sum.has_draco {
         return Err(anyhow!(
@@ -165,38 +195,51 @@ fn to_dto(cpu: &SkinnedMeshCPU) -> SkinDto {
 }
 
 fn collect_basecolor_uv_transforms(path: &Path) -> Result<Vec<Option<UvTransformDto>>> {
-    let (doc, buffers, _images) = gltf_rs::import(path)?;
-    // Score skins by vertex count
-    let mut skin_vtx: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
-    for node in doc.nodes() {
-        if let (Some(skin), Some(mesh)) = (node.skin(), node.mesh()) {
-            let mut v = 0usize;
-            for prim in mesh.primitives() {
-                let r = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
-                if let Some(pos) = r.read_positions() {
-                    v += pos.size_hint().0;
-                }
-            }
-            *skin_vtx.entry(skin.index()).or_default() += v;
-        }
-    }
-    let best_skin = skin_vtx.into_iter().max_by_key(|(_, v)| *v).map(|(i, _)| i);
+    // Parse JSON directly so we can read extension blocks without loading buffers
+    let bytes = std::fs::read(path)?;
+    let root: serde_json::Value = serde_json::from_slice(&bytes)?;
     let mut out: Vec<Option<UvTransformDto>> = Vec::new();
-    if let Some(best) = best_skin {
-        for node in doc.nodes() {
-            if let (Some(skin), Some(mesh)) = (node.skin(), node.mesh()) {
-                if skin.index() != best {
-                    continue;
-                }
-                for prim in mesh.primitives() {
-                    let pbr = prim.material().pbr_metallic_roughness();
-                    let uv = pbr
-                        .base_color_texture()
-                        .and_then(|ti| ti.texture_transform());
+    // Build a materials array for lookup
+    let materials = root
+        .get("materials")
+        .and_then(|m| m.as_array())
+        .cloned()
+        .unwrap_or_default();
+    // Iterate meshes[*].primitives[*].material
+    if let Some(meshes) = root.get("meshes").and_then(|m| m.as_array()) {
+        for mesh in meshes {
+            if let Some(prims) = mesh.get("primitives").and_then(|p| p.as_array()) {
+                for prim in prims {
+                    let mat_idx =
+                        prim.get("material").and_then(|x| x.as_u64()).unwrap_or(0) as usize;
+                    let mat = materials.get(mat_idx);
+                    let uv = mat
+                        .and_then(|m| m.get("pbrMetallicRoughness"))
+                        .and_then(|pbr| pbr.get("baseColorTexture"))
+                        .and_then(|bct| bct.get("extensions"))
+                        .and_then(|ext| ext.get("KHR_texture_transform"));
                     let dto = uv.map(|t| UvTransformDto {
-                        offset: [t.offset()[0] as f32, t.offset()[1] as f32],
-                        scale: [t.scale()[0] as f32, t.scale()[1] as f32],
-                        rot: t.rotation() as f32,
+                        offset: [
+                            t.get("offset")
+                                .and_then(|a| a.get(0))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0) as f32,
+                            t.get("offset")
+                                .and_then(|a| a.get(1))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0) as f32,
+                        ],
+                        scale: [
+                            t.get("scale")
+                                .and_then(|a| a.get(0))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(1.0) as f32,
+                            t.get("scale")
+                                .and_then(|a| a.get(1))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(1.0) as f32,
+                        ],
+                        rot: t.get("rotation").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
                     });
                     out.push(dto);
                 }
@@ -313,4 +356,88 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn bake_summary_counts_minimal_doc() {
+        let gltf_json = r#"{
+          "asset": { "version": "2.0" },
+          "scenes": [{ "nodes": [0] }],
+          "nodes": [{ "mesh": 0 }],
+          "meshes": [{
+            "primitives": [{
+              "attributes": { },
+              "material": 0
+            }]
+          }],
+          "materials": [{
+            "pbrMetallicRoughness": {
+              "baseColorTexture": { "index": 0 }
+            }
+          }],
+          "textures": [{ "source": 0 }],
+          "images": [{ "uri": "data:image/png;base64," }],
+          "skins": [{ "joints": [0] }],
+          "animations": [{ "channels": [], "samplers": [] }]
+        }"#;
+        let mut f = NamedTempFile::new().expect("tmp file");
+        f.write_all(gltf_json.as_bytes()).unwrap();
+        let summary = bake_summary(f.path()).expect("summary");
+        assert_eq!(summary.scenes, 1);
+        assert_eq!(summary.nodes, 1);
+        assert_eq!(summary.meshes, 1);
+        assert_eq!(summary.materials, 1);
+        assert_eq!(summary.skins, 1);
+        assert_eq!(summary.animations, 1);
+        assert!(!summary.has_draco);
+    }
+
+    #[test]
+    fn collect_uv_transform_from_khr_texture_transform() {
+        let gltf_json = r#"{
+          "asset": { "version": "2.0" },
+          "extensionsUsed": ["KHR_texture_transform"],
+          "scenes": [{ "nodes": [0] }],
+          "nodes": [{ "mesh": 0 }],
+          "meshes": [{
+            "primitives": [{
+              "attributes": { },
+              "material": 0
+            }]
+          }],
+          "materials": [{
+            "pbrMetallicRoughness": {
+              "baseColorTexture": {
+                "index": 0,
+                "extensions": {
+                  "KHR_texture_transform": {
+                    "offset": [0.25, 0.5],
+                    "scale": [2.0, 0.5],
+                    "rotation": 0.7853982
+                  }
+                }
+              }
+            }
+          }],
+          "textures": [{ "source": 0 }],
+          "images": [{ "uri": "data:image/png;base64," }],
+          "skins": [{ "joints": [0] }]
+        }"#;
+        let mut f = NamedTempFile::new().expect("tmp file");
+        f.write_all(gltf_json.as_bytes()).unwrap();
+        let xfms = collect_basecolor_uv_transforms(f.path()).expect("xfms");
+        assert_eq!(xfms.len(), 1);
+        let t = xfms[0].expect("transform present");
+        assert!((t.offset[0] - 0.25).abs() < 1e-6);
+        assert!((t.offset[1] - 0.50).abs() < 1e-6);
+        assert!((t.scale[0] - 2.00).abs() < 1e-6);
+        assert!((t.scale[1] - 0.50).abs() < 1e-6);
+        assert!((t.rot - 0.7853982).abs() < 1e-6);
+    }
 }
