@@ -27,9 +27,12 @@ pub struct WyvernAssets {
 
 pub fn load_assets(device: &wgpu::Device) -> Result<WyvernAssets> {
     // 0) Manual override for fast unblocking via environment.
-    if let Ok(ovr) = std::env::var("ROA_WYVERN_BASE") {
+    // Allow alias env var names for convenience.
+    let override_var =
+        std::env::var("ROA_WYVERN_BASE").or_else(|_| std::env::var("OA_WYVERN_BASE"));
+    if let Ok(ovr) = override_var {
         let p = resolve_asset_or_abs(&ovr);
-        log::info!(target: "wyvern", "override ROA_WYVERN_BASE -> {}", p.display());
+        log::info!(target: "wyvern", "override WYVERN_BASE -> {}", p.display());
         let prepared = roa_assets::util::prepare_gltf_path(&p)
             .ok()
             .unwrap_or(p.clone());

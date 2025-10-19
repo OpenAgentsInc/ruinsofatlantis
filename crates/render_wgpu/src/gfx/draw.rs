@@ -198,12 +198,13 @@ impl Renderer {
             rpass.set_pipeline(&self.inst_tex_pipeline);
             rpass.set_bind_group(0, &self.globals_bg, &[]);
             rpass.set_bind_group(1, &self.shard_model_bg, &[]);
-            // Textured instanced pipeline expects material at set(2)
+            // Pipeline layout: 0=globals, 1=model, 2=palettes(unused), 3=material
+            rpass.set_bind_group(2, &self.wyvern_palettes_bg, &[]);
             let mat_bg = self
                 .wyvern_static_mat_bg
                 .as_ref()
                 .unwrap_or(&self.default_material_bg);
-            rpass.set_bind_group(2, mat_bg, &[]);
+            rpass.set_bind_group(3, mat_bg, &[]);
 
             rpass.set_vertex_buffer(0, vb.slice(..));
             rpass.set_vertex_buffer(1, self.ghost_inst.slice(..));

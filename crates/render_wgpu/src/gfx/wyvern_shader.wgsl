@@ -11,8 +11,9 @@ struct Globals { view_proj: mat4x4<f32>, camRightTime: vec4<f32>, camUpPad: vec4
 struct Palettes { mats: array<mat4x4<f32>> };
 @group(1) @binding(0) var<storage, read> palettes: Palettes;
 
-@group(2) @binding(0) var base_sam: sampler;
-@group(2) @binding(1) var base_tex: texture_2d<f32>;
+// Match engine material BGL order: binding(0)=texture, binding(1)=sampler
+@group(2) @binding(0) var base_tex: texture_2d<f32>;
+@group(2) @binding(1) var base_sam: sampler;
 
 // Instance + skinned vertex input: mirrors engine VertexSkinned + InstanceSkin
 struct WyvIn {
@@ -80,4 +81,3 @@ fn fs_wyvern(input: WyvOut) -> @location(0) vec4<f32> {
   let shade = 0.25 + 0.75 * ndl;
   return vec4<f32>(albedo * shade, 1.0);
 }
-
