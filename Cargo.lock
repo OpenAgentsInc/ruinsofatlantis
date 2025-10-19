@@ -2052,6 +2052,7 @@ dependencies = [
  "anyhow",
  "clap",
  "gltf",
+ "roa-assets",
  "serde",
  "serde_json",
 ]

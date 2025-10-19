@@ -21,3 +21,24 @@ Next steps
 
 Notes
 - Draco is an offline preprocess: use our existing `gltf-decompress` tool and re-run `gltf-baker`.
+
+
+Animation export (DTO)
+- --anims-out <path> writes AnimClip JSON with node index–based tracks:
+  - name, duration
+  - t_tracks (node, times, values[xyz])
+  - r_tracks (node, times, values[xyzw])
+  - s_tracks (node, times, values[xyz])
+
+Examples
+```
+# Export skinned DTO
+cargo run -p gltf-baker -- assets/anims/converted/RedDragon2021.glb --skinned-out out/wyvern.skinned.json
+
+# Export animation DTOs
+cargo run -p gltf-baker -- assets/anims/converted/RedDragon2021.glb --anims-out out/wyvern.anims.json
+```
+
+
+Materials v1 (baseColor)
+- The Skinned DTO includes `submeshes[]` with start/count and optional baseColor texture (RGBA8, base64 encoded). KHR_texture_transform is not yet exported; v2 will add `uv_transform` per baseColor (offset, scale, rot).
