@@ -42,3 +42,10 @@ cargo run -p gltf-baker -- assets/anims/converted/RedDragon2021.glb --anims-out 
 
 Materials v1 (baseColor)
 - The Skinned DTO includes `submeshes[]` with start/count and optional baseColor texture (RGBA8, base64 encoded). KHR_texture_transform is not yet exported; v2 will add `uv_transform` per baseColor (offset, scale, rot).
+
+
+Materials v2 (KHR_texture_transform)
+- Set env `GLTF_BAKER_SRC=<input.glb>` to enable best-effort UV transform export.
+- The skinned DTO `submeshes[]` includes `uv_transform` when available from `KHR_texture_transform`:
+  - offset: [u,v], scale: [u,v], rot (radians)
+- Note: Mapping assumes submesh order matches GLTF primitive order for the dominant skin (by vertex count).

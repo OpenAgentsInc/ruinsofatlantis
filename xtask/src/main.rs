@@ -27,6 +27,20 @@ enum Cmd {
     BuildSpells,
     /// Bake a zone snapshot to packs
     BakeZone { slug: String },
+    /// Bake a GLTF/GLB via tools/gltf-baker
+    BakeGltf {
+        /// Input .gltf or .glb
+        input: PathBuf,
+        /// Optional summary JSON output
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Optional skinned DTO JSON output
+        #[arg(long)]
+        skinned_out: Option<PathBuf>,
+        /// Optional animations DTO JSON output
+        #[arg(long)]
+        anims_out: Option<PathBuf>,
+    },
     /// Wishcraft utilities
     Wish {
         #[command(subcommand)]
@@ -796,6 +810,34 @@ fn build_packs() -> Result<()> {
     Ok(())
 }
 
+fn bake_gltf(
+    input: &PathBuf,
+    out: Option<PathBuf>,
+    skinned_out: Option<PathBuf>,
+    anims_out: Option<PathBuf>,
+) -> Result<()> {
+    let mut c = Command::new("cargo");
+    c.args([
+        "run",
+        "-p",
+        "gltf-baker",
+        "--",
+        input.to_string_lossy().as_ref(),
+    ])
+    .stdout(Stdio::inherit())
+    .stderr(Stdio::inherit());
+    if let Some(p) = out.as_ref() {
+        c.arg(p);
+    }
+    if let Some(p) = skinned_out.as_ref() {
+        c.arg("--skinned-out").arg(p);
+    }
+    if let Some(p) = anims_out.as_ref() {
+        c.arg("--anims-out").arg(p);
+    }
+    run(&mut c)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
@@ -805,6 +847,12 @@ fn main() -> Result<()> {
         Cmd::BuildPacks => build_packs(),
         Cmd::BuildSpells => build_spells(),
         Cmd::BakeZone { slug } => bake_zone(&slug),
+        Cmd::BakeGltf {
+            input,
+            out,
+            skinned_out,
+            anims_out,
+        } => bake_gltf(&input, out, skinned_out, anims_out),
         Cmd::Wish { cmd } => wish_cmd(cmd),
     }
 }

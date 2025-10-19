@@ -1,0 +1,15 @@
+[package]
+name = "bevy-runtime-import"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+bevy_app = "0.17"
+bevy_asset = "0.17"
+bevy_ecs = "0.17"
+bevy_gltf = "0.17"
+bevy_scene = "0.17"
+bevy_transform = "0.17"
+bevy_utils = "0.17"

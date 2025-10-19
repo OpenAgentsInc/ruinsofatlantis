@@ -3,6 +3,7 @@ use clap::Parser;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
+use gltf as gltf_rs;
 use roa_assets::skinning::load_gltf_skinned;
 use roa_assets::types::{SkinnedMeshCPU, VertexSkinCPU};
 use roa_assets::util::prepare_gltf_path;
@@ -88,6 +89,7 @@ struct SubmeshDto {
     start: u32,
     count: u32,
     base_color: Option<TextureDto>,
+    uv_transform: Option<UvTransformDto>,
 }
 
 #[derive(Serialize)]
@@ -97,6 +99,13 @@ struct TextureDto {
     srgb: bool,
     /// RGBA8 pixels, base64-encoded
     data_b64: String,
+}
+
+#[derive(Serialize, Clone, Copy)]
+struct UvTransformDto {
+    offset: [f32; 2],
+    scale: [f32; 2],
+    rot: f32,
 }
 
 fn to_dto(cpu: &SkinnedMeshCPU) -> SkinDto {
@@ -116,10 +125,21 @@ fn to_dto(cpu: &SkinnedMeshCPU) -> SkinDto {
     let base_r = cpu.base_r.iter().map(|q| [q.x, q.y, q.z, q.w]).collect();
     let base_s = cpu.base_s.iter().map(|v| [v.x, v.y, v.z]).collect();
     // Submeshes + baseColor (if present)
+    // Try to collect baseColor UV transforms in primitive order to match submeshes
+    // Note: best-effort mapping; relies on iteration order matching loader's append order.
+    let uv_transforms: Vec<Option<UvTransformDto>> = match std::env::var("GLTF_BAKER_SRC") {
+        Ok(src) => match collect_basecolor_uv_transforms(Path::new(&src)) {
+            Ok(v) => v,
+            Err(_) => Vec::new(),
+        },
+        Err(_) => Vec::new(),
+    };
+
     let submeshes = cpu
         .submeshes
         .iter()
-        .map(|sm| SubmeshDto {
+        .enumerate()
+        .map(|(i, sm)| SubmeshDto {
             start: sm.start,
             count: sm.count,
             base_color: sm.base_color_texture.as_ref().map(|t| TextureDto {
@@ -128,6 +148,7 @@ fn to_dto(cpu: &SkinnedMeshCPU) -> SkinDto {
                 srgb: t.srgb,
                 data_b64: base64::encode(&t.pixels),
             }),
+            uv_transform: uv_transforms.get(i).cloned().unwrap_or(None),
         })
         .collect();
     SkinDto {
@@ -141,6 +162,48 @@ fn to_dto(cpu: &SkinnedMeshCPU) -> SkinDto {
         base_s,
         submeshes,
     }
+}
+
+fn collect_basecolor_uv_transforms(path: &Path) -> Result<Vec<Option<UvTransformDto>>> {
+    let (doc, buffers, _images) = gltf_rs::import(path)?;
+    // Score skins by vertex count
+    let mut skin_vtx: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    for node in doc.nodes() {
+        if let (Some(skin), Some(mesh)) = (node.skin(), node.mesh()) {
+            let mut v = 0usize;
+            for prim in mesh.primitives() {
+                let r = prim.reader(|b| buffers.get(b.index()).map(|bb| bb.0.as_slice()));
+                if let Some(pos) = r.read_positions() {
+                    v += pos.size_hint().0;
+                }
+            }
+            *skin_vtx.entry(skin.index()).or_default() += v;
+        }
+    }
+    let best_skin = skin_vtx.into_iter().max_by_key(|(_, v)| *v).map(|(i, _)| i);
+    let mut out: Vec<Option<UvTransformDto>> = Vec::new();
+    if let Some(best) = best_skin {
+        for node in doc.nodes() {
+            if let (Some(skin), Some(mesh)) = (node.skin(), node.mesh()) {
+                if skin.index() != best {
+                    continue;
+                }
+                for prim in mesh.primitives() {
+                    let pbr = prim.material().pbr_metallic_roughness();
+                    let uv = pbr
+                        .base_color_texture()
+                        .and_then(|ti| ti.texture_transform());
+                    let dto = uv.map(|t| UvTransformDto {
+                        offset: [t.offset()[0] as f32, t.offset()[1] as f32],
+                        scale: [t.scale()[0] as f32, t.scale()[1] as f32],
+                        rot: t.rotation() as f32,
+                    });
+                    out.push(dto);
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 #[derive(Serialize)]

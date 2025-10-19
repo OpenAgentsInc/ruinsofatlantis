@@ -13,6 +13,7 @@ members = [
     "xtask",             # workspace automation
     "tools/zone-bake",
     "tools/gltf-decompress",
+    "tools/bevy-runtime-import",
     "tools/image-probe",
     "tools/gltf-baker",
     "tools/sim-harness",
