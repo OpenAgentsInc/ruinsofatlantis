@@ -64,8 +64,8 @@ impl VertexSkinned {
     pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: std::mem::size_of::<VertexSkinned>() as u64,
         step_mode: wgpu::VertexStepMode::Vertex,
+        // Keep attributes in ascending shader_location order for portability
         attributes: &[
-            // Keep attributes in ascending shader_location order for portability
             wgpu::VertexAttribute {
                 shader_location: 0,
                 offset: 0,
@@ -76,12 +76,7 @@ impl VertexSkinned {
                 offset: 12,
                 format: wgpu::VertexFormat::Float32x3,
             },
-            // pos(12) + nrm(12) = 24, uv at 24 (8 bytes), then joints at 32, weights at 48
-            wgpu::VertexAttribute {
-                shader_location: 11,
-                offset: 24,
-                format: wgpu::VertexFormat::Float32x2,
-            },
+            // joints + weights before uv to keep locations ascending
             wgpu::VertexAttribute {
                 shader_location: 8,
                 offset: 32,
@@ -91,6 +86,12 @@ impl VertexSkinned {
                 shader_location: 9,
                 offset: 48,
                 format: wgpu::VertexFormat::Float32x4,
+            },
+            // pos(12) + nrm(12) = 24, uv at 24 (8 bytes)
+            wgpu::VertexAttribute {
+                shader_location: 11,
+                offset: 24,
+                format: wgpu::VertexFormat::Float32x2,
             },
         ],
     };
