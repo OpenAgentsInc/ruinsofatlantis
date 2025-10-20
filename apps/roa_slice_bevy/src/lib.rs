@@ -9,7 +9,7 @@ use roa_domain::{
     tick_sim_time,
 };
 
-const DEFAULT_ZONE: &str = "models/ruins.gltf";
+const DEFAULT_ZONE: &str = "models/ruins.decompressed.gltf";
 const DEFAULT_DRAGON: &str = "models/red_wyvern/RedDragon2021.textured.glb";
 
 #[derive(Resource, Default, Clone)]
@@ -68,7 +68,7 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
 fn setup_camera_lights(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 12.5, 22.0).looking_at(Vec3::new(0.0, 5.0, 0.0), Vec3::Y),
+        Transform::from_xyz(0.0, 4.0, 8.0).looking_at(Vec3::new(0.0, 1.5, 0.0), Vec3::Y),
     ));
     commands.spawn((
         DirectionalLight {
@@ -99,10 +99,7 @@ fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetS
 
     // Auto-load dragon scene root and tag it
     let dragon_scene0 = assets.load(GltfAssetLabel::Scene(0).from_asset(DEFAULT_DRAGON));
-    let dragon_xform = Transform {
-        translation: Vec3::new(0.0, 1.5, 0.0),
-        ..Transform::from_scale(Vec3::splat(0.01))
-    };
+    let dragon_xform = Transform::from_xyz(0.0, 1.5, 0.0).with_scale(Vec3::splat(1.0));
     commands.spawn((SceneRoot(dragon_scene0), dragon_xform, IsDragon));
 
     info!(

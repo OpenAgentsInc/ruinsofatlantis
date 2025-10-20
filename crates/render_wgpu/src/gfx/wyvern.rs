@@ -9,7 +9,6 @@ use crate::gfx::types::{InstanceSkin, VertexPosNrmUv, VertexSkinned};
 use gltf as gltf_rs;
 use roa_assets::gltf::load_gltf_mesh;
 use roa_assets::skinning::{load_gltf_skinned, merge_gltf_animations};
-use roa_assets::types::TextureCPU;
 use std::path::{Path, PathBuf};
 
 /// Resolve a repo-relative asset path (like assets/...) or accept an absolute path unchanged.
