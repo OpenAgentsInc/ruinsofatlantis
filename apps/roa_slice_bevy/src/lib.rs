@@ -233,11 +233,10 @@ fn spawn_dragon_scene(
 #[derive(Resource, Clone)]
 struct DragonGltf(Handle<Gltf>);
 
-#[derive(Component, Clone, Copy)]
-struct DragonAnimNodes {
-    first: AnimationNodeIndex,
-    second: Option<AnimationNodeIndex>,
-    current: u8,
+#[derive(Component, Clone)]
+struct DragonAnimSeq {
+    nodes: Vec<AnimationNodeIndex>,
+    idx: usize,
 }
 
 /// Marker on the entity that owns the live AnimationPlayer we drive
@@ -262,22 +261,18 @@ fn prepare_dragon_animation(
     let Some(g) = gltfs.get(&dragon.0) else {
         return;
     };
-    let mut clips: Vec<Handle<bevy_animation::AnimationClip>> = Vec::new();
-    for h in g.animations.iter().take(2) {
-        clips.push(h.clone());
-    }
-    if clips.is_empty() {
+    // Build a graph with all clips and record node indices
+    let mut seq_nodes: Vec<AnimationNodeIndex> = Vec::new();
+    if g.animations.is_empty() {
         info!("dragon: no animations found in GLTF");
         *done = true;
         return;
     }
     let mut graph = AnimationGraph::new();
-    let a = graph.add_clip(clips[0].clone(), 1.0, graph.root);
-    let b = if clips.len() > 1 {
-        Some(graph.add_clip(clips[1].clone(), 1.0, graph.root))
-    } else {
-        None
-    };
+    for h in g.animations.iter() {
+        let n = graph.add_clip(h.clone(), 1.0, graph.root);
+        seq_nodes.push(n);
+    }
     let handle = graphs.add(graph);
     // Find existing AnimationPlayer under the dragon root; otherwise use root
     let Some((root, kids)) = q_dragon.iter().next() else {
@@ -307,60 +302,47 @@ fn prepare_dragon_animation(
         ecmd.insert(AnimationPlayer::default());
     }
     ecmd.insert(AnimationGraphHandle(handle))
-        .insert(DragonAnimNodes {
-            first: a,
-            second: b,
-            current: 0,
+        .insert(DragonAnimSeq {
+            nodes: seq_nodes,
+            idx: 0,
         })
         .insert(DragonAnimController);
     info!(
         "dragon: driving AnimationPlayer on {:?} ({} clip(s))",
         target,
-        clips.len()
+        g.animations.len()
     );
     *done = true;
 }
 
 fn kickoff_dragon_animation(
-    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<DragonAnimController>>,
+    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimSeq), With<DragonAnimController>>,
 ) {
-    if let Ok((mut player, nodes)) = q.single_mut() {
-        let node = if nodes.current == 0 {
-            nodes.first
-        } else {
-            nodes.second.unwrap_or(nodes.first)
-        };
-        if !player.is_playing_animation(node) {
-            player.start(node); // default: no repeat
-            info!("dragon: playing animation node {:?}", node);
+    if let Ok((mut player, seq)) = q.single_mut() {
+        if let Some(&node) = seq.nodes.get(seq.idx) {
+            if !player.is_playing_animation(node) {
+                player.start(node);
+                info!("dragon: playing animation node {:?}", node);
+            }
         }
     }
 }
 
 fn cycle_dragon_animation(
-    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<DragonAnimController>>,
+    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimSeq), With<DragonAnimController>>,
 ) {
-    if let Ok((mut player, mut nodes)) = q.single_mut() {
-        let cur = if nodes.current == 0 {
-            nodes.first
-        } else {
-            nodes.second.unwrap_or(nodes.first)
-        };
+    if let Ok((mut player, mut seq)) = q.single_mut() {
+        if seq.nodes.is_empty() {
+            return;
+        }
+        let cur = seq.nodes[seq.idx];
         let finished = player
             .animation(cur)
             .map(|a| a.is_finished())
             .unwrap_or(true);
         if finished {
-            nodes.current = if nodes.current == 0 && nodes.second.is_some() {
-                1
-            } else {
-                0
-            };
-            let next = if nodes.current == 0 {
-                nodes.first
-            } else {
-                nodes.second.unwrap_or(nodes.first)
-            };
+            seq.idx = (seq.idx + 1) % seq.nodes.len();
+            let next = seq.nodes[seq.idx];
             player.stop_all();
             player.start(next);
             info!("dragon: switched animation to node {:?}", next);
