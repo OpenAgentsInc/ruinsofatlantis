@@ -15,7 +15,7 @@ use roa_domain::{
 };
 
 const DEFAULT_ZONE: &str = "models/ruins.decompressed.gltf";
-const DEFAULT_DRAGON: &str = "models/DragonProto.glb";
+const DEFAULT_DRAGON: &str = "models/DragonProto_v2.glb";
 
 #[derive(Resource, Default, Clone)]
 struct SliceConfig {
