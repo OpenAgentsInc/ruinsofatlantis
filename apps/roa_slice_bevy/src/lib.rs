@@ -36,6 +36,7 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
         }),
         ..default()
     }));
+    app.add_plugins(bevy_animation::AnimationPlugin);
 
     // Domain events/resources
     app.add_message::<Command>();
@@ -70,6 +71,7 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
             ensure_domain_dragon,
             prepare_dragon_animation,
             kickoff_dragon_animation,
+            cycle_dragon_animation,
             prune_dragon_extras,
         ),
     );
@@ -108,7 +110,7 @@ fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetS
         assets.load_with_settings(DEFAULT_DRAGON, |s: &mut bevy_gltf::GltfLoaderSettings| {
             s.load_cameras = false;
             s.load_lights = false;
-            // We manage animation playback manually; clips still load in the Gltf asset when queried directly.
+            s.load_animations = true;
         });
     commands.insert_resource(DragonGltf(dragon_gltf));
     info!("Slice: requested dragon glTF={}", DEFAULT_DRAGON);
