@@ -66,6 +66,7 @@ pub fn sys_prepare_npc_animation(
     mut graphs: ResMut<Assets<AnimationGraph>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut q_mat: Query<&mut MeshMaterial3d<StandardMaterial>>,
+    q_mesh: Query<&Mesh3d>,
     q_tint: Query<&NpcTint, With<NpcRoot>>,
 ) {
     for (root, kids, _xf) in q_root.iter() {
@@ -149,6 +150,13 @@ pub fn sys_prepare_npc_animation(
                         });
                         *mat_handle = MeshMaterial3d(new);
                     }
+                } else if q_mesh.get(e2).is_ok() {
+                    // Attach a new material if none exists yet
+                    let new = materials.add(StandardMaterial {
+                        base_color: *col,
+                        ..Default::default()
+                    });
+                    commands.entity(e2).insert(MeshMaterial3d(new));
                 }
             }
         }
