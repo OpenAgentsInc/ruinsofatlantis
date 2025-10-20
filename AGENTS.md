@@ -239,12 +239,15 @@ NOTE FOR AGENTS
 - Invocation: The user may ask for “Comprehensive Dossier with code” or “CD with code”.
 - Behavior:
   - Collect the regular dossier narrative (overview, behavior, data flow, history, TODOs).
-  - Append stitched file contents for the most relevant sources (code, docs, scripts, schemas) with clear headers and absolute paths for traceability.
+  - Append stitched file contents for the most relevant sources (code, docs, scripts, schemas).
+  - Format each included file as a block headed by a single line with the absolute path:
+    `----- /abs/path/to/file -----` followed by the file contents (no code fences). This mirrors our 240 KiB bundles.
+  - Optionally include a leading CONTEXT section headed by `----- CONTEXT -----` describing what the bundle contains.
   - Enforce a size budget (default 240 KiB) so the bundle can be pasted/shared.
-  - Persist the bundle to `docs/dossiers/generated/<topic-slug>.with-code.md` and copy the bundle to the clipboard.
+  - Persist to `docs/dossiers/generated/<topic-slug>.with-code.md` and copy to clipboard when asked to generate a shareable bundle.
 - Script support:
-  - Use `scripts/dossier_with_code_240k.sh <topic-slug>` to generate a 240 KiB bundle, save it under `docs/dossiers/generated/`, and copy it to the clipboard.
-  - The script is non‑interactive and repository‑local; it never reads network resources.
+  - You may use repository scripts to generate/share bundles. For Red Wyvern/dragon loading, see `scripts/copy_red_wyvern_loading_240k.sh` as a reference for the exact block format and file selection.
+  - Generated bundles are non‑interactive and repository‑local; they never read network resources.
 - Git hygiene:
   - The `docs/dossiers/generated/` directory is ignored by Git. Generated bundles are local artifacts for handoff and should not be committed.
 

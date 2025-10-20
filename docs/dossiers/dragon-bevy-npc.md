@@ -264,3 +264,145 @@ let asnap = srv.tick_snapshot_actors(tick64);
 - Server path: define a `NpcKind::Dragon(type_id)` and emit replication; client builds visuals keyed by type.
 
 If you want, I can scaffold the `dragon_types` registry, a spawner system, and a tiny UI toggle to cycle dragons and switch clips manually.
+
+## With‑Code Appendix (240 KiB style excerpt)
+
+----- CONTEXT -----
+Bundle: Dragons in Bevy — code and docs referenced by this dossier, formatted
+as file blocks similar to our 240 KiB sharing bundles.
+
+Contents (excerpt)
+- apps/roa_slice_bevy/src/lib.rs — Bevy slice loader/spawner/animation
+- crates/roa_domain/src/{character.rs,input.rs,sim_time.rs} — domain controller
+- docs/dragon-proto-workflow.md — authoring/export workflow
+----- END CONTEXT -----
+
+----- /Users/christopherdavid/code/ruinsofatlantis/apps/roa_slice_bevy/src/lib.rs -----
+```rust
+// Bevy slice entry: loading DragonProto_v2, pruning helpers, building graph for all clips,
+// and rotating the AnimationPlayer across them.
+// (Full file in repo; excerpted for brevity.)
+
+// ... imports ...
+const DEFAULT_DRAGON: &str = "models/DragonProto_v2.glb";
+
+#[derive(Component, Clone)]
+struct DragonAnimSeq { nodes: Vec<AnimationNodeIndex>, idx: usize }
+#[derive(Component)]
+struct DragonAnimController;
+
+fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetServer>) {
+    if cfg.zone_picker { return; }
+    let dragon_gltf: Handle<Gltf> = assets.load_with_settings(
+        DEFAULT_DRAGON,
+        |s: &mut bevy_gltf::GltfLoaderSettings| {
+            s.load_cameras = false; s.load_lights = false; s.load_animations = true;
+        },
+    );
+    commands.insert_resource(DragonGltf(dragon_gltf));
+}
+
+fn spawn_dragon_scene(/* ... */) { /* spawn Scene0; set IsDragon; position/scale */ }
+
+fn prune_dragon_extras(/* ... */) { /* despawn Cube/Plane/Grid/Light/Lamp/Sphere/Sun/Emiss */ }
+
+fn prepare_dragon_animation(
+    mut commands: Commands,
+    dragon: Res<DragonGltf>,
+    gltfs: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    q_dragon: Query<(Entity, Option<&Children>), With<IsDragon>>,
+    q_children: Query<&Children>,
+    q_players: Query<Entity, With<AnimationPlayer>>,
+    mut done: Local<bool>,
+) {
+    if *done { return; }
+    let Some(g) = gltfs.get(&dragon.0) else { return; };
+    if g.animations.is_empty() { *done = true; return; }
+    let mut graph = AnimationGraph::new();
+    let mut seq_nodes = Vec::new();
+    for h in g.animations.iter() { seq_nodes.push(graph.add_clip(h.clone(), 1.0, graph.root)); }
+    let handle = graphs.add(graph);
+    // find GLTF's AnimationPlayer in spawned hierarchy
+    let Some((root, kids)) = q_dragon.iter().next() else { return; };
+    let mut stack = Vec::new(); if let Some(k)=kids { for c in k.iter(){ stack.push(*c); } }
+    let mut player_ent=None; while let Some(e)=stack.pop(){ if q_players.get(e).is_ok(){player_ent=Some(e);break;} if let Ok(ch)=q_children.get(e){for c in ch.iter(){stack.push(*c);} } }
+    let target = player_ent.unwrap_or(root);
+    let mut ecmd = commands.entity(target);
+    if q_players.get(target).is_err() { ecmd.insert(AnimationPlayer::default()); }
+    ecmd.insert(AnimationGraphHandle(handle))
+        .insert(DragonAnimSeq { nodes: seq_nodes, idx: 0 })
+        .insert(DragonAnimController);
+}
+
+fn kickoff_dragon_animation(mut q: Query<(&mut AnimationPlayer, &mut DragonAnimSeq), With<DragonAnimController>>){
+    if let Ok((mut player, seq)) = q.single_mut() {
+        if let Some(&node) = seq.nodes.get(seq.idx) { if !player.is_playing_animation(node) { player.start(node); } }
+    }
+}
+
+fn cycle_dragon_animation(mut q: Query<(&mut AnimationPlayer, &mut DragonAnimSeq), With<DragonAnimController>>){
+    if let Ok((mut player, mut seq)) = q.single_mut() {
+        if seq.nodes.is_empty() { return; }
+        let cur = seq.nodes[seq.idx];
+        let finished = player.animation(cur).map(|a| a.is_finished()).unwrap_or(true);
+        if finished { seq.idx = (seq.idx + 1) % seq.nodes.len(); let next = seq.nodes[seq.idx]; player.stop_all(); player.start(next); }
+    }
+}
+```
+
+----- /Users/christopherdavid/code/ruinsofatlantis/crates/roa_domain/src/character.rs -----
+```rust
+//! Minimal character/dragon controller components and systems.
+use bevy_ecs::prelude::*;
+use bevy_reflect::Reflect;
+use crate::Command;
+
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+pub struct DragonController { pub speed_fwd: f32, pub speed_strafe: f32, pub speed_up: f32, pub yaw: f32, pub pitch: f32 }
+impl Default for DragonController { fn default() -> Self { Self { speed_fwd: 12.0, speed_strafe: 8.0, speed_up: 8.0, yaw: 0.0, pitch: 0.0 } } }
+
+#[derive(Component, Reflect, Debug, Default, Clone, Copy)]
+pub struct TransformState { pub pos: glam::Vec3, pub rot_yaw_pitch_roll: glam::Vec3 }
+
+pub fn sys_apply_commands_to_controller(
+    mut q: Query<(&mut DragonController, &mut TransformState)>,
+    mut ev: MessageReader<Command>, sim: Res<crate::SimTime>) {
+    let dt = sim.dt;
+    for (mut ctrl, mut tf) in q.iter_mut() {
+        for e in ev.read() { match *e {
+            Command::MoveAxes { x, y } => { let yaw = ctrl.yaw; let fwd = glam::Vec3::new(yaw.sin(),0.0,-yaw.cos()); let right = glam::Vec3::new(fwd.z,0.0,-fwd.x); tf.pos += (fwd*y*ctrl.speed_fwd + right*x*ctrl.speed_strafe)*dt; }
+            Command::LookDelta { dx, dy } => { ctrl.yaw += dx*0.002; ctrl.pitch=(ctrl.pitch+dy*0.002).clamp(-1.2,1.2); tf.rot_yaw_pitch_roll = glam::vec3(ctrl.yaw, ctrl.pitch, 0.0); }
+            Command::Ascend(a)=>{ tf.pos.y += a*ctrl.speed_up*dt; }
+            Command::Descend(a)=>{ tf.pos.y -= a*ctrl.speed_up*dt; }
+            _ => {}
+        } }
+    }
+}
+```
+
+----- /Users/christopherdavid/code/ruinsofatlantis/crates/roa_domain/src/input.rs -----
+```rust
+//! Input command events for the domain.
+use bevy_ecs::prelude::*; use bevy_reflect::Reflect;
+#[derive(Message, Debug, Clone, Reflect)]
+pub enum Command { MoveAxes{ x:f32, y:f32 }, LookDelta{ dx:f32, dy:f32 }, Ascend(f32), Descend(f32), Takeoff, Land, AttackPrimary }
+```
+
+----- /Users/christopherdavid/code/ruinsofatlantis/crates/roa_domain/src/sim_time.rs -----
+```rust
+//! Simple simulation time resource for fixed-step logic.
+use bevy_ecs::prelude::*; use bevy_time::Time;
+#[derive(Resource, Debug, Clone, Copy)] pub struct SimTime { pub tick:u64, pub dt:f32 }
+impl Default for SimTime { fn default()->Self{ Self{ tick:0, dt:1.0/60.0 } } }
+pub fn tick_sim_time(mut sim: ResMut<SimTime>, time: Res<Time>) { sim.tick = sim.tick.saturating_add(1); sim.dt = time.delta_secs(); }
+```
+
+----- /Users/christopherdavid/code/ruinsofatlantis/docs/dragon-proto-workflow.md -----
+```markdown
+# DragonProto Workflow — Programmatic Dragon Builds (Blender → GLB → Bevy)
+(See full file in repo; excerpt)
+- Headless Blender build: geometry → rig → skin → Actions; push Actions to NLA
+- Export GLB: selection-only, no cams/lights, animations baked & force-sampled
+- Verify GLB has skins/animations; integrate under assets/models; run slice
+```
