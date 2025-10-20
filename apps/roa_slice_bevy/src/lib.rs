@@ -19,7 +19,6 @@ const DEFAULT_DRAGON: &str = "models/DragonProto.glb";
 
 #[derive(Resource, Default, Clone)]
 struct SliceConfig {
-    zone_scene: String,
     zone_picker: bool,
 }
 
@@ -46,9 +45,8 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
         .ok()
         .map(|v| v == "1")
         .unwrap_or(false);
-    let zone_scene = zone_override.unwrap_or_else(|| DEFAULT_ZONE.to_string());
+    let _zone_scene = zone_override.unwrap_or_else(|| DEFAULT_ZONE.to_string());
     app.insert_resource(SliceConfig {
-        zone_scene,
         zone_picker: zone_picker || zone_picker_env,
     });
 
@@ -246,24 +244,7 @@ struct DragonAnimNodes {
 #[derive(Component)]
 struct DragonAnimController;
 
-fn pick_clip<'a>(gltf: &'a Gltf) -> Option<Handle<bevy_animation::AnimationClip>> {
-    if let Ok(want) = std::env::var("ROA_WYVERN_CLIP") {
-        let want_l = want.to_ascii_lowercase();
-        for (name, h) in gltf.named_animations.iter() {
-            if name.to_ascii_lowercase().contains(&want_l) {
-                return Some(h.clone());
-            }
-        }
-    }
-    for key in ["idle", "fly", "loop", "walk"] {
-        for (name, h) in gltf.named_animations.iter() {
-            if name.to_ascii_lowercase().contains(key) {
-                return Some(h.clone());
-            }
-        }
-    }
-    gltf.animations.get(0).cloned()
-}
+// (Removed) pick_clip helper; we now take the first two clips directly.
 
 fn prepare_dragon_animation(
     mut commands: Commands,
