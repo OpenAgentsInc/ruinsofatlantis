@@ -10,7 +10,7 @@ use roa_domain::{
 };
 
 const DEFAULT_ZONE: &str = "models/ruins.gltf";
-const DEFAULT_DRAGON: &str = "anims/converted/RedDragon2021.glb";
+const DEFAULT_DRAGON: &str = "models/red_wyvern/RedDragon2021.textured.glb";
 
 #[derive(Resource, Default, Clone)]
 struct SliceConfig {
