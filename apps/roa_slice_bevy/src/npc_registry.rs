@@ -43,6 +43,25 @@ pub fn register_default_dragons(mut reg: ResMut<NpcVisualRegistry>) {
             clip_mode: ClipMode::RotateAll,
         },
     );
+    // Construct other clip modes too so enum variants are used (and available for testing)
+    reg.insert(
+        "dragon:proto_v2_idle",
+        NpcVisualArchetype {
+            gltf_path: "models/DragonProto_v2.glb".into(),
+            scene_index: 0,
+            scale: Vec3::splat(1.0),
+            clip_mode: ClipMode::IdleOnly,
+        },
+    );
+    reg.insert(
+        "dragon:proto_v2_named",
+        NpcVisualArchetype {
+            gltf_path: "models/DragonProto_v2.glb".into(),
+            scene_index: 0,
+            scale: Vec3::splat(1.0),
+            clip_mode: ClipMode::Named(&["Idle", "Fly"]),
+        },
+    );
 }
 
 pub struct NpcVisualRegistryPlugin;

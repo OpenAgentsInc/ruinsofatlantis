@@ -140,7 +140,7 @@ pub fn sys_apply_tint_after_spawn(
         let mut painted = false;
         let mut stack: Vec<Entity> = Vec::new();
         let mut visited = 0usize;
-        let mut mat_updated = 0usize;
+        let mat_updated = 0usize;
         let mut mat_inserted = 0usize;
         let mut mesh_seen = 0usize;
         for child in kids.iter() {

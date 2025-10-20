@@ -1,6 +1,7 @@
 //! Bevy vertical slice runner (library entry) so other crates can launch the slice.
 use anyhow::Result;
 use bevy::gltf::GltfAssetLabel;
+use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::Mesh3d;
 use bevy::prelude::Name;
 use bevy::prelude::*;
@@ -73,6 +74,7 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
             kickoff_dragon_animation,
             cycle_dragon_animation,
             prune_dragon_extras,
+            apply_player_tint_after_spawn,
         ),
     );
 
@@ -438,3 +440,72 @@ fn prune_dragon_extras(
 }
 mod npc_registry;
 mod npc_spawn;
+
+// --- Player dragon tint ---
+#[derive(Component)]
+struct PlayerTintApplied;
+
+fn apply_player_tint_after_spawn(
+    mut commands: Commands,
+    q_root: Query<(Entity, Option<&Children>), (With<IsDragon>, Without<PlayerTintApplied>)>,
+    q_children: Query<&Children>,
+    mut q_mat: Query<&mut MeshMaterial3d<StandardMaterial>>, // mesh material handle on mesh
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    q_mesh: Query<&Mesh3d>,
+) {
+    let Ok((root, kids)) = q_root.single() else {
+        return;
+    };
+    let tint = Color::srgb(0.15, 0.4, 1.0); // blue
+    let mut stack: Vec<Entity> = Vec::new();
+    if let Some(k) = kids {
+        for child in k.iter() {
+            stack.push(child);
+        }
+    }
+    let mut painted = false;
+    while let Some(e) = stack.pop() {
+        if let Ok(ch) = q_children.get(e) {
+            for c in ch.iter() {
+                stack.push(c);
+            }
+        }
+        if let Ok(mut mh) = q_mat.get_mut(e) {
+            // Duplicate and tint material
+            let handle = mh.0.clone();
+            let new_mat = if let Some(orig) = materials.get(&handle).cloned() {
+                let mut m = orig;
+                m.base_color_texture = None;
+                m.base_color = tint;
+                m.unlit = true;
+                m.emissive = tint.into();
+                m
+            } else {
+                StandardMaterial {
+                    base_color_texture: None,
+                    base_color: tint,
+                    unlit: true,
+                    emissive: tint.into(),
+                    ..Default::default()
+                }
+            };
+            let new = materials.add(new_mat);
+            *mh = MeshMaterial3d(new);
+            painted = true;
+        } else if q_mesh.get(e).is_ok() {
+            // Attach a fresh tinted material if none present
+            let new = materials.add(StandardMaterial {
+                base_color_texture: None,
+                base_color: tint,
+                unlit: true,
+                emissive: tint.into(),
+                ..Default::default()
+            });
+            commands.entity(e).insert(MeshMaterial3d(new));
+            painted = true;
+        }
+    }
+    if painted {
+        commands.entity(root).insert(PlayerTintApplied);
+    }
+}
