@@ -143,17 +143,20 @@ pub fn sys_prepare_npc_animation(
                     let handle = mat_handle.0.clone();
                     if let Some(m) = materials.get_mut(&handle) {
                         m.base_color = *col;
+                        m.unlit = true;
                     } else {
                         let new = materials.add(StandardMaterial {
                             base_color: *col,
+                            unlit: true,
                             ..Default::default()
                         });
                         *mat_handle = MeshMaterial3d(new);
                     }
                 } else if q_mesh.get(e2).is_ok() {
-                    // Attach a new material if none exists yet
+                    // Attach a new unlit material if none exists yet
                     let new = materials.add(StandardMaterial {
                         base_color: *col,
+                        unlit: true,
                         ..Default::default()
                     });
                     commands.entity(e2).insert(MeshMaterial3d(new));
