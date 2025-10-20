@@ -242,6 +242,10 @@ struct DragonAnimNodes {
     current: u8,
 }
 
+/// Marker on the entity that owns the live AnimationPlayer we drive
+#[derive(Component)]
+struct DragonAnimController;
+
 fn pick_clip<'a>(gltf: &'a Gltf) -> Option<Handle<bevy_animation::AnimationClip>> {
     if let Ok(want) = std::env::var("ROA_WYVERN_CLIP") {
         let want_l = want.to_ascii_lowercase();
@@ -266,7 +270,9 @@ fn prepare_dragon_animation(
     dragon: Res<DragonGltf>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
-    q_dragon: Query<Entity, With<IsDragon>>,
+    q_dragon: Query<(Entity, Option<&Children>), With<IsDragon>>,
+    q_children: Query<&Children>,
+    q_players: Query<Entity, With<AnimationPlayer>>,
     mut done: Local<bool>,
 ) {
     if *done {
@@ -292,26 +298,50 @@ fn prepare_dragon_animation(
         None
     };
     let handle = graphs.add(graph);
-    if let Ok(ent) = q_dragon.single() {
-        commands
-            .entity(ent)
-            .insert(AnimationGraphHandle(handle))
-            .insert(AnimationPlayer::default())
-            .insert(DragonAnimNodes {
-                first: a,
-                second: b,
-                current: 0,
-            });
-        info!(
-            "dragon: attached AnimationPlayer and graph ({} clip(s))",
-            clips.len()
-        );
-        *done = true;
+    // Find existing AnimationPlayer under the dragon root; otherwise use root
+    let Some((root, kids)) = q_dragon.iter().next() else {
+        return;
+    };
+    let mut stack: Vec<Entity> = Vec::new();
+    if let Some(k) = kids {
+        for child in k.iter() {
+            stack.push(child.clone());
+        }
     }
+    let mut player_ent: Option<Entity> = None;
+    while let Some(e) = stack.pop() {
+        if q_players.get(e).is_ok() {
+            player_ent = Some(e);
+            break;
+        }
+        if let Ok(ch) = q_children.get(e) {
+            for child in ch.iter() {
+                stack.push(child.clone());
+            }
+        }
+    }
+    let target = player_ent.unwrap_or(root);
+    let mut ecmd = commands.entity(target);
+    if q_players.get(target).is_err() {
+        ecmd.insert(AnimationPlayer::default());
+    }
+    ecmd.insert(AnimationGraphHandle(handle))
+        .insert(DragonAnimNodes {
+            first: a,
+            second: b,
+            current: 0,
+        })
+        .insert(DragonAnimController);
+    info!(
+        "dragon: driving AnimationPlayer on {:?} ({} clip(s))",
+        target,
+        clips.len()
+    );
+    *done = true;
 }
 
 fn kickoff_dragon_animation(
-    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<IsDragon>>,
+    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<DragonAnimController>>,
 ) {
     if let Ok((mut player, nodes)) = q.single_mut() {
         let node = if nodes.current == 0 {
@@ -327,7 +357,7 @@ fn kickoff_dragon_animation(
 }
 
 fn cycle_dragon_animation(
-    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<IsDragon>>,
+    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<DragonAnimController>>,
 ) {
     if let Ok((mut player, mut nodes)) = q.single_mut() {
         let cur = if nodes.current == 0 {
