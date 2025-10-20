@@ -66,6 +66,7 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
     app.add_systems(
         Update,
         (
+            spawn_dragon_scene,
             ensure_domain_dragon,
             prepare_dragon_animation,
             kickoff_dragon_animation,
@@ -102,15 +103,15 @@ fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetS
     // Zone temporarily disabled for bring-up clarity.
     // When re-enabling, spawn SceneRoot for `cfg.zone_scene` here.
 
-    // Auto-load dragon scene root and tag it
-    let dragon_scene0 = assets.load(GltfAssetLabel::Scene(0).from_asset(DEFAULT_DRAGON));
-    let dragon_xform = Transform::from_xyz(0.0, 1.5, 0.0).with_scale(Vec3::splat(1.0));
-    commands.spawn((SceneRoot(dragon_scene0), dragon_xform, IsDragon));
-    // Load whole GLTF to access animations
-    let dragon_gltf: Handle<Gltf> = assets.load(DEFAULT_DRAGON);
+    // Load GLTF with cameras/lights disabled to avoid extra scene clutter.
+    let dragon_gltf: Handle<Gltf> =
+        assets.load_with_settings(DEFAULT_DRAGON, |s: &mut bevy_gltf::GltfLoaderSettings| {
+            s.load_cameras = false;
+            s.load_lights = false;
+            // We manage animation playback manually; clips still load in the Gltf asset when queried directly.
+        });
     commands.insert_resource(DragonGltf(dragon_gltf));
-
-    info!("Slice: auto-loaded dragon={}", DEFAULT_DRAGON);
+    info!("Slice: requested dragon glTF={}", DEFAULT_DRAGON);
 }
 
 // --- Input mapping: Bevy input → domain `Command` messages ---
@@ -199,6 +200,34 @@ fn ensure_domain_dragon(
 ) {
     if q_has_domain.single().is_err() && q_visual.single().is_ok() {
         commands.spawn((DragonController::default(), TransformState::default()));
+    }
+}
+
+// Spawn the dragon SceneRoot once the GLTF asset is available.
+fn spawn_dragon_scene(
+    mut commands: Commands,
+    dragon: Res<DragonGltf>,
+    gltfs: Res<Assets<Gltf>>,
+    assets: Res<AssetServer>,
+    mut spawned: Local<bool>,
+) {
+    if *spawned {
+        return;
+    }
+    let Some(g) = gltfs.get(&dragon.0) else {
+        return;
+    };
+    if let Some(first_scene) = g.scenes.get(0).cloned() {
+        let dragon_xform = Transform::from_xyz(0.0, 1.5, 0.0).with_scale(Vec3::splat(1.0));
+        commands.spawn((SceneRoot(first_scene), dragon_xform, IsDragon));
+        info!("dragon: spawned Scene0");
+        *spawned = true;
+    } else {
+        // Fallback: direct label
+        let scene0 = assets.load(GltfAssetLabel::Scene(0).from_asset(DEFAULT_DRAGON));
+        let dragon_xform = Transform::from_xyz(0.0, 1.5, 0.0).with_scale(Vec3::splat(1.0));
+        commands.spawn((SceneRoot(scene0), dragon_xform, IsDragon));
+        *spawned = true;
     }
 }
 
