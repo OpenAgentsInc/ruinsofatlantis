@@ -23,6 +23,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+use env_logger::{Builder as LogBuilder, Env as LogEnv};
 use glam::{Mat4, Vec3};
 use log::info;
 use roa_assets::skinning::{merge_fbx_animations, merge_gltf_animations};
@@ -591,20 +592,35 @@ fn clip_names_affecting_skin(base: &SkinnedMeshCPU) -> Vec<String> {
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
+    // Initialize logging with a helpful default if RUST_LOG is not set.
+    // Shows info-level logs for this tool and roa_assets by default.
+    let env = LogEnv::default().filter_or(
+        "RUST_LOG",
+        "info,viewer=info,model-viewer=info,roa_assets=info",
+    );
+    let mut builder = LogBuilder::from_env(env);
+    builder.format_timestamp_secs();
+    let _ = builder.try_init();
+
     let cli = Cli::parse();
     pollster::block_on(run(cli))
 }
 
 #[allow(deprecated)]
 async fn run(cli: Cli) -> Result<()> {
+    // Log CLI args early so long startup phases show context.
+    log::info!(target: "viewer", "start: path={:?} anim_lib={:?} wireframe={} snapshot={:?}", cli.path, cli.anim_lib, cli.wireframe, cli.snapshot);
     // Window + surface
+    let t_start = std::time::Instant::now();
     let event_loop = EventLoop::new()?;
+    log::info!(target: "viewer", "created event loop ({} ms)", t_start.elapsed().as_millis());
+    let t_win = std::time::Instant::now();
     let window = event_loop.create_window(
         WindowAttributes::default()
             .with_title("Model Viewer")
             .with_inner_size(PhysicalSize::new(1920, 1080)),
     )?;
+    log::info!(target: "viewer", "created window {}x{} ({} ms)", 1920, 1080, t_win.elapsed().as_millis());
     let instance = wgpu::Instance::default();
     let raw_display = window.display_handle()?.as_raw();
     let raw_window = window.window_handle()?.as_raw();
@@ -614,8 +630,10 @@ async fn run(cli: Cli) -> Result<()> {
             raw_window_handle: raw_window,
         })
     }?;
+    log::info!(target: "viewer", "created surface");
 
     // Adapter/device
+    let t_adapt = std::time::Instant::now();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             compatible_surface: Some(&surface),
@@ -624,11 +642,13 @@ async fn run(cli: Cli) -> Result<()> {
         })
         .await
         .expect("adapter");
+    log::info!(target: "viewer", "got adapter in {} ms", t_adapt.elapsed().as_millis());
     let needed_features = if cli.wireframe {
         wgpu::Features::POLYGON_MODE_LINE
     } else {
         wgpu::Features::empty()
     };
+    let t_dev = std::time::Instant::now();
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("viewer-device"),
@@ -638,6 +658,7 @@ async fn run(cli: Cli) -> Result<()> {
             trace: wgpu::Trace::default(),
         })
         .await?;
+    log::info!(target: "viewer", "created device (features={:?}) in {} ms", needed_features, t_dev.elapsed().as_millis());
 
     // Surface config
     let size = window.inner_size();
@@ -668,6 +689,7 @@ async fn run(cli: Cli) -> Result<()> {
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
+    log::info!(target: "viewer", "configured surface (format={:?}, {}x{}, present={:?})", format, config.width, config.height, present_mode);
 
     // Globals
     let globals = Globals {
@@ -897,10 +919,14 @@ async fn run(cli: Cli) -> Result<()> {
                       mat_bgl: &wgpu::BindGroupLayout,
                       skin_bgl: &wgpu::BindGroupLayout|
      -> Result<ModelGpu> {
+        log::info!(target: "viewer", "load: preparing {:?}", path);
+        let t_prep = std::time::Instant::now();
         let prepared = roa_assets::util::prepare_gltf_path(path)?;
+        log::info!(target: "viewer", "load: prepared -> {} ({} ms)", prepared.display(), t_prep.elapsed().as_millis());
         match load_gltf_skinned(&prepared) {
             Ok(skinned) => {
                 info!(
+                    target: "viewer",
                     "loaded (skinned): {} (verts={}, indices={}, joints={}, anims={})",
                     prepared.display(),
                     skinned.vertices.len(),
@@ -929,12 +955,14 @@ async fn run(cli: Cli) -> Result<()> {
                     contents: bytemuck::cast_slice(&skinned.indices),
                     usage: wgpu::BufferUsages::INDEX,
                 });
+                let t_pal = std::time::Instant::now();
                 let palette = compute_bind_pose_palette(&skinned);
                 let skin_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("skin-palette"),
                     contents: bytemuck::cast_slice(&palette),
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 });
+                log::info!(target: "viewer", "built bind-pose palette ({} joints) in {} ms", palette.len(), t_pal.elapsed().as_millis());
                 let skin_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("skin-bg"),
                     layout: skin_bgl,
@@ -1005,14 +1033,10 @@ async fn run(cli: Cli) -> Result<()> {
                     });
                     mats.push((bg, 0, skinned.indices.len() as u32));
                 } else {
+                    log::info!(target: "viewer", "building {} material(s) from submeshes", skinned.submeshes.len());
                     for (i, sm) in skinned.submeshes.iter().enumerate() {
                         let (view, samp) = if let Some(tex) = &sm.base_color_texture {
-                            log::info!(
-                                "viewer: material #{} baseColor {}x{}",
-                                i,
-                                tex.width,
-                                tex.height
-                            );
+                            log::info!(target: "viewer", "mat[{}]: baseColor {}x{}", i, tex.width, tex.height);
                             let size = wgpu::Extent3d {
                                 width: tex.width,
                                 height: tex.height,
@@ -1049,7 +1073,7 @@ async fn run(cli: Cli) -> Result<()> {
                                 linear_samp.clone(),
                             )
                         } else {
-                            log::info!("viewer: material #{} baseColor <none>", i);
+                            log::info!(target: "viewer", "mat[{}]: baseColor <none>", i);
                             (white_view.clone(), linear_samp.clone())
                         };
                         let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1075,11 +1099,7 @@ async fn run(cli: Cli) -> Result<()> {
                     .iter()
                     .filter(|s| s.base_color_texture.is_some())
                     .count();
-                log::info!(
-                    "viewer: submeshes={} (with textures={})",
-                    skinned.submeshes.len(),
-                    tex_count
-                );
+                log::info!(target: "viewer", "submeshes={} (with textures={})", skinned.submeshes.len(), tex_count);
                 let center = 0.5 * (min_b + max_b);
                 let diag = (max_b - min_b).length().max(1.0);
                 // Collect only clips that affect skinned joints (skip camera/object-only tracks)
@@ -1138,9 +1158,10 @@ async fn run(cli: Cli) -> Result<()> {
                 })
             }
             Err(e) => {
-                log::warn!("skinned load failed, trying unskinned: {}", e);
+                log::warn!(target: "viewer", "skinned load failed, trying basic: {}", e);
                 let cpu: CpuMesh = load_gltf_mesh(&prepared)?;
                 info!(
+                    target: "viewer",
                     "loaded (basic): {} (verts={}, indices={})",
                     prepared.display(),
                     cpu.vertices.len(),
@@ -1183,6 +1204,7 @@ async fn run(cli: Cli) -> Result<()> {
     let mut lists_visible_pre: bool = false;
     // Load from CLI if provided
     if let Some(p) = cli.path.as_ref() {
+        log::info!(target: "viewer", "CLI load: {}", p.display());
         if let Ok(mut gpu) = load_model(p, &device, &queue, &mat_bgl, &skin_bgl) {
             match &gpu {
                 ModelGpu::Skinned {
@@ -1241,6 +1263,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
             // If an animation library is provided, and the model is skinned, merge now.
             if let Some(lib_path) = cli.anim_lib.as_ref() {
+                log::info!(target: "viewer", "merge: explicit anim_lib = {}", lib_path.display());
                 if let ModelGpu::Skinned {
                     base,
                     anim,
@@ -1295,6 +1318,8 @@ async fn run(cli: Cli) -> Result<()> {
                         *anims = names;
                         *time = 0.0;
                         *active_index = 0;
+                    } else {
+                        log::warn!(target: "viewer", "merge: no animations merged from {}", lib_path.display());
                     }
                 }
             } else {
@@ -1310,6 +1335,7 @@ async fn run(cli: Cli) -> Result<()> {
                 {
                     if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
                         let stem_l = stem.to_ascii_lowercase();
+                        log::info!(target: "viewer", "merge(auto): stem='{}'", stem_l);
                         let mut candidates: Vec<std::path::PathBuf> = Vec::new();
                         for dir in [
                             "assets/anims/converted",
@@ -1330,6 +1356,11 @@ async fn run(cli: Cli) -> Result<()> {
                                 }
                             }
                         }
+                        if candidates.is_empty() {
+                            log::info!(target: "viewer", "merge(auto): no candidates found in assets/anims/**");
+                        } else {
+                            log::info!(target: "viewer", "merge(auto): candidates: {}", candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
+                        }
                         let mut merged_any = false;
                         for c in candidates {
                             let ext = c
@@ -1338,13 +1369,16 @@ async fn run(cli: Cli) -> Result<()> {
                                 .unwrap_or("")
                                 .to_ascii_lowercase();
                             if ext == "glb" || ext == "gltf" {
+                                log::info!(target: "viewer", "merge(auto): glTF candidate {}", c.display());
                                 if let Ok(n) = merge_gltf_animations(base.as_mut(), &c) {
                                     merged_any |= n > 0;
                                 }
                             } else if ext == "fbx" {
+                                log::info!(target: "viewer", "merge(auto): FBX candidate {}", c.display());
                                 if merge_fbx_animations(base.as_mut(), &c).is_ok() {
                                     merged_any = true;
                                 } else if let Some(conv) = try_convert_fbx_to_gltf(&c) {
+                                    log::info!(target: "viewer", "merge(auto): converted FBX -> {}", conv.display());
                                     if let Ok(n) = merge_gltf_animations(base.as_mut(), &conv) {
                                         merged_any |= n > 0;
                                     }
@@ -1352,6 +1386,7 @@ async fn run(cli: Cli) -> Result<()> {
                             }
                         }
                         if merged_any {
+                            log::info!(target: "viewer", "merge(auto): merged some clips; now refreshing list");
                             let mut names: Vec<String> = clip_names_affecting_skin(&base);
                             if names.is_empty() {
                                 names = base.animations.keys().cloned().collect();
@@ -1379,6 +1414,8 @@ async fn run(cli: Cli) -> Result<()> {
                                 }
                             );
                             window.set_title(&title);
+                        } else {
+                            log::info!(target: "viewer", "merge(auto): nothing merged");
                         }
                     }
                 }
@@ -1408,6 +1445,8 @@ async fn run(cli: Cli) -> Result<()> {
     // Animations panel scroll (pixels, 0 = top)
     let mut anim_scroll_px: f32 = 0.0;
 
+    log::info!(target: "viewer", "enter event loop");
+    let mut first_frame_logged = false;
     Ok(event_loop.run(move |event, elwt| match event {
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => elwt.exit(),
         Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } => {
@@ -1457,6 +1496,10 @@ async fn run(cli: Cli) -> Result<()> {
             }
         }
         Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+            if !first_frame_logged {
+                log::info!(target: "viewer", "first frame");
+                first_frame_logged = true;
+            }
             // Update animation palette (if skinned)
             if let Some(ModelGpu::Skinned { skin_buf, anim, active_index, time, .. }) = model_gpu.as_mut() {
                 let now = std::time::Instant::now();

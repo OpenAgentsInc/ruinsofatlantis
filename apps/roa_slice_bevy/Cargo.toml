@@ -1,0 +1,10 @@
+[package]
+name = "roa_slice_bevy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+bevy = "=0.17"
+clap = { version = "4", features = ["derive"] }
+roa_domain = { version = "0.1.0", path = "../../crates/roa_domain" }

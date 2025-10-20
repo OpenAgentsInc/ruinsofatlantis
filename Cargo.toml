@@ -23,7 +23,7 @@ members = [
     "crates/platform_winit", # winit platform loop
     "crates/ux_hud"          # HUD logic
     ,"crates/collision_static"
- , "crates/client_runtime", "crates/core_units", "crates/core_materials", "crates/voxel_proxy", "crates/voxel_mesh", "crates/net_core", "crates/client_core", "crates/dev_docs", "crates/worldsmithing", "crates/wishcraft", "crates/wishcraft_openai"]
+ , "crates/client_runtime", "crates/core_units", "crates/core_materials", "crates/voxel_proxy", "crates/voxel_mesh", "crates/net_core", "crates/client_core", "crates/dev_docs", "crates/worldsmithing", "crates/wishcraft", "crates/wishcraft_openai", "tools/bevy-hello", "crates/roa_domain", "apps/roa_slice_bevy"]
 resolver = "2"
 
 [features]
@@ -38,6 +38,7 @@ platform_winit = { version = "0.1.0", path = "crates/platform_winit", default-fe
 ecs_core = { version = "0.1.0", path = "crates/ecs_core" }
 client_core = { version = "0.1.0", path = "crates/client_core" }
 sim_core = { version = "0.1.0", path = "crates/sim_core" }
+roa_slice_bevy = { version = "0.1.0", path = "apps/roa_slice_bevy" }
 
 [patch.crates-io]
 # Use a patched local copy of draco_decoder to avoid passing
