@@ -104,12 +104,12 @@ fn setup_camera_lights(mut commands: Commands) {
 }
 
 fn demo_spawn_multiple_dragons(mut ev: bevy::ecs::message::MessageWriter<SpawnNpc>) {
-    // Spawn blue / red / green variants using tint colors per instance
+    // Spawn green / red / blue variants using per-instance tint colors
     let offs = [(-8.0, 2.5, 0.0), (0.0, 3.0, 0.0), (8.0, 2.5, 0.0)];
     let tints = [
-        glam::Vec3::new(0.2, 0.4, 1.0),
-        glam::Vec3::new(1.0, 0.2, 0.2),
-        glam::Vec3::new(0.2, 1.0, 0.3),
+        glam::Vec3::new(0.1, 0.95, 0.2),   // green
+        glam::Vec3::new(0.95, 0.15, 0.15), // red
+        glam::Vec3::new(0.15, 0.4, 1.0),   // blue
     ];
     for (i, (x, y, z)) in offs.into_iter().enumerate() {
         let yaw = 0.0 + i as f32 * 0.7;

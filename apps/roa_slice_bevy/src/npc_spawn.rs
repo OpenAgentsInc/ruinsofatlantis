@@ -154,35 +154,36 @@ pub fn sys_apply_tint_after_spawn(
                 }
             }
             if let Ok(mut mh) = q_mat.get_mut(e) {
-                // Entity already uses StandardMaterial; tweak it
+                // Duplicate the material so each mesh can have independent tint
                 let handle = mh.0.clone();
-                if let Some(m) = materials.get_mut(&handle) {
+                let new_mat = if let Some(orig) = materials.get(&handle).cloned() {
+                    let mut m = orig;
+                    m.base_color_texture = None;
                     m.base_color = tint.0;
                     m.unlit = true;
-                    // Kill any base color texture so the tint is fully visible
-                    m.base_color_texture = None;
-                    // Strongly force visible tint using emissive as well
-                    // If the API differs, this assignment will fail at compile-time and we will adjust.
-                    // Make the tint obvious even with textures by boosting emissive
                     m.emissive = tint.0.into();
-                    painted = true;
-                    mat_updated += 1;
+                    m
                 } else {
-                    let new = materials.add(StandardMaterial {
+                    StandardMaterial {
+                        base_color_texture: None,
                         base_color: tint.0,
                         unlit: true,
+                        emissive: tint.0.into(),
                         ..Default::default()
-                    });
-                    *mh = MeshMaterial3d(new);
-                    painted = true;
-                    mat_inserted += 1;
-                }
+                    }
+                };
+                let new = materials.add(new_mat);
+                *mh = MeshMaterial3d(new);
+                painted = true;
+                mat_inserted += 1;
             } else if q_mesh.get(e).is_ok() {
                 // Mesh has no material yet: attach a new StandardMaterial
                 mesh_seen += 1;
                 let new = materials.add(StandardMaterial {
+                    base_color_texture: None,
                     base_color: tint.0,
                     unlit: true,
+                    emissive: tint.0.into(),
                     ..Default::default()
                 });
                 commands.entity(e).insert(MeshMaterial3d(new));
