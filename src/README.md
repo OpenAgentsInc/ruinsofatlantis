@@ -6,7 +6,7 @@ Workspace crates (added for modularization)
 - crates/data_runtime — SRD-aligned data schemas + loaders (replaces `src/core/data`; re-exported under `crate::core::data`).
 - crates/render_wgpu — Renderer crate. The full contents of the old `src/gfx/**` now live here under `crates/render_wgpu/src/gfx/**`. The root `src/gfx/mod.rs` is a thin re‑export of `render_wgpu::gfx`.
 - crates/sim_core — Rules/combat/sim crate (moved from `src/core/{rules,combat}` and `src/sim`). Re-exported under `crate::core::{rules,combat}` and `crate::sim` for compatibility.
-- crates/platform_winit — Platform loop crate. Root app calls `platform_winit::run()`.
+- crates/platform_winit — Platform loop crate. On Web builds (`wasm32`), the root app calls `platform_winit::run()`.
 - crates/ux_hud — HUD logic crate (now owns perf/HUD toggles; P toggles perf overlay, H toggles HUD).
 
 - Workspace crates (new)
@@ -14,7 +14,9 @@ Workspace crates (added for modularization)
 - tools/model-viewer — Standalone wgpu viewer that loads GLTF/GLB via shared/assets.
 
 - lib.rs — Crate root; re‑exports main modules.
-- main.rs — Binary entry; sets up logging and runs the winit platform loop.
+- main.rs — Binary entry; sets up logging.
+  - On native: runs the ADR‑0003 Bevy vertical slice (`apps/roa_slice_bevy`).
+  - On Web (`wasm32`): runs the winit platform loop.
 - platform_winit.rs — Window/event loop integration using winit 0.30.
 
 ## Controls

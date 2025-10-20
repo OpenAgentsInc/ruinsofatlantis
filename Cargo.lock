@@ -6604,6 +6604,7 @@ dependencies = [
  "log",
  "platform_winit",
  "render_wgpu",
+ "roa_slice_bevy",
  "serde_json",
  "server_core",
  "sha2",

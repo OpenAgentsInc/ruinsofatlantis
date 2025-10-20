@@ -1,15 +1,8 @@
-use ruinsofatlantis::platform_winit;
-
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    // Developer-friendly default logging (info+) unless RUST_LOG overrides
-    // Suppress noisy GPU backend logs by default; honor RUST_LOG if set.
-    let default = "info,ruinsofatlantis=info,wgpu_hal=off,wgpu_core=off,wgpu=off,naga=off";
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default))
-        .format_timestamp_secs()
-        .try_init();
-    // Flag parsing handled in renderer (checks --no-vsync / RA_NO_VSYNC)
-    if let Err(e) = platform_winit::run() {
+    // For the vertical slice (ADR-0003), run the Bevy app by default.
+    // Bevy's LogPlugin sets up logging; avoid initializing a second logger.
+    if let Err(e) = roa_slice_bevy::run_slice(false, None) {
         eprintln!("error: {e}");
     }
 }
@@ -20,5 +13,6 @@ fn main() {
 fn main() {
     console_error_panic_hook::set_once();
     let _ = console_log::init_with_level(log::Level::Info);
-    let _ = platform_winit::run();
+    // Keep winit-based runtime on the web target.
+    let _ = ruinsofatlantis::platform_winit::run();
 }
