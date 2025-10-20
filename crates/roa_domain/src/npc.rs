@@ -34,6 +34,7 @@ pub struct SpawnNpc {
     pub kind: NpcKind,
     pub pos: glam::Vec3,
     pub yaw: f32,
+    pub tint: Option<glam::Vec3>,
 }
 
 pub fn register_npc_domain(app: &mut bevy_ecs::prelude::World) {
