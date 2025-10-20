@@ -36,7 +36,6 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
         }),
         ..default()
     }));
-    app.add_plugins(bevy_animation::AnimationPlugin);
 
     // Domain events/resources
     app.add_message::<Command>();
@@ -314,7 +313,7 @@ fn prepare_dragon_animation(
 fn kickoff_dragon_animation(
     mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<IsDragon>>,
 ) {
-    if let Ok((mut player, mut nodes)) = q.single_mut() {
+    if let Ok((mut player, nodes)) = q.single_mut() {
         let node = if nodes.current == 0 {
             nodes.first
         } else {
