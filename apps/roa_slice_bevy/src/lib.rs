@@ -10,8 +10,8 @@ use bevy_animation::prelude::{AnimationGraph, AnimationGraphHandle, AnimationPla
 use bevy_gltf::Gltf;
 
 use roa_domain::{
-    Command, DragonController, SimTime, TransformState, sys_apply_commands_to_controller,
-    tick_sim_time,
+    Command, DragonController, DragonTypeId, NpcKind, SimTime, SpawnNpc, TransformState,
+    register_npc_domain, sys_apply_commands_to_controller, tick_sim_time,
 };
 
 const DEFAULT_ZONE: &str = "models/ruins.decompressed.gltf";
@@ -39,6 +39,9 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
     // Domain events/resources
     app.add_message::<Command>();
     app.insert_resource(SimTime::default());
+    // Domain NPC events
+    // Register domain NPC message storage on the world
+    register_npc_domain(app.world_mut());
 
     // Config
     let zone_picker_env = std::env::var("ROA_ZONE_PICKER")
@@ -73,6 +76,13 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
         ),
     );
 
+    // NPC visuals & spawner
+    app.add_plugins((
+        npc_registry::NpcVisualRegistryPlugin,
+        npc_spawn::NpcSpawnPlugin,
+    ))
+    .add_systems(Startup, demo_spawn_multiple_dragons);
+
     app.run();
     Ok(())
 }
@@ -91,6 +101,19 @@ fn setup_camera_lights(mut commands: Commands) {
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.9, -0.4, 0.0)),
     ));
+}
+
+fn demo_spawn_multiple_dragons(mut ev: bevy::ecs::message::MessageWriter<SpawnNpc>) {
+    // Spawn blue/red/green variants by reusing proto_v2 with tints implied by scale/offset; different positions
+    let offs = [(-8.0, 2.5, 0.0), (0.0, 3.0, 0.0), (8.0, 2.5, 0.0)];
+    for (i, (x, y, z)) in offs.into_iter().enumerate() {
+        let yaw = 0.0 + i as f32 * 0.7;
+        ev.write(SpawnNpc {
+            kind: NpcKind::Dragon(DragonTypeId("proto_v2")),
+            pos: glam::Vec3::new(x, y, z),
+            yaw,
+        });
+    }
 }
 
 fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetServer>) {
@@ -407,3 +430,5 @@ fn prune_dragon_extras(
     }
     *done = true;
 }
+mod npc_registry;
+mod npc_spawn;

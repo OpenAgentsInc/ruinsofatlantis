@@ -6559,6 +6559,7 @@ dependencies = [
  "bevy_animation",
  "bevy_gltf",
  "clap",
+ "glam",
  "roa_domain",
 ]
 

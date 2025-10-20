@@ -7,8 +7,10 @@
 
 pub mod character;
 pub mod input;
+pub mod npc;
 pub mod sim_time;
 
 pub use character::*;
 pub use input::*;
+pub use npc::*;
 pub use sim_time::*;

@@ -9,4 +9,5 @@ bevy = "=0.17"
 bevy_animation = "=0.17"
 bevy_gltf = "=0.17"
 clap = { version = "4", features = ["derive"] }
+glam = "0.30"
 roa_domain = { version = "0.1.0", path = "../../crates/roa_domain" }
