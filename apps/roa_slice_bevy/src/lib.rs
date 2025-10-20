@@ -5,6 +5,9 @@ use bevy::prelude::Mesh3d;
 use bevy::prelude::Name;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
+use bevy_animation::graph::AnimationNodeIndex;
+use bevy_animation::prelude::{AnimationGraph, AnimationGraphHandle, AnimationPlayer};
+use bevy_gltf::Gltf;
 
 use roa_domain::{
     Command, DragonController, SimTime, TransformState, sys_apply_commands_to_controller,
@@ -60,7 +63,15 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
             apply_transformstate_to_transforms, // Presenter bridge for transforms
         ),
     );
-    app.add_systems(Update, (ensure_domain_dragon, prune_dragon_extras));
+    app.add_systems(
+        Update,
+        (
+            ensure_domain_dragon,
+            prepare_dragon_animation,
+            kickoff_dragon_animation,
+            prune_dragon_extras,
+        ),
+    );
 
     app.run();
     Ok(())
@@ -95,6 +106,9 @@ fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetS
     let dragon_scene0 = assets.load(GltfAssetLabel::Scene(0).from_asset(DEFAULT_DRAGON));
     let dragon_xform = Transform::from_xyz(0.0, 1.5, 0.0).with_scale(Vec3::splat(1.0));
     commands.spawn((SceneRoot(dragon_scene0), dragon_xform, IsDragon));
+    // Load whole GLTF to access animations
+    let dragon_gltf: Handle<Gltf> = assets.load(DEFAULT_DRAGON);
+    commands.insert_resource(DragonGltf(dragon_gltf));
 
     info!("Slice: auto-loaded dragon={}", DEFAULT_DRAGON);
 }
@@ -185,6 +199,75 @@ fn ensure_domain_dragon(
 ) {
     if q_has_domain.single().is_err() && q_visual.single().is_ok() {
         commands.spawn((DragonController::default(), TransformState::default()));
+    }
+}
+
+#[derive(Resource, Clone)]
+struct DragonGltf(Handle<Gltf>);
+
+#[derive(Component, Clone, Copy)]
+struct DragonAnimNode(AnimationNodeIndex);
+
+fn pick_clip<'a>(gltf: &'a Gltf) -> Option<Handle<bevy_animation::AnimationClip>> {
+    if let Ok(want) = std::env::var("ROA_WYVERN_CLIP") {
+        let want_l = want.to_ascii_lowercase();
+        for (name, h) in gltf.named_animations.iter() {
+            if name.to_ascii_lowercase().contains(&want_l) {
+                return Some(h.clone());
+            }
+        }
+    }
+    for key in ["idle", "fly", "loop", "walk"] {
+        for (name, h) in gltf.named_animations.iter() {
+            if name.to_ascii_lowercase().contains(key) {
+                return Some(h.clone());
+            }
+        }
+    }
+    gltf.animations.get(0).cloned()
+}
+
+fn prepare_dragon_animation(
+    mut commands: Commands,
+    dragon: Res<DragonGltf>,
+    gltfs: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    q_dragon: Query<Entity, With<IsDragon>>,
+    mut done: Local<bool>,
+) {
+    if *done {
+        return;
+    }
+    let Some(g) = gltfs.get(&dragon.0) else {
+        return;
+    };
+    let Some(clip) = pick_clip(g) else {
+        info!("dragon: no animations found in GLTF");
+        *done = true;
+        return;
+    };
+    let (graph, node) = AnimationGraph::from_clip(clip);
+    let handle = graphs.add(graph);
+    if let Ok(ent) = q_dragon.single() {
+        commands
+            .entity(ent)
+            .insert(AnimationGraphHandle(handle))
+            .insert(AnimationPlayer::default())
+            .insert(DragonAnimNode(node));
+        info!(
+            "dragon: attached AnimationPlayer and graph; node={:?}",
+            node
+        );
+        *done = true;
+    }
+}
+
+fn kickoff_dragon_animation(mut q: Query<(&mut AnimationPlayer, &DragonAnimNode), With<IsDragon>>) {
+    if let Ok((mut player, node)) = q.single_mut() {
+        if !player.is_playing_animation(node.0) {
+            player.play(node.0).repeat();
+            info!("dragon: playing animation node {:?} (repeat)", node.0);
+        }
     }
 }
 
