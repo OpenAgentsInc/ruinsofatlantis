@@ -1,6 +1,8 @@
 //! Bevy vertical slice runner (library entry) so other crates can launch the slice.
 use anyhow::Result;
 use bevy::gltf::GltfAssetLabel;
+use bevy::prelude::Mesh3d;
+use bevy::prelude::Name;
 use bevy::prelude::*;
 use bevy::scene::SceneRoot;
 
@@ -58,7 +60,7 @@ pub fn run_slice(zone_picker: bool, zone_override: Option<String>) -> Result<()>
             apply_transformstate_to_transforms, // Presenter bridge for transforms
         ),
     );
-    app.add_systems(Update, (ensure_domain_dragon,));
+    app.add_systems(Update, (ensure_domain_dragon, prune_dragon_extras));
 
     app.run();
     Ok(())
@@ -86,26 +88,15 @@ fn setup_slice(mut commands: Commands, cfg: Res<SliceConfig>, assets: Res<AssetS
         return;
     }
 
-    // Auto-load zone scene root (supports either raw `path#Scene` or path only)
-    let zone_handle: Handle<Scene> = if cfg.zone_scene.contains('#') {
-        assets.load(cfg.zone_scene.clone())
-    } else {
-        assets.load(GltfAssetLabel::Scene(0).from_asset(cfg.zone_scene.clone()))
-    };
-    commands.spawn((
-        SceneRoot(zone_handle),
-        Transform::from_scale(Vec3::splat(1.0)),
-    ));
+    // Zone temporarily disabled for bring-up clarity.
+    // When re-enabling, spawn SceneRoot for `cfg.zone_scene` here.
 
     // Auto-load dragon scene root and tag it
     let dragon_scene0 = assets.load(GltfAssetLabel::Scene(0).from_asset(DEFAULT_DRAGON));
     let dragon_xform = Transform::from_xyz(0.0, 1.5, 0.0).with_scale(Vec3::splat(1.0));
     commands.spawn((SceneRoot(dragon_scene0), dragon_xform, IsDragon));
 
-    info!(
-        "Slice: auto-loaded zone={} dragon={}",
-        cfg.zone_scene, DEFAULT_DRAGON
-    );
+    info!("Slice: auto-loaded dragon={}", DEFAULT_DRAGON);
 }
 
 // --- Input mapping: Bevy input → domain `Command` messages ---
@@ -195,4 +186,57 @@ fn ensure_domain_dragon(
     if q_has_domain.single().is_err() && q_visual.single().is_ok() {
         commands.spawn((DragonController::default(), TransformState::default()));
     }
+}
+
+// One-shot prune pass to remove obvious helper cubes/planes from the dragon scene.
+fn prune_dragon_extras(
+    mut commands: Commands,
+    mut done: Local<bool>,
+    q_root: Query<(Entity, Option<&Children>), With<IsDragon>>,
+    q_children: Query<&Children>,
+    q_name_mesh: Query<(Option<&Name>, Option<&Mesh3d>)>,
+) {
+    if *done {
+        return;
+    }
+    let Ok((_root, kids)) = q_root.single() else {
+        return;
+    };
+    let mut stack: Vec<Entity> = Vec::new();
+    if let Some(k) = kids {
+        for c in k.iter() {
+            stack.push(c);
+        }
+    }
+    let mut removed = 0usize;
+    while let Some(e) = stack.pop() {
+        // enqueue children first
+        if let Ok(children) = q_children.get(e) {
+            for c in children.iter() {
+                stack.push(c);
+            }
+        }
+        // if it's a mesh and name looks like a helper, remove it
+        if let Ok((maybe_name, maybe_mesh)) = q_name_mesh.get(e) {
+            if maybe_mesh.is_some() {
+                if let Some(name) = maybe_name {
+                    let s = name.as_str().to_ascii_lowercase();
+                    if s.contains("cube")
+                        || s.contains("block")
+                        || s.contains("plane")
+                        || s.contains("grid")
+                        || s.contains("floor")
+                        || s.contains("helper")
+                    {
+                        commands.entity(e).despawn();
+                        removed += 1;
+                    }
+                }
+            }
+        }
+    }
+    if removed > 0 {
+        info!("pruned {} helper mesh(es) under dragon", removed);
+    }
+    *done = true;
 }
