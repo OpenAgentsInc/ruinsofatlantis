@@ -18,6 +18,8 @@ pub struct DragonAnimSeq {
 pub struct DragonAnimController;
 #[derive(Component, Clone, Copy)]
 pub struct NpcTint(pub Color);
+#[derive(Component)]
+pub struct TintApplied;
 
 pub fn sys_spawn_npc_requests(
     mut commands: Commands,
@@ -64,10 +66,6 @@ pub fn sys_prepare_npc_animation(
     q_children: Query<&Children>,
     q_players: Query<Entity, With<AnimationPlayer>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut q_mat: Query<&mut MeshMaterial3d<StandardMaterial>>,
-    q_mesh: Query<&Mesh3d>,
-    q_tint: Query<&NpcTint, With<NpcRoot>>,
 ) {
     for (root, kids, _xf) in q_root.iter() {
         // For now, assume proto_v2 archetype
@@ -126,42 +124,83 @@ pub fn sys_prepare_npc_animation(
         ecmd.insert(AnimationGraphHandle(ghandle))
             .insert(DragonAnimSeq { nodes: seq, idx: 0 })
             .insert(DragonAnimController);
+    }
+}
 
-        // Apply tint by cloning or updating StandardMaterial base_color
-        if let Ok(NpcTint(col)) = q_tint.get(root) {
-            let mut paint_stack: Vec<Entity> = Vec::new();
-            for child in kids.iter() {
-                paint_stack.push(child);
-            }
-            while let Some(e2) = paint_stack.pop() {
-                if let Ok(ch) = q_children.get(e2) {
-                    for c in ch.iter() {
-                        paint_stack.push(c);
-                    }
+/// Apply tint after GLTF scene is instantiated. Runs until any mesh gets colored, then marks TintApplied.
+pub fn sys_apply_tint_after_spawn(
+    mut commands: Commands,
+    q_roots: Query<(Entity, &Children, &NpcTint), (With<NpcRoot>, Without<TintApplied>)>,
+    q_children: Query<&Children>,
+    mut q_mat: Query<&mut MeshMaterial3d<StandardMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    q_mesh: Query<&Mesh3d>,
+) {
+    for (root, kids, tint) in q_roots.iter() {
+        let mut painted = false;
+        let mut stack: Vec<Entity> = Vec::new();
+        let mut visited = 0usize;
+        let mut mat_updated = 0usize;
+        let mut mat_inserted = 0usize;
+        let mut mesh_seen = 0usize;
+        for child in kids.iter() {
+            stack.push(child);
+        }
+        while let Some(e) = stack.pop() {
+            visited += 1;
+            if let Ok(ch) = q_children.get(e) {
+                for c in ch.iter() {
+                    stack.push(c);
                 }
-                if let Ok(mut mat_handle) = q_mat.get_mut(e2) {
-                    let handle = mat_handle.0.clone();
-                    if let Some(m) = materials.get_mut(&handle) {
-                        m.base_color = *col;
-                        m.unlit = true;
-                    } else {
-                        let new = materials.add(StandardMaterial {
-                            base_color: *col,
-                            unlit: true,
-                            ..Default::default()
-                        });
-                        *mat_handle = MeshMaterial3d(new);
-                    }
-                } else if q_mesh.get(e2).is_ok() {
-                    // Attach a new unlit material if none exists yet
+            }
+            if let Ok(mut mh) = q_mat.get_mut(e) {
+                // Entity already uses StandardMaterial; tweak it
+                let handle = mh.0.clone();
+                if let Some(m) = materials.get_mut(&handle) {
+                    m.base_color = tint.0;
+                    m.unlit = true;
+                    // Kill any base color texture so the tint is fully visible
+                    m.base_color_texture = None;
+                    // Strongly force visible tint using emissive as well
+                    // If the API differs, this assignment will fail at compile-time and we will adjust.
+                    // Make the tint obvious even with textures by boosting emissive
+                    m.emissive = tint.0.into();
+                    painted = true;
+                    mat_updated += 1;
+                } else {
                     let new = materials.add(StandardMaterial {
-                        base_color: *col,
+                        base_color: tint.0,
                         unlit: true,
                         ..Default::default()
                     });
-                    commands.entity(e2).insert(MeshMaterial3d(new));
+                    *mh = MeshMaterial3d(new);
+                    painted = true;
+                    mat_inserted += 1;
                 }
+            } else if q_mesh.get(e).is_ok() {
+                // Mesh has no material yet: attach a new StandardMaterial
+                mesh_seen += 1;
+                let new = materials.add(StandardMaterial {
+                    base_color: tint.0,
+                    unlit: true,
+                    ..Default::default()
+                });
+                commands.entity(e).insert(MeshMaterial3d(new));
+                painted = true;
+                mat_inserted += 1;
             }
+        }
+        if painted {
+            commands.entity(root).insert(TintApplied);
+            info!(
+                "tint: applied under root {:?} (visited={}, mesh_seen={}, updated={}, inserted={})",
+                root, visited, mesh_seen, mat_updated, mat_inserted
+            );
+        } else {
+            trace!(
+                "tint: no meshes found yet under root {:?} (visited={})",
+                root, visited
+            );
         }
     }
 }
@@ -191,6 +230,13 @@ pub struct NpcSpawnPlugin;
 impl Plugin for NpcSpawnPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(FixedUpdate, sys_spawn_npc_requests)
-            .add_systems(Update, (sys_prepare_npc_animation, sys_cycle_animation));
+            .add_systems(
+                Update,
+                (
+                    sys_prepare_npc_animation,
+                    sys_apply_tint_after_spawn,
+                    sys_cycle_animation,
+                ),
+            );
     }
 }
