@@ -15,7 +15,7 @@ use roa_domain::{
 };
 
 const DEFAULT_ZONE: &str = "models/ruins.decompressed.gltf";
-const DEFAULT_DRAGON: &str = "models/red_wyvern/RedDragon2021.textured.glb";
+const DEFAULT_DRAGON: &str = "models/DragonProto.glb";
 
 #[derive(Resource, Default, Clone)]
 struct SliceConfig {
@@ -235,7 +235,11 @@ fn spawn_dragon_scene(
 struct DragonGltf(Handle<Gltf>);
 
 #[derive(Component, Clone, Copy)]
-struct DragonAnimNode(AnimationNodeIndex);
+struct DragonAnimNodes {
+    first: AnimationNodeIndex,
+    second: Option<AnimationNodeIndex>,
+    current: u8,
+}
 
 fn pick_clip<'a>(gltf: &'a Gltf) -> Option<Handle<bevy_animation::AnimationClip>> {
     if let Ok(want) = std::env::var("ROA_WYVERN_CLIP") {
@@ -270,32 +274,84 @@ fn prepare_dragon_animation(
     let Some(g) = gltfs.get(&dragon.0) else {
         return;
     };
-    let Some(clip) = pick_clip(g) else {
+    let mut clips: Vec<Handle<bevy_animation::AnimationClip>> = Vec::new();
+    for h in g.animations.iter().take(2) {
+        clips.push(h.clone());
+    }
+    if clips.is_empty() {
         info!("dragon: no animations found in GLTF");
         *done = true;
         return;
+    }
+    let mut graph = AnimationGraph::new();
+    let a = graph.add_clip(clips[0].clone(), 1.0, graph.root);
+    let b = if clips.len() > 1 {
+        Some(graph.add_clip(clips[1].clone(), 1.0, graph.root))
+    } else {
+        None
     };
-    let (graph, node) = AnimationGraph::from_clip(clip);
     let handle = graphs.add(graph);
     if let Ok(ent) = q_dragon.single() {
         commands
             .entity(ent)
             .insert(AnimationGraphHandle(handle))
             .insert(AnimationPlayer::default())
-            .insert(DragonAnimNode(node));
+            .insert(DragonAnimNodes {
+                first: a,
+                second: b,
+                current: 0,
+            });
         info!(
-            "dragon: attached AnimationPlayer and graph; node={:?}",
-            node
+            "dragon: attached AnimationPlayer and graph ({} clip(s))",
+            clips.len()
         );
         *done = true;
     }
 }
 
-fn kickoff_dragon_animation(mut q: Query<(&mut AnimationPlayer, &DragonAnimNode), With<IsDragon>>) {
-    if let Ok((mut player, node)) = q.single_mut() {
-        if !player.is_playing_animation(node.0) {
-            player.play(node.0).repeat();
-            info!("dragon: playing animation node {:?} (repeat)", node.0);
+fn kickoff_dragon_animation(
+    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<IsDragon>>,
+) {
+    if let Ok((mut player, mut nodes)) = q.single_mut() {
+        let node = if nodes.current == 0 {
+            nodes.first
+        } else {
+            nodes.second.unwrap_or(nodes.first)
+        };
+        if !player.is_playing_animation(node) {
+            player.start(node); // default: no repeat
+            info!("dragon: playing animation node {:?}", node);
+        }
+    }
+}
+
+fn cycle_dragon_animation(
+    mut q: Query<(&mut AnimationPlayer, &mut DragonAnimNodes), With<IsDragon>>,
+) {
+    if let Ok((mut player, mut nodes)) = q.single_mut() {
+        let cur = if nodes.current == 0 {
+            nodes.first
+        } else {
+            nodes.second.unwrap_or(nodes.first)
+        };
+        let finished = player
+            .animation(cur)
+            .map(|a| a.is_finished())
+            .unwrap_or(true);
+        if finished {
+            nodes.current = if nodes.current == 0 && nodes.second.is_some() {
+                1
+            } else {
+                0
+            };
+            let next = if nodes.current == 0 {
+                nodes.first
+            } else {
+                nodes.second.unwrap_or(nodes.first)
+            };
+            player.stop_all();
+            player.start(next);
+            info!("dragon: switched animation to node {:?}", next);
         }
     }
 }
@@ -339,6 +395,11 @@ fn prune_dragon_extras(
                         || s.contains("grid")
                         || s.contains("floor")
                         || s.contains("helper")
+                        || s.contains("light")
+                        || s.contains("lamp")
+                        || s.contains("sphere")
+                        || s.contains("sun")
+                        || s.contains("emiss")
                     {
                         commands.entity(e).despawn();
                         removed += 1;
