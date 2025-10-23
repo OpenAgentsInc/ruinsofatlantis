@@ -5,6 +5,7 @@ This folder organizes project documentation by topic. Start here for key specs a
 Priority Reads
 - architecture/ECS_ARCHITECTURE_GUIDE.md — Authoritative ECS architecture guide
 - systems/zones.md — Zone system (authoring, bake, runtime)
+- v7-companion-guide.md — Companion OpenAgents v7 repo overview (iOS app + Rust engine)
 
 Sections
 - architecture/ — System and code architecture guides and overviews
