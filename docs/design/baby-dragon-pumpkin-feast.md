@@ -41,6 +41,29 @@
 - **Hour 2–3**: spawn skeleton hazards, add kill/eat threshold, basic death/reset loop.
 - **Hour 3–4**: polish pass—HUD text, tweak movement feels, ensure no crashes, record a quick screen capture.
 
+## CC Demo Integration Notes
+- Zone data lives under `data/zones/cc_demo/manifest.json` with slug `cc_demo`; existing baked snapshot is essentially empty (meta only), so we lean on the GLB scene instead.
+- The current slice hardcodes `DEFAULT_ZONE = "models/ruins.decompressed.gltf"` (CC demo geometry); `setup_slice` skipped spawning it for clarity. We need to reinstate a `SceneRoot` spawn for this GLB so the pumpkins/skeletons sit on terrain.
+- Assets: baby dragon `assets/models/DragonProto_v2.glb`, new pumpkin mesh `assets/models/Gourd.glb` (Scene0), skeleton placeholder will arrive later—temporarily reuse `assets/models/zombie.glb` and swap once the skeleton GLB lands.
+- Rendering policy: keep Bevy default lighting/shadows; CC demo manifest already enables HUD/casting but we can ignore those flags for this mode.
+- Companion (~/code/v7) only needs the scene camera feed; once the MVP stands up we can script DOF later.
+
+## Near-Term Implementation Tasks
+1. (done) Restore CC demo scene spawn in `setup_slice` (load `DEFAULT_ZONE` GLB and drop it into the world).
+2. (done) Split slice logic into an `agar_dragon` module that owns camera, input, and gameplay systems separate from the legacy domain controller.
+3. (done) Implement top-down camera + planar movement for the dragon (drive `Transform` directly; keep animation idle loop).
+4. (done) Load `Gourd.glb`, scatter N pumpkins, handle collection + respawn, increment XP/level component, scale dragon.
+5. (done) Spawn placeholder zombies (reusing `assets/models/zombie.glb`) as level-gated hazards.
+6. (done) Add lightweight HUD text and restart flow.
+
+## Implementation Log
+- (T0) Restored CC demo zone GLB spawn in `apps/roa_slice_bevy` so the slice loads terrain for the baby dragon prototype.
+- (T0+200s) Ran `cargo check -p roa_slice_bevy` to verify the new zone resource/system compiles cleanly.
+- (T0+55m) Added `agar_dragon` gameplay plugin with top-down camera follow, planar dragon movement, XP-driven scaling, and pumpkin field spawning via `Gourd.glb`.
+- (T0+65m) Re-ran `cargo check -p roa_slice_bevy` to confirm the new gameplay plugin compiles end-to-end.
+- (T0+110m) Wired in zombie hazards (reusing `zombie.glb`), level-gated defeats, and restartable game state with HUD messaging.
+- (T0+120m) Another `cargo check -p roa_slice_bevy` green after hazard + HUD integration.
+
 ## Risks & Mitigations
 - **Animation setup time**: if the animation graph slows us down, lock the dragon to a single idle pose and revisit later.
 - **Collision weirdness**: start with exaggerated collider radii and tune later; rely on debug prints before adding UI polish.
